@@ -32,7 +32,7 @@ first-class scenario fields, each resolved and folded into `config_hash` (`src/f
   `high` are exercised by existing tests/smoke** — `xhigh`/`max` are unproven on a live spawn, so §5/§9
   probe them before the effort layer is authored (FM-7).
 - **The mapping under test is pinned external config.** Source: the series engine's `model-tiers` and
-  `pr-prompt-scorer`, in repo `C:\Users\grima\Documents\pr-pilot-main` (the series engine **0.8.1**,
+  `pr-prompt-scorer`, in repo `/path/to/pr-pilot-main` (the series engine **0.8.1**,
   HEAD **`1c2748f3004c7c32e67b9379944b92e3777020a6`**). Thresholds recorded inline so a drift cannot
   silently move the target: **weak 0-25 → `claude-haiku-4-5`; mid 26-55 → `claude-sonnet-4-6`; strong
   56-100 → `claude-opus-4-8`**. The SHA is re-verified at build time (FM-5).

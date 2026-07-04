@@ -18,7 +18,7 @@ source = "none"
 allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
 
 [gate]
-extra = ["python C:/Users/grima/Documents/fathom/tasks/ablation-v2/exprlang/type_probe.py ."]
+extra = ["python /path/to/fathom/tasks/ablation-v2/exprlang/type_probe.py ."]
 
 [limits]
 trial_timeout_s = 1800

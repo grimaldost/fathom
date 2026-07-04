@@ -3,7 +3,7 @@ plan -> implement (TDD) -> verify
 
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 6 + the Context engine-facts paragraph (read both fully; they encode pre-mortem blockers)
-- Engine source for reference (read-only, outside this repo): `C:/Users/grima/Documents/pr-pilot-main/src/pr_pilot/` (config.py, claude.py, tracker.py, series.py)
+- Engine source for reference (read-only, outside this repo): `/path/to/pr-pilot-main/src/pr_pilot/` (config.py, claude.py, tracker.py, series.py)
 
 ## Task
 Implement `src/fathom/strategies/base.py` (`StrategyExecutor` typing.Protocol —

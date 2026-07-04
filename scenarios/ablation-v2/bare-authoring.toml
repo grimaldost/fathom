@@ -14,7 +14,7 @@ source = "none"
 allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
 
 [context]
-inject = "C:/Users/grima/Documents/fathom/scenarios/ablation-v2/authoring-brief.md"
+inject = "authoring-brief.md"
 
 [limits]
 trial_timeout_s = 1800

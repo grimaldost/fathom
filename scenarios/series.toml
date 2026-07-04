@@ -8,7 +8,7 @@ effort = "high"
 # Tool repo resolved to a git SHA at run time; invocation command is
 # "uv run --project <repo> convoy" — never a bare PATH lookup.
 source = "repo"
-repo = "C:/Users/grima/Documents/convoy"
+repo = "../convoy"
 
 [limits]
 # 60-minute ceiling: the series engine spawns multiple subagents sequentially;

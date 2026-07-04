@@ -4,7 +4,7 @@ plan -> author -> verify (bank authorship; tests validate the bank)
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 12 (entire section; it encodes pre-mortem blockers) + section 5 of `docs/specs/2026-06-10-fathom-v1-design.md`
 - `docs/adr/0005-sealed-holdout-tasks.md`
-- Engine series schema reference (read-only, outside this repo): `C:/Users/grima/Documents/pr-pilot-main/docs/series-toml-reference.md`
+- Engine series schema reference (read-only, outside this repo): `/path/to/pr-pilot-main/docs/series-toml-reference.md`
 
 ## Task
 Author the `tasks/pr-pilot-v1/` bank per spec section 12: 3-5 realistic Python

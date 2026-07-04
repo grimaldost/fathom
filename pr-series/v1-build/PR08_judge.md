@@ -4,7 +4,7 @@ plan -> implement (TDD) -> verify
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 8
 - `docs/adr/0003-blind-result-only-scoring.md`
-- Port source (read-only, outside this repo): `C:/Users/grima/Documents/craft-collection/evals/harness/judge.py`
+- Port source (read-only, outside this repo): `/path/to/craft-collection/evals/harness/judge.py`
 
 ## Task
 Port the swap-order pairwise judge to `src/fathom/grading/judge.py` per spec

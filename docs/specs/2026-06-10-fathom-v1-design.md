@@ -136,7 +136,7 @@ model = "sonnet"             # resolved to exact model id at run time, recorded
 strategy = "series"
 [scenario.tools]
 source = "repo"              # none | plugin-dir | repo
-path = "C:/Users/grima/Documents/pr-pilot-main"
+path = "/path/to/pr-pilot-main"
 # resolved git SHA recorded per trial as tool_git_sha
 [scenario.limits]
 max_budget_usd_per_run = 2.0
@@ -265,6 +265,6 @@ expected), trial timeout.
 |---|---|---|
 | Relation to existing harness | Extract-and-generalize: vendor `claude_runner.py` core, refactor behind `Runner` | Import evals/ as dependency (couples to a test subject); greenfield rewrite (discards debugged isolation) |
 | v1 scope | Spine + series-engine question | Infrastructure-first (no consuming question); breadth-first banks (spreads hardest work thin) |
-| Name / location | `fathom`, `C:\Users\grima\Documents\fathom` | gauge, proving-ground, benchrest |
+| Name / location | `fathom`, `/path/to/fathom` | gauge, proving-ground, benchrest |
 | Frameworks | Adopt patterns, not runtimes [report recommendation] | Running on Inspect/promptfoo (API-key-centric; subscription `claude -p` is both SUT and judge transport) |
 | Governance | keel apply-method binds fathom; build runs as a governed series | Generic plan-only flow |

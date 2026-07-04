@@ -4,7 +4,7 @@ plan -> implement (TDD) -> verify
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 5
 - `docs/adr/0001-subscription-cli-behind-vendor-abstract-runner.md`, `docs/adr/0004-vendor-claude-runner-core.md`
-- Vendor source (read-only, outside this repo): `C:/Users/grima/Documents/craft-collection/evals/harness/claude_runner.py`
+- Vendor source (read-only, outside this repo): `/path/to/craft-collection/evals/harness/claude_runner.py`
 
 ## Task
 Implement `src/fathom/adapters/base.py` (the `Runner` typing.Protocol —
