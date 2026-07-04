@@ -699,7 +699,7 @@ dependencies properly, and include basic quality and security checks.
 `scenarios/skill-pyeng/assets/python-engineering.md` — **vendor the skill body verbatim**. Exact
 command (the pinned treatment asset, committed so the experiment is reproducible):
 ```
-Copy C:\Users\grima\.claude\plugins\cache\craft-collection\engineering-discipline\0.1.2\skills\python-engineering\SKILL.md
+Copy ~/.claude/plugins/cache/craft-collection/engineering-discipline/0.1.2/skills/python-engineering/SKILL.md
   to scenarios\skill-pyeng\assets\python-engineering.md
 ```
 (Use `Read` then `Write`, or `Copy-Item`. Do not edit the body — it is the treatment.)

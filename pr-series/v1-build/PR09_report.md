@@ -3,7 +3,7 @@ plan -> implement (TDD) -> verify
 
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 9
-- Port source for the interval math (read-only, outside this repo): `C:/Users/grima/Documents/craft-collection/evals/harness/stats.py`
+- Port source for the interval math (read-only, outside this repo): `/path/to/craft-collection/evals/harness/stats.py`
 
 ## Task
 Implement `src/fathom/report.py` per spec section 9: `render(bank) ->

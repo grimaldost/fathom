@@ -17,7 +17,7 @@ the invocation command. Scenario may override per-task trial limits. Ship the
 three committed scenario files under `scenarios/`: `bare.toml`,
 `single-long-session.toml`, `series.toml` — all three declaring equal
 `effort` values, the series one carrying `tools.source="repo"` pointing at
-`C:/Users/grima/Documents/pr-pilot-main` and a larger trial-timeout override.
+`/path/to/pr-pilot-main` and a larger trial-timeout override.
 
 ## Constraints
 - Stdlib only. Resolution is injectable (stub resolver in tests; no real git/CLI calls).

@@ -4,7 +4,7 @@ plan -> implement -> verify (this PR's tests include REAL spawns)
 ## Mandatory pre-read
 - `docs/specs/2026-06-10-fathom-v1-build.md` — section 11
 - `docs/adr/0004-vendor-claude-runner-core.md`
-- Port source (read-only, outside this repo): `C:/Users/grima/Documents/craft-collection/evals/harness/smoke.py`
+- Port source (read-only, outside this repo): `/path/to/craft-collection/evals/harness/smoke.py`
 
 ## Task
 Implement `src/fathom/smoke.py` wired to `fathom smoke` per spec section 11, porting
