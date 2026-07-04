@@ -1,0 +1,205 @@
+# ==========================================================================
+# series.toml -- fathom humble-vs-super plugin-eval
+# spec: docs/specs/2026-06-14-fathom-humble-vs-super-design.md (keel DoR CERTIFIED)
+# PR01..PR11 == spec sections 1..11 (bijection). The sealed-holdout checkpoint
+# and the paid matrix RUN are OPERATOR-RUN after this series -- not engine PRs.
+#
+# Budget forecast: model-mix baseline ~$0.83 vs all-strong ~$1.60 (~48% saving);
+# realistic with impl+review+fix at max effort on output-heavy code: ~$10-20.
+# ==========================================================================
+
+[series]
+id = "humble-vs-super"
+version = "1"
+
+[branches]
+base = "main"
+integration = "feat/humble-vs-super"
+
+[claude]
+tier = "mid"                  # majority tier; per-PR overrides below
+effort = "max"
+permission_mode = "bypassPermissions"   # build series on operator machine; the EVAL arms fathom spawns pin non-bypass per spec/ADR-0004
+preamble = "Read your PR's numbered section in docs/specs/2026-06-14-fathom-humble-vs-super-design.md and docs/method/method-bindings.md before starting. The spec passed keel DoR (CERTIFIED); where prompt and spec disagree, the spec wins."
+
+[claude.budgets]
+implementation = "10.00"
+review = "4.00"
+fix = "3.00"
+
+[claude.tools]
+implementation = "Bash,Read,Write,Edit"
+review = "Bash(git:*),Bash(uv:*),Bash(python:*),Bash(grep:*),Bash(cat:*),Bash(find:*),Bash(wc:*),Read"
+fix = "Bash,Read,Write,Edit"
+
+[review]
+blocking = true
+max_fix_attempts = 1
+
+[substitutions]
+
+[paths]
+prompts = "pr-series/humble-vs-super"
+review_prompt = "pr-series/humble-vs-super/REVIEW_PROMPT.md"
+outputs = ".pr-outputs/humble-vs-super"
+
+[quality_gates]
+# --frozen so gates never rewrite uv.lock.
+sync_cmd = "uv sync --frozen --quiet"
+# main already ships the toolchain + a green suite (308 tests), so a clean
+# baseline sweep is expected before launch.
+baseline_strict = true
+
+[[quality_gates.checks]]
+name = "ruff_fmt"
+run = "uv run ruff format --check ."
+pass_pattern = "already formatted"
+autofix = "uv run ruff format ."
+blocking = true
+
+[[quality_gates.checks]]
+name = "ruff_chk"
+run = "uv run ruff check ."
+pass_pattern = "All checks passed!"
+autofix = "uv run ruff check --fix ."
+blocking = true
+
+[[quality_gates.checks]]
+name = "pytest"
+# `&& echo` only fires on a zero exit, so the sentinel is absent on ANY failure
+# or crash. A bare `pass_pattern = " passed"` is vacuous: it matches
+# "1 failed, 386 passed", and pass_pattern mode ignores the return code
+# (the series engine's _gatecheck.py gate_failed). This masked a real failure once.
+run = "uv run pytest -q && echo PYTEST_GATE_OK"
+pass_pattern = "PYTEST_GATE_OK"
+blocking = true
+
+# NOTE: `fathom smoke` is deliberately NOT a quality gate -- it makes real paid
+# spawns. It is the operator go/no-go gate run once before the paid matrix,
+# after this series merges (spec section 5 / Definition of Done).
+
+[parallel]
+enabled = true
+max_workers = 3
+worktree_dir = ".worktrees"
+
+[retry]
+enabled = true
+max_attempts = 4
+base_seconds = 10.0
+cap_seconds = 120.0
+jitter_seconds = 5.0
+
+[injections]
+shared = ['.series-engine/injections/automation_directive.md']
+implementation = []
+review = ['.series-engine/injections/review_checklist.md']
+fix = []
+
+# ---------------------------------------------------------------------------
+# PRs -- one per spec section; depends_on is the real data + file-contention DAG
+# ---------------------------------------------------------------------------
+[[prs]]
+id = "PR01"
+branch = "docs/adr-0006-plugin-mount"
+prompt = "PR01_adr.md"
+phase = 1
+depends_on = []
+tier = "weak"
+budget_impl = "4.00"
+budget_review = "2.00"
+budget_fix = "2.00"
+
+[[prs]]
+id = "PR02"
+branch = "feat/scenario-plugins-mount"
+prompt = "PR02_scenario_mount.md"
+phase = 1
+depends_on = []
+
+[[prs]]
+id = "PR03"
+branch = "feat/adapter-plugin-dir"
+prompt = "PR03_adapter_plugin_dir.md"
+phase = 1
+depends_on = []
+tier = "weak"
+budget_impl = "4.00"
+budget_review = "2.00"
+budget_fix = "2.00"
+
+[[prs]]
+id = "PR04"
+branch = "feat/cli-mount-plumbing"
+prompt = "PR04_cli_plumbing.md"
+phase = 2
+depends_on = ["PR02", "PR03"]
+
+[[prs]]
+id = "PR05"
+branch = "feat/smoke-mount-gate"
+prompt = "PR05_smoke_mount.md"
+phase = 3
+depends_on = ["PR03", "PR04"]
+
+[[prs]]
+id = "PR06"
+branch = "feat/tasks-bugfix-pack"
+prompt = "PR06_bugfix_tasks.md"
+phase = 1
+depends_on = []
+tier = "strong"
+budget_impl = "20.00"
+budget_review = "5.00"
+budget_fix = "3.00"
+
+[[prs]]
+id = "PR07"
+branch = "feat/tasks-feature-pack"
+prompt = "PR07_feature_tasks.md"
+phase = 1
+depends_on = []
+tier = "strong"
+budget_impl = "20.00"
+budget_review = "5.00"
+budget_fix = "3.00"
+
+[[prs]]
+id = "PR08"
+branch = "feat/scenarios-and-vendoring"
+prompt = "PR08_scenarios_vendoring.md"
+phase = 3
+depends_on = ["PR02", "PR04", "PR06", "PR07"]
+
+[[prs]]
+id = "PR09"
+branch = "feat/report-efficiency"
+prompt = "PR09_report_efficiency.md"
+phase = 1
+depends_on = []
+
+[[prs]]
+id = "PR10"
+branch = "feat/result-view-scrub"
+prompt = "PR10_result_view_scrub.md"
+phase = 1
+depends_on = []
+
+[[prs]]
+id = "PR11"
+branch = "feat/billing-ledger-cost"
+prompt = "PR11_billing_cost.md"
+phase = 3
+depends_on = ["PR03", "PR04", "PR09"]
+tier = "strong"
+budget_impl = "20.00"
+budget_review = "5.00"
+budget_fix = "3.00"
+
+[[phases]]
+after_pr = "PR04"
+label = "Phase gate -- schema + adapter + CLI + tasks + report-skeleton integrated and green"
+
+[gitignore]
+marker = "# series-engine (managed)"
+entries = [".pr-outputs/", ".worktrees/", "/report/"]

@@ -1,0 +1,6 @@
+name = "context-size-v1"
+dataset_version = "1"
+
+# No holdout: the study is small (4 matched pairs) and every pair feeds the per-pair
+# small→large shift — the headline metric. Holding one out would only thin the sample.
+holdout = []

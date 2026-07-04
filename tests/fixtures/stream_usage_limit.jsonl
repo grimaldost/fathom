@@ -1,0 +1,2 @@
+{"type": "system", "subtype": "init", "model": "claude-opus-4-8-20260115", "version": "1.2.3", "tools": [], "plugins": []}
+{"type": "result", "subtype": "error_during_execution", "is_error": true, "num_turns": 0, "duration_ms": 1200, "total_cost_usd": 0.0, "result": "Claude usage limit reached. Your limit will reset at 6pm (America/New_York).", "usage": {"input_tokens": 0, "output_tokens": 0}}

@@ -1,0 +1,22 @@
+id = "nonlocal-sku-large"
+instruction = """
+Warehouse reports that the same product is being treated as several different items when
+its code is written in different ways — a product's newer code, its short code, and its
+primary code don't line up. The result: stock counts for a product are split across its
+code variants, and price lookups by a variant code come back empty. Known code variants
+should resolve to the same canonical product everywhere a product code is looked up. Fix
+it so all lookups treat a product's known code variants as the same product. Preserve the
+public API and keep the shipped test suite passing.
+"""
+
+[context]
+size = "large"
+pair = "nonlocal-sku"
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 160
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["stock_merges_aliases", "price_merges_aliases"]

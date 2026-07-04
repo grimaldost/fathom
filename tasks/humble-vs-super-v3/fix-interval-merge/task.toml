@@ -1,0 +1,17 @@
+id = "fix-interval-merge"
+instruction = """
+Users of the `intervals` package report that `merge()` is unreliable: sometimes it
+leaves two ranges separate when they should have become one, and sometimes the range
+it returns is shorter than one of the inputs that went into it. Find and fix the
+bug(s) so `merge` behaves as documented. Preserve the existing public API, and keep
+the shipped test suite passing.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

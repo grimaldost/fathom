@@ -1,0 +1,14 @@
+name = "sonnet-lo-gate"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "gated-session"
+effort = "low"
+
+# Mid tier, low effort, + gate. Pair with sonnet-lo (same model + effort) to isolate the
+# gate's value at the mid tier where low effort has left headroom (FM-1).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

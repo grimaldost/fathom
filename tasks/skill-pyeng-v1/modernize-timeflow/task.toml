@@ -1,0 +1,18 @@
+id = "modernize-timeflow"
+instruction = """
+Modernize this Python project to production-quality standards. Improve its project
+layout, packaging and tooling configuration, dependency management, and quality and
+security tooling to current best practice. Preserve all existing behavior: the
+existing tests must still pass and the public functions `parse_timestamp` and
+`normalize` must keep their current behavior.
+"""
+
+[limits]
+trial_timeout_s = 600
+# Modernization is multi-step (move to src/, rewrite pyproject, add tooling/CI):
+# the first run showed a skill-armed completion at ~36 turns and the bare arm
+# still mid-task at the old 30 cap, so 80 gives headroom for every arm to finish.
+max_turns = 80
+
+[verify]
+entry = "verify.py"

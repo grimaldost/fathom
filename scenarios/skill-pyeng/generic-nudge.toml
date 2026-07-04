@@ -1,0 +1,15 @@
+name = "generic-nudge"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+inject = "assets/generic-nudge.md"
+
+[limits]
+trial_timeout_s = 600

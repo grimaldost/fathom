@@ -1,0 +1,203 @@
+# ==========================================================================
+# series.toml -- fathom v1 build (spec: docs/specs/2026-06-10-fathom-v1-build.md)
+# PR01..PR12 == spec sections 1..12 (bijection). Spec section 13 (the paid
+# eval run) is OPERATOR-RUN after this series completes -- deliberately not an
+# engine PR.
+#
+# Budget forecast (keel Route & Budget; drift gate planned, reviewed via
+# `the series engine analyze`):
+#   model-mix baseline ~$1.05 vs all-strong ~$1.74 (40% mix saving);
+#   realistic with impl+review+fix cycles and max effort: ~$8-15 ceiling.
+# ==========================================================================
+
+[series]
+id = "fathom-v1-build"
+version = "1"
+
+[branches]
+base = "main"
+integration = "feat/v1-build"
+
+[claude]
+tier = "mid"                  # majority tier; per-PR overrides below
+effort = "max"
+permission_mode = "bypassPermissions"   # build series on operator machine -- standard dev config; the EVAL arms fathom itself spawns pin non-bypass per spec section 6
+preamble = "Read docs/specs/2026-06-10-fathom-v1-build.md (your PR's section) and docs/method/method-bindings.md before starting."
+
+[claude.budgets]
+implementation = "15.00"
+review = "5.00"
+fix = "3.00"
+
+[claude.tools]
+implementation = "Bash,Read,Write,Edit"
+review = "Bash(git:*),Bash(uv:*),Bash(python:*),Bash(grep:*),Bash(cat:*),Bash(find:*),Bash(wc:*),Read"
+fix = "Bash,Read,Write,Edit"
+
+[review]
+blocking = true
+max_fix_attempts = 1
+
+[substitutions]
+
+[paths]
+prompts = "pr-series/v1-build"
+review_prompt = "pr-series/v1-build/REVIEW_PROMPT.md"
+outputs = ".pr-outputs/v1-build"
+
+[quality_gates]
+# --frozen so gates never rewrite uv.lock (PR01 commits it).
+sync_cmd = "uv sync --frozen --quiet"
+# Recorded rationale (spec section 12 discipline): the repo has no Python
+# toolchain until PR01 lands, so a strict baseline sweep on the integration
+# branch would abort the series for reasons unrelated to any PR.
+baseline_strict = false
+
+[[quality_gates.checks]]
+name = "ruff_fmt"
+run = "uv run ruff format --check ."
+pass_pattern = "already formatted"
+autofix = "uv run ruff format ."
+blocking = true
+
+[[quality_gates.checks]]
+name = "ruff_chk"
+run = "uv run ruff check ."
+pass_pattern = "All checks passed!"
+autofix = "uv run ruff check --fix ."
+blocking = true
+
+[[quality_gates.checks]]
+name = "pytest"
+# `&& echo` only fires on a zero exit, so the sentinel is absent on ANY failure
+# or crash. A bare `pass_pattern = " passed"` is vacuous: it matches
+# "1 failed, 386 passed", and pass_pattern mode ignores the return code
+# (the series engine's _gatecheck.py gate_failed). This masked a real failure once.
+run = "uv run pytest -q && echo PYTEST_GATE_OK"
+pass_pattern = "PYTEST_GATE_OK"
+blocking = true
+
+[parallel]
+enabled = true
+max_workers = 3
+worktree_dir = ".worktrees"
+
+[retry]
+enabled = true
+max_attempts = 4
+base_seconds = 10.0
+cap_seconds = 120.0
+jitter_seconds = 5.0
+
+[injections]
+shared = ['.series-engine/injections/automation_directive.md']
+implementation = []
+review = ['.series-engine/injections/review_checklist.md']
+fix = []
+
+# ---------------------------------------------------------------------------
+# PRs -- one per spec section; depends_on is the real data DAG
+# ---------------------------------------------------------------------------
+[[prs]]
+id = "PR01"
+branch = "chore/scaffold"
+prompt = "PR01_scaffold.md"
+phase = 1
+depends_on = []
+tier = "weak"
+budget_impl = "4.00"
+budget_review = "2.00"
+budget_fix = "2.00"
+
+[[prs]]
+id = "PR02"
+branch = "feat/ledger"
+prompt = "PR02_ledger.md"
+phase = 2
+depends_on = ["PR01"]
+
+[[prs]]
+id = "PR03"
+branch = "feat/taskbank"
+prompt = "PR03_taskbank.md"
+phase = 2
+depends_on = ["PR01"]
+
+[[prs]]
+id = "PR04"
+branch = "feat/scenario"
+prompt = "PR04_scenario.md"
+phase = 2
+depends_on = ["PR01"]
+
+[[prs]]
+id = "PR05"
+branch = "feat/claude-cli-adapter"
+prompt = "PR05_adapter.md"
+phase = 2
+depends_on = ["PR04"]
+tier = "strong"
+
+[[prs]]
+id = "PR06"
+branch = "feat/strategy-executors"
+prompt = "PR06_strategies.md"
+phase = 3
+depends_on = ["PR02", "PR03", "PR04", "PR05"]
+tier = "strong"
+
+[[prs]]
+id = "PR07"
+branch = "feat/verifier"
+prompt = "PR07_verifier.md"
+phase = 2
+depends_on = ["PR02", "PR03"]
+
+[[prs]]
+id = "PR08"
+branch = "feat/pairwise-judge"
+prompt = "PR08_judge.md"
+phase = 3
+depends_on = ["PR02", "PR05"]
+
+[[prs]]
+id = "PR09"
+branch = "feat/report"
+prompt = "PR09_report.md"
+phase = 2
+depends_on = ["PR02"]
+
+[[prs]]
+id = "PR10"
+branch = "feat/cli"
+prompt = "PR10_cli.md"
+phase = 3
+depends_on = ["PR06", "PR07", "PR09"]
+
+[[prs]]
+id = "PR11"
+branch = "feat/smoke-gate"
+prompt = "PR11_smoke.md"
+phase = 3
+depends_on = ["PR05", "PR10"]
+tier = "strong"
+
+[[prs]]
+id = "PR12"
+branch = "feat/pr-pilot-v1-bank"
+prompt = "PR12_taskbank_pr_pilot_v1.md"
+phase = 3
+depends_on = ["PR03", "PR07"]
+tier = "strong"
+
+[[phases]]
+after_pr = "PR01"
+label = "Phase 1 -- toolchain ready"
+
+[[phases]]
+after_pr = "PR09"
+label = "Phase 2 -- spine modules complete"
+
+[gitignore]
+marker = "# series-engine (managed)"
+entries = [".pr-outputs/", ".worktrees/", "/report/"]

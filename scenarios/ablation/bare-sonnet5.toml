@@ -1,0 +1,15 @@
+name = "bare-sonnet5"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Plain-Claude baseline for the ablation probe: single session, self-check via python,
+# no series engine. Generous timeout so a long-but-legit solve is not truncated into a false
+# failure. Difficulty probe on the querytable defect-escape task.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1500

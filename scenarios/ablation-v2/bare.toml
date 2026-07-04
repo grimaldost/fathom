@@ -1,0 +1,17 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Plain-Claude baseline for the v2 (brownfield) ablation: one session, no series engine.
+# The model is given the full repo -- INCLUDING tests/ -- and may run python. Whether
+# it runs the full suite and iterates to green is its own judgement; that judgement is
+# exactly the discipline the gated arms remove. Generous timeout so a long-but-legit
+# solve is never truncated into a false failure.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

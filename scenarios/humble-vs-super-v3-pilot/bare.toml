@@ -1,0 +1,15 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+# The calibration floor / discrimination anchor: identical tools to the armed arms, but
+# NO plugins and NO context injection. Its all-criteria pass-rate must land inside (0, 1)
+# for the bank to carry correctness signal (see V3_NOTES.md).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 2400

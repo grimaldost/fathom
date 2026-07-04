@@ -1,0 +1,16 @@
+name = "series"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "series"
+effort = "high"
+
+[tools]
+# Tool repo resolved to a git SHA at run time; invocation command is
+# "uv run --project <repo> convoy" — never a bare PATH lookup.
+source = "repo"
+repo = "C:/Users/grima/Documents/convoy"
+
+[limits]
+# 60-minute ceiling: the series engine spawns multiple subagents sequentially;
+# one engine subagent allowance must not exceed this trial budget.
+trial_timeout_s = 3600

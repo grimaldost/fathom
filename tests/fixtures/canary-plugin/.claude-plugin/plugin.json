@@ -1,0 +1,5 @@
+{
+  "name": "fathom-smoke-canary",
+  "description": "Canary plugin for the fathom smoke mount/available gate (spec §5). Never triggered in production.",
+  "version": "0.0.1"
+}

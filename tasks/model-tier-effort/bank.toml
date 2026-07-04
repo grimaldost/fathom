@@ -1,0 +1,9 @@
+name = "model-tier-effort"
+dataset_version = "1"
+holdout = []
+
+# Targeted effort sub-study (§5): the ONE task the full matrix showed has headroom for
+# effort to matter — fix-nonlocal-parse (Haiku 40% / Sonnet 60% / Opus 100% on its hard
+# criteria at effort=high). Every other model-tier-v1 task ceilings at 100%, so effort
+# can only move the needle here. This bank runs the cheaper models at xhigh thinking to
+# test the substitution question: can extra thinking close the capability gap to Opus?

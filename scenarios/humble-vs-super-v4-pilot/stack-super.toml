@@ -1,0 +1,21 @@
+name = "stack-super"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+# Mounted from v2's vendored tree (same content => identical config_hash as v2's
+# stack-super). v3 self-contains only if it graduates.
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v2/plugins/superpowers@6fd4507",
+    "../../tasks/humble-vs-super-v2/plugins/engineering-discipline",
+    "../../tasks/humble-vs-super-v2/plugins/session-workflow",
+]
+
+[limits]
+trial_timeout_s = 2400

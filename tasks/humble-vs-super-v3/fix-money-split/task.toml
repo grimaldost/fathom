@@ -1,0 +1,16 @@
+id = "fix-money-split"
+instruction = """
+The payments team reports that `split_amount()` loses money: splitting 100 cents
+across 3 recipients returns parts that total only 99. Find and fix the bug so
+`split_amount` behaves as documented. Preserve the existing public API, and keep the
+shipped test suite passing.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

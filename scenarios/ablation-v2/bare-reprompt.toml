@@ -1,0 +1,14 @@
+name = "bare-reprompt"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "reprompt-session"
+effort = "high"
+
+# Iteration-matched control for bare-gate at the strong tier (FM-6). Expected ~null vs
+# bare (self-gating), but it pins the "extra attempt" confound at Sonnet too.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,19 @@
+id = "fix-nonlocal-urlkey"
+instruction = """
+The `urlstats` team reports that the same page is counted as several different entries
+when its URL differs only by a query string or a trailing slash — for example `/home`,
+`/home/`, and `/home?ref=promo` show up as three separate pages, and `top_page()` can
+then report the wrong page. Fix it so URLs that differ only by query string or trailing
+slash are treated as the same page, as documented. Preserve the existing public API,
+and keep the shipped test suite passing.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["page_counts_merge", "top_page_merge"]

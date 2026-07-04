@@ -1,0 +1,16 @@
+name = "bare-gate-review"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "gated-review"
+effort = "high"
+
+# Gate discipline PLUS one structured review pass after the gate is green (VERDICT +
+# one fix). Isolates the marginal value of review OVER the gate -- i.e. whether a
+# review pass catches defects the visible gate cannot (the escape surface between the
+# visible tests and the blind oracle).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

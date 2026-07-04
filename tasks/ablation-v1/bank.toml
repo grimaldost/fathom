@@ -1,0 +1,8 @@
+name = "ablation-v1"
+dataset_version = "1"
+# Defect-escape bank for the series engine value-side ablation: tasks tuned to sit in
+# Sonnet 5's FAILURE zone (bare pass rate strictly inside (0,1)) so the gate/review/
+# authoring arms have escapes to catch. Oracles are naive-and-obviously-correct so
+# grader risk is low; difficulty comes from edge cases (NULL/3-valued logic,
+# ordering, aggregate null-semantics) a one-shot tends to miss under property tests.
+holdout = []

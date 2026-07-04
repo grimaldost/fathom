@@ -1,0 +1,16 @@
+name = "bare-sonnet5"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# The plain-Claude baseline (current mid tier). Matches the series-engine bank `bare`
+# convention: single session, self-check via python. A generous timeout avoids a
+# truncated-but-legit solve being scored as a false failure (which would inflate
+# the "bare fails" rate). Difficulty probe for the usefulness ladder.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1200

@@ -1,0 +1,21 @@
+id = "loyalty-reward-large"
+instruction = """
+Our loyalty program isn't paying out correctly: gold and platinum members are only
+earning the base reward rate on their purchases instead of their higher tier rate.
+Silver members are fine. Reward credit should be based on each customer's loyalty tier
+and the program's configured rate for that tier. Fix the reward calculation so a
+customer's tier and its configured rate are both applied. Preserve the public API and
+keep the shipped test suite passing.
+"""
+
+[context]
+size = "large"
+pair = "loyalty-reward"
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 160
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["reward_reflects_gold_tier", "reward_reflects_platinum_tier"]

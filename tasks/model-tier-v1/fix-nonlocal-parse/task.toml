@@ -1,0 +1,18 @@
+id = "fix-nonlocal-parse"
+instruction = """
+Users of the `logparse` package report two problems with log lines whose message
+contains spaces: `codes()` raises a ValueError on some of those lines, and `messages()`
+comes back garbled (cut off at the first space). Lines with a simple one-word message
+are fine. Find and fix the bug so `messages()` and `codes()` behave as documented for
+all log lines. Preserve the existing public API, and keep the shipped test suite passing.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["messages_quoted", "codes_quoted_tagged"]

@@ -1,0 +1,20 @@
+id = "fix-offbyone-paginator"
+instruction = """
+The `paginator` package splits a result set into fixed-size pages. Users report that
+the final page of results goes missing whenever the total number of items is not an
+exact multiple of the page size — for example, 25 items at 10 per page reports only 2
+pages instead of 3. Find and fix the bug so the reported page count is correct for any
+non-negative item count and positive page size. Preserve the existing public API and
+all current behavior; the shipped test suite must still pass.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table. The cost-probe pilot
+# (spec DoD) recalibrates against observed turn/cost counts; the per-spawn budget cap is
+# the real spend guard, not these ceilings.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

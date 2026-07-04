@@ -1,0 +1,16 @@
+name = "haiku-gate"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "high"
+
+# The KEY interaction cell. If a strong model self-verifies (making the gate redundant),
+# the gate's value should surface at the WEAK tier: does the deterministic gate + fix
+# loop rescue Haiku failures that bare Haiku leaves on the table? bare-haiku vs
+# haiku-gate is the fair isolation of the gate's value where headroom actually exists.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

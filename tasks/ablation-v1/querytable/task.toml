@@ -1,0 +1,42 @@
+id = "querytable"
+instruction = """
+Implement a small in-memory query engine in the `querytable` package (pure standard
+library — add no dependencies). A "table" is a list of row dicts; every value is an
+`int` or `None` (SQL NULL). Keep the existing behaviour and all baseline tests
+passing (`python -m unittest discover -s tests -t .` from the project root).
+
+Implement exactly these three functions in `querytable.core` (re-exported from
+`querytable`). Each returns a NEW list and must not mutate its input.
+
+1. `where(rows, col, op, value)` — filter. `op` is one of `"="`, `"!="`, `"<"`,
+   `"<="`, `">"`, `">="`; `value` is an `int` (never None). SQL three-valued logic:
+   if a row's `col` is `None`, EVERY comparison is UNKNOWN, so the row is EXCLUDED
+   (including for `"!="`). Otherwise include the row iff `row[col] <op> value` holds.
+   Row order is preserved.
+
+2. `order_by(rows, keys)` — sort. `keys` is a list of `(col, descending)` pairs
+   (`descending` is a bool). Sort by the keys in order; the sort is STABLE (rows
+   equal on all keys keep their original relative order). `None` always sorts LAST,
+   in BOTH ascending and descending directions (NULLS LAST).
+
+3. `aggregate(rows, group_by, specs)` — group + aggregate. `group_by` is a list of
+   column names (possibly empty -> one group over all rows). `specs` is a list of
+   `(func, col, alias)` with `func` in `"COUNT"`, `"SUM"`, `"AVG"`, `"MIN"`,
+   `"MAX"`. Group rows by the tuple of `group_by` values (`None` is a valid,
+   distinct group key). Emit one dict per group, in FIRST-APPEARANCE order of the
+   group key, shaped `{**{gcol: keyval}, **{alias: aggval}}`. Each aggregate is over
+   the NON-`None` values of `col` in the group:
+   - `COUNT` -> number of non-None values (0 if none).
+   - `SUM`/`AVG`/`MIN`/`MAX` over the non-None values; if there are NO non-None
+     values the result is `None` (SQL). `AVG` is `sum/count` (a float).
+
+Add unit tests under `tests/` for the new behaviour (NULL handling in `where`,
+multi-key/desc/NULLS-LAST ordering, and the aggregate null-semantics).
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 90
+
+[verify]
+entry = "verify.py"

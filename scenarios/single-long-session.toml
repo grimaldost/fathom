@@ -1,0 +1,14 @@
+name = "single-long-session"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+# Same allowlist as bare — the arm distinction is strategy, not capability.
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+# 10-minute ceiling — same as bare; the arm distinction is strategy, not budget.
+trial_timeout_s = 600

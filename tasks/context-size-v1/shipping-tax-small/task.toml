@@ -1,0 +1,23 @@
+id = "shipping-tax-small"
+instruction = """
+Customers are complaining that their order totals are wrong at checkout. Two problems:
+orders that should qualify for free shipping are still being charged a shipping fee, and
+the sales tax on every order looks too low. The store's configured free-shipping rule and
+tax rate are not being applied to the total. Fix the checkout total so it honors the
+store's configured free-shipping threshold, shipping fee, and tax rate. Preserve the
+existing public API and keep the shipped test suite passing.
+"""
+
+[context]
+size = "small"
+pair = "shipping-tax"
+
+# Sized for the weakest model NAVIGATING the workspace (not just solving) — the large
+# twin buries the contract modules among ~40 siblings (FM-7).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["free_shipping_above_threshold", "charges_below_threshold_correctly"]

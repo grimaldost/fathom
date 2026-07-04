@@ -1,0 +1,17 @@
+name = "haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# Weak tier. Arms differ ONLY by `model`; identical tools, strategy, effort, limits so the
+# contrast is the model. No `Task` (clean single-session solve, no subagent orchestration).
+# Limits sized for the WEAKEST model NAVIGATING the large fixtures (~40 modules), not just
+# solving (FM-7) — so Haiku's large-context attempts are not truncated into ERRORED and
+# dropped (a false ceiling). The pilot confirms no LARGE trial ERRORED-truncates.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,17 @@
+name = "humble-only"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v1/plugins/humblepowers@0.3.1",
+]
+
+[limits]
+trial_timeout_s = 2400

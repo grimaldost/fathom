@@ -1,0 +1,23 @@
+id = "feature-retry-backoff"
+instruction = """
+Implement the retry-with-exponential-backoff helper described in SPEC.md. Extend
+the existing `retrier` package (pure standard library — add no dependencies) so
+that `retry` is importable as `from retrier import retry` and behaves exactly as
+SPEC.md specifies. Keep the existing helpers and the baseline tests passing.
+
+Add unit tests under `tests/` (run with `python -m unittest discover -s tests -t .`
+from the project root) covering the happy path and each edge case SPEC.md names:
+zero-retry (`attempts=1`), jitter bounds, and error propagation.
+"""
+
+[limits]
+# Sized for the LONGEST arm. With Task allowed (spec §8), discipline arms can fan
+# out into subagents (humble planned-execution / super subagent-driven-development)
+# and run a reproducing-test-then-implement loop, so they need materially more
+# turns/wall-clock than a bare one-shot. These ceilings give every arm headroom to
+# finish (FM-11: discipline arms must not be truncated out of the per-criterion table).
+trial_timeout_s = 2400
+max_turns = 100
+
+[verify]
+entry = "verify.py"

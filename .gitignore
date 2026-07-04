@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+/report/
+.pr-outputs/
+.worktrees/
+
+# Top-level run logs (nohup/console captures from matrix runs) - never artifacts
+/.*.log
+
+# Vendored THIRD-PARTY plugin snapshots - excluded pending a submodule/pin decision (2026-07-01).
+# Own craft-collection snapshots (humblepowers / engineering-discipline / session-workflow) ARE committed.
+tasks/*/plugins/superpowers@*/
+
+# per-phase scenario staging dirs (copies of scenarios/ablation-v2 arms)
+scenarios/_p*/

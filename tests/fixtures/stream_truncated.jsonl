@@ -1,0 +1,4 @@
+{"type": "system", "subtype": "init", "model": "claude-opus-4-8-20260115", "version": "1.2.3", "tools": ["Read", "Grep"], "plugins": []}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Starting."}], "usage": {"input_tokens": 800, "output_tokens": 30, "cache_read_input_tokens": 100}}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": "Still going"}], "usage": {"input_tokens": 900, "output_tokens": 75, "cache_read_input_tokens": 150}}}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "tex

@@ -1,0 +1,17 @@
+id = "fix-clamp"
+instruction = """
+Users of the `numkit` package report that `clamp()` does not cap large values:
+`clamp(99, 0, 10)` returns 99 instead of 10. Values at or below the low bound are
+fine. Find and fix the bug so `clamp` behaves as documented. Preserve the existing
+public API, and keep the shipped test suite passing.
+"""
+
+# Small task, but sized so the longest discipline arm is never truncated out of the
+# per-criterion table.
+[limits]
+trial_timeout_s = 600
+max_turns = 60
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["clamp_low", "clamp_high"]

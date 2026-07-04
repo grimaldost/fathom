@@ -1,0 +1,16 @@
+name = "sonnet5"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Mid tier, CURRENT model (Sonnet 5). Added 2026-07-01 to re-measure calibration after the
+# series engine mid-tier bump Sonnet 4.6 -> Sonnet 5. Left the June `sonnet` arm (Sonnet 4.6) in
+# place so the 4.6->5 delta is visible side-by-side. Identical to haiku/opus/sonnet except
+# `model`, so the contrast stays the model axis.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

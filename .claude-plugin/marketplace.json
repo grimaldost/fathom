@@ -1,0 +1,18 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/marketplace.schema.json",
+  "name": "fathom",
+  "owner": {
+    "name": "Grimaldo Stanzani",
+    "email": "grimaldosj93@gmail.com"
+  },
+  "metadata": {
+    "description": "Scenario-blind tool-effectiveness evals"
+  },
+  "plugins": [
+    {
+      "name": "fathom",
+      "source": ".",
+      "description": "Run/report/smoke a coding-tool eval matrix, scored blind to scenario, with economy joined after scoring."
+    }
+  ]
+}

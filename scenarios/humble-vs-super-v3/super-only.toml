@@ -1,0 +1,19 @@
+name = "super-only"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+# Mounted from v2's vendored tree (same content => identical config_hash as v1/v2's
+# super-only). v3 self-contains its plugins only if it graduates to a committed instrument.
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v2/plugins/superpowers@6fd4507",
+]
+
+[limits]
+trial_timeout_s = 2400

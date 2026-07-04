@@ -1,0 +1,16 @@
+name = "bare-gate"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "gated-session"
+effort = "high"
+
+# Engine-INDEPENDENT gate discipline: one implementation spawn, then the harness runs
+# the task's visible gate (tests/) and re-prompts the agent with the failing output up
+# to the bounded fix-attempt cap. No orchestration engine. Isolates the value of a
+# DETERMINISTIC gate + fix loop over the model's own stop-when-satisfied judgement.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

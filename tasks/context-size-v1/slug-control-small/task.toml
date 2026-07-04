@@ -1,0 +1,20 @@
+id = "slug-control-small"
+instruction = """
+Our URL slugs look broken: titles with extra spaces or punctuation produce slugs with
+repeated hyphens (like "hello---world"), and slugs sometimes start or end with a stray
+hyphen. A slug should collapse any run of separators into a single hyphen and never start
+or end with one. Fix the slug generation. Preserve the public API and keep the shipped
+test suite passing.
+"""
+
+[context]
+size = "small"
+pair = "slug-control"
+
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["collapses_repeated_separators", "strips_edges"]

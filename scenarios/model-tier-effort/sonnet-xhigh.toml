@@ -1,0 +1,14 @@
+name = "sonnet-xhigh"
+adapter = "claude-cli"
+model = "claude-sonnet-4-6"
+strategy = "single-session"
+effort = "xhigh"
+
+# Substitution arm: mid model + extra thinking. Compare against the main matrix's
+# sonnet@high (60% on nonlocal-parse hard criteria) and opus@high (100%).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

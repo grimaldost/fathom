@@ -1,0 +1,15 @@
+name = "haiku-reprompt"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "reprompt-session"
+effort = "high"
+
+# Iteration-matched control for haiku-gate (FM-6): same TWO spawns, but the second is a
+# generic "re-examine and fix" with NO gate/test information. haiku vs haiku-reprompt vs
+# haiku-gate separates "the gate's information + forcing" from "simply a second attempt".
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,24 @@
+name = "haiku-gate-sg"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "high"
+
+# E1 KEYSTONE arm: weak tier + STRENGTHENED deterministic gate. Identical to
+# haiku-gate except the harness's gate also runs the type-contract probe (the
+# bool-is-int class that dominates Haiku's failures and provably escapes the
+# visible suite). The probe is harness-side (never in the workspace); its failing
+# output feeds the ordinary fix loop. Tests the series engine's evolution thesis: a weak
+# model + a strong deterministic oracle rescues the defects the model cannot see
+# itself, for ~0 extra LLM tokens when green.
+# NOTE: the probe SCRIPT's content is not hashed (only the command string is) --
+# if type_probe.py is edited, version this scenario's name.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[gate]
+extra = ["python C:/Users/grima/Documents/fathom/tasks/ablation-v2/exprlang/type_probe.py ."]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,27 @@
+name = "orchestrated"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "gated-session"
+effort = "high"
+
+# EFFICIENCY test, corrected (operator's framing). NOT a lazy agent -- the agent does its
+# normal implementation work at full effort. The difference from `bare` is that the
+# VERIFICATION / ORCHESTRATION discipline is provided by the series engine's fixed, deterministic
+# gate + fix loop (the injected brief tells the agent to rely on it instead of inventing
+# its own verification). Hypothesis: the fixed tooling discipline reaches `bare`'s 100%
+# quality at LOWER cost (tokens + wall-time), because the token-expensive
+# "reason about how to verify" work is offloaded to the ~free deterministic gate.
+#
+# Reads against two references:
+#   vs `bare`      -- whole approach: fixed tooling discipline vs agent self-orchestration
+#   vs `bare-gate` -- isolates the brief: does "rely on the gate" cut the agent's
+#                     redundant self-verification (bare-gate has the agent verify AND the gate)?
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+inject = "C:/Users/grima/Documents/fathom/scenarios/ablation-v2/orchestrated-brief.md"
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,16 @@
+name = "sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-4-6"
+strategy = "single-session"
+effort = "high"
+
+# Mid tier. Identical to the other arms but for `model` (the routing variable under test).
+# Byte-identical to scenarios/context-size/sonnet.toml → same content-based config_hash, so
+# sonnet trials run from this sonnet-only dir are valid + recognized by the full-matrix view
+# (lets us fill the load-bearing mid arm without re-walking the doomed opus-yearfraction reruns).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

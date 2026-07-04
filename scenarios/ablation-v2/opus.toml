@@ -1,0 +1,16 @@
+name = "opus"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+# Tier axis, strong tier. Same single-session bare harness as `bare`/`sonnet`, only the
+# model changes. Tests whether Opus actually beats Sonnet 5 on a task with headroom --
+# the over-provisioning / tier-by-difficulty question, now on a discriminating
+# instrument (unlike model-tier-v1, where all tasks sat inside every tier's reach).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

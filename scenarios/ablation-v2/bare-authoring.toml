@@ -1,0 +1,20 @@
+name = "bare-authoring"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Authoring arm (mid tier): plain single session, but the series-engine-style structured
+# brief (scope + plan + Definition-of-Done verification discipline) is injected as
+# system-prompt context. No engine, no external gate -- isolates whether the SKILLS'
+# prompt authoring alone lifts quality over bare. Absolute path so it resolves
+# regardless of the spawn's working directory (FM-2: the arm must not silently degrade).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+inject = "C:/Users/grima/Documents/fathom/scenarios/ablation-v2/authoring-brief.md"
+
+[limits]
+trial_timeout_s = 1800

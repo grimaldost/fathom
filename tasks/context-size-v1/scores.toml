@@ -1,0 +1,27 @@
+# Per-task complexity scores (series engine pr-prompt-scorer, pinned 0.8.1 @ 1c2748f) for the
+# predicted-tier baseline [0-25 weak / 26-55 mid / 56-100 strong].
+#
+# LOAD-BEARING for this study: each matched pair's SMALL and LARGE members carry the SAME
+# score, because the scorer reads the PROMPT and the two members ship the *identical*
+# symptom-only instruction (only the workspace volume differs). That is exactly the gap the
+# study probes: the scorer cannot distinguish small from large, yet they may need different
+# tiers. So the study's validity rests on small==large here, NOT on the absolute values.
+#
+# These are author estimates (single rater). Unlike model-tier-v1 (where the score→tier
+# calibration WAS the result and needed two independent raters), here the score is
+# scaffolding for the predicted-tier column; the headline is the empirical small→large
+# right-tier shift per pair (§7). The absolute scores are a documented limitation (§9).
+#
+# SMALL bug selection (ADR-0008 D4 / FM-A): each bug is seeded from the weak-passable shape
+# (the model-tier `urlkey`/`urlstats` family Haiku aced at 100%, not the `parse` family it
+# floored at 40%), so the series engine's weak-SMALL ≥80% floor is satisfiable by construction.
+
+[scores]
+shipping-tax-small = 34
+shipping-tax-large = 34
+loyalty-reward-small = 48
+loyalty-reward-large = 48
+nonlocal-sku-small = 64
+nonlocal-sku-large = 64
+slug-control-small = 18
+slug-control-large = 18

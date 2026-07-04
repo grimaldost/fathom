@@ -1,0 +1,15 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+# Spawn tool allowlist (spec §5) — under headless default-deny an empty list
+# means NO tools; the agent must be able to read/edit the fixture and run it.
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+# 10-minute ceiling for a single bare-agent attempt.
+trial_timeout_s = 600

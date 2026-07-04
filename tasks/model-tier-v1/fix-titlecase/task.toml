@@ -1,0 +1,19 @@
+id = "fix-titlecase"
+instruction = """
+Users of the `textkit` package report two problems with `title_case()`: it raises an
+IndexError on an empty string instead of returning "", and it leaves the rest of an
+already-capitalised word untouched, so `title_case("hELLO wORLD")` comes back as
+"HELLO WORLD" instead of "Hello World". A simple lower-case input works. Find and fix
+the bug so `title_case` behaves as documented. Preserve the existing public API, and
+keep the shipped test suite passing.
+"""
+
+# Small task, but sized so the longest discipline arm is never truncated out of the
+# per-criterion table.
+[limits]
+trial_timeout_s = 600
+max_turns = 60
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["title_empty", "title_mixed_case"]

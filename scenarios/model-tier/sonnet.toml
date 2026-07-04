@@ -1,0 +1,13 @@
+name = "sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-4-6"
+strategy = "single-session"
+effort = "high"
+
+# Mid tier. Identical to haiku/opus except `model`.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

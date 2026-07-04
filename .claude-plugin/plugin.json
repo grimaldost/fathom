@@ -1,0 +1,21 @@
+{
+  "name": "fathom",
+  "version": "0.1.0",
+  "description": "Scenario-blind tool-effectiveness evals. Run a coding tool, skill, model tier, or execution strategy through a task-bank matrix, score the results blind to which arm produced them, and join quality with economy (tokens, turns, USD) into a longitudinal scorecard. The engine and its committed longitudinal ledger live in your own fathom checkout; point FATHOM_HOME at it. Requires uv and a local fathom repository.",
+  "author": {
+    "name": "Grimaldo Stanzani",
+    "email": "grimaldosj93@gmail.com"
+  },
+  "mcpServers": {
+    "fathom": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--with",
+        "fastmcp>=2.0",
+        "python",
+        "${CLAUDE_PLUGIN_ROOT}/mcp/fathom_server.py"
+      ]
+    }
+  }
+}

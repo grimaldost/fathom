@@ -1,0 +1,18 @@
+id = "fix-dedup-records"
+instruction = """
+Users of the `records` package report that the same person still appears several
+times in the output of `dedupe()` — for example "Ada Lovelace" and "ada lovelace"
+are both kept instead of being collapsed into one. Find and fix the bug so `dedupe`
+behaves as documented. Preserve the existing public API, and keep the shipped test
+suite passing.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+hard_criteria = ["dedup_case", "dedup_whitespace"]

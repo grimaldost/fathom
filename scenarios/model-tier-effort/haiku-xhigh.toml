@@ -1,0 +1,14 @@
+name = "haiku-xhigh"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "xhigh"
+
+# Substitution arm: cheapest model + extra thinking. Compare against the main matrix's
+# haiku@high (40% on nonlocal-parse hard criteria) and opus@high (100%).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,16 @@
+name = "sonnet-lo"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "low"
+
+# Mid tier at LOW effort. A fair way to create headroom at Sonnet without handicapping
+# bare relative to its own gate arm: at low effort the model self-verifies less
+# reliably, so sonnet-lo vs sonnet-lo-gate can show gate value at the mid tier. Both
+# arms share the same model AND effort, so the comparison stays fair (FM-1).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

@@ -1,0 +1,40 @@
+{
+  "description": "Mechanical enforcement: ruff-format on edit (PostToolUse, non-blocking); steer Bash toward uv inside uv projects (PreToolUse, CLAUDE_ALLOW_PIP=1 to override); and an inert-by-default data pre-shipping-checklist nudge (Stop, enable with DATAENG_CHECKLIST_NUDGE=1).",
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/ruff_format.py"]
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/uv_enforce.py"]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/stop_nudge.py"]
+          }
+        ]
+      }
+    ]
+  }
+}

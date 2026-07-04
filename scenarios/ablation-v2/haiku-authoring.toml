@@ -1,0 +1,18 @@
+name = "haiku-authoring"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# Authoring arm at the WEAK tier -- like the gate, the skills' prompt discipline is most
+# likely to help where the model does not already self-verify. haiku vs haiku-authoring
+# isolates the value of the series engine's authoring on the tier with headroom.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+inject = "C:/Users/grima/Documents/fathom/scenarios/ablation-v2/authoring-brief.md"
+
+[limits]
+trial_timeout_s = 1800

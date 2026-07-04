@@ -1,0 +1,18 @@
+name = "ablation-v2"
+dataset_version = "1"
+# Brownfield defect-escape bank for the series engine value-side ablation.
+#
+# v1 (querytable) was GREENFIELD + single-file, so it had no regression surface
+# and no cross-file coupling -> bare Sonnet 5 aced it 5/5 and the gate/review arms
+# had nothing to catch (a quality-null). v2 fixes both: the candidate MODIFIES an
+# existing multi-file package (lexer/parser/evaluator) with a comprehensive GREEN
+# baseline suite, adding a well-specified feature whose subtleties (short-circuit
+# error-suppression, bool-is-a-subclass-of-int type checks, multi-char operator
+# lexing, precedence) a one-shot self-judged solution tends to get subtly wrong or
+# under-test. The goal is a bare pass rate strictly inside (0,1) so the disciplined
+# arms (gate / review / authoring) have escapes to catch.
+#
+# The visible suite (tests/, the gate) is a PROPER SUBSET of the blind oracle
+# (verify.py): passing the gate does not guarantee passing verify.py, so
+# defect-escape is measurable and review can add marginal value.
+holdout = []

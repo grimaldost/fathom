@@ -1,0 +1,15 @@
+name = "haiku-gate-review"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-review"
+effort = "high"
+
+# Weak tier + gate + review. Marginal value of the review pass over the gate at the tier
+# where the gate itself has room to help. Together with bare-haiku and haiku-gate this
+# gives the full weak-tier discipline ladder (bare -> +gate -> +review).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

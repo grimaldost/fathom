@@ -1,0 +1,56 @@
+id = "exprlang"
+instruction = """
+Extend the existing `exprlang` expression-language package (pure standard library --
+add no dependencies). It currently evaluates integer/float arithmetic; you will add
+comparison and boolean operators. The package is split across
+`exprlang/lexer.py` (tokenizer), `exprlang/parser.py` (parser -> AST),
+`exprlang/evaluator.py` (AST evaluator), and `exprlang/errors.py`. The public entry
+point is `exprlang.evaluate(expr, env=None)`.
+
+KEEP ALL EXISTING BEHAVIOUR AND BASELINE TESTS PASSING
+(`python -m unittest discover -s tests -t .` from the project root). The existing
+arithmetic semantics, error types (`LexError`, `ParseError`, `EvalError`), and
+division/modulo-by-zero handling must not regress.
+
+Values are `int`, `float`, and now `bool`. Add exactly this feature:
+
+1. Boolean literals `true` and `false` (evaluate to Python `True` / `False`).
+
+2. Comparison operators `==`, `!=`, `<`, `<=`, `>`, `>=`. They are binary,
+   left-associative, and require TWO NUMERIC (int or float) operands; the result is
+   a `bool`. A boolean operand to a comparison is a type error (see below).
+
+3. Boolean operators `and`, `or` (binary, left-associative) and `not` (prefix).
+   They require BOOLEAN operands and produce a `bool`. `and` / `or` MUST
+   short-circuit: `and` evaluates its right operand only if the left is `True`;
+   `or` evaluates its right operand only if the left is `False`. Because of
+   short-circuiting, the right operand's errors are suppressed when the left
+   already decides the result -- e.g. `false and (1 / 0 > 0)` evaluates to `False`
+   and MUST NOT raise, while `true and (1 / 0 > 0)` DOES raise.
+
+4. Type errors: an operand of the wrong type (a bool where a number is required, or
+   a number where a bool is required) raises `TypeMismatchError`, a NEW subclass of
+   the existing `ExprError` you add to `exprlang.errors`. Note the standard rules:
+   arithmetic (`+ - * / %`) and comparison operators require numeric operands and
+   reject booleans; `and` / `or` / `not` require boolean operands and reject
+   numbers.
+
+Operator precedence, from LOWEST to HIGHEST binding:
+   `or` < `and` < `not` < (comparisons) < `+` `-` < `*` `/` `%` < unary `-` `+`
+All binary operators are left-associative; `not` and unary `-`/`+` are prefix.
+So `1 < 2 and 3 < 4` parses as `(1 < 2) and (3 < 4)`, and `not 1 < 2` parses as
+`not (1 < 2)`.
+
+Add unit tests under `tests/` covering the new behaviour (comparisons, and/or/not,
+short-circuiting in BOTH directions, the precedence rules, and the type errors).
+"""
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 120
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+[verify]
+entry = "verify.py"

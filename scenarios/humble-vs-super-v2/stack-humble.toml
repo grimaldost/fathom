@@ -1,0 +1,19 @@
+name = "stack-humble"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v2/plugins/humblepowers@0.4.0",
+    "../../tasks/humble-vs-super-v2/plugins/engineering-discipline",
+    "../../tasks/humble-vs-super-v2/plugins/session-workflow",
+]
+
+[limits]
+trial_timeout_s = 2400
