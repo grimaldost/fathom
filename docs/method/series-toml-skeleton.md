@@ -1,43 +1,66 @@
-# series.toml skeleton (with wave budget)
+# series.toml skeleton
 
-The full `series.toml` schema is owned by the series engine (`docs/series-toml-reference.md`
-in its repo) — this skeleton does not restate it. What it adds is the **`[budget]`
-block** (Upgrade 4): a wave-level forecast and a drift gate, extending per-PR
-scoring to the whole wave.
+The `series.toml` schema is the **engine-agnostic series contract**
+(`docs/specs/2026-07-03-series-engine-contract.md` §3; convoy's own format doc is
+`docs/design/02-formats.md` in its repo). fathom **regenerates** this file per trial —
+rewriting `[paths]` to absolute, pinning `[governance]`, and stripping any per-PR
+`model`/`tier`/`effort`/`budget` override — so keep it to the contract's plain value types.
 
 ```toml
 [series]
 id = "<series-name>"
-integration_branch = "refactor/<topic>-consolidation"
+version = "1"
 
-# Per-PR definitions: each cites exactly one spec section (see the PR↔section
-# manifest in the spec). Model tier comes from the complexity score.
-[[pr]]
+[branches]
+base = "main"                      # fathom stages the fixture here
+integration = "<topic>/integration"  # the engine leaves this checked out — fathom scores it
+
+[paths]
+prompts = "prompts"                # fathom rewrites to an absolute path outside the workspace
+outputs = "outputs"                # spawns.jsonl telemetry lands here
+
+[governance]                       # fathom PINS these from the resolved scenario
+model = "claude-opus-4-8"
+effort = "high"
+permission_mode = "default"        # never bypassPermissions (§6 parity)
+timeout_seconds = 1800
+
+[governance.budgets]               # per-phase USD ceilings — TOML numbers, not strings.
+implementation = 20.0              # a spawn that exceeds its cap halts un-integrated
+review = 5.0                       # (outcome="budget" / exit 4, §7) rather than overspending —
+fix = 3.0                          # this IS the wave-budget guard (no separate [budget] block).
+
+[review]
+blocking = false
+max_fix_attempts = 0
+
+[[checks]]                         # a blocking red stops the phase (never silently skipped)
+name = "tests"
+run = "python -m pytest -q"
+blocking = true
+independent = false
+
+# Per-PR definitions: the DAG. NO per-PR model/tier/effort/budget — those are rejected
+# at spec-load (convoy `_FORBIDDEN_PR_KEYS`) so an arm can't silently use a stronger model.
+[[prs]]
 id = "PR01"
-prompt = "PR01_task.md"
-section = "§1"          # traceability: spec section this PR implements
-tier = "haiku"          # from the complexity score
+branch = "<topic>/pr01"
+prompt = "PR01.md"                 # relative to [paths].prompts
+phase = "1"
+depends_on = []
 
-[[pr]]
+[[prs]]
 id = "PR02"
-prompt = "PR02_task.md"
-section = "§2"
-tier = "sonnet"
-
-# --- Upgrade 4: wave budget + drift gate -------------------------------------
-[budget]
-estimate_usd = 26.00          # Σ per-PR tier cost estimates
-all_opus_baseline_usd = 41.00 # same series if every PR ran on Opus (cost framing)
-drift_threshold = 0.25        # flag if cumulative actual exceeds estimate by >25%
-on_breach = "warn"            # "warn" (log + continue) | "block" (stop the wave)
+branch = "<topic>/pr02"
+prompt = "PR02.md"
+phase = "2"
+depends_on = ["PR01"]
 ```
 
-## Drift-check convention
+## Wave budget
 
-A post-PR hook sums actual cost so far and compares to `estimate_usd`. If
-`actual > estimate * (1 + drift_threshold)`, it fires `on_breach`. This catches a
-wave quietly blowing past its forecast — the wave-level analogue of a PR that
-won't score.
-
-*(The hook itself is wired during "apply"; this skeleton defines the contract it
-reads.)*
+There is no wave-level `[budget]`/drift block that any engine reads. Cost is bounded per
+spawn by `[governance.budgets]` (which fathom pins): when a spawn exceeds its cap, convoy
+halts that PR **un-integrated** and reports `outcome = "budget"` / exit 4 (series contract §7).
+fathom records that trial `errored` (excluded from the pass rate, re-runnable after raising
+the cap) rather than scoring truncated work — the wave never quietly blows past its forecast.

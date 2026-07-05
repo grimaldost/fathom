@@ -41,9 +41,10 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
   (usage bills against the plan, not per-token), which is why the token×price estimate is the operative
   USD figure for these arms; when a real `total_cost_usd` is present (e.g. API-key auth) it is always
   preferred over the estimate. Tokens/turns/wall-clock remain the primary economy currency (C1); USD is a
-  derived estimate. *Caveat (adjacent, not fixed here):* the spawn env is `os.environ.copy()`, so a host
-  `ANTHROPIC_API_KEY` would pass through and divert billing to the API account (and surface a real
-  `total_cost_usd`) — a future PR may strip it from the spawn env to guarantee subscription billing.
+  derived estimate. *Adjacent caveat — now resolved:* `make_spawn_env` (claude_cli.py) strips
+  `ANTHROPIC_API_KEY` and the whole routing-diverter set (`_SPAWN_ENV_STRIP`: `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_BASE_URL`, Bedrock/Vertex) from every spawn env — both spawn paths (adapter + series)
+  build their env there — so a stray host key can no longer divert billing or reroute the backend.
   Historical pre-PR11 ledger lines have no `cost_usd_est`, so a regenerated scorecard shows `$0` for them
   (append-only — old lines are never rewritten). This includes the `series` arm, whose USD
   previously surfaced only because that strategy echoes the whole engine tracker event (with its own
@@ -59,6 +60,31 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
 
 ## Recently fixed (context for the ledger archive)
 
+- **Polish/self-improvement session (2026-07-05).** Audit + fixes across the measurement surfaces:
+  - **Series arm was broken** — the genericize-paths change made `[tools].repo` relative (`../convoy`),
+    but the invocation command is baked at resolution time and run with `cwd=workspace`, so the engine
+    couldn't resolve it → smoke engine-boundary FAILED (7/8). Fixed with a shared
+    `resolve_repo_invocation_cmd` helper (scenario.py) that freezes the repo to an absolute forward-slash
+    path; both resolvers (cli.py, smoke.py) delegate. Smoke back to 8/8.
+  - **Scorecard conflated dataset_versions** — a dv bump let old + new task versions co-render under one
+    arm (last-write-wins per (scenario,task,repeat) + dv-blind `reps_for`). `report.py` now scopes to the
+    current (last-appended) dataset_version and warns about excluded older-dv trials (they stay in the ledger).
+  - **convoy `EXIT_BUDGET=4` / `outcome="budget"` was unhandled** — a per-spawn budget-cap halt fell
+    through `_classify` to an opaque `"engine exit 4"`. Now classified explicitly (ENGINE_EXIT_BUDGET,
+    clear detail; excluded from the pass rate, re-runnable, does not halt the matrix). Contract §2/§5/§7 updated.
+  - **CI-honesty (blind review-panel, unanimous):** the pooled Wilson CI pools correlated repeats +
+    heterogeneous tasks as independent. Kept the pooled point-and-interval (cluster-t / bootstrap collapse
+    at K=1 banks and all-0/all-100 tasks — worse than Wilson) but added a concrete clustering caveat under
+    Pass Rates and surfaced K (distinct tasks) beside n in each verdict — matching the calibration precedent
+    (ADR-0007 D3). Panel raw output: session feedback report.
+  - **Docs reconciled to as-built:** design §4.1/§4.3/§4.5/§6 (module map, "ships three", ledger-record
+    schema incl. `completed` vs `complete` + the INFRASTRUCTURE state, no trial-level retry cap), CLAUDE.md
+    (`[verify] timeout_s`, test-count floor), method-bindings (superpowers→humblepowers, convoy_run,
+    `fathom smoke` built, wave budget), recalibration Step 0 (pr_pilot→convoy governance.py/pricing.py),
+    series-toml-skeleton (contract §3 shape), pre-mortem (vela→keel), STATUS D2 caveat + In-flight.
+  - **Known-but-deferred:** `infra_error` is a phantom field — report.py/calibration.py guard a field the
+    producer never writes (infra trials halt with no ledger line; the real gate is `status=="completed"`).
+    Dead-but-harmless; removing it ripples into the "Infra Errors" column + golden. Tracked in feedback.
 - `task.limits.max_turns` was **dead config** — the adapter hardcapped at its default 30 — which
   truncated 8/9 trials of the first `skill-pyeng-v1` run (archived invalid). Now plumbed through
   `Runner.execute`; the task budget is 80.
@@ -70,9 +96,9 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
 - *(nothing in flight)* — the `humble-vs-super` plugin-eval is complete through **four** analyses (v1
   0.3.1 baseline, v2 0.4.0 re-run, v3+v4 harder-bank retunes with the v3 powered confirmatory at n=45/arm;
   see Analyses run). Spec + instrument: `docs/specs/2026-06-14-fathom-humble-vs-super-design.md`, the
-  keel-DoR-certified design; 11-PR build series in `pr-series/humble-vs-super/`. **Four ledgers are
-  uncommitted on disk** (`ledger/humble-vs-super-{v1,v2,v3,v4}.jsonl`) plus the v3/v4 banks, scenarios,
-  `tests/test_verify_humble_super_v{3,4}.py`, and `docs/reports/2026-06-16-...md`, all pending a commit.
+  keel-DoR-certified design; 11-PR build series in `pr-series/humble-vs-super/`. The four ledgers
+  (`ledger/humble-vs-super-{v1,v2,v3,v4}.jsonl`), the v3/v4 banks, scenarios,
+  `tests/test_verify_humble_super_v{3,4}.py`, and `docs/reports/2026-06-16-...md` are **committed**.
 - **Model-tier calibration study (2026-06-16) — complete.** New instrument: the `model-tier-v1` bank
   (8 graded hard-criteria tasks + `scores.toml` w/ blind re-rating), `scenarios/model-tier/`, the
   `src/fathom/calibration.py` report views (§7/§8 — confusion matrix, dose-response, **corrected** strict
@@ -81,7 +107,7 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
   (`docs/specs/2026-06-16-fathom-model-tier-calibration-design.md`, 4 pre-mortem rounds) + ADR-0007.
   Verdict in Analyses run (mapping **over-provisions** on this distribution). **The pairwise judge (§6)
   was deferred** (verifier-only spine — reinforces next-step #2). `ledger/model-tier-{v1,effort}.jsonl`
-  + `docs/reports/2026-06-16-model-tier-calibration.md` uncommitted.
+  + `docs/reports/2026-06-16-model-tier-calibration.md` are **committed**.
 ## Next steps (highest-leverage first)
 
 1. **A discriminating *correctness* bank — now known to be hard (v3/v4 finding).** Two harder-bank
