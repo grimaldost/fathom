@@ -536,6 +536,25 @@ def test_verdict_lines_carry_n_ci_qualifier():
         assert "Wilson 95% CI" in line, f"Missing CI: {line}"
 
 
+def test_verdict_carries_cluster_count_and_ci_caveat():
+    """Estimator-honesty (review-panel, unanimous Option a): the pooled Wilson CI
+    pools correlated repeats + heterogeneous tasks as independent, so the scorecard
+    must (1) surface the cluster count K (distinct tasks) beside n so the design
+    effect is visible, and (2) carry an explicit clustering caveat mirroring
+    ADR-0007 D3 — a heuristic width, not exact 95% coverage."""
+    content = _render_content()
+    # bare's dev tasks are task-alpha + task-beta → K=2 distinct tasks.
+    bare_verdict = next(
+        ln for ln in content.splitlines() if ln.startswith("- **bare**") and "n=" in ln
+    )
+    assert "K=2" in bare_verdict, f"verdict should surface cluster count K=2: {bare_verdict}"
+    # The clustering caveat must be present (not just the generic 'directional' tag).
+    low = content.lower()
+    assert "heuristic width" in low, "missing the heuristic-width CI caveat"
+    assert "correlated repeats" in low, "caveat must name correlated repeats"
+    assert "adr-0007" in low, "caveat should cite the calibration precedent (ADR-0007 D3)"
+
+
 def test_series_verdict_enumerates_arm_deltas():
     content = _render_content()
     series_lines = [ln for ln in content.splitlines() if "series" in ln and ln.startswith("- **")]
@@ -682,6 +701,96 @@ def test_pairwise_only_for_non_bare_scenarios():
     assert pw_rows, "No pairwise data rows found"
     assert not any(r.strip().startswith("| bare ") for r in pw_rows), (
         "bare should not appear as a pairwise row — it is the anchor"
+    )
+
+
+def _dv_trial(dv, sc, ch, tid, rep, passed):
+    return {
+        "kind": "trial",
+        "bank": "dv-bank",
+        "task_id": tid,
+        "repeat": rep,
+        "status": "completed",
+        "dataset_version": dv,
+        "config_hash": ch,
+        "tool_git_sha": "s",
+        "cli_version": "1",
+        "pin_level": "strong",
+        "verifier_results": {"c": passed},
+        "scenario": sc,
+        "holdout": False,
+        "infra_error": False,
+    }
+
+
+def _dv_run(dv, sc, ch, tid, rep):
+    return {
+        "kind": "run",
+        "bank": "dv-bank",
+        "task_id": tid,
+        "repeat": rep,
+        "usage": {"input_tokens": 100, "output_tokens": 50},
+        "cost_usd_est": 0.01,
+        "turns": 3,
+        "duration": 10.0,
+        "exit_code": 0,
+        "dataset_version": dv,
+        "config_hash": ch,
+        "tool_git_sha": "s",
+        "cli_version": "1",
+        "pin_level": "strong",
+        "scenario": sc,
+    }
+
+
+def test_multiple_dataset_versions_scoped_to_current():
+    """A bumped dataset_version must NOT silently conflate old + new task versions
+    under one arm (2026-07-01 feedback #1). The scorecard reflects the CURRENT
+    (last-appended) dataset_version only; older-dv trials are excluded (not mixed)
+    and their exclusion is surfaced, never silent.
+
+    Ledger: bare/task-x under dv 'v1' (easy task, reps 0-3 all PASS) then dv 'v2'
+    (hardened task, reps 0-1 all FAIL — only two re-run so far). The buggy renderer
+    keyed trials by (scenario, task, repeat) with no dataset_version, so last-write-
+    wins kept v2 for reps 0-1 but v1's reps 2-3 leaked in — rendering a conflated
+    2/4 = 50%. Scoping to the current dv (v2) must render 0/2 = 0%.
+    """
+    records = []
+    for rep in range(4):  # v1: easy task, all pass (older)
+        records += [
+            _dv_trial("v1", "bare", "aaa", "task-x", rep, True),
+            _dv_run("v1", "bare", "aaa", "task-x", rep),
+        ]
+    for rep in range(2):  # v2: hardened task, all fail (current, only 2 re-run)
+        records += [
+            _dv_trial("v2", "bare", "aaa", "task-x", rep, False),
+            _dv_run("v2", "bare", "aaa", "task-x", rep),
+        ]
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        ldgr = pathlib.Path(tmpdir) / "ledger"
+        rpt = pathlib.Path(tmpdir) / "report"
+        ldgr.mkdir(parents=True, exist_ok=True)
+        with open(ldgr / "dv-bank.jsonl", "w", encoding="utf-8") as f:
+            for rec in records:
+                f.write(json.dumps(rec, sort_keys=True) + "\n")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            render("dv-bank", ledger_dir=ldgr, report_dir=rpt)
+        content = (rpt / "scorecard-dv-bank.md").read_text(encoding="utf-8")
+
+    # Current dv is v2 (both FAIL) → bare must be 0/2 (0%), NOT the conflated 2/4 (50%).
+    rate_rows = [ln for ln in content.splitlines() if ln.startswith("| bare |") and "%" in ln]
+    assert rate_rows, f"no bare pass-rate row found in:\n{content}"
+    cols = [c.strip() for c in rate_rows[0].split("|")]
+    # | scenario | pass | N | rate | CI | infra |
+    assert cols[2] == "0", f"expected pass=0 (v2 only), got {cols[2]!r} in {rate_rows[0]}"
+    assert cols[3] == "2", f"expected N=2 (v2 only, not conflated with v1), got {cols[3]!r}"
+    assert cols[4] == "0.0%", f"expected 0.0% (v2 fails), got {cols[4]!r}"
+
+    # The exclusion must be surfaced, not silent (data-contract discipline).
+    assert any("dataset_version" in str(w.message) for w in caught), (
+        "expected a warning that older dataset_version trials were excluded"
     )
 
 
