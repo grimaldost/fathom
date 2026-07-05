@@ -49,7 +49,7 @@ fathom forms `<invocation> run <abs-path-to-series.toml>` and runs it as a subpr
 | Command | A `run <series.toml>` subcommand. The invocation prefix is **scenario-supplied** (e.g. `uv run --project <repo> convoy`), never a bare PATH lookup. |
 | `cwd` | The trial workspace — the repository under test. The engine operates here. |
 | `env` | Carries an isolated `CLAUDE_CONFIG_DIR` (credential-only, ADR-0004) and is stripped of API-routing vars. **The engine must honor this env when it spawns its agent CLI** — no re-injecting keys, no rerouting to another endpoint. |
-| Exit code | `0` integrated · `1` blocked (a blocking gate stayed red — a task failure) · `2` infrastructure (auth/usage-limit/retry — halt cleanly) · `3` usage (a malformed series.toml). Classified per §7. |
+| Exit code | `0` integrated · `1` blocked (a blocking gate stayed red — a task failure) · `2` infrastructure (auth/usage-limit/retry — halt cleanly) · `3` usage (a malformed series.toml) · `4` budget (a spawn hit its per-spawn budget cap; partial work left un-integrated). Classified per §7. |
 | Process tree | The engine and every agent CLI it spawns must die when the process tree is killed — fathom enforces a wall-clock timeout by killing the group. No orphaned grandchildren. |
 | stdout / stderr | Free-form logs. fathom reads them only as an infrastructure-signature backstop (§7). |
 
@@ -105,7 +105,7 @@ carries `schema_version` and an `event` tag; a consumer keys on both and ignores
 |---|---|---|
 | `run_start` (once) | `schema_version`, `event`, `run_id`, `series_id` | groups one invocation's events |
 | `spawn_complete` (one per spawn) | `schema_version`, `event`, `run_id`, `pr_id`, `role` (`implementation` / `review` / `fix`), `exit_code`, `input_tokens`, `output_tokens`, `num_turns`, `duration_s`, `cost_usd`, `effective_model` | fathom materializes **one economy record per event** |
-| `run_complete` (once) | `schema_version`, `event`, `run_id`, `outcome` (`completed` / `blocked` / `infrastructure`), `integrated` | the engine's own terminal verdict |
+| `run_complete` (once) | `schema_version`, `event`, `run_id`, `outcome` (`completed` / `blocked` / `infrastructure` / `budget`), `integrated` | the engine's own terminal verdict |
 
 Cross-cutting:
 
@@ -153,8 +153,14 @@ engine surfaces the difference explicitly, so a bare nonzero exit is never blind
   single-spawn adapter's `_spawn_is_infrastructure`).
 - **Task failure** — exit `1` (a blocking gate stayed red) is scored; exit `3` (a malformed
   series.toml) is fathom's own bug, surfaced loudly, never scored as the task.
+- **Budget truncation** — exit `4` and a `run_complete` `outcome = "budget"`: a spawn hit its
+  per-spawn budget cap and the engine left the partial work **un-integrated**. This is a
+  governance halt, not a task result, so fathom records the trial `errored` (excluded from the
+  pass rate — the report counts only `completed`) rather than scoring truncated work as a
+  failure. Unlike infrastructure it does **not** halt the whole matrix — a per-spawn cap is
+  trial-specific; the cell is re-runnable after raising `--max-budget-usd`.
 - **Effect** — infra halts the matrix **cleanly** (re-runnable later, ADR-0002 resume); task
-  failure is **scored**.
+  failure is **scored**; a budget truncation is recorded non-scored and re-runnable.
 
 *Consumed by:* `_classify` (series.py), shared with the single-spawn adapter's
 `_spawn_is_infrastructure`.

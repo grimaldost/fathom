@@ -11,7 +11,7 @@ method (`docs/method/`).
 ```sh
 uv run ruff format --check .
 uv run ruff check .
-uv run pytest                 # 485+ stdlib-runnable tests (count moves; don't gate on an exact N)
+uv run pytest                 # stdlib-runnable test suite (count moves as tests are added; don't gate on an exact N)
 uv run fathom smoke             # real-spawn isolation gate — spends a little; run before any paid matrix
 ```
 
@@ -107,8 +107,10 @@ trial_timeout_s = 600
 - `tasks/<bank>/bank.toml`: `name`, `dataset_version` (bump on ANY task/fixture/verifier change — it is
   in the resume key), `holdout = [...]`.
 - `tasks/<bank>/<task-id>/task.toml`: `id`, `instruction`, `[limits] trial_timeout_s, max_turns`,
-  `[verify] entry = "verify.py"`. (`max_turns` IS plumbed to the spawn — set it high enough for the
-  task's work, or the run truncates.)
+  `[verify] entry = "verify.py"` (optional `timeout_s`, default **60**, bounds the verifier
+  subprocess — raise it for a `verify.py` that shells out to a heavier harness, e.g. a full pytest
+  collect+run, or the verifier times out and the trial is scored an error). (`max_turns` IS plumbed
+  to the spawn — set it high enough for the task's work, or the run truncates.)
 - `verify.py`: reads **only** `argv[1]` (the result-view path), emits `{criterion: bool}` JSON to stdout,
   exits 0 iff the correctness gate holds. **No scenario identity in argv/env** (blindness). The schemas
   above are the source of truth (`src/fathom/scenario.py` and `taskbank.py` parsers).

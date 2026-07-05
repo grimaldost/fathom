@@ -108,10 +108,17 @@ DEFAULT_TEMPLATE_NAME = "series.toml"
 # The engine's exit-code taxonomy (series contract §7): 0 integrated · 1 blocked
 # (a blocking gate stayed red — a scored task failure) · 2 infrastructure
 # (auth / usage-limit / retry — halt the matrix cleanly) · 3 usage (a malformed
-# series.toml — fathom's own bug, surfaced loudly, never scored as the task).
+# series.toml — fathom's own bug, surfaced loudly, never scored as the task) ·
+# 4 budget (a spawn hit its per-spawn --max-budget-usd cap; convoy leaves the
+# partial work un-integrated). A budget truncation is a governance halt, not a
+# task result — classified ERRORED with a clear detail so it is excluded from the
+# pass rate (report.py counts only status=="completed") rather than falling
+# through to an opaque "engine exit 4" that reads as a task failure; it is
+# trial-specific, so unlike infrastructure it does NOT halt the whole matrix.
 ENGINE_EXIT_BLOCKED = 1
 ENGINE_EXIT_INFRASTRUCTURE = 2
 ENGINE_EXIT_USAGE = 3
+ENGINE_EXIT_BUDGET = 4
 
 
 # ---------------------------------------------------------------------------
@@ -420,6 +427,11 @@ def _classify(outcome: EngineOutcome, events: list[dict]) -> tuple[TrialStatus, 
 
     if outcome.returncode == ENGINE_EXIT_USAGE:
         return TrialStatus.ERRORED, "engine usage error (invalid series.toml)"
+    if outcome.returncode == ENGINE_EXIT_BUDGET or run_outcome == "budget":
+        # A spawn hit its per-spawn budget cap; the engine left the partial work
+        # un-integrated (§7). Not a task result — recorded ERRORED (excluded from the
+        # pass rate) with a clear detail, and re-runnable after raising --max-budget-usd.
+        return TrialStatus.ERRORED, "engine budget cap hit (partial work not integrated)"
     if outcome.returncode != 0:
         # Includes exit 1 (a blocking gate stayed red) — a scored task failure.
         return TrialStatus.ERRORED, f"engine exit {outcome.returncode}"

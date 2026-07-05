@@ -10,8 +10,9 @@ Part A passes and before execution.
   The spec and its PR↔section manifest already exist; this runs before the spec
   becomes a runnable series and before any code.
 - **Who:** a fresh agent that has not authored the spec (a stateless pass, so the
-  judgment is externalized, not the author's own). The vela `pre-mortem-review`
-  agent can execute it, or run it as a convoy pre-series hook, or a manual pass.
+  judgment is externalized, not the author's own). The keel `pre-mortem-review`
+  agent (`keel:pre-mortem-review`) can execute it, or run it as a convoy pre-series
+  hook, or a manual pass.
 
 ## Prompt
 

@@ -101,6 +101,44 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
     return meta
 
 
+def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
+    """Keep only records at the CURRENT dataset_version — the last-appended trial's.
+
+    The ledger is append-only, so the most-recently-run trials are last in the file;
+    their dataset_version is the bank's current version. A ``dataset_version`` bump
+    (bumped on any task/fixture/verifier change — it is in the resume key) otherwise
+    lets an older task version's trials silently co-render with the new one: the
+    scorecard keys trials by (scenario, task, repeat) with no dataset_version, so
+    last-write-wins keeps the newest per cell but any cell the current version has
+    not re-run yet still shows the *old* version's result — a silent conflation of
+    two task definitions under one arm (2026-07-01 feedback #1).
+
+    Scoping to the current version keeps the scorecard a coherent current-state view
+    (matching the resume key, which includes dataset_version). Older-version trials
+    remain in the committed ledger untouched (append-only); they are excluded from
+    this render and the exclusion is surfaced, never silent. A single-version bank is
+    unaffected — nothing is excluded and the output is byte-identical.
+    """
+    trial_dvs = [r.get("dataset_version") for r in raw if r.get("kind") == "trial"]
+    trial_dvs = [dv for dv in trial_dvs if dv is not None]
+    if not trial_dvs:
+        return raw
+    current_dv = trial_dvs[-1]
+    distinct = sorted(set(trial_dvs))
+    if len(distinct) == 1:
+        return raw
+    excluded = sum(1 for dv in trial_dvs if dv != current_dv)
+    warnings.warn(
+        f"ledger for {bank!r} holds {len(distinct)} dataset_versions {distinct}; the "
+        f"scorecard reflects the current dataset_version {current_dv!r} only "
+        f"({excluded} older-dataset_version trial(s) excluded — the older versions "
+        "stay in the committed ledger). Re-run the current version to full N.",
+        stacklevel=2,
+    )
+    # Records without a dataset_version (none in practice) are kept, not dropped.
+    return [r for r in raw if r.get("dataset_version", current_dv) == current_dv]
+
+
 def render(
     bank: str,
     *,
@@ -111,6 +149,7 @@ def render(
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", bank):
         raise ValueError(f"Invalid bank name: {bank!r}")
     raw = _read_raw(bank, ledger_dir)
+    raw = _scope_to_current_dataset_version(bank, raw)
 
     trials: dict[tuple, dict] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
@@ -198,8 +237,14 @@ def render(
 
     lines: list[str] = [f"# Scorecard — {bank}", ""]
 
-    def _stats(sc: str, task_list: list[str]) -> tuple[int, int, int]:
+    def _stats(sc: str, task_list: list[str]) -> tuple[int, int, int, int]:
+        # Returns (passes, n, infra, k) where k = distinct tasks contributing a
+        # completed trial — the CLUSTER count. n pools every task×repeat cell, but
+        # repeats within a task and different tasks are correlated, so k lets the
+        # reader see the design effect the pooled Wilson CI ignores (review-panel
+        # Option a; ADR-0007 D3 precedent).
         passes = n = infra = 0
+        completed_tasks: set[str] = set()
         for tid in task_list:
             for rep in reps_for.get((sc, tid), []):
                 t = trials.get((sc, tid, rep))
@@ -209,9 +254,10 @@ def render(
                     infra += 1
                 elif t.get("status") == "completed":
                     n += 1
+                    completed_tasks.add(tid)
                     if _is_pass(t.get("verifier_results")):
                         passes += 1
-        return passes, n, infra
+        return passes, n, infra, len(completed_tasks)
 
     def _section(title: str, task_list: list[str]) -> None:
         if not task_list:
@@ -224,7 +270,7 @@ def render(
         lines.append("| Scenario | Pass | N | Pass Rate | Wilson 95% CI | Infra Errors |")
         lines.append("|---|---|---|---|---|---|")
         for sc in all_sc:
-            passes, n, infra = _stats(sc, task_list)
+            passes, n, infra, _k = _stats(sc, task_list)
             if n == 0 and infra == 0:
                 continue
             if n > 0:
@@ -235,11 +281,23 @@ def render(
                 rate = ci = "N/A"
             lines.append(f"| {sc} | {passes} | {n} | {rate} | {ci} | {infra} |")
         lines.append("")
+        # CI-honesty caveat (review-panel Option a; ADR-0007 D3 precedent): N pools
+        # every task×repeat cell, and repeats within a task and the different tasks
+        # are correlated, so the Wilson interval is a heuristic width — an
+        # under-estimate of true uncertainty, not exact 95% coverage. Each verdict
+        # line prints K (distinct tasks) so the reader can see the clustering.
+        lines.append(
+            "> **CI caveat:** N pools every task×repeat cell; repeats within a task and "
+            "the different (heterogeneous) tasks are correlated repeats, so the Wilson "
+            "95% CI is a **heuristic width** (an under-estimate of true uncertainty), not "
+            "exact 95% coverage — cf. ADR-0007 D3. Each verdict shows K = distinct tasks."
+        )
+        lines.append("")
 
         lines.append("### Verdicts")
         lines.append("")
         for sc in all_sc:
-            passes, n, infra = _stats(sc, task_list)
+            passes, n, infra, k = _stats(sc, task_list)
             if n == 0 and infra == 0:
                 continue
             if n > 0:
@@ -248,7 +306,7 @@ def render(
                 ci = f"[{_pct(lo)}, {_pct(hi)}]"
                 v = (
                     f"- **{sc}** — {passes}/{n} ({rate}), "
-                    f"Wilson 95% CI {ci}, n={n} — directional, not final"
+                    f"Wilson 95% CI {ci}, n={n} across K={k} task(s) — directional, not final"
                 )
             else:
                 # n=0 with infra>0: no scored trials — avoid misleading "0/0" fraction

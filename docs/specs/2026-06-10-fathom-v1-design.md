@@ -73,6 +73,8 @@ fathom/
     strategies/
       base.py               # StrategyExecutor protocol + TrialResult
       single_session.py     # 1 run per trial
+      gated_session.py      # gated-session / gated-review (as-built, post-v1)
+      reprompt_session.py   # reprompt-session (as-built, post-v1)
       series.py             # N runs per trial via the series engine
     grading/
       verifier.py           # run task verify.py against final workspace
@@ -143,8 +145,12 @@ max_budget_usd_per_run = 2.0
 max_turns = 50
 ```
 
-v1 ships three: `bare` (clean config, no tools — the control [R§5]), `single-long-session`
-(clean config, one spawn, full instruction), `series` (engine-driven N spawns).
+v1 shipped three reference arms: `bare` (clean config, no tools — the control [R§5]),
+`single-long-session` (clean config, one spawn, full instruction), `series` (engine-driven N
+spawns). **As-built:** the strategy catalog has since grown to five (`KNOWN_STRATEGIES` in
+`strategies/__init__.py`: single-session, gated-session, gated-review, reprompt-session, series),
+and many banks ship their own arms under `scenarios/` — that directory + `KNOWN_STRATEGIES` are the
+live catalog, not this line.
 
 ### 4.4 Execution abstractions (C1, C2)
 
@@ -180,8 +186,20 @@ kinds:
  "verdict":"win|tie|loss","judge_model_resolved":…,"judge_config_hash":…}
 ```
 
+> **⚠ As-built note:** the JSON above is the *design-time* sketch and drifted. Source of truth is
+> `src/fathom/ledger.py` (the three dataclasses). Key differences a fixture/consumer author must
+> know: the trial `status` literal is **`"completed"`** (not `"complete"`), and there is a third
+> value **`"infrastructure"`** — an infra trial is never appended at all (it halts the matrix as
+> the resume checkpoint), so only `completed`/`errored` lines exist on disk. The `grading` record
+> carries **no** `pair`/`axis`/`order_ab`/`order_ba`; it pairs by `repeat` index and by
+> (`config_hash_a` = bare anchor, `config_hash_b` = treatment), and its `verdict` is **`"a"`/`"b"`/
+> `"tie"`** (not `win|tie|loss`), with `judge_model` + `judge_config_hash` + `pin_level`. Trial/run
+> records key on `config_hash` (there is no `trial_id`).
+
 **Resume key:** `(bank, dataset_version, task_id, config_hash, repeat)`. A re-run skips completed
-tuples; a fully complete matrix is a no-op; an `errored` trial is retried up to a cap. Reports are
+tuples; a fully complete matrix is a no-op. Only `status=="completed"` counts as done, so an
+`errored` trial is simply re-planned on the next `fathom run` (there is no trial-level retry cap —
+the only attempt cap is the adapter's per-spawn `max_attempts` within a single run). Reports are
 regenerated from the ledger, never merged read-modify-write — this removes the old harness's
 clobber/overwrite failure modes by construction. Reads tolerate and warn on malformed lines.
 Version pins (`dataset_version`, `config_hash`, `tool_git_sha`, `cli_version`,
@@ -230,8 +248,10 @@ expected), trial timeout.
 
 ## 6. Error handling
 
-- Spawn failure → retry with cap (vendored behavior); timeout → partial stream still parsed;
-  trial marked `errored` only after retries exhausted.
+- Spawn failure → retry with cap (the adapter's per-spawn `max_attempts`, within one run); timeout →
+  partial stream still parsed; the trial is marked `errored` only after that per-spawn cap is
+  exhausted. (This is the adapter attempt cap, not a matrix-level retry: an `errored` trial is
+  re-planned on the next `fathom run`, bounded only by operator invocations — §4.5.)
 - Verifier crash or non-JSON output → trial `errored` (never silently scored fail) and surfaced
   in the report's error column.
 - Series-arm engine failure mid-trial → trial `errored` with runs-so-far recorded (economy data

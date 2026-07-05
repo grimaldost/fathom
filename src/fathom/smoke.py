@@ -310,7 +310,7 @@ def assert_no_bypass_in_engine_spawn(
     carrying ``--dangerously-skip-permissions`` or a ``bypassPermissions`` mode
     (the engine's own default, which the §6 executor must override).
     """
-    name = "engine-boundary: §6 non-bypass mode reaches the spawned CLI"
+    name = "engine-boundary: non-bypass permission mode reaches the spawned CLI"
     if not recorded_argvs:
         return SmokeResult(
             name, False, "engine spawned no claude invocation (boundary not exercised)"
@@ -869,7 +869,9 @@ class _DefaultSmokeResolver:
         return result.stdout.strip() if result.returncode == 0 else "unknown"
 
     def build_tool_invocation_cmd(self, repo: str) -> str:
-        return f"uv run --project {repo} convoy"
+        from fathom.scenario import resolve_repo_invocation_cmd
+
+        return resolve_repo_invocation_cmd(repo)
 
 
 # ---------------------------------------------------------------------------

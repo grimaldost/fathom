@@ -578,6 +578,32 @@ class TestSeriesClassification(SeriesTestBase):
         status, _ = _classify(EngineOutcome(returncode=2, stdout=""), events)
         self.assertEqual(status, TrialStatus.INFRASTRUCTURE)
 
+    def test_budget_exit_is_errored_with_clear_detail(self):
+        # convoy exit 4 / outcome "budget" = a spawn hit its per-spawn --max-budget-usd
+        # cap; convoy does NOT integrate the partial work (integrated=False). This is a
+        # governance truncation, not a task result, so it must be ERRORED (excluded from
+        # the pass rate by report.py's status=="completed" gate) with a clear detail —
+        # never fall through to an opaque "engine exit 4" that reads as a task failure,
+        # and never halt the whole matrix (a per-spawn cap is trial-specific, not infra).
+        events = [
+            {"event": "run_complete", "run_id": "R", "outcome": "budget", "integrated": False}
+        ]
+        status, detail = _classify(EngineOutcome(returncode=4, stdout=""), events)
+        self.assertEqual(status, TrialStatus.ERRORED)  # excluded from scoring, re-runnable
+        self.assertNotEqual(status, TrialStatus.INFRASTRUCTURE)  # does not halt the matrix
+        self.assertIn("budget", detail.lower())
+        self.assertNotIn("engine exit 4", detail)
+
+    def test_budget_outcome_caught_even_if_exit_code_differs(self):
+        # Defensive: classify on the engine's own terminal verdict too, not only the
+        # exit code, so a budget truncation is caught even if the code path differs.
+        events = [
+            {"event": "run_complete", "run_id": "R", "outcome": "budget", "integrated": False}
+        ]
+        status, detail = _classify(EngineOutcome(returncode=1, stdout=""), events)
+        self.assertEqual(status, TrialStatus.ERRORED)
+        self.assertIn("budget", detail.lower())
+
     def test_completed_outcome_with_clean_exit_is_completed(self):
         # A clean exit whose telemetry says completed is scored as completed — event
         # field content is not sniffed for infra phrasing (the engine signals it).

@@ -476,7 +476,9 @@ class _DefaultResolver:
         return result.stdout.strip() if result.returncode == 0 else "unknown"
 
     def build_tool_invocation_cmd(self, repo: str) -> str:
-        return f"uv run --project {repo} convoy"
+        from fathom.scenario import resolve_repo_invocation_cmd
+
+        return resolve_repo_invocation_cmd(repo)
 
     def resolve_plugin_meta(self, plugin_dir: str) -> tuple[str, str, str]:
         import hashlib

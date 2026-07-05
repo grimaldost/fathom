@@ -11,16 +11,17 @@ token×price *estimates*); still pass `--max-budget-usd` as a hard stop.
 ---
 
 ## Step 0 — Model freshness (convoy repo)
-Update the catalog + skills to the current lineup and verify against the **repo source** (edits don't
-reach the installed CLI/plugin until reinstalled — use `uv run` from the repo):
+Update convoy's tier map + pricing to the current lineup and verify against the **repo source** (edits
+don't reach the installed CLI/plugin until reinstalled — use `uv run` from the convoy repo). convoy
+replaced pr-pilot, so the paths below are the as-built homes (not the old `pr_pilot` package):
 1. Confirm current model IDs + pricing via the `claude-api` skill (never from memory).
-2. Edit `src/pr_pilot/data/models.toml` (api_string + display; pricing per MTok/1k).
-3. Mirror in `skills/model-tiers/SKILL.md` (Model Assignment + Cost tables) and the
-   `skills/pr-prompt-scorer/SKILL.md` fallback table; add a dated changelog row.
-4. Update catalog-asserting tests only (`tests/test_catalog.py`, `tests/test_model_check.py`); leave
-   explicit-pin tests + historical fixtures alone.
-5. Verify: `uv run --no-sync python -m pr_pilot model list` (tiers resolve) · `... model lint` (clean) ·
-   `uv run --no-sync pytest tests/test_catalog.py tests/test_model_check.py tests/test_config.py -q`.
+2. Edit the tier→model map in `src/convoy/core/governance.py` (`DEFAULT_TIER_MODELS`:
+   `weak`/`mid`/`strong` → the current Haiku/Sonnet/Opus ids), and the per-family USD/MTok rates in
+   `src/convoy/core/pricing.py` (`_FAMILY_RATES`).
+3. Mirror any tier/cost table documented in `skills/convoy/SKILL.md`; add a dated changelog row.
+4. Update the governance/pricing-asserting tests; leave explicit-pin tests + historical fixtures alone.
+5. Verify: `uv run --project . convoy validate <series.toml>` (a series' models resolve against the map)
+   · `uv run --project . pytest -q` (convoy's own suite green).
 
 ## Step 1 — Calibration re-run (fathom repo), cheaply
 Reuse the `model-tier-v1` bank and the `scenarios/model-tier/` arms. Because the ledger resume-key is

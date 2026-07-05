@@ -181,6 +181,23 @@ class ScenarioResolver(Protocol):
 # ---------------------------------------------------------------------------
 
 
+def resolve_repo_invocation_cmd(repo: str) -> str:
+    """Freeze a ``source="repo"`` scenario's engine invocation to a cwd-independent command.
+
+    The series engine runs with ``cwd = trial workspace`` (a temp dir), so a
+    *relative* ``[tools].repo`` (e.g. ``../convoy``) baked verbatim into
+    ``uv run --project <rel> convoy`` cannot resolve from there — the engine never
+    starts, spawns no ``claude``, and the arm silently mis-scores (the regression
+    the genericize-paths change introduced, caught by the smoke engine boundary).
+    Resolve the repo to an absolute path at resolution time (fathom's cwd) and
+    normalize to forward slashes so the string — which enters ``config_hash`` — is
+    stable across path separators.  Shared by both real resolvers (cli.py,
+    smoke.py) so they cannot drift.
+    """
+    abs_repo = str(Path(repo).resolve()).replace("\\", "/")
+    return f"uv run --project {abs_repo} convoy"
+
+
 def compute_config_hash(d: dict) -> str:
     """SHA-256 of the sorted-keys JSON serialization of *d*.
 

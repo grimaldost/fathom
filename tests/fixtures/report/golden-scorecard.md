@@ -10,11 +10,13 @@
 | series | 2 | 2 | 100.0% | [34.2%, 100.0%] | 0 |
 | single-long-session | 1 | 1 | 100.0% | [20.7%, 100.0%] | 1 |
 
+> **CI caveat:** N pools every task×repeat cell; repeats within a task and the different (heterogeneous) tasks are correlated repeats, so the Wilson 95% CI is a **heuristic width** (an under-estimate of true uncertainty), not exact 95% coverage — cf. ADR-0007 D3. Each verdict shows K = distinct tasks.
+
 ### Verdicts
 
-- **bare** — 1/2 (50.0%), Wilson 95% CI [9.5%, 90.5%], n=2 — directional, not final
-- **series** — 2/2 (100.0%), Wilson 95% CI [34.2%, 100.0%], n=2 — directional, not final; arm deltas vs bare: human decomposition, per-PR gates, review/fix subagents, engine settings
-- **single-long-session** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 — directional, not final; 1 infra error(s) excluded
+- **bare** — 1/2 (50.0%), Wilson 95% CI [9.5%, 90.5%], n=2 across K=2 task(s) — directional, not final
+- **series** — 2/2 (100.0%), Wilson 95% CI [34.2%, 100.0%], n=2 across K=2 task(s) — directional, not final; arm deltas vs bare: human decomposition, per-PR gates, review/fix subagents, engine settings
+- **single-long-session** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 across K=1 task(s) — directional, not final; 1 infra error(s) excluded
 
 ### Per-Criterion Pass Rates
 
@@ -54,11 +56,13 @@
 | series | 1 | 1 | 100.0% | [20.7%, 100.0%] | 0 |
 | single-long-session | 1 | 1 | 100.0% | [20.7%, 100.0%] | 0 |
 
+> **CI caveat:** N pools every task×repeat cell; repeats within a task and the different (heterogeneous) tasks are correlated repeats, so the Wilson 95% CI is a **heuristic width** (an under-estimate of true uncertainty), not exact 95% coverage — cf. ADR-0007 D3. Each verdict shows K = distinct tasks.
+
 ### Verdicts
 
-- **bare** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 — directional, not final
-- **series** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 — directional, not final; arm deltas vs bare: human decomposition, per-PR gates, review/fix subagents, engine settings
-- **single-long-session** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 — directional, not final
+- **bare** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 across K=1 task(s) — directional, not final
+- **series** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 across K=1 task(s) — directional, not final; arm deltas vs bare: human decomposition, per-PR gates, review/fix subagents, engine settings
+- **single-long-session** — 1/1 (100.0%), Wilson 95% CI [20.7%, 100.0%], n=1 across K=1 task(s) — directional, not final
 
 ### Per-Criterion Pass Rates
 

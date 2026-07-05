@@ -193,6 +193,47 @@ class TestResolveScenario(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestRepoInvocationCmd — the engine invocation command must be cwd-independent.
+# Regression guard for the series-arm F1 bug: the engine runs with cwd=trial
+# workspace (a temp dir), so a relative [tools].repo baked verbatim into
+# `uv run --project <rel> convoy` fails to resolve there. resolve_repo_invocation_cmd
+# freezes the repo to an absolute, forward-slash path at resolution time.
+# ---------------------------------------------------------------------------
+
+
+class TestRepoInvocationCmd(unittest.TestCase):
+    def _project_arg(self, cmd: str) -> str:
+        parts = cmd.split()
+        return parts[parts.index("--project") + 1]
+
+    def test_relative_repo_frozen_to_absolute(self):
+        from fathom.scenario import resolve_repo_invocation_cmd
+
+        cmd = resolve_repo_invocation_cmd("../convoy")
+        proj = self._project_arg(cmd)
+        self.assertTrue(Path(proj).is_absolute(), f"project path not absolute: {proj!r}")
+        self.assertNotIn("..", cmd)  # the raw relative token is gone
+        self.assertEqual(proj, str(Path("../convoy").resolve()).replace("\\", "/"))
+
+    def test_forward_slash_normalized(self):
+        from fathom.scenario import resolve_repo_invocation_cmd
+
+        cmd = resolve_repo_invocation_cmd(str(Path.cwd()))
+        self.assertNotIn("\\", cmd)  # config_hash stability across separators
+
+    def test_real_resolvers_delegate_to_helper(self):
+        """Both real resolvers must produce the same cwd-independent command,
+        so the series arm works from cli.py and from the smoke gate identically."""
+        from fathom.cli import _DefaultResolver
+        from fathom.scenario import resolve_repo_invocation_cmd
+        from fathom.smoke import _DefaultSmokeResolver
+
+        expected = resolve_repo_invocation_cmd("../convoy")
+        self.assertEqual(_DefaultResolver().build_tool_invocation_cmd("../convoy"), expected)
+        self.assertEqual(_DefaultSmokeResolver().build_tool_invocation_cmd("../convoy"), expected)
+
+
+# ---------------------------------------------------------------------------
 # TestLoadScenario — TOML parsing (no resolution)
 # ---------------------------------------------------------------------------
 
