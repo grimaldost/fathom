@@ -1,8 +1,8 @@
 # fathom — status & next steps
 
 *The index of what's been run, what's open, and what's next. Per-run detail lives in the run notes
-under `docs/feedback/*-first-matrix.md`; this file points at them. Update it when a run or a defect
-changes state.*
+and findings reports under `docs/reports/`; this file points at them. Update it when a run or a
+defect changes state.*
 
 ## Build state
 
@@ -18,12 +18,17 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
 
 | Bank | Question | Verdict | Run notes |
 |---|---|---|---|
-| the series-engine bank | single long session vs the series engine's multi-session series vs bare, on 3 dev tasks | the series engine's pipeline gave **no quality gain** over a bare single session at ~4.6× tokens and 8 sessions/trial — the tasks sat below the coordination threshold (ceiling effect: bare 6/6). | `docs/feedback/2026-06-10-pr-pilot-v1-first-matrix.md` |
-| `skill-pyeng-v1` | does `engineering-discipline:python-engineering` improve legacy-project modernization? | **Yes, and specifically:** the skill drove 5/5 doctor compliance 3/3 vs bare/generic ~2–3/5; `uv` build backend + ruff single-quote are skill-only (0% → 100%); `generic-nudge ≈ bare`, so it is the skill's content, not a generic nudge. | `docs/feedback/2026-06-13-skill-pyeng-v1-first-matrix.md` |
+| the series-engine bank | single long session vs the series engine's multi-session series vs bare, on 3 dev tasks | the series engine's pipeline gave **no quality gain** over a bare single session at ~4.6× tokens and 8 sessions/trial — the tasks sat below the coordination threshold (ceiling effect: bare 6/6). | `docs/reports/2026-06-10-pr-pilot-v1-first-matrix.md` |
+| `skill-pyeng-v1` | does `engineering-discipline:python-engineering` improve legacy-project modernization? | **Yes, and specifically:** the skill drove 5/5 doctor compliance 3/3 vs bare/generic ~2–3/5; `uv` build backend + ruff single-quote are skill-only (0% → 100%); `generic-nudge ≈ bare`, so it is the skill's content, not a generic nudge. | `docs/reports/2026-06-13-skill-pyeng-v1-first-matrix.md` |
 | `humble-vs-super-v1` | humblepowers **0.3.1** vs superpowers, mounted as plugins (5 arms) | superpowers **more effective** — regression-test discipline 90–100% vs humble 50–60% — at ~30–40% higher cost; no clean efficiency win for humble. Ceiling: 10/11 criteria at 100%. | `docs/reports/2026-06-14-humblepowers-vs-superpowers.md` |
 | `humble-vs-super-v2` | re-run with humblepowers **0.4.0** (3 arms: stack-humble / super-only / stack-super) | **Verdict reversed.** 0.4.0 closed the discipline gap — regression-test 100% vs super 80% — and `stack-humble` is the **sole Pareto-optimal arm** (higher quality at ~16–20% lower cost/tokens/turns). Quality edge directional (n=10, overlapping CIs); cost edge robust. | `docs/reports/2026-06-15-humblepowers-0.4.0-vs-superpowers.md` |
 | `humble-vs-super-v3`/`v4` (harder banks; v3 powered to **n=45/arm**) | can a harder bank make **correctness** discriminate? + higher-n confirmatory of the v2 verdict | **Two findings.** (1) *Harder-bank goal failed, cleanly & replicated:* opus-bare nails correctness on self-contained tasks regardless of discipline — v3 (documented edges) **and** v4 (non-local root-cause) both ceiling; **0/180 correctness failures** at n=45. The disciplines move **test-hygiene, not correctness**. (2) *v2 corrected:* at n=45 humble ≈ super on test-discipline (100% vs 95.6–97.8%, **overlapping CIs**) — v2's "humble>super" was n=10 noise. `stack-humble` still **Pareto-dominates** both super arms, but via **cost** (~9–19% cheaper, ~21% fewer turns), not quality. | `docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md` |
 | `model-tier-v1` | is the series engine's complexity→model-tier mapping (0-25 Haiku / 26-55 Sonnet / 56-100 Opus) **well-tuned**? 7 tasks × 3 models, blind hard-criteria fraction, n=5 | **Over-provisions on this distribution.** On-diagonal **1/7**: Haiku aces 6/7 tasks the rubric routed to mid/strong (weak & mid bands buy **+0.00 quality** at 2–3× cost). The strong tier pays off only on the one cross-module root-cause task (`nonlocal-parse`, Haiku 40%→Opus 100%); its near-identically-scored sibling is aced by Haiku → **score ≠ model-difficulty**. Effort (`xhigh`) does **not** substitute for capacity. Caveat: bank is easy-for-Haiku. ~$20. | `docs/reports/2026-06-16-model-tier-calibration.md` |
+| `context-size-v1` (4 matched small/large pairs) | does interdependence at *volume* (~40 coherent distractor modules) push the empirically-right tier above the identical ≤5-file fix? haiku + opus, n=5, hard-criteria fraction, GO-gated pilot | **No — synthetic volume does not bite.** Haiku 100% on all 8 tasks (both sizes, incl. the score-64 nonlocal pair; ~328k cache-tokens/trial — it ingests the volume); all 4 pairs weak = weak; **NO-GO** at the pilot gate → the sonnet arm + n=5 fill deliberately unrun (~$10.2 spent; ~$120 remaining ceiling saved). Over-provisioning **persists at volume**; opus +0.00 quality at ~4.2× cost. Caveat: shallow synthetic distractors — a real-codebase probe is the phase-2. | `docs/reports/2026-06-16-context-size-calibration.md` |
+| `model-tier-v1` + `sonnet5` arm | does the over-provisioning verdict hold after convoy bumped mid Sonnet 4.6 → **Sonnet 5**? (35 fresh trials; the June cells resume-reused free) | **Reproduces** (on-diagonal 1/7). `fix-nonlocal-parse` is still the one discriminator; Sonnet 5 climbs its ladder 40→60→**80**→100% (Haiku/S4.6/S5/Opus), so the strong tier trends escalation-only. **No threshold change**; the calibration note was extended instead. Cost caveat: Sonnet 5's est $/trial landed **above** Opus's (new tokenizer, adaptive thinking) — report tokens beside $. ≈$11.4 est / ~$0 real. | `docs/reports/2026-07-01-model-tier-recalibration.md` |
+| `ablation-v1` (querytable, greenfield) | value-side ablation instrument v1: can a defect-escape bank make bare fail, so the gate/review arms have escapes to catch? | **Quality-null, by instrument:** greenfield + single-file left no regression surface — bare Sonnet 5 aced it, nothing to catch. Superseded by the brownfield v2 instrument. | design: `docs/specs/2026-07-01-pr-pilot-full-ablation-design.md` (superseded); ledger `ledger/ablation-v1.jsonl` |
+| `ablation-v2` (exprlang, brownfield) | do convoy's engine-independent features (gate / review / authoring / tier ladder) add quality on brownfield multi-file work? 15 arms, n=6–10, blind 15-criterion oracle | **Strong-tier null:** bare Sonnet 5 self-gates to 100%; every in-session feature adds +0. **Weak tier (Haiku):** failures collapse onto a type-contract class the visible suite misses (8/8 gates green, 5/8 oracle escapes); a strengthened gate coincided with 38%→90%, attributable lift bounded **+20..+52pp** (batch-confounded). Transferable: **self-authored tests inherit the implementer's blind spots — gate value tracks oracle independence + coverage.** Engine arm not run. ~$0 real. | `docs/reports/2026-07-01-pr-pilot-ablation-v2-findings.md` (companion analysis: `docs/reports/2026-07-01-pr-pilot-beyond-the-engine.md`) |
+| series-usefulness (task `sheet`; bank retired — ledger archived) | did Sonnet 5 move the orchestration threshold? a single `bare-sonnet5` difficulty ladder, dv1 (9 crit) + dv2 (15 crit), n=5, property-graded | **Bare aced both probes (5/5, 5/5)** — it one-shots a fill-and-aggregates reactive spreadsheet engine → **the threshold moved up substantially**. With the 2026-06-10 result (engine ~4.6× tokens, 8 sessions/trial, +0.00 quality), the engine is **overhead for self-contained feature work**; defect-escape was unobservable (bare never failed). ≈$13 est / ~$0 real. | `docs/reports/2026-07-01-pr-pilot-usefulness-findings.md` (ledger: `ledger/archive/pr-pilot-usefulness-v1.jsonl`) |
 
 ## Open defects
 
@@ -57,6 +62,32 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
   truncation (max-turns / timeout) hides real partial-compliance data; the signal was only visible by
   reading the ledger directly. Consider a distinct trial status for *budget-exhaustion* vs *task-error*
   (`src/fathom/strategies/base.py` `TrialStatus`, `src/fathom/report.py`).
+
+### Open items swept from the feedback corpus (2026-07-09)
+
+The dogfooding feedback reports were relocated out of the repo (to the local, gitignored
+`feedback/` dir); before the move, every proposed promotion was checked against the code and the
+still-open ones are tracked here so they survive the relocation. Two were confirmed **resolved** in
+the meantime: the efficiency-view Pareto flag is now strict non-domination (`report.py`), and the
+series invocation-path regression guard (`TestRepoInvocationCmd`) runs in CI via `pytest`
+(`fathom smoke` itself stays a manual gate — credentialed and paid).
+
+| Item | Sev | Home |
+|---|---|---|
+| `fathom smoke` doesn't plumb `--effort`/`--model`, blocking effort-acceptance probes before a paid effort run | MED | `src/fathom/cli.py` (smoke subparser) |
+| No forced UTF-8 on harness stdout: a spawn emitting a non-cp1252 char can still crash `smoke`/`run` prints on a cp1252 console (smoke's own literals were de-mojibaked; `reconfigure(errors="replace")` was not added) | MED | `src/fathom/smoke.py`, `src/fathom/cli.py` |
+| No token-TTL pre-flight: an hours-long matrix can outlive the subscription OAuth token (two manual re-auths on the v1 100-trial run) | MED | `src/fathom/cli.py` (run path) |
+| Hard-criteria quality fraction — the anti-ceiling metric — renders only for calibration banks (`scores.toml` + `hard_criteria`); promote it to the core report for all banks | MED | `src/fathom/report.py` (reference impl in `calibration.py`) |
+| Calibration view covers only the three fixed pin arms; an ad-hoc arm (e.g. `sonnet5`) doesn't land on the capacity ladder automatically | MED | `src/fathom/calibration.py` |
+| No warning when task content (instruction / `verify.py` / fixtures) changes without a `dataset_version` bump — silent stale-resume risk | LOW | `src/fathom/taskbank.py` / run planner |
+| `fathom report` rejects `--scenarios-dir` while `run` requires it; it re-derives arm names from the ledger `scenario` field — accept the flag or document the asymmetry | LOW | `src/fathom/cli.py` |
+| `--no-engine-boundary` reads as disabling a safety control; it only skips a check group — rename (e.g. `--skip-engine-check`) or document | LOW | `src/fathom/cli.py` |
+| `_CEILING_PER_TRIAL_USD = 2.00` is flat; observed actuals run ~$0.08–0.59/trial by strategy — recalibrate per strategy | LOW | `src/fathom/cli.py` |
+| A re-vendored plugin copied into the wrong (un-suffixed) dir is silent — the run uses the old plugin; warn when a mounted dir's `@version` disagrees with its `plugin.json` | LOW | `src/fathom/cli.py` |
+| `fathom run` emits no closing summary line (`N trials completed, $X spent`); headless captures must read the ledger for cost | LOW | `src/fathom/cli.py` |
+| No deliberate way to render a chosen *historical* `dataset_version` now that the report scopes to the current one | LOW | `src/fathom/cli.py` / `report.render` |
+| Design-effect-inflated Wilson as a mechanical guard on the pooled CI, if the advisory K + caveat proves insufficient | LOW | `src/fathom/report.py` |
+| Dangling ADR references lost in the 2026-07 history squash: `ADR-0008` (cited by the context-size bank docs) and `ADR-0009` (cited by the usefulness / beyond-the-engine docs) exist in neither fathom nor convoy, and `docs/concepts.md` was never created — recover the lost ADR content from the citing docs or de-reference | LOW | `tasks/context-size-v1/{README.md,scores.toml}`, `docs/reports/2026-07-01-pr-pilot-{usefulness-findings,beyond-the-engine}.md`, `docs/specs/2026-07-01-pr-pilot-usefulness-v2-design.md` |
 
 ## Recently fixed (context for the ledger archive)
 
@@ -98,7 +129,7 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
   see Analyses run). Spec + instrument: `docs/specs/2026-06-14-fathom-humble-vs-super-design.md`, the
   keel-DoR-certified design; 11-PR build series in `pr-series/humble-vs-super/`. The four ledgers
   (`ledger/humble-vs-super-{v1,v2,v3,v4}.jsonl`), the v3/v4 banks, scenarios,
-  `tests/test_verify_humble_super_v{3,4}.py`, and `docs/reports/2026-06-16-...md` are **committed**.
+  `tests/test_verify_humble_super_v{3,4}.py`, and `docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md` are **committed**.
 - **Model-tier calibration study (2026-06-16) — complete.** New instrument: the `model-tier-v1` bank
   (8 graded hard-criteria tasks + `scores.toml` w/ blind re-rating), `scenarios/model-tier/`, the
   `src/fathom/calibration.py` report views (§7/§8 — confusion matrix, dose-response, **corrected** strict
@@ -123,7 +154,6 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
    verifier's mechanical checks. Wiring requires validating the judge on our own tasks first (ADR-0003,
    design §4.6); fuzzy-rubric gold-set κ is weak evidence, so prefer verifier-expressible criteria where
    possible.
-3. **D2 cost fix** (above) — unblocks cross-arm USD economy claims.
-4. **(v2, deferred / interface-ready)** OTel telemetry join; non-Claude runner adapters; Docker-isolated
+3. **(v2, deferred / interface-ready)** OTel telemetry join; non-Claude runner adapters; Docker-isolated
    workspaces (would lift the offline presence-only grading limit, C3); migrating the trigger-axis
    (recall/specificity) evals from craft-collection `evals/`.

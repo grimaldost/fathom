@@ -5,6 +5,8 @@
 - **Instrument under test:** `series-engine:model-tiers` + `series-engine:pr-prompt-scorer`, pinned the series engine **0.8.1** @ `1c2748f3004c7c32e67b9379944b92e3777020a6`
 - **Spec:** `docs/specs/2026-06-16-fathom-model-tier-calibration-design.md` (keel-DoR certified; 4 pre-mortem rounds) · **ADR:** `docs/adr/0007-model-tier-calibration.md`
 - **Status:** complete (verifier-fraction axis); pairwise judge deferred; effort sub-study reported in §5.5
+- **Follow-up (2026-07-01):** recalibrated with mid = Sonnet 5 — over-provisioning reproduces, no
+  threshold change; see `2026-07-01-model-tier-recalibration.md`
 
 ## Executive summary
 

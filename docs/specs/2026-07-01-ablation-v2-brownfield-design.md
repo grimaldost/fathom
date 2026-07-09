@@ -1,7 +1,7 @@
 # Series engine value-side ablation v2 -- brownfield instrument (design)
 
 - **Date:** 2026-07-01
-- **Status:** design; instrument built + validated; difficulty probe in progress
+- **Status:** executed — findings: `docs/reports/2026-07-01-pr-pilot-ablation-v2-findings.md`
 - **Bank:** `tasks/ablation-v2/` (`exprlang`)
 - **Supersedes (as the value-side design):** `2026-07-01-pr-pilot-full-ablation-design.md`
   (v1/querytable), which produced a quality-null.

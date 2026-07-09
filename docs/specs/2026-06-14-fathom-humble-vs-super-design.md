@@ -1,7 +1,7 @@
 # Spec — fathom plugin-eval: humblepowers vs superpowers
 
 - **Date:** 2026-06-14
-- **Status:** draft — Part A clean; pre-mortem folds applied (2026-06-14); re-certification pending
+- **Status:** certified (round-2 pre-mortem, recorded below) and executed — four analyses shipped on this instrument (v1–v4); index in `docs/STATUS.md`
 - **Audience:** fathom maintainer; the keel pre-mortem reviewer; the series-engine decomposer
 - **Output artifact(s):** `tasks/humble-vs-super-v1/`, `scenarios/humble-vs-super/`, adapter/scenario/ledger/report changes under `src/fathom/`, `docs/adr/0006-plugin-mount-fidelity.md`
 
@@ -251,7 +251,7 @@ with known token counts yields a non-zero `cost_usd_est` in the ledger and `fath
   resolvable gap.
 - Truncated trials (timeout / max-turns) are recovered from the ledger for the run notes, since the per-criterion
   table currently drops them (STATUS reporting gap) and discipline arms run longer.
-- A dogfooding feedback report under `docs/feedback/` on fathom's plugin-eval fit, with a cost table.
+- A dogfooding feedback report (local, gitignored `feedback/` dir) on fathom's plugin-eval fit, with a cost table.
 
 ## Pre-mortem certification
 

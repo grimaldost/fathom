@@ -1,5 +1,9 @@
 # Series engine COMPLETE value-side ablation — design + build spec
 
+> **Superseded (2026-07-01):** the v1 (`querytable`, greenfield) instrument this spec produced was a
+> quality-null; the live value-side design is `2026-07-01-ablation-v2-brownfield-design.md`. Kept as
+> the capability→arm map and the build spec for the `gated_session` strategies (since built).
+
 > Goal (operator): a COMPLETE evaluation of the series engine's value — the orchestration engine AND every
 > engine-independent capability (not just the gate) — measured on the current lineup. This spec is
 > executable: a continuation session builds + runs from it. Companion to
