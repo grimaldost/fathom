@@ -1,7 +1,7 @@
 # fathom skill-eval (python-engineering) — design spec
 
 **Date:** 2026-06-13
-**Status:** Approved-pending-review design, pre-DoR
+**Status:** executed — the matrix ran 2026-06-13; run notes: `docs/reports/2026-06-13-skill-pyeng-v1-first-matrix.md`
 **Builds on:** `docs/specs/2026-06-10-fathom-v1-design.md` (the spine), ADR-0001 (vendor-abstract
 runner), ADR-0003 (blind result-only scoring), ADR-0004 (vendor claude runner core).
 **Subject skill:** `engineering-discipline:python-engineering` v0.1.2
@@ -166,7 +166,7 @@ lesson as the series-engine bank.
 4. `fathom report skill-pyeng-v1` renders the **per-criterion** table (each compliance criterion and
    `behavior_preserved`, % per arm) and the economy table — the treatment arms' extra input tokens
    visible. The per-criterion view, not the blended pass-rate, carries the verdict.
-5. A dogfooding feedback report under `docs/feedback/` on fathom's skill-eval fit, with a cost table.
+5. A dogfooding feedback report (local, gitignored `feedback/` dir) on fathom's skill-eval fit, with a cost table.
 
 ## 7. Open items (resolve before/at DoR)
 

@@ -117,14 +117,17 @@ trial_timeout_s = 600
 
 ## State / what to work on next
 
-`docs/STATUS.md` is the index of analyses run, open defects, and next steps. Per-run detail lives in the
-run notes under `docs/feedback/*-first-matrix.md` (these double as dogfooding reports). Headline open
-item: the dark-shipped pairwise judge (`grading/judge.py`, the quality axis) waiting to be lit up (D2 —
-subscription `cost_usd_est = 0` — is **fixed**; see STATUS.md). The obvious next analysis is a
-**discriminating v2 bank** (one where the bare arm sometimes fails).
+`docs/STATUS.md` is the index of analyses run, open defects, and next steps; `docs/README.md` maps the
+whole docs tree. Per-analysis detail lives in the run notes and findings reports under `docs/reports/`.
+Headline open item: the dark-shipped pairwise judge (`grading/judge.py`, the quality axis) waiting to
+be lit up. A discriminating *correctness* bank is now known to be hard — the v3/v4 harder banks both
+ceilinged (0/180 correctness failures at n=45); see STATUS "Next steps" before designing another.
 
 ## Conventions
 
 Windows host — paths via `pathlib`, terminate process trees where you spawn. Never edit `ledger/` by hand
 (append-only). Commit messages carry no AI-attribution trailer (GPG/SSH signing left as configured).
-`report/`, `.pr-outputs/`, `.worktrees/`, `.venv/` are gitignored; `ledger/` is committed.
+`report/`, `feedback/`, `.pr-outputs/`, `.worktrees/`, `.venv/` are gitignored; `ledger/` is committed.
+Dogfooding feedback reports (session-workflow `tool-feedback`) go to the local, gitignored `feedback/`
+dir — never under `docs/`. Analysis run notes and findings reports are not feedback: they are part of
+the longitudinal record and go to `docs/reports/`.

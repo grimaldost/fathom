@@ -330,7 +330,7 @@ multi-hour matrix); render the scorecard into `report/`; commit the ledger under
 **Acceptance criterion:** the committed ledger and rendered scorecard exist for
 the full matrix; the interrupt-resume demonstration (including the smoke re-run
 at resume) and the verdict lines are recorded in the run notes
-(`docs/feedback/`), satisfying the design doc's done criteria 1, 4, and 5.
+(`docs/reports/`), satisfying the design doc's done criteria 1, 4, and 5.
 
 ## PR ↔ section manifest
 
@@ -363,7 +363,7 @@ at resume) and the verdict lines are recorded in the run notes
   and any recurring trap is promoted (checklist item, guardrail, or
   spec-template change).
 - fathom is registered in the operator's feedback-targets table so future sessions
-  report into `docs/feedback/`.
+  report into the local, gitignored `feedback/` dir.
 
 ## Pre-mortem certification
 

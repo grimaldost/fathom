@@ -85,7 +85,7 @@ fathom/
   ledger/*.jsonl            # committed: the longitudinal record
   report/                   # generated, gitignored
   tests/                    # stdlib-runnable unit tests + smoke gate
-  docs/specs/, docs/feedback/
+  docs/                     # specs/, adr/, method/, reports/, plans/, STATUS.md (as-built; see docs/README.md)
 ```
 
 Dependency policy: the spawning/ledger core imports stdlib only (unit tests run anywhere); uv

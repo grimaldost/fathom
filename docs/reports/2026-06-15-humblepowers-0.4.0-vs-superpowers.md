@@ -4,6 +4,10 @@
 60/60 completed, 0 infra errors · **Cost:** ≈ $30 (token×price estimate) · **Ledger:**
 `ledger/humble-vs-super-v2.jsonl` · **Scorecard:** `report/scorecard-humble-vs-super-v2.md`
 
+> **Corrected (2026-06-16):** the n=45 powered confirmatory found this report's quality gap
+> (humble 100% > super 80%) was n=10 noise — humble ≈ super on test-discipline, overlapping CIs.
+> The cost edge stands. See `2026-06-16-humble-vs-super-powered-confirmatory.md`.
+
 > Companion to the v1 report (`docs/reports/2026-06-14-humblepowers-vs-superpowers.md`), which carries
 > the full design, methodology, blindness model, and the regression-test "swap" verifier. This document
 > reports only what the re-run with **humblepowers 0.4.0** changed.

@@ -1,7 +1,7 @@
 # Spec — fathom model-tier calibration: is the complexity→model mapping well-tuned?
 
 - **Date:** 2026-06-16
-- **Status:** ready (DoR passed) — pre-mortem CERTIFIED (round 4, 2026-06-16) after 6 blocking-class folds across 4 rounds
+- **Status:** executed (DoR passed; pre-mortem CERTIFIED round 4 after 6 blocking-class folds) — findings: `docs/reports/2026-06-16-model-tier-calibration.md`; the §6 judge was deferred (verifier-only spine)
 - **Audience:** fathom maintainer; the keel pre-mortem reviewer; the executor (built directly, not via the series engine — see Execution note)
 - **Output artifact(s):** `tasks/model-tier-v1/`, `scenarios/model-tier/`, `src/fathom/grading/judge.py` (wired), `src/fathom/grading/judge_validation.py`, `src/fathom/report.py` (new views), `docs/adr/0007-model-tier-calibration.md`, `docs/reports/2026-06-16-model-tier-calibration.md`
 

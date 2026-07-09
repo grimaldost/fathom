@@ -11,6 +11,9 @@ env/
 .pr-outputs/
 .worktrees/
 
+# Local dogfooding feedback reports (session-workflow tool-feedback) - local-only, never committed
+/feedback/
+
 # Top-level run logs (nohup/console captures from matrix runs) - never artifacts
 /.*.log
 
