@@ -102,3 +102,7 @@ uv run fathom smoke     # real spawns, costs cents — the go/no-go before any p
 Core modules and their tests import stdlib only (`python tests/test_scenario.py` works without
 uv); uv manages dev tooling. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the gates, the
 invariants, and how to add a bank or an arm.
+
+## License
+
+[MIT](LICENSE).
