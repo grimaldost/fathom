@@ -72,6 +72,19 @@ the meantime: the efficiency-view Pareto flag is now strict non-domination (`rep
 series invocation-path regression guard (`TestRepoInvocationCmd`) runs in CI via `pytest`
 (`fathom smoke` itself stays a manual gate — credentialed and paid).
 
+**Triage (2026-07-09, `feedback/2026-07-09-triage-v1.md`).** The 7-report corpus was clustered and
+gated; three clusters cleared for build (leverage-ordered), the rest hold at `watch` in the table
+below pending a second corroborating report:
+1. **Report legibility** — the headline all-truthy pass-rate ceilings the signal; promote the
+   hard-criteria/partial-credit fraction into the *core* report, add all-arms to the calibration
+   view, and allow rendering a chosen historical `dataset_version` (`report.py`/`calibration.py`).
+2. **Analysis close-out** — a committed ledger with no STATUS row / `docs/reports/` entry (and its
+   decisions) goes invisible; the prose step shipped (`CONTRIBUTING.md`) and recurred, so escalate
+   to a mechanical `fathom report` warn when a bank's ledger has no matching report (`cli.py`).
+3. **Smoke-gate robustness** — the gate can pass hollow under an expired credential (a check
+   satisfied by absence) or crash on a non-cp1252 char; fail fast as INFRA-BLOCKED and force UTF-8
+   on stdout (`smoke.py`, `cli.py`).
+
 | Item | Sev | Home |
 |---|---|---|
 | `fathom smoke` doesn't plumb `--effort`/`--model`, blocking effort-acceptance probes before a paid effort run | MED | `src/fathom/cli.py` (smoke subparser) |
