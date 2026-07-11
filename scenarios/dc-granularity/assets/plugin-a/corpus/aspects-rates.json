@@ -1,0 +1,775 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "di_curve",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "tenor_252",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "di_rate_252",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "di_curve",
+        "description": "DI Interest Rate Curve. Source: BigQuery dataplatform-prd.treasury_platform_public.di_curve, merge on [ref_date, tenor_252]; DI futures (B3 DI1 contracts) are the primary input for constructing the CDI curve.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/di_data.yaml",
+        "customProperties": {
+          "serving.locator": "di_curve",
+          "serving.aliases": "cdi_daily",
+          "serving.producer": "treasuryutils",
+          "concept.rule.canonical_name_policy": "di_curve and cdi_daily share the same BigQuery coordinate: cdi_daily.yaml's active source selects Duration = 1 FROM this table inside a WITH cdi AS (...) CTE, while di_data.yaml (di_curve) queries the table directly. Both FROM-parse to the identical (bigquery, dataplatform-prd.treasury_platform_public.di_curve) URN, so build_lineage dedupes them to one entity; di_curve is the canonical serving.locator, cdi_daily the serving.aliases entry — a Duration = 1 projection relationship, not a distinct dataset.",
+          "concept.rule.cdi_daily_projection": "cdi_daily projects this table filtered to Duration = 1 (the 1-day DI vertex, proxying the CDI overnight rate): ref_date (date, not null), rate = Rate/100 (double, not null), factor = POW(1+rate, 1.0/252) (double — BUS/252 daily capitalization factor), year (integer)."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "market_fixings",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "fixing_name",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "market_fixings",
+        "description": "Daily market fixings (Futures, Spot FX, Indexes, PTAX). Source: BigQuery dataplatform-prd.treasury_platform_public.fixings, merge on [ref_date, fixing_name]; hub dataset feeding all fx_* and sofr_accumulated via fixing_name filtering (observed names include DOL1, DOL2, CASADO, PTAX V, SOFR RATE).",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/market_fixings.yaml",
+        "customProperties": {
+          "serving.locator": "market_fixings",
+          "serving.producer": "treasuryutils"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "sofr_curve_raw",
+        "platform": "urn:li:dataPlatform:rest_api",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "tenor_cd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate_annual",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "sofr_curve_raw",
+        "description": "SOFR Term Structure (from Market Data API). Source: internal Stone Treasury Market Data API https://api.treasury.stone.com.br/market-data/api, endpoint curves, settings.name SOFR; merge on [ref_date, tenor_cd]; rate_annual = rate/100.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/sofr_data.yaml",
+        "customProperties": {
+          "serving.locator": "sofr_curve_raw",
+          "serving.producer": "treasuryutils"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "frc_raw",
+        "platform": "urn:li:dataPlatform:rest_api",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "maturity_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "duration_cd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_annual",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "frc_raw",
+        "description": "FRC (Forward Rate Agreement de Cupom Cambial) from Market Data API. Source: internal Stone Treasury Market Data API https://api.treasury.stone.com.br/market-data/api, endpoint curves, settings.name FRC; merge on [ref_date, maturity_date]; rate_annual = rate/100; maturity_date = ref_date + duration_cd days. FRC quotes are already cupom cambial rates (loaded as decimals) and are used directly as the long-end vertices of the cupom cambial curve.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/frc_data.yaml",
+        "customProperties": {
+          "serving.locator": "frc_raw",
+          "serving.producer": "treasuryutils"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "di_pre",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "maturity_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "duration_bd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "duration_cd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_annual",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_period",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "di_pre",
+        "description": "DI Pre-Fixed Interest Rate Curve (Absolute Dates). Derived (DiPreCurveBuilder) from di_curve + calendar_brazil: maturity_date = add_workdays(ref_date, tenor_252, calendar_brazil); rate_period = (1+di_rate_252)^(tenor_252/252) - 1. Merge on [ref_date, maturity_date].",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/di_derived.yaml",
+        "customProperties": {
+          "serving.locator": "di_pre",
+          "serving.producer": "treasuryutils",
+          "concept.rule.day_count": "BUS/252 discrete-annual factor math: rate_period = (1 + di_rate_252)^(tenor_252/252) - 1, business-day count resolved against calendar_brazil (add_workdays)."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "cdi_accumulated",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "cumulated_overnight_rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "cdi_accumulated",
+        "description": "Historical Accumulated CDI Index. Derived (CdiAccumulatedBuilder) from the di_curve/cdi_daily projection: cumulative product of daily factors in sorted ref_date order. Merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/di_derived.yaml",
+        "customProperties": {
+          "serving.locator": "cdi_accumulated",
+          "serving.producer": "treasuryutils",
+          "concept.rule.day_count": "BUS/252 exponential factor math: cumulated_overnight_rate is the cumulative product of daily factors POW(1+rate, 1/252) taken from the di_curve/cdi_daily projection, in sorted ref_date order."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "sofr_pre",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "maturity_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "duration_cd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_annual",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_period",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "sofr_pre",
+        "description": "SOFR Term Structure (Absolute Dates, Normalized). Derived (SofrCurveBuilder) from sofr_curve_raw: maturity_date = ref_date + tenor_cd calendar days; rate_period = rate_annual * duration_cd / 360. No calendar dependency — SOFR uses calendar days (ACT/360). Merge on [ref_date, maturity_date].",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/sofr_derived.yaml",
+        "customProperties": {
+          "serving.locator": "sofr_pre",
+          "serving.producer": "treasuryutils",
+          "concept.rule.day_count": "ACT/360 simple compounding, calendar days: rate_period = rate_annual * duration_cd / 360; no calendar (business-day) dependency, unlike the BUS/252 cdi/di conventions."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "sofr_accumulated",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "cumulated_overnight_rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "sofr_accumulated",
+        "description": "Historical Accumulated SOFR Index (daily compounded). Derived (SofrAccumulatedBuilder) from market_fixings filtered fixing_name = SOFR RATE: daily_factor = 1 + rate*calendar_days/360; cumulated = cum_prod(daily_factor). Merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/sofr_derived.yaml",
+        "customProperties": {
+          "serving.locator": "sofr_accumulated",
+          "serving.producer": "treasuryutils",
+          "concept.rule.day_count": "ACT/360 simple compounding on calendar days (1 on weekdays, 3 over weekends, accounting for holidays): daily_factor = 1 + rate*calendar_days/360, cumulated as the running product — contrasted against CDI's BUS/252 exponential (1+r)^(1/252) convention."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "cupom_cambial",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "maturity_date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "datetime",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "duration_cd",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rate_annual",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "cupom_cambial",
+        "description": "Cupom Cambial Term Structure (USD-denominated BRL interest rate). Derived (CupomCambialCurveBuilder) from di_pre + market_fixings + frc_raw via covered interest rate parity. Convention ACT/360 linear (simple) compounding. Short-end vertex: forward = dol_quote/1000; cc_factor = di_factor * spot / forward; cc_rate = (cc_factor-1)*360/duration_cd. Long end: FRC quotes used directly. Month-end roll rule: on the last business day of the month use DOL2 instead of DOL1, except Dec 31 (B3 convention: DOL1 on Dec 31 already references the January contract). Merge on [ref_date, maturity_date].",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/cupom_cambial.yaml",
+        "customProperties": {
+          "serving.locator": "cupom_cambial",
+          "serving.producer": "treasuryutils",
+          "concept.rule.day_count": "ACT/360 linear (simple) compounding, covered interest rate parity across di_pre + market_fixings + frc_raw.",
+          "concept.rule.month_end_roll": "On the last business day of the month, use the DOL2 fixing instead of DOL1 for the short-end vertex, EXCEPT December 31 (B3 convention: DOL1 on Dec 31 already references the following January contract, so the DOL1 fixing is kept)."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

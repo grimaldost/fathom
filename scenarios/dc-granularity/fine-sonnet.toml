@@ -1,0 +1,21 @@
+name = "fine-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# FINE arm: the data-context product surface as-is — twelve discovery/actuation
+# tools — served by plugin-a's bundled MCP server (.mcp.json, server key
+# "data") over the frozen corpus snapshot inside the plugin. Differs from
+# coarse-sonnet ONLY by the mounted plugin (tool granularity); same backend,
+# same corpus, same model/effort. The mcp__plugin_dc_data allow rule covers
+# every tool the mounted server exposes.
+[plugins]
+mount = ["assets/plugin-a"]
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "mcp__plugin_dc_data"]
+
+[limits]
+trial_timeout_s = 900

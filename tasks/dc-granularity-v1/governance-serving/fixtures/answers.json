@@ -1,0 +1,10 @@
+{
+  "lookahead_bias_term": null,
+  "pit_visibility_field": null,
+  "fx_casado_unit": null,
+  "fx_spot_derivation": null,
+  "fx_casado_producer": null,
+  "fx_casado_locator": null,
+  "brazil_holiday_locators": null,
+  "notes": ""
+}

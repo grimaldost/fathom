@@ -1,0 +1,601 @@
+[
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:treasury",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Business concepts used across the treasury data domain.",
+        "name": "Treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:rates",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Interest-rate benchmarks and curves (CDI, DI futures, cupom cambial, SOFR).",
+        "name": "Rates",
+        "parentNode": "urn:li:glossaryNode:treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:fx",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "USD/BRL foreign-exchange rates and fixings (PTAX, casado, DI futures legs).",
+        "name": "FX",
+        "parentNode": "urn:li:glossaryNode:treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:equity",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "B3 equity market data: price bars, corporate actions, and fundamentals.",
+        "name": "Equity",
+        "parentNode": "urn:li:glossaryNode:treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:calendars",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Business-day calendars and holiday schedules underlying date arithmetic.",
+        "name": "Calendars",
+        "parentNode": "urn:li:glossaryNode:treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:conventions",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Cross-cutting day-count, interpolation, and data-modeling conventions used across the treasury catalog.",
+        "name": "Conventions",
+        "parentNode": "urn:li:glossaryNode:treasury"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:cdi",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "The CDI is the Brazilian overnight interbank rate — the rate at which banks lend to each other for one business day. It is the most important benchmark for Brazilian fixed income: published daily by B3 (formerly CETIP); annualized on BUS/252 basis: CDI_annual = (1 + CDI_daily)^252 - 1; most Brazilian corporate bonds, loans, and swaps are indexed to CDI; '100% CDI' means index_perc = 1.0 (docs/financialtools/theory_quantitative_finance.md §7.1).",
+        "termSource": "INTERNAL",
+        "name": "CDI",
+        "parentNode": "urn:li:glossaryNode:rates"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:di-futures",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "DI futures (DI1 contracts) are exchange-traded interest rate futures on B3. Each contract references the accumulated CDI over its lifetime: quoted as annual rates on a BUS/252 discrete-annual basis; contract value at maturity BRL 100,000; settlement financial (no physical delivery); maturities on the first business day of selected months. DI futures prices are the primary input for constructing the CDI curve (docs/financialtools/theory_quantitative_finance.md §7.2).",
+        "termSource": "INTERNAL",
+        "name": "DI futures",
+        "parentNode": "urn:li:glossaryNode:rates"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:ptax",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "The PTAX is the official BRL/USD exchange rate published by the Central Bank of Brazil (BCB). It is used for: settlement of FX derivatives (NDFs, FX forwards); cross-currency swap valuations; regulatory reporting of FX exposures. The dataset uses 'PTAX V' (PTAX Venda / sell side) (docs/financialtools/theory_quantitative_finance.md §7.5).",
+        "termSource": "INTERNAL",
+        "name": "PTAX",
+        "parentNode": "urn:li:glossaryNode:fx"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:cupom-cambial",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Cupom cambial is the USD-denominated BRL interest rate (curves.md). Builds the Cupom Cambial term structure from covered interest rate parity using the DI curve, FX fixings, and FRC quotes. Convention: ACT/360, linear (simple) compounding (src/treasuryutils/financialtools/builders/cupom_cambial.py module docstring).",
+        "termSource": "INTERNAL",
+        "name": "Cupom cambial",
+        "parentNode": "urn:li:glossaryNode:rates"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:casado",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "USD/BRL Casado (spot-future basis) — BRL per 1000 USD (src/treasuryutils/datatools/metadata/fx_derived.yaml), used in the formula spot = (first_future - casado) / 1000 (src/treasuryutils/financialtools/builders/fx.py, FxSpotBuilder docstring).",
+        "termSource": "INTERNAL",
+        "name": "Casado",
+        "parentNode": "urn:li:glossaryNode:fx"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:frc",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "FRC (Forward Rate Agreement de Cupom Cambial) from Market Data API (src/treasuryutils/datatools/metadata/frc_data.yaml). Long-end vertices (FRC maturities): FRC quotes are already cupom cambial rates (loaded as decimals) (src/treasuryutils/financialtools/builders/cupom_cambial.py).",
+        "termSource": "INTERNAL",
+        "name": "FRC",
+        "parentNode": "urn:li:glossaryNode:rates"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:sofr-conventions",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "CDI uses (1+r)^(1/252) exponential on business days. SOFR uses 1 + r * days/360 simple on calendar days (1 on weekdays, 3 over weekends, accounting for holidays) (src/treasuryutils/financialtools/builders/sofr.py, SofrAccumulatedBuilder docstring; comparison table in docs/financialtools/curves.md, 'CDI vs. SOFR: a quick comparison').",
+        "termSource": "INTERNAL",
+        "name": "SOFR conventions",
+        "parentNode": "urn:li:glossaryNode:rates"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:business-day-calendar",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "A business day calendar defines which dates are valid trading/settlement days for a given market. Weekends and public holidays are non-workdays. Financial contracts settle on workdays, accrual periods count workdays (or calendar days), and coupon schedules skip holidays. Without a calendar, date arithmetic like 'T+2 settlement' or 'add 5 business days' would be ambiguous (docs/calendartools/README.md).",
+        "termSource": "INTERNAL",
+        "name": "Business-day calendar",
+        "parentNode": "urn:li:glossaryNode:calendars"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:bus-252",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Brazilian fixed-income markets use BUS/252: the year fraction is business days / 252, where 252 is the approximate number of workdays in a Brazilian year. Because BUS/252 counts only workdays, the result depends on the calendar — a month with a holiday in it accrues slightly less than the same month without one. This is the standard for CDI-indexed instruments, government bonds (NTN, LTN, LFT), and most local derivatives (docs/calendartools/day_count.md).",
+        "termSource": "INTERNAL",
+        "name": "BUS/252",
+        "parentNode": "urn:li:glossaryNode:conventions"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:flat-forward",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Between any two known data points (curve 'nodes'), the curve assumes that the instantaneous forward rate is constant. It is the standard convention in Brazilian fixed-income markets. By contrast, the SOFR curve uses linear interpolation on yields, which is the standard convention for USD money-market instruments (docs/financialtools/curves.md, 'Interpolation: flat-forward explained').",
+        "termSource": "INTERNAL",
+        "name": "Flat-forward interpolation",
+        "parentNode": "urn:li:glossaryNode:conventions"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:pit-discipline",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Point-in-time (PIT) discipline prevents look-ahead bias by ensuring fundamental data is only visible as of the date it was publicly available. A fiscal quarter ends on period_end (e.g. 2024-09-30), but the company may not file with CVM until weeks later (filing_date). A model running on 2024-10-01 must not see this filing (docs/equitytools/data_layer.md §PIT discipline).",
+        "termSource": "INTERNAL",
+        "name": "PIT discipline",
+        "parentNode": "urn:li:glossaryNode:conventions"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:scd-2",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Temporal entities follow the SCD-2 (Slowly Changing Dimension Type 2) pattern. Each version carries valid_from, valid_to, version, and reason fields. Intervals are half-open: [valid_from, valid_to) — a version is active when valid_from <= as_of < valid_to. The current version has valid_to = None (docs/adr/0012-scd2-versioning-protocol.md).",
+        "termSource": "INTERNAL",
+        "name": "SCD-2",
+        "parentNode": "urn:li:glossaryNode:conventions"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:corporate-action-adjustment",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Corporate action types: SPLIT, REVERSE_SPLIT, DIVIDEND, BONUS_SHARES, RIGHTS_ISSUE. adj_factor is the cumulative corporate-action adjustment factor (1.0 = unadjusted); must be > 0 (docs/equitytools/schemas.md, qnt_corporate_actions / qnt_daily_bars).",
+        "termSource": "INTERNAL",
+        "name": "Corporate-action adjustment",
+        "parentNode": "urn:li:glossaryNode:equity"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:business-day-calendar" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:cdi" },
+          { "urn": "urn:li:glossaryTerm:di-futures" },
+          { "urn": "urn:li:glossaryTerm:bus-252" },
+          { "urn": "urn:li:glossaryTerm:flat-forward" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:ptax" },
+          { "urn": "urn:li:glossaryTerm:casado" },
+          { "urn": "urn:li:glossaryTerm:sofr-conventions" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:sofr-conventions" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:frc" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:di-futures" },
+          { "urn": "urn:li:glossaryTerm:bus-252" },
+          { "urn": "urn:li:glossaryTerm:flat-forward" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:cdi" },
+          { "urn": "urn:li:glossaryTerm:bus-252" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:sofr-conventions" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:sofr-conventions" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:cupom-cambial" },
+          { "urn": "urn:li:glossaryTerm:frc" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:casado" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:casado" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:casado" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:ptax" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          { "urn": "urn:li:glossaryTerm:ptax" },
+          { "urn": "urn:li:glossaryTerm:casado" }
+        ],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/daily_bars,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:corporate-action-adjustment" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/corporate_actions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:corporate-action-adjustment" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/fundamentals,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [{ "urn": "urn:li:glossaryTerm:pit-discipline" }],
+        "auditStamp": { "time": 1783555200000, "actor": "urn:li:corpuser:treasury-data-team" }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

@@ -1,0 +1,19 @@
+# Tool-granularity A/B over the data-context MCP surface (pre-v4 gate #1).
+# FINE arm = the product's twelve-tool discovery/actuation facade served as-is;
+# COARSE arm = a three-tool merged facade (find_data / describe_dataset /
+# corpus_status) over the SAME backend, freshness engine, and corpus snapshot,
+# so the arms differ only in tool granularity, never in available facts.
+# Arms live in scenarios/dc-granularity (plugin-a = fine, plugin-b = coarse;
+# both plugins are named "dc" and the .mcp.json server key is "data", so the
+# agent-visible tool prefix is identical across arms — no priming).
+# Corpus: treasury-prod (content_hash fe56edda…) frozen INSIDE each plugin dir,
+# so it enters config_hash via the plugin tree_sha. The data-context repo is
+# referenced via `uv run --with "data-context @ file:///…"` at 455c603 as of
+# authoring — the repo working tree is NOT hashed; hold it frozen during a
+# matrix.
+# Oracle provenance: every expected value in the verifiers was frozen from
+# EXECUTED in-process drives of BOTH arm servers (2026-07-11); both arms
+# returned identical facts on every probed question.
+name = "dc-granularity-v1"
+dataset_version = "1"
+holdout = []

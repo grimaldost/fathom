@@ -1,0 +1,378 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fx_first_future",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fx_first_future",
+        "description": "USD/BRL First DI Future (DOL) — BRL per 1000 USD. FixingFilterBuilder(fixing_name='DOL1') over market_fixings; merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/fx_derived.yaml",
+        "customProperties": {
+          "serving.locator": "fx_first_future",
+          "serving.producer": "treasuryutils",
+          "concept.rule.unit_convention": "DOL1 is quoted BRL per 1000 USD — the fx.py module docstring notes all FX rates are normalized to BRL per 1 USD, but DOL1/DOL2/CASADO remain per-1000 by convention."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fx_second_future",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fx_second_future",
+        "description": "USD/BRL Second DI Future — BRL per 1000 USD. FixingFilterBuilder(fixing_name='DOL2') over market_fixings; merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/fx_derived.yaml",
+        "customProperties": {
+          "serving.locator": "fx_second_future",
+          "serving.producer": "treasuryutils",
+          "concept.rule.unit_convention": "DOL2 is quoted BRL per 1000 USD — the fx.py module docstring notes all FX rates are normalized to BRL per 1 USD, but DOL1/DOL2/CASADO remain per-1000 by convention."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fx_casado",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fx_casado",
+        "description": "USD/BRL Casado (spot-future basis) — BRL per 1000 USD. FixingFilterBuilder(fixing_name='CASADO') over market_fixings; merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/fx_derived.yaml",
+        "customProperties": {
+          "serving.locator": "fx_casado",
+          "serving.producer": "treasuryutils",
+          "concept.rule.unit_convention": "CASADO is quoted BRL per 1000 USD — the fx.py module docstring notes all FX rates are normalized to BRL per 1 USD, but DOL1/DOL2/CASADO remain per-1000 by convention."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fx_ptax",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fx_ptax",
+        "description": "PTAX Venda (BCB official FX rate) — BRL per 1 USD. FixingFilterBuilder(fixing_name='PTAX V') over market_fixings; merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/fx_derived.yaml",
+        "customProperties": {
+          "serving.locator": "fx_ptax",
+          "serving.producer": "treasuryutils",
+          "concept.rule.unit_convention": "PTAX V (Venda) is quoted BRL per 1 USD — the Central Bank of Brazil's official sell-side rate, unlike the per-1000 DOL1/DOL2/CASADO convention."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fx_spot",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "ref_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "rate",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fx_spot",
+        "description": "USD/BRL Spot Rate — BRL per 1 USD, derived from (first_future - casado) / 1000 (FxSpotBuilder). Merge on ref_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/fx_derived.yaml",
+        "customProperties": {
+          "serving.locator": "fx_spot",
+          "serving.producer": "treasuryutils",
+          "concept.rule.unit_convention": "USD/BRL Spot is BRL per 1 USD (FxSpotBuilder normalizes to the per-1-USD convention, unlike the per-1000 DOL1/DOL2/CASADO fixings it derives from).",
+          "concept.rule.derivation": "spot = (first_future - casado) / 1000 (FxSpotBuilder docstring) — converts the per-1000-USD DOL1/CASADO fixings into a per-1-USD spot rate."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

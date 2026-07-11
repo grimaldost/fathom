@@ -1,0 +1,235 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

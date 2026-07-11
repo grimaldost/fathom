@@ -1,0 +1,8 @@
+{
+  "emit_timestamp": "2026-07-11T19:08:01.219166+00:00",
+  "source_version": "treasuryutils@v1.8.0-7-gfcd1b126",
+  "corpus_id": "treasury-prod",
+  "manifest_schema_version": "3",
+  "content_hash": "fe56edda98bc54324b90158e33172bf5a106e46ce1c5a1481aa91ef3b5592b08",
+  "max_age_days": 30
+}

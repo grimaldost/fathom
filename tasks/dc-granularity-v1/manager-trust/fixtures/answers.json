@@ -1,0 +1,9 @@
+{
+  "equity_fundamentals_verdict": null,
+  "equity_fundamentals_reason": null,
+  "di_curve_verdict_if_observed": null,
+  "di_curve_expected_interval": null,
+  "snapshot_source_version": null,
+  "snapshot_max_age_days": null,
+  "notes": ""
+}
