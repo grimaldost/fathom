@@ -1,0 +1,31 @@
+name = "stack-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# THE STACK: data-context server (treasury corpus, tu installed server-side so
+# the observation seam is live) + the real tu consumer plugin (skills + API
+# references; banner pinned silent, FM-9) + a venv where plain python imports
+# treasuryutils (FM-7 proven by sanity spawn). The agent crosses the seam
+# itself: discover via mcp__plugin_dc_data tools, execute via Bash python/uv.
+[plugins]
+mount = ["assets/plugin-dc", "assets/plugin-1130"]
+
+[env]
+VIRTUAL_ENV = 'C:/Users/grima/Documents/treasuryutils-dev/.venv'
+PATH = 'C:/Users/grima/Documents/treasuryutils-dev/.venv/Scripts;${PATH}'
+TREASURYUTILS_DISABLE_STALENESS_BANNER = "1"
+TREASURYUTILS_FEEDBACK = "0"
+
+[tools]
+source = "none"
+allowed = [
+  "Read", "Glob", "Grep", "Write", "Edit", "Skill",
+  "Bash(python:*)", "Bash(uv:*)",
+  "PowerShell(python:*)", "PowerShell(uv:*)",
+  "mcp__plugin_dc_data",
+]
+
+[limits]
+trial_timeout_s = 1200

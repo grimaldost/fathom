@@ -1,0 +1,17 @@
+# Phase-2 STACK eval (design: docs/specs/2026-07-11-dc-stack-v1-design.md,
+# pre-mortem R1 folded): data-context surface + treasuryutils library together.
+# The dc plugin serves corpus/treasury with tu installed in the SERVER env
+# (observation seam live); the agent's [env] venv imports tu directly; the
+# copied consumer plugin (assets/plugin-1130) is the tu knowledge channel.
+# Oracle freeze (2026-07-11, all EXECUTED): tu checkout fcd1b126 clean;
+# lakehouse cache last synced 2026-06-07 (calendar_brazil .996143, holidays
+# .487267); calendar entity URN (external,holidays_brazil) verdict STALE vs
+# 1 WEEK; di_curve observe -> None -> unknown/no_observation; local calendar
+# cache computes 2026-09-07 as a workday (WRONG in reality - stale-input
+# trap); net_workdays 2026-07-13..31 = 14; BUS/252 yf 2026-07-01..2027-07-01
+# = 261/252; default-mode DatasetManager.get() RAISES here and does NOT
+# mutate the cache (FM-2 refuted by execution; backup retained).
+# dataset_version embeds the treasury corpus content_hash prefix.
+name = "dc-stack-v1"
+dataset_version = "1-fe56edda98bc"
+holdout = []

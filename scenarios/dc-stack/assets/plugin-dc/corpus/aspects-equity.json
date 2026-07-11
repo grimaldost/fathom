@@ -1,0 +1,379 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/daily_bars,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "equity_daily_bars",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "security_id",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "bar_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "open",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "high",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "low",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "close",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "volume",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "adj_factor",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "data_quality",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/daily_bars,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "equity_daily_bars",
+        "description": "Daily OHLCV price bars for B3 equities with cumulative adjustment factor. Source: file-based placeholder (B3 market data source to be configured in a future sprint); merge on [security_id, bar_date], update_key bar_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/equity/daily_bars.yaml",
+        "customProperties": {
+          "serving.locator": "equity_daily_bars",
+          "serving.producer": "treasuryutils",
+          "concept.rule.data_quality_enum": "data_quality is one of NORMAL, ADJUSTED, MISSING, ESTIMATED (docs/equitytools/schemas.md, qnt_daily_bars).",
+          "concept.rule.adj_factor": "adj_factor: cumulative corporate-action adjustment factor (1.0 = unadjusted); must be > 0 (YAML check `gt: 0`).",
+          "concept.rule.source_status": "Equity datasets' source is a declared placeholder — B3 market data source 'to be configured in a future sprint'; the file platform binding should not be presented as the durable source authority."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/daily_bars,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/daily_bars,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/corporate_actions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "equity_corporate_actions",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "action_id",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "security_id",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "ex_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "action_type",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "factor",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "description",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/corporate_actions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "equity_corporate_actions",
+        "description": "Corporate actions for B3 equities (splits, dividends, bonus shares, rights issues). Source: file-based placeholder (B3 bulk event files, to be configured in a future sprint); merge on action_id, update_key ex_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/equity/corporate_actions.yaml",
+        "customProperties": {
+          "serving.locator": "equity_corporate_actions",
+          "serving.producer": "treasuryutils",
+          "concept.rule.action_type_enum": "action_type is one of SPLIT, REVERSE_SPLIT, DIVIDEND, BONUS_SHARES, RIGHTS_ISSUE (docs/equitytools/schemas.md, qnt_corporate_actions).",
+          "concept.rule.factor_semantics": "factor: split ratio for SPLIT/REVERSE_SPLIT (2.0 = 2-for-1); dividend per share for DIVIDEND; null otherwise.",
+          "concept.rule.source_status": "Equity datasets' source is a declared placeholder — B3 bulk event files 'to be configured in a future sprint'; the file platform binding should not be presented as the durable source authority."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/corporate_actions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/corporate_actions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/fundamentals,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "equity_fundamentals",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "company_id",
+            "type": { "type": { "com.linkedin.schema.StringType": {} } },
+            "nativeDataType": "text",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "period_end",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "filing_date",
+            "type": { "type": { "com.linkedin.schema.DateType": {} } },
+            "nativeDataType": "date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "revenue",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_income",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "ebitda",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "total_equity",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "total_assets",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "total_debt",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "shares_outstanding",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "eps",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "bvps",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "double",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/fundamentals,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "equity_fundamentals",
+        "description": "Quarterly fundamental data for Brazilian companies filed with CVM. Source: file-based placeholder (CVM ITR/DFP exports, to be configured in a future sprint); merge on [company_id, period_end, filing_date], update_key filing_date.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/equity/fundamentals.yaml",
+        "customProperties": {
+          "serving.locator": "equity_fundamentals",
+          "serving.producer": "treasuryutils",
+          "concept.rule.pit_gate": "PIT availability gate: the date this data became publicly available via CVM. Downstream queries MUST filter on filing_date, not period_end, to avoid look-ahead bias in backtests.",
+          "concept.rule.source_status": "Equity datasets' source is a declared placeholder — CVM ITR/DFP exports 'to be configured in a future sprint'; the file platform binding should not be presented as the durable source authority."
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/fundamentals,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/equity/fundamentals,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]
