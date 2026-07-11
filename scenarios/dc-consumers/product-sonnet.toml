@@ -1,0 +1,22 @@
+name = "product-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# Product surface over the GENERATED mock-payments corpus: plugin-mock bundles
+# the data-context twelve-tool server (mcpServers in plugin.json, server key
+# "data") with the frozen corpus copy inside the plugin (tree_sha enters
+# config_hash; the bank's dataset_version embeds the manifest content_hash
+# prefix). The workspace carries only answers.json; the agent is never told the
+# plugin path (spec §6 side-channel residual — file tools stay allowed,
+# matching dc-granularity-v1).
+[plugins]
+mount = ["assets/plugin-mock"]
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "mcp__plugin_dc_data"]
+
+[limits]
+trial_timeout_s = 900

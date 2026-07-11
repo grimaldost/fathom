@@ -1,0 +1,51 @@
+id = "governance-audit"
+instruction = """
+You are running the quarterly data-governance review at a payments company.
+The review covers freshness coverage, deprecations, ownership, modeling
+conventions, and the provenance of the metadata snapshot itself. The connected
+`data` MCP server is your team's data-context service: dataset discovery,
+schemas, lineage, business rules, glossary definitions, freshness verdicts,
+and serving instructions. Establish every fact through that server's tools —
+do not answer from general knowledge, and do not guess: if the server
+contradicts your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `marts_without_assertion` (list of strings): of the marts in the catalog
+   (serving locators starting `mart_`), the ones that carry NO freshness
+   assertion.
+2. `deprecated_mart_replacement` (string): the machine-readable replacement
+   pointer carried by the deprecated mart.
+3. `liquidity_owner_team` (string): the owner team of the liquidity forecast
+   mart, as recorded in its business rules.
+4. `risk_owner_team` (string): the owner team of the risk exposure mart.
+5. `scd2_current_marker` (short string): per the merchant history table's
+   versioning rule, what marks the CURRENT version of a merchant?
+6. `snapshot_source_version` (string): the exact source version that generated
+   the metadata snapshot you are consulting.
+7. `snapshot_policy_declared` (true/false): does the snapshot declare a
+   max-age staleness policy?
+8. `snapshot_verdict_reason` (string): the machine-readable reason attached to
+   the snapshot's staleness verdict.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "marts_no_assertion_exact",
+  "replacement_correct",
+  "liquidity_team_correct",
+  "risk_team_correct",
+  "scd2_marker_correct",
+  "source_version_correct",
+  "policy_not_declared",
+  "reason_no_policy",
+]

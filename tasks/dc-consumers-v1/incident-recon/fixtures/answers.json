@@ -1,0 +1,10 @@
+{
+  "recon_direct_upstreams": null,
+  "clearing_raw_feeds": null,
+  "raw_slc_expected_interval": null,
+  "verdict_if_updated_20min_ago": null,
+  "verdict_if_updated_3days_ago": null,
+  "clearing_unification_fan_in": null,
+  "pix_direct_recon_input": null,
+  "notes": ""
+}

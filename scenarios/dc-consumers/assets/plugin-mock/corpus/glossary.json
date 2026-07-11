@@ -1,0 +1,544 @@
+[
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Business concepts used across the payments/acquiring data domain.",
+        "name": "Payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments-acquiring",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Card capture economics: volumes, discount rates, and fee shares.",
+        "name": "Acquiring",
+        "parentNode": "urn:li:glossaryNode:payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments-settlement",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Clearing and settlement of captured volume across rails.",
+        "name": "Settlement",
+        "parentNode": "urn:li:glossaryNode:payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments-risk",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Credit and dispute risk carried against merchants.",
+        "name": "Risk",
+        "parentNode": "urn:li:glossaryNode:payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments-conventions",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Cross-cutting data-modeling conventions used across the payments catalog.",
+        "name": "Conventions",
+        "parentNode": "urn:li:glossaryNode:payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryNode",
+    "entityUrn": "urn:li:glossaryNode:payments-calendars",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryNodeInfo",
+    "aspect": {
+      "json": {
+        "definition": "Business-day calendars underlying settlement date arithmetic.",
+        "name": "Calendars",
+        "parentNode": "urn:li:glossaryNode:payments"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-tpv",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Total Payment Volume — the gross captured amount before any fees, in BRL. TPV is the primary size metric of an acquiring operation; net revenue is derived from it via MDR (docs/payments/metrics.md).",
+        "termSource": "INTERNAL",
+        "name": "TPV",
+        "parentNode": "urn:li:glossaryNode:payments-acquiring"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-mdr",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Merchant Discount Rate — the fee rate applied to a merchant's gross captured amount. Stored as BASIS POINTS in fee schedules (raw_billing) and as decimal BRL fee amounts in curated facts (docs/payments/metrics.md).",
+        "termSource": "INTERNAL",
+        "name": "MDR",
+        "parentNode": "urn:li:glossaryNode:payments-acquiring"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-interchange",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "The issuer's share of the MDR, set by scheme-published interchange tables. Subtracted from the MDR fee to compute acquirer net revenue (docs/payments/metrics.md).",
+        "termSource": "INTERNAL",
+        "name": "Interchange",
+        "parentNode": "urn:li:glossaryNode:payments-acquiring"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-pix",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Brazil's instant payment rail operated by the Central Bank (SPI). PIX volume settles D+0 (same day), unlike card rails (docs/payments/settlement.md).",
+        "termSource": "INTERNAL",
+        "name": "PIX",
+        "parentNode": "urn:li:glossaryNode:payments-settlement"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-slc",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "CIP's central clearing service for card acquiring in Brazil (Servico de Liquidacao de Cartoes). Daily settlement files drive the cleared leg of reconciliation (docs/payments/settlement.md).",
+        "termSource": "INTERNAL",
+        "name": "SLC",
+        "parentNode": "urn:li:glossaryNode:payments-settlement"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-d1-settlement",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Card-rail settlement on the next BUSINESS day after capture, computed with the B3 business-day calendar (dim_calendar.next_business_day). A capture on Friday settles Monday — or later across holidays (docs/payments/settlement.md).",
+        "termSource": "INTERNAL",
+        "name": "D+1 settlement",
+        "parentNode": "urn:li:glossaryNode:payments-settlement"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-recon-break",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "A divergence between the expected settlement amount (fct_settlements) and the cleared amount in the SLC files. Any nonzero break_brl in mart_settlement_recon is a break to investigate (docs/payments/recon.md).",
+        "termSource": "INTERNAL",
+        "name": "Reconciliation break",
+        "parentNode": "urn:li:glossaryNode:payments-settlement"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-chargeback",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "A disputed transaction reversed by the issuer under a scheme reason code. Chargeback rates feed merchant risk tiers (docs/payments/risk.md).",
+        "termSource": "INTERNAL",
+        "name": "Chargeback",
+        "parentNode": "urn:li:glossaryNode:payments-risk"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-anticipation",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Early payment of a merchant's future receivables at a discount (Antecipacao de Recebiveis). The discount accrues per the fee schedule's anticipation_bps; pricing against the CDI curve is a planned treasury integration (docs/payments/receivables.md).",
+        "termSource": "INTERNAL",
+        "name": "Anticipation (ARV)",
+        "parentNode": "urn:li:glossaryNode:payments-risk"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-receivables",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "A merchant's future cash flows from captured transactions, settling on their due dates unless anticipated (docs/payments/receivables.md).",
+        "termSource": "INTERNAL",
+        "name": "Receivables",
+        "parentNode": "urn:li:glossaryNode:payments-risk"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-scd-2",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Slowly Changing Dimension Type 2: each version carries valid_from/valid_to with half-open validity [valid_from, valid_to); a version is active when valid_from <= as_of < valid_to and the current version has valid_to NULL (docs/payments/modeling.md).",
+        "termSource": "INTERNAL",
+        "name": "SCD-2",
+        "parentNode": "urn:li:glossaryNode:payments-conventions"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:payments-business-day-calendar",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTermInfo",
+    "aspect": {
+      "json": {
+        "definition": "Defines which dates are valid settlement days for a market. Weekends and B3 holidays are non-workdays; settlement arithmetic like D+1 is computed over business days, not calendar days (docs/payments/settlement.md).",
+        "termSource": "INTERNAL",
+        "name": "Business-day calendar",
+        "parentNode": "urn:li:glossaryNode:payments-calendars"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-scd-2"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-business-day-calendar"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-tpv"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-mdr"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-interchange"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-d1-settlement"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-pix"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-slc"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-receivables"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-anticipation"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-chargeback"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-tpv"
+          },
+          {
+            "urn": "urn:li:glossaryTerm:payments-mdr"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-recon-break"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "glossaryTerms",
+    "aspect": {
+      "json": {
+        "terms": [
+          {
+            "urn": "urn:li:glossaryTerm:payments-tpv"
+          }
+        ],
+        "auditStamp": {
+          "time": 1783641600000,
+          "actor": "urn:li:corpuser:dataplatform-team"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  }
+]

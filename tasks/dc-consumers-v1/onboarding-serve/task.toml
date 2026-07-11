@@ -1,0 +1,51 @@
+id = "onboarding-serve"
+instruction = """
+You are helping a quant developer in her first week at a payments company. Her
+notebook has TODOs referencing datasets by informal names, and she wants to
+load them properly. The connected `data` MCP server is your team's
+data-context service: dataset discovery, schemas, lineage, business rules,
+glossary definitions, freshness verdicts, and serving instructions. Establish
+every fact through that server's tools — do not answer from general knowledge,
+and do not guess: if the server contradicts your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `receivables_locator` (string): her notebook loads "receivables" — the
+   canonical serving locator that name resolves to.
+2. `tpv_locator` (string): it also loads "tpv" — the canonical serving locator
+   that name resolves to.
+3. `producer_id` (string): the producer id she passes those locators to.
+4. `dashboard_serve_error_code` (string): she tried to load a dashboard as
+   data — the machine-readable error code the platform returns when asked to
+   resolve a serving locator for a dashboard.
+5. `curated_brl_transactions` (string): the team says "use THE transactions
+   table"; give the serving locator of the curated, decimal-BRL,
+   deduplicated transactions dataset she should use.
+6. `transactions_table_platforms` (list of strings): the catalog carries
+   datasets whose TABLE name is exactly `transactions` (not prefixed
+   variants) — list the platforms that host one.
+7. `chargebacks_verdict` ("fresh" / "stale" / "unknown"): the freshness
+   verdict the platform reports for the raw chargebacks table.
+8. `chargebacks_reason` (string): the machine-readable reason accompanying it.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "receivables_correct",
+  "tpv_correct",
+  "producer_correct",
+  "error_code_correct",
+  "curated_correct",
+  "platforms_exact",
+  "verdict_unknown",
+  "reason_no_assertion",
+]

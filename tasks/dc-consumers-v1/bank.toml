@@ -1,0 +1,20 @@
+# Consumer-persona eval over the GENERATED mock-payments corpus (data-context
+# ADR-0009 / spec §6, phase 1: data-context alone). Five personas — analyst
+# building a report, manager distrusting a number, on-call incident triage,
+# onboarding developer, governance reviewer — each a fresh spawn answering
+# through the mounted product surface (plugin-mock: the twelve-tool
+# data-context server over a frozen corpus copy inside the plugin).
+# dataset_version embeds the mounted corpus manifest content_hash prefix
+# (spec §6 refreeze discipline): regenerating the corpus with content changes
+# forces a visible resume-key fork and an oracle refreeze.
+# Oracle provenance: every expected verifier value frozen from EXECUTED
+# in-process drives of the same server+corpus (2026-07-11); freshness
+# questions are run-time-relative (spec §6 clock-decay discipline) and pin
+# verdict/reason only.
+# Side-channel note (spec §6, accepted residual): the corpus JSON ships inside
+# the mounted plugin; scenarios keep the workspace free of corpus files and
+# the agent is never told the plugin path — file tools stay allowed, matching
+# dc-granularity-v1; run notes must restate this.
+name = "dc-consumers-v1"
+dataset_version = "1-88340fb37975"
+holdout = []

@@ -1,0 +1,50 @@
+id = "incident-recon"
+instruction = """
+You are the on-call data analyst at a payments company. This morning the
+settlement reconciliation report flagged breaks, and you need to map the blast
+radius before the standup. The connected `data` MCP server is your team's
+data-context service: dataset discovery, schemas, lineage, business rules,
+glossary definitions, freshness verdicts, and serving instructions. Establish
+every fact through that server's tools — do not answer from general knowledge,
+and do not guess: if the server contradicts your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `recon_direct_upstreams` (list of strings): the serving locators of the
+   reconciliation mart's DIRECT (1-hop) upstream datasets.
+2. `clearing_raw_feeds` (list of strings): the serving locators of the raw
+   CLEARING-FILE tables (card-scheme and CIP settlement files — NOT
+   instant-payment event feeds) reachable within 3 hops upstream of the
+   reconciliation mart.
+3. `raw_slc_expected_interval` (string): the expected freshness interval of
+   the raw SLC table, as the platform states it (count and unit).
+4. `verdict_if_updated_20min_ago` ("fresh" / "stale" / "unknown"): the verdict
+   the platform returns for the raw SLC table if its data was last updated
+   about 20 minutes before you check.
+5. `verdict_if_updated_3days_ago` ("fresh" / "stale" / "unknown"): the verdict
+   if it had last updated 3 days before you check.
+6. `clearing_unification_fan_in` (integer): how many raw tables feed the
+   unified clearing staging table directly.
+7. `pix_direct_recon_input` (true/false): is the PIX events feed a DIRECT
+   (1-hop) input of the reconciliation mart?
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "direct_upstreams_exact",
+  "clearing_feeds_exact",
+  "interval_1_day",
+  "recent_fresh",
+  "old_stale",
+  "fan_in_three",
+  "pix_not_direct",
+]

@@ -1,0 +1,10 @@
+{
+  "authoritative_revenue_mart": null,
+  "mart_direct_upstream_locators": null,
+  "unit_conversion_dataset": null,
+  "raw_amount_unit": null,
+  "report_day_field": null,
+  "report_day_timezone": null,
+  "mart_expected_interval": null,
+  "notes": ""
+}
