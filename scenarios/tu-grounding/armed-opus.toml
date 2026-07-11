@@ -1,0 +1,16 @@
+name = "armed-opus"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "medium"
+
+# ARMED treatment, strong tier. Identical to armed-haiku except `model`.
+[context]
+inject = "banner.txt"
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 600

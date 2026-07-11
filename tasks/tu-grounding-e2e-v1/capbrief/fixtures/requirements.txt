@@ -1,0 +1,3 @@
+# Treasury reporting pipeline — runtime dependencies (managed by the platform team).
+treasuryutils>=1.8.0
+polars>=1.0

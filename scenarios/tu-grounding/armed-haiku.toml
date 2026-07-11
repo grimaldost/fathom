@@ -1,0 +1,20 @@
+name = "armed-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+# ARMED treatment, weak tier: same fixture, plus the EXACT shipped staleness banner
+# (consumer plugin session-start-context.py::_version_mismatch_banner, incl. the
+# honest-uncertainty exit) appended to the system prompt — fathom's stand-in for the
+# SessionStart hook's additionalContext push channel. Differs from bare-haiku ONLY by
+# the injection.
+[context]
+inject = "banner.txt"
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 600

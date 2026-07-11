@@ -1,0 +1,31 @@
+id = "capbrief"
+instruction = """
+You are preparing a capability brief about the `treasuryutils` library for an orchestrator
+that will fan out subagents based on your answers. This project runs treasuryutils 1.8.0
+(installed and managed by the platform team; the library source is not vendored in this
+workspace). The vendored API reference mirrors for the library are under `refs/`.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace each null:
+
+1. `calendartools_polars_only` (true/false): is `treasuryutils.calendartools` a
+   polars-only surface, or does it also support numpy inputs?
+2. `calendartools_composes_in_compute_expr` (true/false): do calendartools column
+   operations (e.g. `add_workdays` over a column) compose INSIDE the backend-agnostic
+   `treasuryutils.compute.expr` (`nw.Expr`) surface?
+3. `cdicurve_get_rate_accepts_pl_expr` ("yes" / "no" / "uncertain"): does
+   `CdiCurve.get_rate` accept a polars expression (`pl.Expr`) column as its `date` input?
+
+Optionally use `notes` for a one-line justification per answer.
+
+Be decisive where the material supports it — the orchestrator treats your brief as ground
+truth for the subagents it spawns.
+"""
+
+[limits]
+trial_timeout_s = 600
+# 40, not 20: the first matrix showed haiku legitimately spends >20 turns re-reading the
+# large refs before writing answers.json — 21-turn truncations produced errored trials.
+max_turns = 40
+
+[verify]
+entry = "verify.py"

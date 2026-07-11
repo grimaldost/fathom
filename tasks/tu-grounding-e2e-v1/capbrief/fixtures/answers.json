@@ -1,0 +1,8 @@
+{
+  "calendartools_polars_only": null,
+  "calendartools_composes_in_compute_expr": null,
+  "cdicurve_get_rate_accepts_pl_expr": null,
+  "saw_treasuryutils_context": null,
+  "saw_staleness_warning": null,
+  "notes": ""
+}

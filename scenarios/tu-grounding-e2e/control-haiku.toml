@@ -1,0 +1,24 @@
+name = "control-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+# CONTROL, weak tier: REAL consumer plugin 1.12.1 (b50e5f01) mounted — mirrors stamped
+# 1.5.2.dev174 (the incident artifact), hook emits context but NO staleness signal.
+# [env] points the hook's `uv run python` at a venv resolving tu 1.8.0 (the incident's
+# installed-vs-stamp gap, reproduced for real). Arms differ ONLY by {plugin snapshot} x
+# {model}. No shell tools; Skill allowed (the real pull channel is part of the system).
+[plugins]
+mount = ["assets/plugin-1121"]
+
+[env]
+VIRTUAL_ENV = 'C:/Users/grima/Documents/treasuryutils-dev/.venv'
+PATH = 'C:/Users/grima/Documents/treasuryutils-dev/.venv/Scripts;${PATH}'
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "Skill"]
+
+[limits]
+trial_timeout_s = 600
