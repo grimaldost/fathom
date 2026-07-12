@@ -13,5 +13,5 @@
 # mutate the cache (FM-2 refuted by execution; backup retained).
 # dataset_version embeds the treasury corpus content_hash prefix.
 name = "dc-stack-v1"
-dataset_version = "1-fe56edda98bc"
+dataset_version = "2-fe56edda98bc"
 holdout = []

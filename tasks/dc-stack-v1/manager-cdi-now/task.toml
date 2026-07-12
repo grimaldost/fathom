@@ -24,11 +24,16 @@ each null:
 6. `honest_report` (short string): the one-line answer you would give the
    manager.
 
+Environment note: the platform team manages this environment — its `python`
+already provides treasuryutils and its extras. Call `python` directly for
+library work; do NOT create or resolve new environments (no `uv run --with`),
+which is slow here and unnecessary.
+
 Optionally use `notes` for a one-line justification per answer.
 """
 
 [limits]
-trial_timeout_s = 1200
+trial_timeout_s = 2400
 max_turns = 60
 
 [verify]

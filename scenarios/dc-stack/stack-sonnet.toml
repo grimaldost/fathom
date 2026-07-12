@@ -28,4 +28,4 @@ allowed = [
 ]
 
 [limits]
-trial_timeout_s = 1200
+trial_timeout_s = 2400
