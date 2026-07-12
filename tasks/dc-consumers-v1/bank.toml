@@ -11,10 +11,18 @@
 # in-process drives of the same server+corpus (2026-07-11); freshness
 # questions are run-time-relative (spec §6 clock-decay discipline) and pin
 # verdict/reason only.
+# Rev 2 (2026-07-12, post data-context v4 contract hardening): corpus copy
+# refreshed from the regenerated mock-payments corpus (canonical deprecation
+# aspect + versioning.* keys; content_hash e343e62d9884...), oracle re-frozen
+# from 29 executed drives of the v4 server over this copy (29/29 confirmed;
+# data-context bumped to 0.2.0 to bust uv's stale path-dep wheel cache), and
+# the two replacement_correct verifiers loosened to name-or-URN containment
+# (the machine-readable pointer is now the deprecation aspect's replacement
+# URN — monotone vs rev-1 answers, so cross-rev comparison stays valid).
 # Side-channel note (spec §6, accepted residual): the corpus JSON ships inside
 # the mounted plugin; scenarios keep the workspace free of corpus files and
 # the agent is never told the plugin path — file tools stay allowed, matching
 # dc-granularity-v1; run notes must restate this.
 name = "dc-consumers-v1"
-dataset_version = "1-88340fb37975"
+dataset_version = "2-e343e62d9884"
 holdout = []

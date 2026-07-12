@@ -83,7 +83,10 @@ def _criteria(root: str) -> dict[str, bool]:
     results["marts_no_assertion_exact"] = no_assertion is not None and set(no_assertion) == {
         "mart_revenue_legacy"
     }
-    results["replacement_correct"] = replacement == "mart_revenue_daily"
+    # bank rev 2 (post data-context v4): the machine-readable pointer is the
+    # canonical deprecation aspect's `replacement` URN, which CONTAINS the
+    # name — accept name or URN (monotone vs rev-1 answers).
+    results["replacement_correct"] = replacement is not None and "mart_revenue_daily" in replacement
     results["liquidity_team_correct"] = liquidity_team == "treasury-ops"
     results["risk_team_correct"] = risk_team == "risk-analytics"
     if scd2:

@@ -741,8 +741,6 @@
           "serving.locator": "mart_revenue_legacy",
           "serving.producer": "dataplatform",
           "concept.owner.team": "finance-analytics",
-          "deprecation.status": "deprecated",
-          "deprecation.replaced_by": "mart_revenue_daily",
           "concept.rule.deprecation_reason": "Double-counts refunded transactions (refunds were never netted out); numbers diverge upward from mart_revenue_daily. Kept for historical audit only."
         }
       }
@@ -806,6 +804,24 @@
             "isPartOfKey": false
           }
         ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "deprecation",
+    "aspect": {
+      "json": {
+        "deprecated": true,
+        "note": "Double-counts refunded transactions (refunds were never netted out); numbers diverge upward from mart_revenue_daily. Kept for historical audit only.",
+        "actor": "urn:li:corpuser:dataplatform-team",
+        "replacement": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)"
       }
     },
     "systemMetadata": {

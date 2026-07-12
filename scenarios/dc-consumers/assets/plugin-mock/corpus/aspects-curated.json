@@ -206,6 +206,8 @@
           "serving.locator": "stg_merchants",
           "serving.producer": "dataplatform",
           "concept.owner.team": "data-platform-eng",
+          "versioning.scheme": "scd2",
+          "versioning.current_marker": "valid_to IS NULL",
           "concept.rule.versioning": "SCD-2: versions carry half-open validity [valid_from, valid_to); the current version has valid_to NULL."
         }
       }

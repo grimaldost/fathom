@@ -77,7 +77,10 @@ def _criteria(root: str) -> dict[str, bool]:
         results["authoritative_correct"] = "revenue_daily" in dashboard and (
             "legacy" not in dashboard
         )
-    results["replacement_correct"] = replaced_by == "mart_revenue_daily"
+    # bank rev 2 (post data-context v4): the machine-readable pointer is the
+    # canonical deprecation aspect's `replacement` URN, which CONTAINS the
+    # name — accept name or URN (monotone vs rev-1 answers).
+    results["replacement_correct"] = replaced_by is not None and "mart_revenue_daily" in replaced_by
     if reason:
         results["reason_refunds"] = "refund" in reason
     results["verdict_unknown"] = verdict == "unknown"
