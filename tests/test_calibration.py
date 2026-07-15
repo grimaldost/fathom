@@ -133,6 +133,47 @@ class TestParetoFrontier(unittest.TestCase):
         self.assertIn("Pareto", md)
 
 
+def _prod_run(arm: str, task: str, rep: int, cost: float) -> dict:
+    """A run record shaped like production: NO ``scenario`` field.
+
+    The suite's ``_run`` helper stamps ``scenario`` on the run, which the real cli.py
+    RunRecord (cli.py) does NOT — the arm is stamped only on the trial. That extra key
+    masks the attribution bug, so the realistic fixture drops it. This is the first
+    fixture in either calibration test module that matches how cli.py actually writes a
+    ledger (run-before-trial, run without a scenario).
+    """
+    return {
+        "kind": "run",
+        "task_id": task,
+        "repeat": rep,
+        "config_hash": f"ch-{arm}",
+        "usage": {"input_tokens": 100, "output_tokens": 100},
+        "cost_usd_est": cost,
+    }
+
+
+class TestRunAttribution(unittest.TestCase):
+    def test_runs_appended_before_the_trial_record_are_attributed(self):
+        # Built the way cli.py actually writes a ledger: a trial's RUN records are appended
+        # BEFORE its TRIAL record, and a run carries no `scenario`. A single-pass
+        # config_hash→arm map resolves the first repeat's runs against an empty map and
+        # orphans them under the raw config_hash, so they never join the cost. Here all the
+        # cost sits in the first (orphaned) repeat, so the orphan zeroes the reported $/trial.
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            cost = 1.0 if rep == 0 else 0.0  # all cost in the first (orphaned) repeat
+            raw.append(_prod_run("opus", "t", rep, cost))  # run FIRST, as production does
+            raw.append(_trial("opus", "t", rep, 2))  # then the trial record
+        trials, runs = cal.parse_ledger(raw)
+        # (i) every run attributes to a real arm — no key is a bare config_hash
+        self.assertTrue(all(k[0] == "opus" for k in runs), f"orphaned run keys: {list(runs)}")
+        # (ii) the Pareto cost is the full mean $/trial (1.0/5), not diluted by the orphan
+        out = cal.build_calibration(raw, meta)
+        opus = {p["arm"]: p for p in out["pareto"]}["opus"]
+        self.assertAlmostEqual(opus["cost"], 0.20)
+
+
 if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromModule(sys.modules[__name__])

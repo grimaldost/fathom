@@ -57,17 +57,30 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
 
     trials[k] = verifier_results dict (or None); runs[k] = list of run records.
     Only ``status == completed`` trials are kept (errored/truncated excluded).
+
+    Two passes, because a ledger RunRecord carries no ``scenario`` field — the arm name is
+    stamped only on TRIAL records (cli.py) — and cli.py appends a trial's run records
+    BEFORE its trial record. Resolving a run's arm against a config_hash→scenario map built
+    incrementally in a single pass therefore orphaned every arm's first trial's runs under
+    the raw config_hash, biasing every cost this module reports off them. Pass 1 builds the
+    COMPLETE map from every trial; pass 2 attributes trials and runs against it, so
+    attribution is independent of record order. This mirrors the sibling fix in
+    report.py:160-171 (the same single-pass bug shipped twice).
     """
     ch_to_sc: dict[str, str] = {}
     trials: dict[tuple, Any] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
+    # Pass 1 — the COMPLETE config_hash → scenario-name map, from every trial record.
+    for rec in raw:
+        if rec.get("kind") == "trial":
+            ch = rec.get("config_hash", "")
+            ch_to_sc[ch] = rec.get("scenario") or ch
+    # Pass 2 — attribute trials and runs against the finished map.
     for rec in raw:
         kind = rec.get("kind")
         ch = rec.get("config_hash", "")
         sc = rec.get("scenario") or ch_to_sc.get(ch, ch)
         if kind == "trial":
-            ch_to_sc[ch] = rec.get("scenario") or ch
-            sc = rec.get("scenario") or ch
             if rec.get("status") == "completed" and not rec.get("infra_error"):
                 trials[(sc, rec.get("task_id", ""), rec.get("repeat", 0))] = rec.get(
                     "verifier_results"
