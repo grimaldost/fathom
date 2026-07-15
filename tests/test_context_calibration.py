@@ -99,6 +99,9 @@ class TestContextView(unittest.TestCase):
         self.assertIn("per-pair small→large right-tier shift", md)
         # the alpha pair's rising shift is rendered
         self.assertIn("weak→strong", md)
+        # the weak-tier delta columns are labelled by tier, not by the model name `haiku`
+        self.assertIn("Δ weak", md)
+        self.assertNotIn("Δ haiku", md)
 
     def test_model_tier_bank_unaffected(self):
         # No context tags -> empty pairs, default heading, no context section.
@@ -109,6 +112,38 @@ class TestContextView(unittest.TestCase):
         md = "\n".join(cal.render_calibration(out))
         self.assertIn("## Model-Tier Calibration", md)
         self.assertNotIn("Context-Size", md)
+
+
+# A bank identical in shape to META but with renamed arms: the weak arm is `haiku-xhigh`
+# and the mid arm `sonnet5` (both real arm names). Proves the weak line resolves by TIER,
+# not by the literal name `haiku`.
+META_RENAMED = {
+    "alpha-small": {"score": 40, "hard_criteria": HARD, "context": "small", "pair": "alpha"},
+    "alpha-large": {"score": 40, "hard_criteria": HARD, "context": "large", "pair": "alpha"},
+}
+
+
+def _ledger_renamed() -> list[dict]:
+    raw: list[dict] = []
+    for rep in range(5):
+        for arm in ("haiku-xhigh", "sonnet5", "opus"):
+            raw.append(_trial(arm, "alpha-small", rep, 2))
+        raw.append(_trial("haiku-xhigh", "alpha-large", rep, 0))
+        raw.append(_trial("sonnet5", "alpha-large", rep, 0))
+        raw.append(_trial("opus", "alpha-large", rep, 2))
+    return raw
+
+
+class TestRenamedWeakLine(unittest.TestCase):
+    def test_weak_line_resolves_by_tier_not_by_arm_name(self):
+        # Today `stats.get("haiku")` is None for a `haiku-xhigh` arm, so the entire volume
+        # signal silently vanishes (weak_mean None -> weak_delta None). Tier resolution
+        # must recover it: weak-tier mean 1.0 (small) -> 0.0 (large), delta -1.0.
+        out = cal.build_calibration(_ledger_renamed(), META_RENAMED)
+        alpha = {p["pair"]: p for p in out["pairs"]}["alpha"]
+        self.assertAlmostEqual(alpha["small"]["weak_mean"], 1.0)
+        self.assertAlmostEqual(alpha["large"]["weak_mean"], 0.0)
+        self.assertAlmostEqual(alpha["weak_delta"], -1.0)
 
 
 if __name__ == "__main__":
