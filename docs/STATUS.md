@@ -91,7 +91,6 @@ below pending a second corroborating report:
 | No forced UTF-8 on harness stdout: a spawn emitting a non-cp1252 char can still crash `smoke`/`run` prints on a cp1252 console (smoke's own literals were de-mojibaked; `reconfigure(errors="replace")` was not added) | MED | `src/fathom/smoke.py`, `src/fathom/cli.py` |
 | No token-TTL pre-flight: an hours-long matrix can outlive the subscription OAuth token (two manual re-auths on the v1 100-trial run) | MED | `src/fathom/cli.py` (run path) |
 | Hard-criteria quality fraction — the anti-ceiling metric — renders only for calibration banks (`scores.toml` + `hard_criteria`); promote it to the core report for all banks | MED | `src/fathom/report.py` (reference impl in `calibration.py`) |
-| Calibration view covers only the three fixed pin arms; an ad-hoc arm (e.g. `sonnet5`) doesn't land on the capacity ladder automatically | MED | `src/fathom/calibration.py` |
 | No warning when task content (instruction / `verify.py` / fixtures) changes without a `dataset_version` bump — silent stale-resume risk | LOW | `src/fathom/taskbank.py` / run planner |
 | `fathom report` rejects `--scenarios-dir` while `run` requires it; it re-derives arm names from the ledger `scenario` field — accept the flag or document the asymmetry | LOW | `src/fathom/cli.py` |
 | `--no-engine-boundary` reads as disabling a safety control; it only skips a check group — rename (e.g. `--skip-engine-check`) or document | LOW | `src/fathom/cli.py` |

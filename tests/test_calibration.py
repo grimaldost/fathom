@@ -131,6 +131,104 @@ class TestParetoFrontier(unittest.TestCase):
         md = "\n".join(cal.render_calibration(out))
         self.assertIn("Model-Tier Calibration", md)
         self.assertIn("Pareto", md)
+        # 3-arm bank per-task header stays byte-identical after the dynamic-column rewrite.
+        self.assertIn("| task | score | predicted | empirical | haiku | sonnet | opus | note |", md)
+        # The dose-response Δ column names the arm one step down the ladder, not a dollar
+        # order — the ladder is tier-ordered and can list a dearer arm above a cheaper one.
+        self.assertIn("| band | arm | mean quality | mean $/trial | Δquality vs prev arm |", md)
+        self.assertNotIn("vs cheaper", md)
+
+
+class TestArmResolution(unittest.TestCase):
+    def test_family_token_resolves_renamed_and_effort_arms(self):
+        # Every name here is a REAL arm in this repo (scenarios/model-tier/sonnet5.toml,
+        # scenarios/model-tier-effort/haiku-xhigh.toml, scenarios/ablation-v2/*).
+        self.assertEqual(cal.arm_tier("sonnet5"), "mid")
+        self.assertEqual(cal.arm_tier("haiku-xhigh"), "weak")
+        self.assertEqual(cal.arm_tier("sonnet-lo-gate"), "mid")
+        self.assertEqual(cal.arm_tier("opus"), "strong")
+        self.assertEqual(cal.arm_tier("fable"), "frontier")
+        self.assertIsNone(cal.arm_tier("bare-gate"))
+        self.assertIsNone(cal.arm_tier("orchestrated"))
+
+
+class TestNewLineupArm(unittest.TestCase):
+    def test_renamed_mid_arm_lands_on_the_ladder(self):
+        # The 2026-07-01 Sonnet 5 shape: haiku fails, both sonnets and opus ace, so the
+        # cheapest adequate tier is mid. Today sonnet5 is silently absent from the view.
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("haiku", "t", rep, 0))
+            raw.append(_trial("sonnet", "t", rep, 2))
+            raw.append(_trial("sonnet5", "t", rep, 2))
+            raw.append(_trial("opus", "t", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        row = {r["task_id"]: r for r in out["rows"]}["t"]
+        self.assertEqual(set(row["means"]), {"haiku", "sonnet", "sonnet5", "opus"})
+        self.assertEqual(row["empirical"], "mid")
+        md = "\n".join(cal.render_calibration(out))
+        # sonnet5 renders on the ladder, between sonnet and opus (cheapest→dearest, ties by name).
+        self.assertIn("| haiku | sonnet | sonnet5 | opus | note |", md)
+
+    def test_two_arms_in_one_tier_is_not_indeterminate(self):
+        # sonnet5 aces (within ε), opus aces (best), sonnet is 1/2 each trial (wide CI that
+        # overlaps opus's lower bound but is NOT within ε). So the within-ε cheapest is
+        # sonnet5 and the CI-overlap cheapest is sonnet — DIFFERENT arms, SAME tier (mid).
+        # Arm-identity comparison flags a disagreement that does not exist; tier comparison
+        # must not, and the verdict is mid.
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("sonnet", "t", rep, 1))  # 0.5, wide CI, ci-overlaps
+            raw.append(_trial("sonnet5", "t", rep, 2))  # aces, within ε
+            raw.append(_trial("opus", "t", rep, 2))  # aces, best
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        self.assertFalse(row["indeterminate"])
+        self.assertEqual(row["empirical"], "mid")
+
+
+class TestGatedArm(unittest.TestCase):
+    def test_untiered_arm_renders_but_takes_no_tier(self):
+        # bare-gate carries no family token -> untiered. It must render in every per-arm
+        # view yet take no part in the tier verdict (haiku fails, opus aces -> strong).
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("haiku", "t", rep, 0))
+            raw.append(_trial("opus", "t", rep, 2))
+            raw.append(_trial("bare-gate", "t", rep, 2))
+            raw.append(_run("haiku", "t", rep, 0.05))
+            raw.append(_run("opus", "t", rep, 0.25))
+            raw.append(_run("bare-gate", "t", rep, 0.15))
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        # renders: per-task means + header, Pareto points, dose-response band
+        self.assertIn("bare-gate", row["means"])
+        md = "\n".join(cal.render_calibration(out))
+        self.assertIn("bare-gate", md)
+        self.assertIn("bare-gate", {p["arm"] for p in out["pareto"]})
+        self.assertIn("bare-gate", out["dose_response"]["mid"])
+        # takes no tier: the verdict is decided by the tiered arms alone
+        self.assertEqual(row["empirical"], "strong")
+        self.assertFalse(row["indeterminate"])
+        self.assertIsNone(cal.arm_tier("bare-gate"))
+
+    def test_frontier_arm_gets_a_column_and_no_row(self):
+        # fable is empirically cheapest-adequate here -> the empirical tier is frontier.
+        # Frontier is never score-assigned (no predicted row) but is reachable empirically
+        # (a column). Today the fixed confusion keys make this a KeyError.
+        meta = {"t": {"score": 70, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("haiku", "t", rep, 0))
+            raw.append(_trial("fable", "t", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        self.assertEqual(out["confusion"]["strong"]["frontier"], 1)
+        self.assertNotIn("frontier", set(out["confusion"]))  # no predicted frontier row
+        md = "\n".join(cal.render_calibration(out))
+        self.assertIn("frontier", md)  # the rendered matrix carries a frontier column
 
 
 if __name__ == "__main__":
