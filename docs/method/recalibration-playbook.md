@@ -64,6 +64,13 @@ The single highest-leverage improvement is a **"boundary + heterogeneity" task s
 displaced-cause / backend-parity tasks that *reliably* separate tiers at graded difficulty (not flaky).
 This both sharpens calibration AND unblocks the deferred efficiency study.
 
+The plan of record for this fix is designed in
+[`docs/specs/2026-07-14-tier-separating-bank-design.md`](../specs/2026-07-14-tier-separating-bank-design.md):
+a `model-tier-v2` roster admitted by a cheap **weak-model-fails screen** (a task enters the bank only
+after weak fails / strong passes its hard criteria), crossed **model × oracle-quality** to also settle
+the `choosing-models` oracle-coverage discount (labeled a hypothesis until this runs). Authored, not yet
+run — the paid matrix is a separate budget decision (§ *Deferred* below).
+
 ## Deferred: the efficiency study (needs budget + heterogeneity)
 `pp-native-tier` (per-PR routing) vs `pp-all-<mid>` (flat) vs `pp-fixed-opus` (ceiling), plus a plain-Claude
 `bare` baseline. The 2026-06-19 pre-mortem showed it **cannot produce signal without tier heterogeneity**
