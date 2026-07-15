@@ -39,6 +39,7 @@ The cost axis is the token×price estimate (``cost_usd_est``; subscription auth 
 from __future__ import annotations
 
 import math
+import warnings
 from collections import defaultdict
 from typing import Any
 
@@ -121,6 +122,14 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
     COMPLETE map from every trial; pass 2 attributes trials and runs against it, so
     attribution is independent of record order. This mirrors the sibling fix in
     report.py:160-171 (the same single-pass bug shipped twice).
+
+    Pass 2 also mirrors report.py's two anomaly warnings, which the cost path is
+    otherwise silent-wrong without: a **duplicate completed trial** (a resume never
+    re-runs a completed cell, so two completed lines for one cell mean its runs would be
+    summed twice in ``_arm_cost``) and a **dangling run** whose ``config_hash`` never
+    appears on a trial line (its economy is dropped from the scorecard with no trace).
+    Both warn rather than corrupt the cost silently — the operator archives the invalid
+    ledger and re-runs fresh.
     """
     ch_to_sc: dict[str, str] = {}
     trials: dict[tuple, Any] = {}
@@ -130,18 +139,36 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
         if rec.get("kind") == "trial":
             ch = rec.get("config_hash", "")
             ch_to_sc[ch] = rec.get("scenario") or ch
-    # Pass 2 — attribute trials and runs against the finished map.
+    # Pass 2 — attribute trials and runs against the finished map, warning on anomalies.
+    seen_completed: set[tuple] = set()
+    dangling_warned: set[str] = set()
     for rec in raw:
         kind = rec.get("kind")
         ch = rec.get("config_hash", "")
         sc = rec.get("scenario") or ch_to_sc.get(ch, ch)
+        tid = rec.get("task_id", "")
+        rep = rec.get("repeat", 0)
         if kind == "trial":
             if rec.get("status") == "completed" and not rec.get("infra_error"):
-                trials[(sc, rec.get("task_id", ""), rec.get("repeat", 0))] = rec.get(
-                    "verifier_results"
-                )
+                ckey = (rec.get("dataset_version"), ch, tid, rep)
+                if ckey in seen_completed:
+                    warnings.warn(
+                        f"duplicate completed trial for {sc}/{tid} repeat={rep} "
+                        f"(config_hash={ch[:12]}…): per-arm cost may double-count; "
+                        "inspect the ledger and archive+re-run if it is a stale re-run",
+                        stacklevel=2,
+                    )
+                seen_completed.add(ckey)
+                trials[(sc, tid, rep)] = rec.get("verifier_results")
         elif kind == "run":
-            runs[(sc, rec.get("task_id", ""), rec.get("repeat", 0))].append(rec)
+            if ch not in ch_to_sc and ch not in dangling_warned:
+                dangling_warned.add(ch)
+                warnings.warn(
+                    f"run record with config_hash={ch[:12]}… has no trial line; its economy "
+                    "is excluded from the calibration cost (likely a trial interrupted mid-write)",
+                    stacklevel=2,
+                )
+            runs[(sc, tid, rep)].append(rec)
     return trials, runs
 
 

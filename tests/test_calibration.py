@@ -8,6 +8,7 @@ never flagged) — closing the prior efficiency view's false-Pareto bug.
 
 import sys
 import unittest
+import warnings
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -270,6 +271,33 @@ class TestRunAttribution(unittest.TestCase):
         out = cal.build_calibration(raw, meta)
         opus = {p["arm"]: p for p in out["pareto"]}["opus"]
         self.assertAlmostEqual(opus["cost"], 0.20)
+
+
+class TestParseAnomalyWarnings(unittest.TestCase):
+    """parse_ledger surfaces the two silent-wrong cost anomalies report.py already warns on."""
+
+    def test_duplicate_completed_trial_warns(self):
+        # A resume never re-runs a completed cell, so two completed trial lines for the same
+        # (dataset_version, config_hash, task, repeat) mean its runs would be summed twice in
+        # the cost path. parse_ledger must warn rather than double-count silently.
+        raw = [_trial("opus", "t", 0, 2), _trial("opus", "t", 0, 2)]  # same cell twice
+        with self.assertWarnsRegex(UserWarning, "duplicate completed trial"):
+            cal.parse_ledger(raw)
+
+    def test_dangling_run_without_a_trial_warns(self):
+        # A run whose config_hash appears on no trial line (a trial interrupted mid-write) has
+        # its economy silently dropped from the scorecard; parse_ledger must warn once.
+        raw = [_prod_run("ghost", "t", 0, 1.0)]  # run with ch-ghost, no matching trial
+        with self.assertWarnsRegex(UserWarning, "no trial line"):
+            cal.parse_ledger(raw)
+
+    def test_clean_ledger_emits_no_warning(self):
+        # A well-formed ledger (one completed trial + its matching run) must not trip either
+        # guard — otherwise the warnings are noise on the normal path.
+        raw = [_trial("opus", "t", 0, 2), _run("opus", "t", 0, 0.5)]
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")  # any warning becomes an error
+            cal.parse_ledger(raw)  # must not raise
 
 
 if __name__ == "__main__":
