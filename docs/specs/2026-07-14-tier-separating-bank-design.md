@@ -6,9 +6,14 @@
   paid matrix run is deferred and needs separate budget approval (ADR-0007 cost
   rails; playbook § *Deferred: the efficiency study*).
 - **Extends:** [`2026-06-16-fathom-model-tier-calibration-design.md`](2026-06-16-fathom-model-tier-calibration-design.md),
-  ADR-0007 (model-tier calibration). Consumes the `calibration.py` arm-resolution
-  generalization landed 2026-07-14 (family-token → tier, no fixed arm list), so a
-  new lineup and new tiers render without a code change.
+  ADR-0007 (model-tier calibration); the oracle-quality factor this design adds — a
+  new experimental dimension, not a lineup refresh — is recorded in **ADR-0008**,
+  which must be accepted before build. Consumes the `calibration.py` arm-resolution
+  generalization landed 2026-07-14 (family-token → tier, no fixed arm list), so new
+  models and tiers land on the ladder without a code change — **but the oracle axis
+  is a new factor `calibration.py` does not yet model** (see Part C and the
+  acceptance criteria; wiring it is a build task, not something the arm-resolution
+  work already satisfies).
 - **Downstream:** settles the *oracle-coverage discount* that ships as a **labeled
   hypothesis** in `humblepowers:choosing-models` (its `models.toml` provenance and
   SKILL doctrine both say the downshift is licensed by oracle coverage, not gate
@@ -17,14 +22,21 @@
 ## Problem
 
 `model-tier-v1` **over-saturates**: 6 of 7 scored tasks are aced by every tier, so
-the entire tier calibration rests on one task (`fix-nonlocal-parse`, the sole
-cross-module root-cause bug). Two independent facts from the v1 record make this
-concrete:
+the entire tier calibration rests on one *separating* task, `fix-nonlocal-parse`.
+Crucially, that is the sole task that **separates** — not the sole task of its
+*shape*: v1's `fix-nonlocal-urlkey` is the same cross-module root-cause genre
+(rubric 65 vs 67, near-identically scored) yet saturated — aced by Haiku where
+parse needs Opus. So the separating shape is **necessary but not sufficient**; two
+same-shape tasks landed on opposite sides of the tier line. That is the load-bearing
+reason Part B screens each candidate *empirically* rather than trusting its shape.
+Two more facts from the v1 record make the gap concrete:
 
 1. **The rubric structurally avoids the mid/strong boundary.** The blind re-rating
    in `tasks/model-tier-v1/scores.toml` confirmed pre-mortem FM-3: the
-   `pr-prompt-scorer` rubric clusters single-file bugfixes in the low-mid 30s–40s
-   and jumps to ~61–67 for cross-module root-cause tasks, so it *brackets* the 55
+   model-complexity rubric (the ported pr-prompt-scorer, now at
+   `choosing-models/references/scoring-rubric.md`) clusters single-file bugfixes in
+   the low-mid 30s–40s and jumps to ~61–67 for cross-module root-cause tasks, so it
+   *brackets* the 55
    mid/strong edge (money 44 / nonlocal 65) but never sits on it. Boundary
    placement — the thing the study exists to locate — is under-determined.
 2. **The effort sub-study had to collapse to one task.** `model-tier-effort` runs
@@ -76,6 +88,12 @@ patches the symptom site (the visible failing case) and leaves the second consum
 broken; a strong model fixes the shared root cause and both pass. The bank
 generalizes that shape into a graded ladder rather than relying on one instance.
 
+The shape is **necessary but not sufficient** — v1's `fix-nonlocal-urlkey` shares
+it yet saturated (aced by Haiku). So the roster below is a set of *candidates* the
+Part B screen must each prove separates empirically, not a set the shape alone
+qualifies. The three variants and the graded ladder raise the odds that *enough*
+candidates survive the screen, not the certainty that any given one will.
+
 Three heterogeneous variants of the shape, so separation is not an artifact of a
 single trick:
 
@@ -110,12 +128,23 @@ or more **hard** (capability-gated) criteria at the *displaced* consumer(s),
 
 Spread gate (mirrors v1): ≥2 tasks per band; boundary rungs within ±5 of the 25
 and 55 edges. The 55 edge — v1's gap — is deliberately double-covered
-(`fix-decimal-round` at ~55, `fix-quota-rollup` at ~58) because the rubric resists
-scoring there, so one rung is likely to drift on re-rating.
+(`fix-decimal-round` at ~55, `fix-quota-rollup` at ~58). But there is a real tension
+with the diagnosis above: the rubric *resists* scoring cross-module tasks near 55
+(it clusters them at 61–67), and both 55-edge rungs use exactly that shape, so on
+blind re-rating they are likely to drift UP out of the [50, 60] band. **Escape
+hatch:** if, after one reshape pass, no candidate lands a blind score in [45, 60]
+(the rubric's void), the bank ships with the 55 edge *bracketed* rather than *hit* —
+v1's own honest limitation — and records it, instead of blocking the whole bank on a
+rung the rubric may structurally refuse. The ≥2-per-band gate is likewise
+best-effort: drift is not one-directional (a low single-file task at ~22 can drift
+up into mid), so final band populations are settled by the blind scores, not
+asserted here.
 
 Scores above are **author targets**, not final. Final scores come from two blind
-raters with the pinned `pr-prompt-scorer` rubric, averaged into `scores.toml`,
-exactly as v1 — the numbers here only size the ladder.
+raters with the model-complexity rubric shipped at
+`choosing-models/references/scoring-rubric.md` — the ported, pinned successor to
+pr-prompt-scorer, the same rubric v1 used, kept pinned for cross-study continuity —
+averaged into `scores.toml`, exactly as v1. The numbers here only size the ladder.
 
 ## Part B — the weak-model-fails screen (admission gate; "gap 0, not flaky")
 
@@ -123,13 +152,20 @@ A task earns a place in the bank only after a **cheap two-arm screen** proves it
 separates — run *before* the full crossed matrix:
 
 1. Run only the **weak** (Haiku) and **strong** (Opus) arms, at `standard` oracle
-   (Part C), `--repeats 5`, on each candidate task.
-2. **Admit** the task iff, on a majority of repeats: the anchor passes for *both*
-   arms (the task is well-formed and reachable), the weak arm **fails** ≥1 hard
-   criterion, and the strong arm **passes** all hard criteria.
-3. **Reject** a task that is flaky (weak sometimes passes the hard criteria, or
-   strong sometimes fails them) or saturated (both pass) or broken (anchor fails).
-   A rejected task is re-shaped or dropped, never carried into the paid matrix.
+   (Part C), `--repeats 5`, on each candidate task. The two arms run as independent
+   per-arm repeats — there is no cross-arm repeat pairing, so admission is stated on
+   each arm's own rate, not on a joint per-repeat event.
+2. **Admit** the task iff **every** repeat agrees: the anchor passes on all repeats
+   of *both* arms (well-formed and reachable), the weak arm **fails ≥1 hard
+   criterion on all 5 repeats**, and the strong arm **passes all hard criteria on
+   all 5 repeats**. Unanimity, not a majority — a task that separates *reliably*
+   must do so every time at this sample size.
+3. **Reject** any task that is not unanimous: flaky (the weak arm passes the hard
+   criteria on *any* repeat, or the strong arm fails them on *any* repeat),
+   saturated (both pass), or broken (any anchor failure). The admission rule (2) and
+   this rejection rule are exact complements — there is no repeat count that both
+   admits and rejects. A rejected task is re-shaped once or dropped, never carried
+   into the paid matrix.
 
 This is the operational meaning of "reliably separate tiers at graded difficulty
 (not flaky)". It costs 2 arms, not 9 cells, so a saturating task is caught for
@@ -169,25 +205,56 @@ the same nine tasks under all three oracles (the task code is fixed; only
   instruction never names.
 
 Oracle quality is a **bank-level knob**, realized as three `verify.py` variants
-selected by arm config, so the model arm and the oracle arm are orthogonal in the
-ledger (`calibration.py` already resolves arms by family token, so a
-`weak-thin` / `strong-strong` naming crosses cleanly).
+selected by arm config. The model tier still resolves from the arm name's family
+token, so a `haiku-thin` / `opus-strong` naming lands each arm on the *tier* ladder
+without an edit — but the **oracle dimension does not resolve itself**, and naming
+alone does not cross it. As-built, `calibration.py` has no oracle axis:
+`arm_tier` reads only a model-family token, and `_tier_arm` keeps exactly **one arm
+per tier** (`sorted(...)[0]`), so the three same-model oracle variants
+(`haiku-thin` / `haiku-standard` / `haiku-strong`) all collapse to `weak` and only
+one survives into the tier verdict / confusion / context layers. Crossing therefore
+requires new code — an arm → (tier, oracle) resolver and a model×oracle interaction
+estimator — specified as a build task in the acceptance criteria below, not implied
+by the family-token resolution.
 
 ### What the matrix would show
 
-- **If the hypothesis holds:** weak-tier pass-rate falls monotonically as oracle
-  quality rises (thin → standard → strong) — its symptom patches get caught — while
-  strong-tier pass-rate stays high across all three. The **model×oracle
-  interaction** is the signal; the oracle-quality slope per tier is the effect
-  size. `choosing-models` keeps the discount and can *calibrate* it against the
-  slope.
-- **If pass-rates are flat across oracle quality:** the downshift is not licensed
-  by oracle quality, and the `choosing-models` oracle-coverage modifier should be
-  **retired** (it currently ships labeled exactly so this result can retire it
-  without a doctrine rewrite).
+The oracles are strictly nested (thin ⊂ standard ⊂ strong), so set inclusion alone
+forces every tier's pass-rate to be **non-increasing** as oracle quality rises —
+that much is a tautology, not the signal. The signal is the **model×oracle
+interaction**: whether the *weak* tier's oracle-quality slope is materially steeper
+than the *strong* tier's. Set inclusion constrains both slopes to ≤ 0 but says
+nothing about their magnitudes or their difference — that is empirical.
 
-Either outcome is a real finding. The point of authoring the crossing is that the
-current stack cannot produce *either* — it can only assert.
+- **If the hypothesis holds:** the weak tier's slope is steeply negative (its symptom
+  patches get caught as the oracle sharpens) while the strong tier's is ≈ flat (it
+  fixed the root cause, so a sharper oracle finds nothing new). `choosing-models`
+  keeps the discount and can *calibrate* it against the weak slope.
+- **If the interaction is null** (the weak and strong slopes are indistinguishable):
+  oracle quality does not *differentially* license the weak tier, and the
+  `choosing-models` oracle-coverage modifier should be **retired** (it ships labeled
+  exactly so this result can retire it without a doctrine rewrite). The retirement
+  condition is the **null interaction**, not "flat pass-rates" — the admission screen
+  selects tasks where the weak arm already fails the `standard` oracle, so the weak
+  thin→standard leg is non-flat *by construction* and cannot itself be the test.
+
+**What this can and cannot conclude.** The crossing is **open-loop**: each cell grades
+a fixed artifact post-hoc, with no repair step. It therefore measures oracle
+*detection* — a sharper oracle catching a weak model's displaced-cause miss — and
+reads that as the signal for the *licensing* claim (a sharper oracle making a cheaper
+model adequate) only under the stated interpretation that detection-rate is what a
+downshift should be gated on. Two honest limitations: (a) with no fix loop it cannot
+show that the weak model, *confronted* with the sharper oracle, would then succeed —
+only that the oracle would catch it; (b) the load-bearing `standard → strong` contrast
+is **not** protected by the admission screen (which gates only thin/standard
+separation), so on admitted tasks the weak arm already fails `standard`, and the
+standard→strong leg can come back null for *measurement* reasons rather than because
+the hypothesis is false. Mitigation: design each task's `strong`-oracle independent
+check (Part C) to have real headroom over `standard` on the admitted tasks, or that
+contrast is uninformative.
+
+Either outcome is a real finding within those limits. The point of authoring the
+crossing is that the current stack cannot produce *either* — it can only assert.
 
 ## Acceptance criteria (for the authored bank, before any paid run)
 
@@ -196,11 +263,22 @@ current stack cannot produce *either* — it can only assert.
 - Each task defines all three oracle variants (thin/standard/strong) and names the
   independent check that makes `strong` non-gameable.
 - The weak-model-fails screen is specified as the admission gate, with a recorded
-  per-task outcome format.
+  per-task outcome format, and its admission and rejection rules are exact
+  complements (Part B).
 - `scores.toml` blind-scored by two raters (as v1), not author-only.
-- `calibration.py` renders the crossed arms without a code change (satisfied
-  2026-07-14 by the arm-resolution generalization) — verified by a dry-run once the
-  bank exists, not by spending.
+- **Per-arm rendering** (already true): every arm lands on the tier ladder and its
+  per-arm quality/cost means render, satisfied 2026-07-14 by the arm-resolution
+  generalization. Verify by feeding a **synthetic fixture ledger** (crossed arm
+  names, hand-set verifier results) through `calibration.py` — **not** by a dry-run,
+  which produces no trials and so exercises none of the rendering.
+- **Oracle-axis analysis** (a build task, NOT satisfied by the above): `calibration.py`
+  gains an arm → (tier, oracle) resolver and a model×oracle interaction/slope
+  estimator, so the three same-model oracle variants no longer collapse to one arm
+  per tier (see Part C). This is the code the crossing needs; it is scoped here and
+  built before the paid matrix, gated behind ADR-0008.
+- **ADR-0008 accepted** — the oracle-quality factor and the 3×3 crossing are a new
+  experimental dimension beyond ADR-0007's two knobs, recorded as their own decision
+  before any build or spend.
 
 ## Cost & staging (deferred; needs approval)
 
