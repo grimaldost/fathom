@@ -1,0 +1,19 @@
+id = "tag-normalize"
+instruction = """
+`tagkit.normalize_tags(raw)` should turn a comma-separated tag string into a clean
+list of tags: each tag trimmed of surrounding whitespace, folded to lowercase, blank
+pieces dropped, and only the first occurrence of any given tag kept in the order the
+tags first appear. Right now a tag that appears more than once -- including when the
+repeats differ only in letter case -- comes through multiple times instead of once.
+Make `normalize_tags` collapse those repeats the way the contract in the package
+README describes, leaving the already-correct behavior for the other pieces intact and
+keeping the public API unchanged.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 120

@@ -1,0 +1,17 @@
+id = "fix-slugify"
+instruction = """
+The blog engine turns each post title into a URL slug that goes in the page's
+web address. Right now those slugs come out with stray punctuation stuck in
+them: the title "Fast & Cheap" becomes the slug "fast-&-cheap", and "Big Sale!
+Today" keeps its exclamation mark. Characters like & and ! do not belong in a
+clean URL slug -- a slug should be only lowercase words joined by single
+hyphens, so "Fast & Cheap" should come out as "fast-cheap" and "Big Sale!
+Today" as "big-sale-today". Please make the post-title slugs come out clean.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

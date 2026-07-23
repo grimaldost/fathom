@@ -1,0 +1,14 @@
+id = "order-merge"
+instruction = """
+Something looks off with our revenue-by-region report. One of the regions is
+coming out higher than it should -- more than the actual orders for it add up to
+-- while the other regions look right. Can you get the regional totals to match
+the real orders?
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

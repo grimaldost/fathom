@@ -1,0 +1,19 @@
+name = "e1-data-bare-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/craft-collection/plugins/humblepowers",
+    "C:/Users/grima/Documents/craft-collection/plugins/engineering-discipline",
+    "C:/Users/grima/Documents/craft-collection/plugins/session-workflow",
+]
+
+[limits]
+trial_timeout_s = 600

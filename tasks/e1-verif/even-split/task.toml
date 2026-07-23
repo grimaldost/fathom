@@ -1,0 +1,19 @@
+id = "even-split"
+instruction = """
+`allocate.split_amount(total, parts)` should divide a whole number `total` into
+`parts` integer shares that are as equal as possible and that add back up to `total`
+exactly, giving any leftover units to the earliest shares (so the shares come out
+non-increasing). Right now, when `total` does not divide evenly by `parts`, the
+leftover units are dropped and the returned shares add up to less than `total`. Make
+`split_amount` hand out the remainder the way the contract in the package README
+describes, leaving the evenly divisible cases as they already are and keeping the
+public API unchanged.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
