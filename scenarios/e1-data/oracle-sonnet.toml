@@ -1,0 +1,22 @@
+name = "e1-data-oracle-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/craft-collection/plugins/humblepowers",
+    "C:/Users/grima/Documents/craft-collection/plugins/engineering-discipline",
+    "C:/Users/grima/Documents/craft-collection/plugins/session-workflow",
+]
+
+[context]
+inject = "../e1-assets/oracle-data.md"
+
+[limits]
+trial_timeout_s = 600

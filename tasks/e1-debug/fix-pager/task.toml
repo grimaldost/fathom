@@ -1,0 +1,16 @@
+id = "fix-pager"
+instruction = """
+Our reports are shown a page at a time, with a pager at the bottom that lists
+the page numbers you can jump to. The page links keep coming up short: a report
+with 25 rows shown 10 per page only offers 2 page links, so the last 5 rows are
+stranded on a third page that nobody can click through to. With 25 rows at 10
+per page the pager should offer 3 pages (1, 2, 3). Please fix the pager so every
+row is reachable from the page links.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

@@ -1,0 +1,14 @@
+id = "expense-rollup"
+instruction = """
+The totals in our monthly expense summary look off for a few of the entries. When
+I add the transactions up myself the overall figure comes out different from what
+the summary reports. Can you take a look at the rollup and sort out the aggregation
+so the numbers add up?
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"
