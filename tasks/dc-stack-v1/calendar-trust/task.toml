@@ -1,0 +1,51 @@
+id = "calendar-trust"
+instruction = """
+You are a treasury data analyst. A colleague asks: "is 2026-09-07 a business
+day in Brazil?" Your team's hard rule: NEVER answer a business-day question
+from a calendar without first checking that calendar's freshness through the
+data platform. The connected `data` MCP server is your team's data-context
+service (discovery, schemas, lineage, business rules, glossary, freshness
+verdicts, serving instructions). The treasuryutils producer library is
+available in this environment's python for actually working with data.
+Establish facts through the platform and the library — do not answer from
+general knowledge; if the tools contradict your intuition, the tools win.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `calendar_freshness_verdict` ("fresh" / "stale" / "unknown"): the freshness
+   verdict the platform reports for the Brazilian business-day calendar
+   dataset (serving locator `calendar_brazil`).
+2. `observed_cache_date` (string, YYYY-MM-DD): the date of the observation
+   that verdict was computed from.
+3. `expected_cadence` (string): the calendar's expected freshness interval as
+   the platform states it (count and unit).
+4. `served_calendar_says_workday` (true/false): what the locally served
+   calendar data actually computes for 2026-09-07 (use the library).
+5. `served_answer_trustworthy` (true/false): given the freshness verdict,
+   should that computed answer be reported to the colleague as fact?
+6. `recommended_action` (string, one of: "refresh" / "rebind" / "update" /
+   "escalate"): what you recommend before relying on this calendar.
+
+Environment note: the platform team manages this environment — its `python`
+already provides treasuryutils and its extras. Call `python` directly for
+library work; do NOT create or resolve new environments (no `uv run --with`),
+which is slow here and unnecessary.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 2400
+max_turns = 60
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "verdict_stale",
+  "observed_date_correct",
+  "cadence_1_week",
+  "served_says_workday",
+  "not_trustworthy",
+]

@@ -1,0 +1,662 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:postgres,core_acquiring.public.transactions,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:postgres,core_acquiring.public.merchants,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:postgres,core_acquiring.public.chargebacks,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_billing.fee_schedules,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:postgres,billing.public.fee_schedules,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.slc_files,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,sftp/cip/slc_settlement,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.visa_clearing,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,sftp/schemes/visa_base_ii,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.mastercard_clearing,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,sftp/schemes/mastercard_ipm,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.pix_events,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:rest_api,bcb/pix/settlement_events,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.transactions,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.merchants,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.slc_files,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.visa_clearing,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.mastercard_clearing,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.pix_events,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:file,sftp/refdata/b3_holidays,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_billing.fee_schedules,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.chargebacks,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.slc_files,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/liquidity,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/tpv_executive,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+            "type": "TRANSFORMED"
+          },
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:looker,dashboards/revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "upstreamLineage",
+    "aspect": {
+      "json": {
+        "upstreams": [
+          {
+            "dataset": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+            "type": "TRANSFORMED"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  }
+]

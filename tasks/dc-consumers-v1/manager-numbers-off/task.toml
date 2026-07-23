@@ -1,0 +1,48 @@
+id = "manager-numbers-off"
+instruction = """
+You support a finance manager at a payments company. She says the numbers on
+the executive TPV report (dashboards/tpv_executive) look inconsistent with the
+daily revenue report, and someone also mentioned an older revenue dashboard
+that shows different totals. The connected `data` MCP server is your team's
+data-context service: dataset discovery, schemas, lineage, business rules,
+glossary definitions, freshness verdicts, and serving instructions. Establish
+every fact through that server's tools — do not answer from general knowledge,
+and do not guess: if the server contradicts your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `shared_ancestor` (string): the serving locator of the dataset BOTH inputs
+   of dashboards/tpv_executive ultimately derive from (their common ancestor
+   fact table).
+2. `tpv_executive_upstream_count_2hop` (integer): how many DISTINCT upstream
+   datasets are reachable from dashboards/tpv_executive within 2 hops.
+3. `authoritative_revenue_dashboard` (string): of the revenue dashboards in
+   the catalog, the one the manager should trust.
+4. `legacy_replaced_by` (string): the machine-readable replacement the
+   deprecated revenue mart points at.
+5. `legacy_reason` (short string): why the legacy revenue mart is deprecated.
+6. `tpv_monthly_verdict` ("fresh" / "stale" / "unknown"): the freshness
+   verdict the platform reports for the monthly TPV mart.
+7. `tpv_monthly_reason` (string): the machine-readable reason accompanying
+   that verdict.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "shared_ancestor_correct",
+  "count_2hop_correct",
+  "authoritative_correct",
+  "replacement_correct",
+  "reason_refunds",
+  "verdict_unknown",
+  "reason_unsupported",
+]

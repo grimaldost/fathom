@@ -1,0 +1,45 @@
+id = "rate-convention-compute"
+instruction = """
+You are helping a treasury analyst sanity-check rate conversions in a
+spreadsheet, using the data platform's OWN documented conventions — not
+textbook assumptions. The connected `data` MCP server is your team's
+data-context service; its glossary defines each rate's convention. The
+treasuryutils producer library is available in this environment's python if
+you want computational help. Establish every convention through the platform
+before computing — if the platform contradicts your intuition, the platform
+wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `cdi_convention_basis` (string): per the platform's CDI definition, the
+   day-count basis CDI is annualized on.
+2. `cdi_annualized_pct` (number, in PERCENT, e.g. 12.00): a daily CDI factor
+   of 1.00045 annualized per that convention.
+3. `cupom_convention` (string): per the platform's cupom cambial definition,
+   its day-count and compounding convention.
+4. `cupom_rate_pct` (number, in PERCENT, e.g. 4.00): the cupom cambial rate
+   implied by a growth factor of 1.02 over 180 CALENDAR days per that
+   convention.
+
+Environment note: the platform team manages this environment — its `python`
+already provides treasuryutils and its extras. Call `python` directly for
+library work; do NOT create or resolve new environments (no `uv run --with`),
+which is slow here and unnecessary.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 2400
+max_turns = 60
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "cdi_basis_252",
+  "cdi_rate_correct",
+  "cupom_convention_act360",
+  "cupom_rate_correct",
+]

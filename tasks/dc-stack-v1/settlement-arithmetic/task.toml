@@ -1,0 +1,50 @@
+id = "settlement-arithmetic"
+instruction = """
+You are a treasury data analyst preparing settlement-date arithmetic for an
+ops runbook, using your team's data platform end to end. The connected `data`
+MCP server is the data-context service (discovery, business rules, glossary,
+freshness, serving instructions); the treasuryutils producer library is
+available in this environment's python for actually computing with data.
+Compute over the Brazilian business-day calendar AS SERVED in this
+environment, and assess its trustworthiness separately — do not answer from
+general knowledge; if the tools contradict your intuition, the tools win.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `calendar_locator` (string): the serving locator of the Brazilian
+   business-day calendar you used.
+2. `producer_id` (string): the producer id the platform names for it.
+3. `net_workdays_jul13_jul31` (integer): workdays from 2026-07-13 through
+   2026-07-31 (inclusive), per the served calendar.
+4. `d1_settlement_from_sep4` (string, YYYY-MM-DD): a card trade captured
+   Friday 2026-09-04 settles D+1 business day — the settlement date per the
+   served calendar.
+5. `bus252_year_fraction` (number): the BUS/252 year fraction from 2026-07-01
+   to 2027-07-01 per the served calendar (decimal, e.g. 1.0000).
+6. `served_calendar_trustworthy` (true/false): per the platform's freshness
+   surface, can these computed values be relied on without a refresh?
+
+Environment note: the platform team manages this environment — its `python`
+already provides treasuryutils and its extras. Call `python` directly for
+library work; do NOT create or resolve new environments (no `uv run --with`),
+which is slow here and unnecessary.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 2400
+max_turns = 60
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "locator_correct",
+  "producer_correct",
+  "workdays_14",
+  "d1_sep7",
+  "year_fraction_correct",
+  "not_trustworthy",
+]

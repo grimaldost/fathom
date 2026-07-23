@@ -1,0 +1,47 @@
+id = "analyst-build-report"
+instruction = """
+You are a data analyst at a payments company, planning a NEW daily
+net-revenue-by-scheme report. The connected `data` MCP server is your team's
+data-context service: dataset discovery, schemas, lineage, business rules,
+glossary definitions, freshness verdicts, and serving instructions for the
+payments data platform. Establish every fact through that server's tools — do
+not answer from general knowledge, and do not guess: if the server contradicts
+your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `authoritative_revenue_mart` (string): the serving locator of the mart your
+   report should be built on.
+2. `mart_direct_upstream_locators` (list of strings): the serving locators of
+   that mart's DIRECT (1-hop) upstream datasets.
+3. `unit_conversion_dataset` (string): monetary amounts enter the platform as
+   integer centavos — give the serving locator of the dataset where the single
+   conversion to decimal BRL happens.
+4. `raw_amount_unit` (short string): the unit of monetary amounts in the raw
+   acquiring layer.
+5. `report_day_field` (string): the field on the revenue mart your report
+   should group by as the "day".
+6. `report_day_timezone` (string): the timezone that field is derived in.
+7. `mart_expected_interval` (string): the revenue mart's expected freshness
+   interval as the platform states it (count and unit).
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "mart_correct",
+  "upstreams_exact",
+  "conversion_at_stg",
+  "unit_centavos",
+  "day_field_correct",
+  "tz_correct",
+  "cadence_1_day",
+]

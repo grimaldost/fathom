@@ -1,0 +1,16 @@
+name = "armed-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# ARMED treatment, mid tier. Identical to armed-haiku except `model`.
+[context]
+inject = "banner.txt"
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 600

@@ -1,0 +1,18 @@
+id = "fix-interval-merge-embedded"
+instruction = """
+I'm prepping the release notes for tomorrow and QA flagged the `intervals`
+package again: `merge()` sometimes leaves two ranges separate when they clearly
+should have become one, and other times the merged range comes back shorter
+than one of the inputs that went into it. Nikhil tried a patch last sprint that
+made it worse, so we reverted. Can you get `merge` behaving as documented?
+Public API stays as it is, and the shipped test suite keeps passing.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-interval-merge); only the
+# instruction register differs (embedded).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

@@ -1,0 +1,2 @@
+# Managed by the platform team; the environment's python already provides these.
+treasuryutils[datatools,calendartools]

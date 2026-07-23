@@ -1,0 +1,16 @@
+id = "fix-nonlocal-urlkey-paraphrase"
+instruction = """
+In `urlstats`, `/home`, `/home/`, and `/home?ref=promo` are being treated as
+three different pages, which inflates the counts and can make `top_page()`
+pick the wrong winner. The docs say those should all be one page - make it so.
+Don't change the public surface, and the shipped tests should still pass.
+"""
+
+# Same limits as the source task (humble-vs-super-v4/fix-nonlocal-urlkey); only the
+# instruction register differs (paraphrase).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

@@ -1,0 +1,20 @@
+name = "control-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# CONTROL, mid tier. Identical to control-haiku except `model`.
+[plugins]
+mount = ["assets/plugin-1121"]
+
+[env]
+VIRTUAL_ENV = 'C:/Users/grima/Documents/treasuryutils-dev/.venv'
+PATH = 'C:/Users/grima/Documents/treasuryutils-dev/.venv/Scripts;${PATH}'
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "Skill"]
+
+[limits]
+trial_timeout_s = 600

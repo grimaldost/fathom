@@ -1,0 +1,43 @@
+id = "analyst-lineage"
+instruction = """
+You are a treasury data analyst preparing a report on the cupom cambial curve.
+The connected `data` MCP server is your team's data-context service: it serves
+dataset discovery, schemas, lineage, business rules, glossary definitions,
+freshness verdicts, and serving instructions for the treasury data platform.
+Establish every fact through that server — do not answer from general
+knowledge, and do not guess: if the server contradicts your intuition, the
+server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `cupom_upstream_locators` (list of strings): the serving locators
+   (`serving.locator` values) of the datasets the `cupom_cambial` dataset is
+   DIRECTLY (1 hop) built from.
+2. `cupom_upstream_count_2hop` (integer): how many DISTINCT upstream datasets
+   are reachable from `cupom_cambial` within 2 hops.
+3. `fixings_direct_downstream_count` (integer): how many datasets directly
+   (1 hop) consume the dataset whose serving locator is `market_fixings`.
+4. `cupom_rate_convention` (short string): the day-count and compounding
+   convention the cupom cambial rate uses.
+5. `cdi_daily_resolves_to` (string): a colleague's notebook loads a dataset by
+   the name `cdi_daily`; give the canonical serving locator that name
+   resolves to.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "upstream_locators_exact",
+  "count_2hop_correct",
+  "downstream_count_correct",
+  "convention_act360_linear",
+  "alias_resolved",
+]

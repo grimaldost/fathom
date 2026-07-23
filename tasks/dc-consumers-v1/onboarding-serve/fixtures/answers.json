@@ -1,0 +1,11 @@
+{
+  "receivables_locator": null,
+  "tpv_locator": null,
+  "producer_id": null,
+  "dashboard_serve_error_code": null,
+  "curated_brl_transactions": null,
+  "transactions_table_platforms": null,
+  "chargebacks_verdict": null,
+  "chargebacks_reason": null,
+  "notes": ""
+}

@@ -1,0 +1,21 @@
+name = "tu-grounding-e2e-v1"
+dataset_version = "1"
+# END-TO-END grounding eval — the GENERAL test that gates the tu v1.9 cycle close.
+# Unlike tu-grounding-v1 (isolated banner-text proxy), every element here is the REAL
+# artifact: the consumer plugin is MOUNTED (--plugin-dir) so the REAL SessionStart hook
+# runs (`uv run python .../session-start-context.py` per hooks.json) in a workspace that
+# depends on treasuryutils via requirements.txt, with VIRTUAL_ENV pointing at a venv whose
+# importlib.metadata resolves tu 1.8.0. Arms mount real plugin snapshots:
+#   control    = plugin 1.12.1 @ b50e5f01  (mirrors stamped 1.5.2.dev174 — the incident
+#                artifact; hook emits context but NO staleness signal)
+#   treatment  = plugin 1.13.0 @ 82ba7be5  (v1.9 fix set: mirrors 1.8.0 + capability
+#                notes; banner correctly SILENT because stamp == installed)
+#   drift      = plugin 1.13.0 with ONLY .generated_meta.json doctored to 1.7.0 (declared
+#                deviation) so the version banner FIRES live — proves hook->context.
+# Local integration sanity (2026-07-11, pre-run): all three hooks executed with the trial
+# env produced exactly those three behaviors.
+# Predictions: control reproduces the incident (q3 "no"); treatment answers q3 "yes"
+# CORRECTLY (fresh refs + G4 note state the pl.Expr path); drift shows the warning and
+# hedges. Manipulation checks live in answers.json; the verifier stays scenario-blind and
+# per-arm interpretation happens at analysis.
+holdout = []

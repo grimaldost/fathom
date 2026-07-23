@@ -1,0 +1,442 @@
+[
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:calendar_brazil-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:calendar_us-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:calendar_sifma_us-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:holidays_brazil-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:holidays_us-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:holidays_sifma_us-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "WEEK", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:di_curve-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.di_curve,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: the shared entity's daily basis is evidenced via the cdi_daily contract description 'Historical CDI Overnight Rates (Realized)' (the di_curve description itself carries no cadence word)"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:market_fixings-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.treasury_platform_public.fixings,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "evidenced: contract description 'Daily market fixings (Futures, Spot FX, Indexes, PTAX)'"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:sofr_curve_raw-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/SOFR,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily market curve — no explicit contract cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:frc_raw-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:rest_api,treasuryutils/curves/FRC,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily market curve — no explicit contract cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:di_pre-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/di_pre,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: content-triggered (refresh_on_build), inheriting the di_curve upstream's daily cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:cdi_accumulated-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cdi_accumulated,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: content-triggered (refresh_on_build), inheriting the di_curve upstream's daily cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:sofr_pre-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_pre,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: content-triggered (refresh_on_build), inheriting the sofr_curve_raw upstream's daily cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:sofr_accumulated-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/sofr_accumulated,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: content-triggered (refresh_on_build), inheriting the market_fixings upstream's daily cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:cupom_cambial-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/cupom_cambial,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: content-triggered (refresh_on_build), inheriting the di_pre/market_fixings/frc_raw upstreams' daily cadence"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fx_first_future-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_first_future,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily fixings-derived series"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fx_second_future-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_second_future,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily fixings-derived series"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fx_casado-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_casado,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily fixings-derived series"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fx_ptax-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_ptax,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily fixings-derived series"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fx_spot-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:external,treasuryutils/builders/fx_spot,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": { "unit": "DAY", "multiple": 1 }
+          }
+        },
+        "source": { "type": "EXTERNAL" },
+        "description": "inferred: daily fixings-derived series"
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

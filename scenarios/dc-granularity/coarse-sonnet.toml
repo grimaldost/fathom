@@ -1,0 +1,21 @@
+name = "coarse-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# COARSE arm: a three-tool merged facade (find_data / describe_dataset /
+# corpus_status) served by plugin-b's bundled MCP server (.mcp.json, server
+# key "data") over the same frozen corpus snapshot, built on the same backend
+# and freshness engine as the fine arm. Differs from fine-sonnet ONLY by the
+# mounted plugin (tool granularity); same model/effort. The mcp__plugin_dc_data
+# allow rule covers every tool the mounted server exposes.
+[plugins]
+mount = ["assets/plugin-b"]
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "mcp__plugin_dc_data"]
+
+[limits]
+trial_timeout_s = 900

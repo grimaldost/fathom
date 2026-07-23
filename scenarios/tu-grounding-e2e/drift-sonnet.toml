@@ -1,0 +1,24 @@
+name = "drift-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# DRIFT, mid tier: plugin 1.13.0 with ONLY .generated_meta.json's treasuryutils_version
+# doctored to "1.7.0" (declared deviation from the real artifact) so the version-mismatch
+# banner FIRES in a live session against the [env] venv's tu 1.8.0 — the end-to-end proof
+# that the REAL hook injects the warning into a REAL session (pre-run local sanity showed
+# exactly this: banner present, "generated against tu 1.7.0").
+[plugins]
+mount = ["assets/plugin-1130-drift"]
+
+[env]
+VIRTUAL_ENV = 'C:/Users/grima/Documents/treasuryutils-dev/.venv'
+PATH = 'C:/Users/grima/Documents/treasuryutils-dev/.venv/Scripts;${PATH}'
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "Skill"]
+
+[limits]
+trial_timeout_s = 600

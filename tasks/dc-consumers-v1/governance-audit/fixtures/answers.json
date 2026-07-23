@@ -1,0 +1,11 @@
+{
+  "marts_without_assertion": null,
+  "deprecated_mart_replacement": null,
+  "liquidity_owner_team": null,
+  "risk_owner_team": null,
+  "scd2_current_marker": null,
+  "snapshot_source_version": null,
+  "snapshot_policy_declared": null,
+  "snapshot_verdict_reason": null,
+  "notes": ""
+}

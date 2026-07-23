@@ -1,0 +1,28 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start-context.py\""
+          },
+          {
+            "type": "command",
+            "command": "uv run python \"${CLAUDE_PLUGIN_ROOT}/hooks/feedback-prime.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run python \"${CLAUDE_PLUGIN_ROOT}/hooks/feedback-capture.py\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "treasuryutils-consumer",
+  "version": "1.13.0",
+  "description": "Decision matrix and module API references for engineers using treasuryutils in their own codebases, guided setup workflows for source bindings, authentication profiles, and dataset-contract authoring (each driving deterministic doctor / scaffold / validate tooling), and a SessionStart hook that surfaces treasuryutils — plus, for projects that depend on it, the current data-environment readiness (which datasets are bound, their auth, and what is materialized) from env-memory — when a project already uses it or plausibly fits it.",
+  "author": {
+    "name": "Stone Payments — Treasury Reporting",
+    "email": "grimaldo.stanzani@stone.com.br"
+  },
+  "homepage": "https://github.com/stone-payments/treasuryutils",
+  "repository": "https://github.com/stone-payments/treasuryutils"
+}

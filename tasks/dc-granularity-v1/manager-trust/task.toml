@@ -1,0 +1,45 @@
+id = "manager-trust"
+instruction = """
+You support a treasury manager who wants to know whether the numbers in a
+report can be trusted right now. The connected `data` MCP server is your
+team's data-context service: it serves dataset discovery, schemas, lineage,
+business rules, glossary definitions, freshness verdicts, and serving
+instructions for the treasury data platform. Establish every fact through
+that server — do not answer from general knowledge, and do not guess: if the
+server contradicts your intuition, the server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `equity_fundamentals_verdict` ("fresh" / "stale" / "unknown"): the
+   freshness verdict the platform reports for the dataset with serving
+   locator `equity_fundamentals`.
+2. `equity_fundamentals_reason` (string): the machine-readable reason string
+   accompanying that verdict.
+3. `di_curve_verdict_if_observed` ("fresh" / "stale" / "unknown"): the verdict
+   for the `di_curve` dataset if its data was last observed updated at
+   2026-01-01T00:00:00Z.
+4. `di_curve_expected_interval` (string): di_curve's expected freshness
+   interval, as the platform states it (count and unit).
+5. `snapshot_source_version` (string): the exact producer source version that
+   generated the metadata snapshot you are consulting.
+6. `snapshot_max_age_days` (integer): the snapshot's max-age policy in days.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "verdict_unknown",
+  "reason_no_assertion",
+  "stale_correct",
+  "interval_1_day",
+  "source_version_correct",
+  "max_age_30",
+]

@@ -1,0 +1,539 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "holidays_brazil",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "holidays_brazil",
+        "description": "Brazil holidays data. Source: local parquet file, path overridable via the calendartools holidays_brazil_file_path setting.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/holidays_brazil.yaml",
+        "customProperties": {
+          "serving.locator": "holidays_brazil",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_brazil.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "holidays_us",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "holidays_us",
+        "description": "US Federal holidays data. Source: local parquet file, path overridable via the calendartools holidays_us_file_path setting.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/holidays_us.yaml",
+        "customProperties": {
+          "serving.locator": "holidays_us",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "holidays_sifma_us",
+        "platform": "urn:li:dataPlatform:file",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "holidays_sifma_us",
+        "description": "SIFMA US holidays data. Source: local parquet file, path overridable via the calendartools holidays_sifma_us_file_path setting.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/holidays_sifma_us.yaml",
+        "customProperties": {
+          "serving.locator": "holidays_sifma_us",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:file,data/data/raw/market/holidays_sifma_us.parquet,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "calendar_brazil",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "is_workday",
+            "type": { "type": { "com.linkedin.schema.BooleanType": {} } },
+            "nativeDataType": "bool",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "calendar_brazil",
+        "description": "Brazil Calendar with Workdays and Workday Indexing. Derived from holidays_brazil via inline DuckDB SQL: date spine 2001-01-01 to 2099-12-31, weekend = dayofweek in {0,6}, workday = not weekend and not holiday, with a running workday_num index and last/next workday lookups.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/calendar_brazil.yaml",
+        "customProperties": {
+          "serving.locator": "calendar_brazil",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800",
+          "concept.rule.calendar_construction": "date spine 2001-01-01 to 2099-12-31; weekend = dayofweek in {0,6}; workday = not weekend and not holiday; workday_num is a running business-day index; last_workday/next_workday and their indices are also computed"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_brazil,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "calendar_us",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "is_workday",
+            "type": { "type": { "com.linkedin.schema.BooleanType": {} } },
+            "nativeDataType": "bool",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "calendar_us",
+        "description": "US FED Calendar with Workdays and Workday Indexing. Derived from holidays_us via the same DuckDB SQL/rules as calendar_brazil: date spine 2001-01-01 to 2099-12-31, weekend = dayofweek in {0,6}, workday = not weekend and not holiday, with a running workday_num index and last/next workday lookups.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/calendar_us.yaml",
+        "customProperties": {
+          "serving.locator": "calendar_us",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800",
+          "concept.rule.calendar_construction": "date spine 2001-01-01 to 2099-12-31; weekend = dayofweek in {0,6}; workday = not weekend and not holiday; workday_num is a running business-day index; last_workday/next_workday and their indices are also computed"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "calendar_sifma_us",
+        "platform": "urn:li:dataPlatform:external",
+        "version": 0,
+        "hash": "",
+        "platformSchema": { "com.linkedin.schema.OtherSchema": { "rawSchema": "" } },
+        "fields": [
+          {
+            "fieldPath": "date",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "is_workday",
+            "type": { "type": { "com.linkedin.schema.BooleanType": {} } },
+            "nativeDataType": "bool",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday_num",
+            "type": { "type": { "com.linkedin.schema.NumberType": {} } },
+            "nativeDataType": "int64",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "last_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_workday",
+            "type": { "type": { "com.linkedin.schema.TimeType": {} } },
+            "nativeDataType": "timestamp",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "calendar_sifma_us",
+        "description": "SIFMA US Calendar with Workdays and Workday Indexing. Derived from holidays_sifma_us via the same DuckDB SQL/rules as calendar_brazil: date spine 2001-01-01 to 2099-12-31, weekend = dayofweek in {0,6}, workday = not weekend and not holiday, with a running workday_num index and last/next workday lookups.",
+        "externalUrl": "https://github.com/stone-payments/treasuryutils/blob/main/src/treasuryutils/datatools/metadata/calendar_sifma_us.yaml",
+        "customProperties": {
+          "serving.locator": "calendar_sifma_us",
+          "serving.producer": "treasuryutils",
+          "concept.rule.refresh_policy": "evidenced: refresh_policy if_stale max_age_seconds=604800",
+          "concept.rule.calendar_construction": "date spine 2001-01-01 to 2099-12-31; weekend = dayofweek in {0,6}; workday = not weekend and not holiday; workday_num is a running business-day index; last_workday/next_workday and their indices are also computed"
+        }
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [{ "owner": "urn:li:corpGroup:treasury-reporting", "type": "DATAOWNER" }]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:external,holidays_sifma_us,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": ["urn:li:domain:treasury"]
+      }
+    },
+    "systemMetadata": { "lastObserved": 1783555200000, "runId": "treasury-prod-2026-07" }
+  }
+]

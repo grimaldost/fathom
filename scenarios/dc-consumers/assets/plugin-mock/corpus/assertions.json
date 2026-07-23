@@ -1,0 +1,662 @@
+[
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_transactions-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 HOUR (hourly CDC loads).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.transactions,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "HOUR",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_merchants-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily snapshot ingest).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_acquiring.merchants,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_fee_schedules-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily snapshot ingest).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_billing.fee_schedules,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_slc-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily file drop, lands ~06:00 BRT).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.slc_files,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_visa_clearing-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily BASE II files).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.visa_clearing,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_mc_clearing-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily IPM files).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.mastercard_clearing,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:raw_pix_events-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 HOUR (hourly SPI event pulls).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.raw_settlement.pix_events,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "HOUR",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:stg_transactions-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 HOUR (follows raw hourly loads).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "HOUR",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:stg_merchants-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (follows raw daily snapshot).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:stg_clearing-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (follows the three daily file feeds).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:stg_pix-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 HOUR (follows raw hourly pulls).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "HOUR",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:dim_merchants-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (follows stg_merchants).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:dim_calendar-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 WEEK (weekly refresh from B3 drops).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "WEEK",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fct_transactions-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily build over staging).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fct_settlements-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily build over clearing + pix).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fct_receivables-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily build over transactions + settlements).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:fct_chargebacks-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily build over raw cases).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:mart_revenue_daily-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily mart build).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:mart_liquidity-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily forecast build).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:mart_recon-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily recon after SLC lands).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:mart_risk-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 DAY (daily risk build).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "DAY",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "assertion",
+    "entityUrn": "urn:li:assertion:mart_tpv_monthly-freshness",
+    "changeType": "UPSERT",
+    "aspectName": "assertionInfo",
+    "aspect": {
+      "json": {
+        "type": "FRESHNESS",
+        "description": "Expected update cadence: every 1 MONTH (monthly close build).",
+        "freshnessAssertion": {
+          "type": "DATASET_CHANGE",
+          "entity": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+          "schedule": {
+            "type": "FIXED_INTERVAL",
+            "fixedInterval": {
+              "unit": "MONTH",
+              "multiple": 1
+            }
+          }
+        },
+        "source": {
+          "type": "EXTERNAL"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  }
+]

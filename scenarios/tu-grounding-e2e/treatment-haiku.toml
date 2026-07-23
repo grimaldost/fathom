@@ -1,0 +1,23 @@
+name = "treatment-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+# TREATMENT, weak tier: REAL consumer plugin 1.13.0 (82ba7be5, the v1.9 fix set) mounted —
+# mirrors regenerated at 1.8.0 + capability-status notes; banner correctly SILENT because
+# the stamp matches the installed tu the [env] venv resolves. Differs from control-haiku
+# ONLY by the mounted plugin snapshot.
+[plugins]
+mount = ["assets/plugin-1130"]
+
+[env]
+VIRTUAL_ENV = 'C:/Users/grima/Documents/treasuryutils-dev/.venv'
+PATH = 'C:/Users/grima/Documents/treasuryutils-dev/.venv/Scripts;${PATH}'
+
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit", "Skill"]
+
+[limits]
+trial_timeout_s = 600

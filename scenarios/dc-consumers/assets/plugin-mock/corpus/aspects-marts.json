@@ -1,0 +1,869 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_revenue_daily",
+        "description": "Daily net revenue by scheme and segment — the authoritative revenue mart. Grain: event_date_brt x scheme x segment.",
+        "customProperties": {
+          "serving.locator": "mart_revenue_daily",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "finance-analytics"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_revenue_daily",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "event_date_brt",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "business date in America/Sao_Paulo — the report 'day'",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "scheme",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card scheme",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "segment",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant segment",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "tpv_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "gross captured volume (TPV)",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_revenue_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "net revenue per the F1 rule",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "transaction_count",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "captured transactions",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:finance-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:finance"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_liquidity",
+        "description": "Cash in/out forecast by horizon from settlements and receivables. Phase 2 integrates the treasury DI curve to discount forecast positions to present value.",
+        "customProperties": {
+          "serving.locator": "mart_liquidity",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "treasury-ops"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_liquidity",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "forecast_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "forecast run date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "horizon_days",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "D+n horizon",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "cash_in_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "expected inflows",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "cash_out_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "expected outflows",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_position_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "net position; discounting to PV is a planned treasury integration",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:treasury-ops",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_liquidity_forecast,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:finance"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_recon",
+        "description": "Daily reconciliation of expected settlements (fct_settlements) against cleared amounts in the raw SLC files.",
+        "customProperties": {
+          "serving.locator": "mart_recon",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "treasury-ops",
+          "concept.rule.break": "break_brl = expected_brl - cleared_brl; any nonzero row is a reconciliation break to investigate."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_recon",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "settlement_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "settlement date reconciled",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "source_network",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "visa|mastercard|slc",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "expected_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "expected per fct_settlements",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "cleared_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "cleared per raw SLC",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "break_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "expected - cleared",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "break_count",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "breaking records",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:treasury-ops",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_settlement_recon,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:settlement"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_risk",
+        "description": "Merchant credit exposure from open receivables and chargeback rates.",
+        "customProperties": {
+          "serving.locator": "mart_risk",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "risk-analytics"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_risk",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "exposure_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "open receivables + anticipated balance",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "chargeback_rate_90d",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "90-day chargeback rate",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "segment",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant segment",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "risk_tier",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "A|B|C|D",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:risk-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_risk_exposure,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:risk"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_tpv_monthly",
+        "description": "Monthly TPV by scheme, built at month close.",
+        "customProperties": {
+          "serving.locator": "mart_tpv_monthly",
+          "serving.aliases": "tpv",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "finance-analytics"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_tpv_monthly",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "month",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "first day of the month",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "scheme",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card scheme",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "tpv_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "monthly gross captured volume",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "yoy_growth",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "year-over-year growth; NULL first year",
+            "nullable": true,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:finance-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_tpv_monthly,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:finance"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "mart_revenue_legacy",
+        "description": "DEPRECATED daily revenue mart kept for historical audit only. Use mart_revenue_daily.",
+        "customProperties": {
+          "serving.locator": "mart_revenue_legacy",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "finance-analytics",
+          "concept.rule.deprecation_reason": "Double-counts refunded transactions (refunds were never netted out); numbers diverge upward from mart_revenue_daily. Kept for historical audit only."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "mart_revenue_legacy",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "event_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "calendar date (legacy: UTC-derived)",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "revenue_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "DEPRECATED revenue figure — double-counts refunds",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "scheme",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card scheme",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "deprecation",
+    "aspect": {
+      "json": {
+        "deprecated": true,
+        "note": "Double-counts refunded transactions (refunds were never netted out); numbers diverge upward from mart_revenue_daily. Kept for historical audit only.",
+        "actor": "urn:li:corpuser:dataplatform-team",
+        "replacement": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_daily,PROD)"
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:finance-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.marts.mart_revenue_legacy,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:finance"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  }
+]

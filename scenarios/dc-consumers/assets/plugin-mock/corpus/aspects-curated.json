@@ -1,0 +1,1685 @@
+[
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "stg_transactions",
+        "description": "Deduplicated, BRL-decimal view of captured transactions. This is where centavos become BRL and where the America/Sao_Paulo business date is derived.",
+        "customProperties": {
+          "serving.locator": "stg_transactions",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng",
+          "concept.rule.unit_convention": "amount_brl = raw amount_centavos / 100, converted HERE and only here; all curated/mart layers are decimal BRL.",
+          "concept.rule.timezone": "event_time_utc is UTC; event_date_brt is the business date in America/Sao_Paulo derived from it. Daily reports group by event_date_brt, never by DATE(event_time_utc).",
+          "concept.rule.dedup": "One row per event_id; latest status wins."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "stg_transactions",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "transaction_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "= event_id after dedup",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "FK to dim_merchants",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "scheme",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card scheme",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "gross amount in decimal BRL — converted from raw centavos here",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "mdr_fee_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "MDR fee from the fee schedule",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "amount_brl - mdr_fee_brl",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "event_time_utc",
+            "nativeDataType": "TIMESTAMP",
+            "type": {
+              "type": {
+                "com.linkedin.schema.TimeType": {}
+              }
+            },
+            "description": "capture instant, UTC",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "event_date_brt",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "business date in America/Sao_Paulo — the report 'day' field",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "status",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "captured|voided|refunded",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:acquiring"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "stg_merchants",
+        "description": "SCD-2 merchant history built from raw daily snapshots.",
+        "customProperties": {
+          "serving.locator": "stg_merchants",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng",
+          "versioning.scheme": "scd2",
+          "versioning.current_marker": "valid_to IS NULL",
+          "concept.rule.versioning": "SCD-2: versions carry half-open validity [valid_from, valid_to); the current version has valid_to NULL."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "stg_merchants",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "merchant_sk",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "surrogate key (merchant_id + version)",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "natural key",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "legal_name",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "registered legal name",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "mcc",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant category code",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "segment",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "micro|SMB|enterprise",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "state",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "UF",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "valid_from",
+            "nativeDataType": "TIMESTAMP",
+            "type": {
+              "type": {
+                "com.linkedin.schema.TimeType": {}
+              }
+            },
+            "description": "version validity start (inclusive)",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "valid_to",
+            "nativeDataType": "TIMESTAMP",
+            "type": {
+              "type": {
+                "com.linkedin.schema.TimeType": {}
+              }
+            },
+            "description": "version validity end (exclusive); NULL = current",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "version",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "monotonic version number",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:acquiring"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "stg_clearing",
+        "description": "Unified clearing records normalized from Visa BASE II, Mastercard IPM and CIP SLC files.",
+        "customProperties": {
+          "serving.locator": "stg_clearing",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng",
+          "concept.rule.sources": "Fan-in of raw_visa_clearing, raw_mc_clearing and raw_slc into one clearing record shape; source_network tags the origin."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "stg_clearing",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "clearing_key",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "unified clearing record key",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "source_network",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "visa|mastercard|slc",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "settlement_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "settlement date",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "gross_centavos",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "gross amount, BRL centavos",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "interchange_centavos",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "interchange share; NULL for SLC records",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_centavos",
+            "nativeDataType": "INT64",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "net amount, BRL centavos",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_clearing_unified,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:settlement"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "stg_pix",
+        "description": "Normalized SPI/PIX settlement events in decimal BRL.",
+        "customProperties": {
+          "serving.locator": "stg_pix",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "stg_pix",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "end_to_end_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "SPI end-to-end identifier",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "receiving merchant",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "settled amount, decimal BRL",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "settled_at",
+            "nativeDataType": "TIMESTAMP",
+            "type": {
+              "type": {
+                "com.linkedin.schema.TimeType": {}
+              }
+            },
+            "description": "SPI settlement instant, UTC",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "settlement_date_brt",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "settlement date in America/Sao_Paulo",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.stg_pix_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:settlement"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "dim_merchants",
+        "description": "Current-state merchant dimension (one row per merchant).",
+        "customProperties": {
+          "serving.locator": "dim_merchants",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng",
+          "concept.rule.current_view": "Current merchants only: stg_merchants rows with valid_to NULL."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "dim_merchants",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant identifier",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "legal_name",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "registered legal name",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "mcc",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant category code",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "segment",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "micro|SMB|enterprise",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "state",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "UF",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "since",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "first capture date",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_merchants,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:acquiring"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "dim_calendar",
+        "description": "B3 business-day calendar driving settlement date arithmetic. Phase 2 will unify this calendar with the treasury producer's Brazilian business-day calendar.",
+        "customProperties": {
+          "serving.locator": "dim_calendar",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "data-platform-eng",
+          "concept.rule.source": "Built from the B3 holiday reference drops; drives D+1 settlement."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "dim_calendar",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "calendar_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "calendar date",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "is_business_day",
+            "nativeDataType": "BOOL",
+            "type": {
+              "type": {
+                "com.linkedin.schema.BooleanType": {}
+              }
+            },
+            "description": "B3 business day flag",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "holiday_name",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "holiday name when not a business day",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "next_business_day",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "next B3 business day — used by card D+1 settlement",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:data-platform-eng",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.dim_calendar,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:settlement"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fct_transactions",
+        "description": "Transaction fact: one row per captured transaction with revenue economics (MDR, interchange, scheme fees) joined from the fee schedule and merchant dimension.",
+        "customProperties": {
+          "serving.locator": "fct_transactions",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "finance-analytics",
+          "concept.rule.net_revenue": "net_revenue_brl = mdr_fee_brl - interchange_brl - scheme_fee_brl, per transaction."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fct_transactions",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "transaction_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "from stg_transactions",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "FK to dim_merchants",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "scheme",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card scheme",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "segment",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant segment from dim_merchants",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "gross amount (TPV contribution)",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "mdr_fee_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "MDR fee applied",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "interchange_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "issuer share of MDR",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "scheme_fee_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "scheme fee share",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_revenue_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "see net_revenue rule",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "event_date_brt",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "business date, America/Sao_Paulo",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:finance-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_transactions,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:acquiring"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fct_settlements",
+        "description": "Settlement obligations per merchant and rail, with settlement dates from the business-day calendar.",
+        "customProperties": {
+          "serving.locator": "fct_settlements",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "treasury-ops",
+          "concept.rule.settlement_window": "Card rails settle D+1 BUSINESS day (next_business_day from dim_calendar); PIX settles D+0 (same day)."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fct_settlements",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "settlement_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "settlement record key",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant settled",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "rail",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "card|pix",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "gross_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "gross amount, decimal BRL",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "net_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "net payable amount",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "settlement_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "card: D+1 business day per dim_calendar; PIX: D+0",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "source_network",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "visa|mastercard|slc|pix",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:treasury-ops",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_settlements,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:settlement"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fct_receivables",
+        "description": "Merchant receivables schedule: future cash flows from captured transactions, with anticipation (ARV) flags.",
+        "customProperties": {
+          "serving.locator": "fct_receivables",
+          "serving.aliases": "receivables",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "treasury-ops",
+          "concept.rule.anticipation": "anticipated=TRUE receivables were cashed early (ARV); the fee accrues per the schedule's anticipation_bps. Pricing against the CDI curve is a planned treasury integration."
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fct_receivables",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "receivable_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "receivable key",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "owner merchant",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "receivable amount, decimal BRL",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "due_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "scheduled settlement date",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "anticipated",
+            "nativeDataType": "BOOL",
+            "type": {
+              "type": {
+                "com.linkedin.schema.BooleanType": {}
+              }
+            },
+            "description": "ARV flag",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "anticipation_fee_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "fee charged when anticipated; NULL otherwise",
+            "nullable": true,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "status",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "open|settled|anticipated",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:treasury-ops",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_receivables,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:finance"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "datasetProperties",
+    "aspect": {
+      "json": {
+        "name": "fct_chargebacks",
+        "description": "Chargeback fact joining raw cases to curated transactions.",
+        "customProperties": {
+          "serving.locator": "fct_chargebacks",
+          "serving.producer": "dataplatform",
+          "concept.owner.team": "risk-analytics"
+        }
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "schemaMetadata",
+    "aspect": {
+      "json": {
+        "schemaName": "fct_chargebacks",
+        "platform": "urn:li:dataPlatform:bigquery",
+        "version": 0,
+        "hash": "",
+        "platformSchema": {
+          "com.linkedin.schema.OtherSchema": {
+            "rawSchema": ""
+          }
+        },
+        "fields": [
+          {
+            "fieldPath": "chargeback_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "case identifier",
+            "nullable": false,
+            "isPartOfKey": true
+          },
+          {
+            "fieldPath": "transaction_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "FK to fct_transactions",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "merchant_id",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "merchant charged back",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "amount_brl",
+            "nativeDataType": "NUMERIC",
+            "type": {
+              "type": {
+                "com.linkedin.schema.NumberType": {}
+              }
+            },
+            "description": "disputed amount, decimal BRL",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "reason_code",
+            "nativeDataType": "STRING",
+            "type": {
+              "type": {
+                "com.linkedin.schema.StringType": {}
+              }
+            },
+            "description": "scheme reason code",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "opened_date",
+            "nativeDataType": "DATE",
+            "type": {
+              "type": {
+                "com.linkedin.schema.DateType": {}
+              }
+            },
+            "description": "case opening date",
+            "nullable": false,
+            "isPartOfKey": false
+          },
+          {
+            "fieldPath": "resolved",
+            "nativeDataType": "BOOL",
+            "type": {
+              "type": {
+                "com.linkedin.schema.BooleanType": {}
+              }
+            },
+            "description": "case closed flag",
+            "nullable": false,
+            "isPartOfKey": false
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "ownership",
+    "aspect": {
+      "json": {
+        "owners": [
+          {
+            "owner": "urn:li:corpGroup:risk-analytics",
+            "type": "DATAOWNER"
+          }
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  },
+  {
+    "entityType": "dataset",
+    "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:bigquery,dataplatform-prd.curated.fct_chargebacks,PROD)",
+    "changeType": "UPSERT",
+    "aspectName": "domains",
+    "aspect": {
+      "json": {
+        "domains": [
+          "urn:li:domain:acquiring"
+        ]
+      }
+    },
+    "systemMetadata": {
+      "lastObserved": 1783641600000,
+      "runId": "mock-payments-2026-07"
+    }
+  }
+]

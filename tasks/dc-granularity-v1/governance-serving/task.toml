@@ -1,0 +1,47 @@
+id = "governance-serving"
+instruction = """
+You are onboarding a quant developer to the treasury data platform. The
+connected `data` MCP server is your team's data-context service: it serves
+dataset discovery, schemas, lineage, business rules, glossary definitions,
+freshness verdicts, and serving instructions for the treasury data platform.
+Establish every fact through that server — do not answer from general
+knowledge, and do not guess: if the server contradicts your intuition, the
+server wins.
+
+Fill in `answers.json` at the workspace root — keep the exact keys, replace
+each null:
+
+1. `lookahead_bias_term` (string): the name of the glossary term that governs
+   protection against look-ahead bias in fundamentals data.
+2. `pit_visibility_field` (string): per that term's definition, the date
+   field that controls when a filing becomes visible to a model.
+3. `fx_casado_unit` (short string): the unit convention the `fx_casado`
+   dataset is quoted in.
+4. `fx_spot_derivation` (short string): how the `fx_spot` value is derived
+   from other fixings (formula or phrase).
+5. `fx_casado_producer` (string): the producer id that serves `fx_casado`.
+6. `fx_casado_locator` (string): the serving locator to pass to that producer
+   to load it.
+7. `brazil_holiday_locators` (list of 2 strings): the catalog carries
+   Brazilian holiday data both as a raw holiday table and as a business-day
+   calendar derived from it — give the serving locators of BOTH datasets.
+
+Optionally use `notes` for a one-line justification per answer.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+hard_criteria = [
+  "term_pit",
+  "field_filing_date",
+  "unit_brl_per_1000",
+  "spot_uses_casado_and_first",
+  "producer_treasuryutils",
+  "locator_fx_casado",
+  "holiday_locators_exact",
+]

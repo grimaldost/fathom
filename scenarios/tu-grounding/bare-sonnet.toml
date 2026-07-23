@@ -1,0 +1,13 @@
+name = "bare-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# BARE control, mid tier. Identical to bare-haiku except `model`.
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 600

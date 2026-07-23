@@ -1,0 +1,18 @@
+id = "fix-nonlocal-urlkey-embedded"
+instruction = """
+Before the analytics review on Thursday I need the `urlstats` numbers to stop
+lying: the same page shows up as several entries when its URL differs only by a
+query string or a trailing slash - `/home`, `/home/`, and `/home?ref=promo`
+count as three pages, and `top_page()` can then crown the wrong page. Dana says
+marketing already noticed. Make URLs that differ only that way count as one
+page, as documented; public API preserved, shipped suite passing.
+"""
+
+# Same limits as the source task (humble-vs-super-v4/fix-nonlocal-urlkey); only the
+# instruction register differs (embedded).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

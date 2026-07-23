@@ -1,0 +1,17 @@
+id = "fix-money-split-embedded"
+instruction = """
+Finance escalated this morning: reconciliation is off by a cent on some orders,
+and they traced it to `split_amount()` in the payments code - 100 cents across
+3 recipients comes back totaling 99. We close the books Thursday so I'd love
+this settled today. Same public API, and the shipped test suite has to stay
+passing.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-money-split); only the
+# instruction register differs (embedded).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

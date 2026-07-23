@@ -1,0 +1,18 @@
+id = "fix-nonlocal-parse-embedded"
+instruction = """
+Two customer tickets landed about `logparse` this week and I promised an answer
+by Friday. On log lines whose message contains spaces, `codes()` sometimes
+raises a ValueError and `messages()` comes back cut off at the first space;
+lines with a simple one-word message are fine. Priya suspects the consumers but
+she's out this week. Please get `messages()` and `codes()` behaving as
+documented for all log lines - public API preserved, shipped suite passing.
+"""
+
+# Same limits as the source task (humble-vs-super-v4/fix-nonlocal-parse); only the
+# instruction register differs (embedded).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

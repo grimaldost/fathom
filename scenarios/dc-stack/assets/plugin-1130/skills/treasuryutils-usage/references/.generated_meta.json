@@ -1,0 +1,18 @@
+{
+  "generated_at_utc": "2026-07-10T16:08:46.035900+00:00",
+  "treasuryutils_version": "1.8.0",
+  "python_version": "3.11.15",
+  "generated_from": "DESKTOP-P92MKB1",
+  "ttl_hours": 168,
+  "files": [
+    "authenticator_api.md",
+    "calendartools_api.md",
+    "capitaltools_api.md",
+    "compute_common_api.md",
+    "datatools_api.md",
+    "equitytools_api.md",
+    "financialtools_api.md",
+    "quanttools_api.md",
+    "yaml_contracts.md"
+  ]
+}

@@ -1,0 +1,18 @@
+id = "fix-dedup-records-embedded"
+instruction = """
+Quick one before standup, hopefully: support forwarded a complaint that our
+`records` package still shows the same person several times after `dedupe()`
+runs - their example was "Ada Lovelace" and "ada lovelace" both surviving in
+the output. Marta looked at it on Friday but had to hand it back for the
+quarter-close stuff. Whatever you change, the public API has to stay as it is
+and the shipped test suite has to keep passing.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-dedup-records); only the
+# instruction register differs (embedded: intent inside a longer working message).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

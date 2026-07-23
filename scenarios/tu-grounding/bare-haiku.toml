@@ -1,0 +1,16 @@
+name = "bare-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+# BARE control, weak tier: stale refs in the fixture, NO staleness banner. Arms differ
+# ONLY by {banner} x {model}; identical tools/strategy/effort/limits. No shell tools —
+# the workspace has no installed treasuryutils, and the design requires the
+# version-sensitive q3 to be UNVERIFIABLE (the honest answer is "uncertain").
+[tools]
+source = "none"
+allowed = ["Read", "Glob", "Grep", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 600
