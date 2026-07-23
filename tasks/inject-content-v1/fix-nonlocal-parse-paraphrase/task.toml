@@ -1,0 +1,17 @@
+id = "fix-nonlocal-parse-paraphrase"
+instruction = """
+The `logparse` package falls over exactly when a log line's message has spaces
+in it: `codes()` blows up with a ValueError on some of those lines and
+`messages()` hands back only the first word. Single-word messages sail through.
+I want both behaving the way the docs describe for every line. Keep the public
+surface as is and the shipped tests green.
+"""
+
+# Same limits as the source task (humble-vs-super-v4/fix-nonlocal-parse); only the
+# instruction register differs (paraphrase).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

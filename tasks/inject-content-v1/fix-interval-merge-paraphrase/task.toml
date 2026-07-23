@@ -1,0 +1,17 @@
+id = "fix-interval-merge-paraphrase"
+instruction = """
+The `intervals` package's `merge()` does two flavors of nonsense depending on
+the input: now and then two ranges that obviously belong together stay apart,
+and now and then what comes back is shorter than something that went in. As
+documented it should do neither. Keep the public surface unchanged and leave
+the shipped suite green.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-interval-merge); only the
+# instruction register differs (paraphrase).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

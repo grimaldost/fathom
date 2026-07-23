@@ -1,0 +1,16 @@
+id = "fix-money-split-paraphrase"
+instruction = """
+Our `split_amount()` quietly makes money disappear: hand it 100 cents to divide
+among 3 people and the pieces only add up to 99. Cents should never evaporate -
+it needs to behave the way the docs say. Public surface unchanged, shipped
+tests still green.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-money-split); only the
+# instruction register differs (paraphrase).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

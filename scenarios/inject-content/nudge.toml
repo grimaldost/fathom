@@ -1,0 +1,25 @@
+name = "nudge"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Concrete-content arm: a 2-line nudge NAMING the candidate skills (what a
+# semantic router would emit for a bug-fix task) instead of the generic protocol.
+# Same toolkit mount as bare; the injected content is the only difference.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/inject-content-v1/plugins/humblepowers",
+    "../../tasks/inject-content-v1/plugins/engineering-discipline",
+    "../../tasks/inject-content-v1/plugins/session-workflow",
+]
+
+[context]
+inject = "assets/concrete-nudge.md"
+
+[limits]
+trial_timeout_s = 1200

@@ -1,0 +1,17 @@
+id = "fix-dedup-records-paraphrase"
+instruction = """
+Something in the `records` package isn't collapsing people the way the docs
+promise: run `dedupe()` and "Ada Lovelace" and "ada lovelace" both come out
+the other side as if they were different humans. I'd like it to actually treat
+those as one person. Don't change the public surface, and the tests that ship
+with it should still be green when you're done.
+"""
+
+# Same limits as the source task (humble-vs-super-v3/fix-dedup-records); only the
+# instruction register differs (paraphrase: the situation without bug/fix vocabulary).
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

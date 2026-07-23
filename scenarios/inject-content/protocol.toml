@@ -1,0 +1,25 @@
+name = "protocol"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Generic-content arm: the CURRENT 8-step dispatch protocol (verbatim from
+# humblepowers inject_dispatch.py PROTOCOL, 0.7.4) injected as context - what the
+# per-prompt hook's full tier delivers on prompt 1. Same toolkit mount as bare.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Skill", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/inject-content-v1/plugins/humblepowers",
+    "../../tasks/inject-content-v1/plugins/engineering-discipline",
+    "../../tasks/inject-content-v1/plugins/session-workflow",
+]
+
+[context]
+inject = "assets/dispatch-protocol.md"
+
+[limits]
+trial_timeout_s = 1200
