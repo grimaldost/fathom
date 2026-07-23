@@ -98,8 +98,10 @@ DEFAULT_BUDGET_FIX = 3.0
 # Per-PR keys stripped from the template so every subagent runs at the
 # scenario-pinned model/effort/budget — otherwise the series arm could silently
 # use a different (e.g. stronger) model per PR and the comparison would measure
-# models, not strategies (§4 parity).  The engine also rejects these at spec-load;
-# stripping is belt-and-braces so a stray override fails no trial.
+# models, not strategies (§4 parity).  convoy (the engine) rejects only per-PR
+# budget/budgets and now ACCEPTS per-PR model/tier/effort (its ADR-0007
+# governance), so this strip — not the engine — is the parity guard for those
+# three; a stray override fails no trial because it never reaches the spawn.
 _PER_PR_PINS = ("model", "tier", "effort", "budget", "budgets")
 
 # Default committed-template filename under a task's directory (§12).

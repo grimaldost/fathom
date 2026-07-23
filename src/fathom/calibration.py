@@ -16,6 +16,22 @@ Pure functions over ledger records + per-task metadata. Computes, for the
   **(model×effort) cost-quality Pareto frontier** (strict non-domination — fixes the
   prior efficiency view's "not-the-worst" flag).
 
+**Arm → tier resolution.** An arm is matched to the capacity ladder by the model family
+token in its NAME (``FAMILY_TIERS``, longest match wins), not by a fixed list of arm
+names — so a renamed/effort/gated-but-tiered arm (``sonnet5``, ``haiku-xhigh``,
+``sonnet-lo-gate``) lands on the ladder without an edit. ``FAMILY_TIERS`` is a MIRROR of
+the choosing-models tier map, carried here and never referenced back (see
+``docs/method/recalibration-playbook.md`` Step 0). An arm that resolves to no family
+(``bare-gate``, ``orchestrated``) is *untiered*: it renders in every per-arm view but
+takes no part in the tier verdict — a strategy is not a capacity tier. The ``frontier``
+tier is never *score*-assigned (``tier_for_score`` tops out at ``strong``), yet it is
+reachable *empirically* (a ``fable`` arm cheapest-adequate), so it appears as a confusion
+COLUMN with no predicted ROW. Caveat: the ladder is tier-ordered, not observed-cost
+ordered — on the committed ledger ``sonnet5`` costs more than ``opus``; this is harmless
+to every tier verdict (a comparison feeds a tier, and both sonnets share the ``mid`` tier),
+and the dose-response column reads ``Δquality vs prev arm`` rather than ``vs cheaper`` so
+the rendered scorecard never asserts a dollar order the ladder does not promise.
+
 The cost axis is the token×price estimate (``cost_usd_est``; subscription auth reports
 ``total_cost_usd=0``, D2 / FM-13). The judge is NOT used here (verifier-fraction only).
 """
@@ -23,14 +39,54 @@ The cost axis is the token×price estimate (``cost_usd_est``; subscription auth 
 from __future__ import annotations
 
 import math
+import warnings
 from collections import defaultdict
 from typing import Any
 
 EPS = 0.10  # ε in hard-criteria fraction units (ADR-0007 D3)
 
-# Base auto-routed model arms, cheapest → dearest, with their tier label.
-MODEL_ORDER = {"haiku": (1, "weak"), "sonnet": (2, "mid"), "opus": (3, "strong")}
+# The capacity ladder: tier → cheapness rank (weak cheapest, frontier dearest). The one
+# place rank and tier come from, replacing a per-arm-name (rank, tier) table.
+TIER_ORDER = {"weak": 1, "mid": 2, "strong": 3, "frontier": 4}
+# A MIRROR of the choosing-models tier map: model family → capacity tier. Carried, never
+# referenced back — the same substring-resolution precedent as
+# adapters/claude_cli.py:_PRICE_PER_1K. Refresh via /refresh-models when the lineup moves.
+FAMILY_TIERS = {"haiku": "weak", "sonnet": "mid", "opus": "strong", "fable": "frontier"}
 THRESHOLDS = {"weak": (0, 25), "mid": (26, 55), "strong": (56, 100)}
+
+
+def arm_tier(arm: str) -> str | None:
+    """Capacity tier of an arm, from the model family token in its NAME (longest match).
+
+    Collects every ``FAMILY_TIERS`` token appearing in the lowercased arm name and returns
+    the tier of the LONGEST hit (deterministic when a name embeds more than one token).
+    Resolves ``sonnet5``→mid, ``haiku-xhigh``→weak, ``sonnet-lo-gate``→mid,
+    ``stack-sonnet``→mid without an edit. Returns ``None`` for an untiered strategy arm
+    (``bare-gate``, ``orchestrated``): it renders everywhere but takes no part in the tier
+    verdict. Extension point (not built — no bank needs it): a per-bank ``[arms]`` table in
+    ``scores.toml`` would override this for arms that are not family-inferable.
+    """
+    lower = arm.lower()
+    hits = [family for family in FAMILY_TIERS if family in lower]
+    if not hits:
+        return None
+    return FAMILY_TIERS[max(hits, key=len)]
+
+
+def _ladder_key(arm: str) -> tuple[int, str]:
+    """Sort key: tiered arms cheapest→dearest, untiered last, ties within a tier by name."""
+    return (TIER_ORDER.get(arm_tier(arm) or "", 99), arm)
+
+
+def arms_in(trials: dict, task_id: str | None = None) -> list[str]:
+    """Arms present in ``trials`` (optionally for one task), ordered on the capacity ladder.
+
+    Tiered arms first (cheapest→dearest), untiered arms last, ties within a tier by name.
+    One ordering rule, shared by every iteration site and both renders, so the ladder can
+    never disagree with itself.
+    """
+    arms = {sc for (sc, tid, _rep) in trials if task_id is None or tid == task_id}
+    return sorted(arms, key=_ladder_key)
 
 
 def tier_for_score(score: float) -> str:
@@ -57,23 +113,62 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
 
     trials[k] = verifier_results dict (or None); runs[k] = list of run records.
     Only ``status == completed`` trials are kept (errored/truncated excluded).
+
+    Two passes, because a ledger RunRecord carries no ``scenario`` field — the arm name is
+    stamped only on TRIAL records (cli.py) — and cli.py appends a trial's run records
+    BEFORE its trial record. Resolving a run's arm against a config_hash→scenario map built
+    incrementally in a single pass therefore orphaned every arm's first trial's runs under
+    the raw config_hash, biasing every cost this module reports off them. Pass 1 builds the
+    COMPLETE map from every trial; pass 2 attributes trials and runs against it, so
+    attribution is independent of record order. This mirrors the sibling fix in
+    report.py:160-171 (the same single-pass bug shipped twice).
+
+    Pass 2 also mirrors report.py's two anomaly warnings, which the cost path is
+    otherwise silent-wrong without: a **duplicate completed trial** (a resume never
+    re-runs a completed cell, so two completed lines for one cell mean its runs would be
+    summed twice in ``_arm_cost``) and a **dangling run** whose ``config_hash`` never
+    appears on a trial line (its economy is dropped from the scorecard with no trace).
+    Both warn rather than corrupt the cost silently — the operator archives the invalid
+    ledger and re-runs fresh.
     """
     ch_to_sc: dict[str, str] = {}
     trials: dict[tuple, Any] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
+    # Pass 1 — the COMPLETE config_hash → scenario-name map, from every trial record.
+    for rec in raw:
+        if rec.get("kind") == "trial":
+            ch = rec.get("config_hash", "")
+            ch_to_sc[ch] = rec.get("scenario") or ch
+    # Pass 2 — attribute trials and runs against the finished map, warning on anomalies.
+    seen_completed: set[tuple] = set()
+    dangling_warned: set[str] = set()
     for rec in raw:
         kind = rec.get("kind")
         ch = rec.get("config_hash", "")
         sc = rec.get("scenario") or ch_to_sc.get(ch, ch)
+        tid = rec.get("task_id", "")
+        rep = rec.get("repeat", 0)
         if kind == "trial":
-            ch_to_sc[ch] = rec.get("scenario") or ch
-            sc = rec.get("scenario") or ch
             if rec.get("status") == "completed" and not rec.get("infra_error"):
-                trials[(sc, rec.get("task_id", ""), rec.get("repeat", 0))] = rec.get(
-                    "verifier_results"
-                )
+                ckey = (rec.get("dataset_version"), ch, tid, rep)
+                if ckey in seen_completed:
+                    warnings.warn(
+                        f"duplicate completed trial for {sc}/{tid} repeat={rep} "
+                        f"(config_hash={ch[:12]}…): per-arm cost may double-count; "
+                        "inspect the ledger and archive+re-run if it is a stale re-run",
+                        stacklevel=2,
+                    )
+                seen_completed.add(ckey)
+                trials[(sc, tid, rep)] = rec.get("verifier_results")
         elif kind == "run":
-            runs[(sc, rec.get("task_id", ""), rec.get("repeat", 0))].append(rec)
+            if ch not in ch_to_sc and ch not in dangling_warned:
+                dangling_warned.add(ch)
+                warnings.warn(
+                    f"run record with config_hash={ch[:12]}… has no trial line; its economy "
+                    "is excluded from the calibration cost (likely a trial interrupted mid-write)",
+                    stacklevel=2,
+                )
+            runs[(sc, tid, rep)].append(rec)
     return trials, runs
 
 
@@ -113,9 +208,11 @@ def empirical_right_tier(stats_by_arm: dict[str, dict], eps: float = EPS) -> tup
     """(tier, indeterminate). Cheapest arm within ε AND CI-overlapping the best.
 
     ``indeterminate`` when the point-estimate and CI-overlap criteria disagree on the
-    cheapest adequate arm (the ε-decision rests on overlapping CIs, FM-10).
+    cheapest adequate TIER (the ε-decision rests on overlapping CIs, FM-10). The
+    comparison is by tier, not arm identity, so two arms sharing a tier (``sonnet`` +
+    ``sonnet5``) that agree on the verdict are not flagged as a disagreement.
     """
-    arms = [a for a in stats_by_arm if a in MODEL_ORDER]
+    arms = [a for a in stats_by_arm if arm_tier(a)]
     if not arms:
         return ("indeterminate", True)
     best_arm = max(arms, key=lambda a: stats_by_arm[a]["mean"])
@@ -123,21 +220,32 @@ def empirical_right_tier(stats_by_arm: dict[str, dict], eps: float = EPS) -> tup
     best_lo = stats_by_arm[best_arm]["ci"][0]
 
     def cheapest(passing: list[str]) -> str | None:
-        return min(passing, key=lambda a: MODEL_ORDER[a][0]) if passing else None
+        return min(passing, key=_ladder_key) if passing else None
 
     within_eps = cheapest([a for a in arms if stats_by_arm[a]["mean"] >= best_mean - eps])
     ci_overlap = cheapest([a for a in arms if stats_by_arm[a]["ci"][1] >= best_lo])
     if within_eps is None:
         return ("indeterminate", True)
-    indeterminate = within_eps != ci_overlap
-    return (MODEL_ORDER[within_eps][1], indeterminate)
+    indeterminate = arm_tier(within_eps) != arm_tier(ci_overlap)
+    return (arm_tier(within_eps) or "indeterminate", indeterminate)
+
+
+def _tier_arm(stats: dict[str, dict], tier: str) -> dict | None:
+    """Stats of the (deterministic) arm resolving to ``tier`` in ``stats``, else None.
+
+    Arms in ``stats`` whose ``arm_tier`` is ``tier``, sorted by name, first one — exactly
+    one such arm per tier on every real bank today, so the value is unchanged; the sort
+    only fixes the tie-break if a bank ever runs two arms in one tier.
+    """
+    matches = sorted(a for a in stats if arm_tier(a) == tier)
+    return stats[matches[0]] if matches else None
 
 
 def _context_pairs(trials: dict, task_meta: dict[str, dict]) -> list[dict]:
     """Per matched pair: small vs large empirically-right tier + weak-model delta (§7).
 
     Groups tasks by their ``[context] pair`` slug (the machine-readable pair key, FM-N3)
-    and reports, for each pair, the small→large right-tier shift and the weak (haiku)
+    and reports, for each pair, the small→large right-tier shift and the weak-tier
     hard-fraction delta with pooled-Wilson CIs. Empty list for banks with no context
     tags (every model-tier bank), so their scorecard is unaffected.
     """
@@ -151,11 +259,11 @@ def _context_pairs(trials: dict, task_meta: dict[str, dict]) -> list[dict]:
         if not tid:
             return None
         hard = task_meta[tid]["hard_criteria"]
-        stats = {a: s for a in MODEL_ORDER if (s := arm_task_stats(trials, tid, a, hard))}
+        stats = {a: s for a in arms_in(trials, tid) if (s := arm_task_stats(trials, tid, a, hard))}
         if not stats:
             return None
         emp, indet = empirical_right_tier(stats)
-        weak = stats.get("haiku")
+        weak = _tier_arm(stats, "weak")
         return {
             "task_id": tid,
             "score": task_meta[tid]["score"],
@@ -196,7 +304,7 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
             continue
         hard = meta["hard_criteria"]
         stats_by_arm = {}
-        for arm in MODEL_ORDER:
+        for arm in arms_in(trials, tid):
             s = arm_task_stats(trials, tid, arm, hard)
             if s:
                 stats_by_arm[arm] = s
@@ -220,10 +328,12 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
         )
 
     # Confusion matrix counts (predicted × empirical), indeterminate as its own column.
-    tiers = ["weak", "mid", "strong"]
-    confusion: dict[str, dict[str, int]] = {
-        p: dict.fromkeys([*tiers, "indeterminate"], 0) for p in tiers
-    }
+    # Predicted rows are only weak/mid/strong — tier_for_score never assigns frontier
+    # (the "frontier is never score-assigned" invariant). frontier IS reachable
+    # empirically (a fable arm cheapest-adequate), so it is a COLUMN with no predicted row.
+    predicted_tiers = ["weak", "mid", "strong"]
+    columns = [*TIER_ORDER, "indeterminate"]
+    confusion: dict[str, dict[str, int]] = {p: dict.fromkeys(columns, 0) for p in predicted_tiers}
     for r in rows:
         col = "indeterminate" if r["indeterminate"] else r["empirical"]
         confusion[r["predicted"]][col] += 1
@@ -251,7 +361,7 @@ def _arm_cost(runs: dict, arm: str, tasks: list[str]) -> float:
 
 
 def _dose_response(trials: dict, runs: dict, task_meta: dict) -> dict:
-    """Per band: mean hard-fraction quality + mean cost for haiku→sonnet→opus."""
+    """Per band: mean hard-fraction quality + mean cost for every arm on the ladder."""
     band_tasks: defaultdict[str, list[str]] = defaultdict(list)
     for tid, meta in task_meta.items():
         band_tasks[tier_for_score(meta["score"])].append(tid)
@@ -261,7 +371,7 @@ def _dose_response(trials: dict, runs: dict, task_meta: dict) -> dict:
         if not ran:
             continue
         per_arm = {}
-        for arm in MODEL_ORDER:
+        for arm in arms_in(trials):
             fracs = []
             for tid in ran:
                 s = arm_task_stats(trials, tid, arm, task_meta[tid]["hard_criteria"])
@@ -320,11 +430,10 @@ def _render_context_pairs(pairs: list[dict]) -> list[str]:
     """Per-pair small→large right-tier shift table (§7); empty for model-tier banks."""
     if not pairs:
         return []
-    order = {"weak": 1, "mid": 2, "strong": 3}
     lines = ["### Context-size: per-pair small→large right-tier shift", ""]
     lines.append(
         "| pair | difficulty | small right-tier | large right-tier | shift "
-        "| haiku small | haiku large | Δ haiku |"
+        "| weak small | weak large | Δ weak |"
     )
     lines.append("|---|---|---|---|---|---|---|---|")
 
@@ -337,19 +446,19 @@ def _render_context_pairs(pairs: list[dict]) -> list[str]:
         sm, lg = e.get("small"), e.get("large")
         shift = "—"
         if sm and lg and not sm["indeterminate"] and not lg["indeterminate"]:
-            so, lo = order[sm["empirical"]], order[lg["empirical"]]
+            so, lo = TIER_ORDER[sm["empirical"]], TIER_ORDER[lg["empirical"]]
             if lo > so:
                 shift = f"↑ {sm['empirical']}→{lg['empirical']}"
             elif lo < so:
                 shift = f"↓ {sm['empirical']}→{lg['empirical']}"
             else:
                 shift = "="
-        hs = _pct(sm["weak_mean"]) if sm and sm.get("weak_mean") is not None else "—"
-        hl = _pct(lg["weak_mean"]) if lg and lg.get("weak_mean") is not None else "—"
+        ws = _pct(sm["weak_mean"]) if sm and sm.get("weak_mean") is not None else "—"
+        wl = _pct(lg["weak_mean"]) if lg and lg.get("weak_mean") is not None else "—"
         dlt = f"{e['weak_delta']:+.2f}" if e.get("weak_delta") is not None else "—"
         diff = f"{e['score']:.0f}" if e.get("score") is not None else "—"
         lines.append(
-            f"| {e['pair']} | {diff} | {emp(sm)} | {emp(lg)} | {shift} | {hs} | {hl} | {dlt} |"
+            f"| {e['pair']} | {diff} | {emp(sm)} | {emp(lg)} | {shift} | {ws} | {wl} | {dlt} |"
         )
     lines.append("")
     return lines
@@ -368,24 +477,31 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     tiers = ["weak", "mid", "strong"]
     lines = [heading, ""]
 
-    # Confusion matrix
-    lines += ["### Calibration: predicted tier vs empirically-right tier", ""]
-    lines.append("| predicted ↓ / empirical → | weak | mid | strong | indeterminate |")
-    lines.append("|---|---|---|---|---|")
+    # Confusion matrix. Empirical columns are the fixed three, then `frontier` ONLY when
+    # a cell uses it (keeps today's scorecards byte-identical; a future fable arm lights
+    # the column up), then indeterminate. Predicted rows never include frontier.
     conf = cal["confusion"]
+    show_frontier = any(conf[p].get("frontier", 0) for p in tiers)
+    emp_cols = (
+        ["weak", "mid", "strong"] + (["frontier"] if show_frontier else []) + ["indeterminate"]
+    )
+    lines += ["### Calibration: predicted tier vs empirically-right tier", ""]
+    lines.append("| predicted ↓ / empirical → | " + " | ".join(emp_cols) + " |")
+    lines.append("|" + "---|" * (len(emp_cols) + 1))
     for p in tiers:
         c = conf[p]
-        lines.append(
-            f"| **{p}** | {c['weak']} | {c['mid']} | {c['strong']} | {c['indeterminate']} |"
-        )
+        lines.append(f"| **{p}** | " + " | ".join(str(c[col]) for col in emp_cols) + " |")
     on_diag = sum(conf[t][t] for t in tiers)
     total = sum(sum(conf[p].values()) for p in tiers)
     lines += ["", f"On-diagonal (well-tuned): **{on_diag}/{total}**.", ""]
 
-    # Per-task detail
+    # Per-task detail. Arm columns are derived from the arms that actually ran, on the
+    # ladder — so a renamed/gated arm (sonnet5, bare-gate) renders, and a 3-arm bank's
+    # header stays byte-identical to `haiku | sonnet | opus`.
     lines += ["### Per-task (hard-criteria quality fraction by arm)", ""]
-    lines.append("| task | score | predicted | empirical | haiku | sonnet | opus | note |")
-    lines.append("|---|---|---|---|---|---|---|---|")
+    arm_cols = sorted({a for r in rows for a in r["means"]}, key=_ladder_key)
+    lines.append("| task | score | predicted | empirical | " + " | ".join(arm_cols) + " | note |")
+    lines.append("|" + "---|" * (len(arm_cols) + 5))
     for r in sorted(rows, key=lambda x: x["score"]):
         m = r["means"]
 
@@ -397,10 +513,10 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
             if r["indeterminate"]
             else ("✓" if r["predicted"] == r["empirical"] else f"{r['predicted']}→{r['empirical']}")
         )
+        cells = " | ".join(cell(a) for a in arm_cols)
+        emp = "?" if r["indeterminate"] else r["empirical"]
         lines.append(
-            f"| {r['task_id']} | {r['score']:.0f} | {r['predicted']} | "
-            f"{'?' if r['indeterminate'] else r['empirical']} | "
-            f"{cell('haiku')} | {cell('sonnet')} | {cell('opus')} | {note} |"
+            f"| {r['task_id']} | {r['score']:.0f} | {r['predicted']} | {emp} | {cells} | {note} |"
         )
     lines.append("")
 
@@ -408,15 +524,17 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     dr = cal["dose_response"]
     if dr:
         lines += ["### Dose-response (quality × cost per upgrade, by band)", ""]
-        lines.append("| band | arm | mean quality | mean $/trial | Δquality vs cheaper |")
+        # Δ is against the arm one step DOWN the ladder (the row above). The rows are
+        # tier-ordered, not dollar-ordered, so the column reads "vs prev arm" not "vs
+        # cheaper" — on the committed ledger sonnet5 (mid) sorts above opus (strong) yet
+        # costs more, and "vs cheaper" would misstate a dollar order the ladder never promises.
+        lines.append("| band | arm | mean quality | mean $/trial | Δquality vs prev arm |")
         lines.append("|---|---|---|---|---|")
         for band in tiers:
             if band not in dr:
                 continue
             prev_q = None
-            for arm in MODEL_ORDER:
-                if arm not in dr[band]:
-                    continue
+            for arm in sorted(dr[band], key=_ladder_key):
                 d = dr[band][arm]
                 dq = "—" if prev_q is None else f"{d['quality'] - prev_q:+.2f}"
                 lines.append(f"| {band} | {arm} | {d['quality']:.2f} | ${d['cost']:.3f} | {dq} |")

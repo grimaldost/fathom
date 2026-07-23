@@ -133,14 +133,16 @@ let fathom **override** these, and must never force its own:
 | Knob | Requirement | Why it matters |
 |---|---|---|
 | `permission_mode` | Overridable; support `default` / `acceptEdits` / `plan` / `bypassPermissions`. Governance resolution **never defaults to `bypassPermissions`** | An arm that auto-approves everything is not comparable to a default-deny arm |
-| model / effort | Pinned per phase from the scenario; **per-PR overrides rejected** at spec-load (`model`, `tier`, `effort`, `budget`) | Otherwise the arm silently uses a stronger model per PR — measuring *models*, not *strategy* |
+| model / effort | Pinned per phase from the scenario; **fathom strips any per-PR `model` / `tier` / `effort` / `budget` / `budgets`** before spawning (`_PER_PR_PINS`) | Otherwise the arm silently uses a stronger model per PR — measuring *models*, not *strategy* |
 | per-spawn budgets | Pinned, recorded (as TOML numbers) | Bounds cost; an explicit recorded choice, not an engine default |
 | parallelism | Off (sequential) | Determinism + clean per-spawn attribution |
 | asset / output paths | Relocatable outside `cwd` via absolute path | Engine assets must not land in the scored workspace — the verifier would fingerprint the arm and break blindness |
 
-*Consumed by:* `_PER_PR_PINS`, `NON_BYPASS_PERMISSION_MODE`, pinned budgets (series.py). convoy
-also enforces the per-PR parity guard itself (`spec.py` rejects the forbidden keys), so fathom's
-stripping is belt-and-braces.
+*Consumed by:* `_PER_PR_PINS`, `NON_BYPASS_PERMISSION_MODE`, pinned budgets (series.py). convoy's
+own `spec.py` rejects only per-PR `budget` / `budgets` — it **accepts** per-PR `model` / `tier` /
+`effort` since its Rollout-2 per-PR governance (convoy ADR-0007). So for model/tier/effort, fathom's
+strip *is* the parity guard, not a redundant belt over convoy; only for the budget keys is it
+belt-and-braces.
 
 ## 7. Failure classification
 

@@ -40,8 +40,10 @@ run = "python -m pytest -q"
 blocking = true
 independent = false
 
-# Per-PR definitions: the DAG. NO per-PR model/tier/effort/budget — those are rejected
-# at spec-load (convoy `_FORBIDDEN_PR_KEYS`) so an arm can't silently use a stronger model.
+# Per-PR definitions: the DAG. NO per-PR model/tier/effort/budget — fathom strips them
+# (`_PER_PR_PINS`) before spawning so an arm can't silently use a stronger model per PR.
+# (convoy itself now ACCEPTS per-PR model/tier/effort — its ADR-0007 governance — and
+# rejects only budget/budgets, so the parity guard here is fathom's strip, not convoy's.)
 [[prs]]
 id = "PR01"
 branch = "<topic>/pr01"

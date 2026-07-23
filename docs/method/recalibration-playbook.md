@@ -3,25 +3,44 @@
 **Purpose.** Keep convoy an efficient agentic-coding tool as the Claude lineup evolves: re-verify
 that the tier map routes the cheapest-adequate model per task difficulty, on the *current* models.
 **Trigger:** a new Claude model ships (esp. a tier's model — Haiku/Sonnet/Opus/Fable), or quarterly.
-**Owner disciplines:** fathom method (ADR/spec/blind-grade/append-only ledger) + `convoy:model-tiers`.
+**Owner disciplines:** fathom method (ADR/spec/blind-grade/append-only ledger) + the model-policy owner bound in Step 0.
 
 A zero-context operator can run this cold. Real spend is ≈ $0 under subscription auth (the numbers are
 token×price *estimates*); still pass `--max-budget-usd` as a hard stop.
 
 ---
 
-## Step 0 — Model freshness (convoy repo)
-Update convoy's tier map + pricing to the current lineup and verify against the **repo source** (edits
-don't reach the installed CLI/plugin until reinstalled — use `uv run` from the convoy repo). convoy
-replaced pr-pilot, so the paths below are the as-built homes (not the old `pr_pilot` package):
+## Step 0 — Model freshness
+**Role:** the model-policy owner — the single place the tier→model map and its downstream mirrors are
+updated. **Bound to:** the humblepowers `choosing-models` skill and its `/refresh-models` command
+(canonical data: `skills/choosing-models/models.toml`).
+
+Run `/refresh-models`, land the changeset it proposes, then continue at Step 1. It owns convoy's
+`src/convoy/core/governance.py` (`DEFAULT_TIER_MODELS`), `src/convoy/core/pricing.py` (`_FAMILY_RATES`),
+`skills/convoy/SKILL.md`'s tier/cost table, `src/convoy/interface/scaffold.py`'s starter model, and
+fathom's own `src/fathom/adapters/claude_cli.py` (`_PRICE_PER_1K`) and
+`docs/method/series-toml-skeleton.md` pins — so you know what NOT to hand-edit. This playbook does not
+co-own them; a mirror edit made here instead is how the two rituals drift apart.
+
+**Fallback (owner not installed / no mirror binding registered).** `/refresh-models` walks its mirror
+sites only when a mirror-sites table is registered in project or user memory, and that binding lives in
+the operator's global config outside this repo — so a bare "run /refresh-models" silently no-ops when
+the plugin or the binding is absent, and this playbook must not hard-depend on a plugin being installed.
+When the owner cannot run, do the walk by hand:
 1. Confirm current model IDs + pricing via the `claude-api` skill (never from memory).
-2. Edit the tier→model map in `src/convoy/core/governance.py` (`DEFAULT_TIER_MODELS`:
-   `weak`/`mid`/`strong` → the current Haiku/Sonnet/Opus ids), and the per-family USD/MTok rates in
-   `src/convoy/core/pricing.py` (`_FAMILY_RATES`).
-3. Mirror any tier/cost table documented in `skills/convoy/SKILL.md`; add a dated changelog row.
+2. convoy repo — edit `DEFAULT_TIER_MODELS` in `src/convoy/core/governance.py`
+   (`weak`/`mid`/`strong` → the current Haiku/Sonnet/Opus ids), the per-family USD/MTok rates in
+   `src/convoy/core/pricing.py` (`_FAMILY_RATES`), the tier/cost table in `skills/convoy/SKILL.md`
+   (add a dated changelog row), and the starter model in `src/convoy/interface/scaffold.py`.
+3. fathom repo — the `_PRICE_PER_1K` rates in `src/fathom/adapters/claude_cli.py` and the pinned
+   model/effort strings in `docs/method/series-toml-skeleton.md`.
 4. Update the governance/pricing-asserting tests; leave explicit-pin tests + historical fixtures alone.
-5. Verify: `uv run --project . convoy validate <series.toml>` (a series' models resolve against the map)
-   · `uv run --project . pytest -q` (convoy's own suite green).
+5. Verify against the **repo source** (edits don't reach an installed CLI/plugin until reinstalled):
+   `uv run --project . convoy validate <series.toml>` · `uv run --project . pytest -q`.
+
+**What stays here:** thresholds. `/refresh-models` classifies a threshold or tier-assignment move as
+needing calibration evidence and routes it back to this playbook — Steps 1-3 produce that evidence.
+Lineup freshness there, threshold evidence here.
 
 ## Step 1 — Calibration re-run (fathom repo), cheaply
 Reuse the `model-tier-v1` bank and the `scenarios/model-tier/` arms. Because the ledger resume-key is
@@ -47,12 +66,14 @@ the changed model costs.
   per-token price ≠ lower per-task cost. Report tokens beside $; treat est $ as list-equivalent.
 
 **Decision rule.** Change the numeric thresholds ONLY on a robust, cross-distribution shift. A single
-narrow distribution at small n → **update the `model-tiers` calibration note, not the thresholds**
-(record the run + the observed direction). Over-fitting global defaults to one corpus is the trap.
+narrow distribution at small n → **update the model-policy owner's calibration note (choosing-models'
+rubric changelog + `models.toml` provenance), not the thresholds** (record the run + the observed
+direction). Over-fitting global defaults to one corpus is the trap.
 
 ## Step 3 — Record
 - fathom report at `docs/reports/YYYY-MM-DD-model-tier-recalibration.md`.
-- convoy `model-tiers` calibration note + changelog updated (evidence + decision).
+- Model-policy owner updated — the choosing-models calibration note / `models.toml` provenance
+  (evidence + decision); via `/refresh-models` where installed.
 - This run-state pattern: keep a `docs/specs/YYYY-MM-DD-recalibration-run-state.md` current so
   auto-compaction can't lose the thread.
 
@@ -63,6 +84,13 @@ narrow distribution at small n → **update the `model-tiers` calibration note, 
 The single highest-leverage improvement is a **"boundary + heterogeneity" task set** — cross-module /
 displaced-cause / backend-parity tasks that *reliably* separate tiers at graded difficulty (not flaky).
 This both sharpens calibration AND unblocks the deferred efficiency study.
+
+The plan of record for this fix is designed in
+[`docs/specs/2026-07-14-tier-separating-bank-design.md`](../specs/2026-07-14-tier-separating-bank-design.md):
+a `model-tier-v2` roster admitted by a cheap **weak-model-fails screen** (a task enters the bank only
+after weak fails / strong passes its hard criteria), crossed **model × oracle-quality** to also settle
+the `choosing-models` oracle-coverage discount (labeled a hypothesis until this runs). Authored, not yet
+run — the paid matrix is a separate budget decision (§ *Deferred* below).
 
 ## Deferred: the efficiency study (needs budget + heterogeneity)
 `pp-native-tier` (per-PR routing) vs `pp-all-<mid>` (flat) vs `pp-fixed-opus` (ceiling), plus a plain-Claude
