@@ -1,0 +1,30 @@
+id = "tier-quote"
+instruction = """
+Add a function `quote_line(qty, unit_price)` to `pricing.py` that prices a single
+order line, applying the bulk discount for the order quantity, and returns a
+formatted line string.
+
+The discount tiers by quantity are:
+
+  - tier 0 (no discount) for orders of fewer than 10 units
+  - tier 1 (5% off)      for orders of 10 or more units
+  - tier 2 (10% off)     for orders of 100 or more units
+
+`pricing.py` already has a `tier_for(qty)` helper that maps a quantity to its
+discount tier. The returned line has the form `"<qty> x <unit_price> = <net>"`,
+with the unit price and net (post-discount) total each shown to two decimals.
+Examples:
+
+  - quote_line(9, 2.00)   -> "9 x 2.00 = 18.00"      (tier 0, no discount)
+  - quote_line(50, 4.00)  -> "50 x 4.00 = 190.00"    (tier 1, 5% off 200.00)
+
+There is a test in `test_pricing.py`; make it pass. You can run it with
+`python test_pricing.py` (it prints an `ok:` line when the cases pass).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

@@ -1,0 +1,15 @@
+id = "pad-label"
+instruction = """
+Shipping labels should show the order id zero-padded to 5 digits, e.g. order 42
+-> "ORDER-00042". Right now `shipping_label(42)` in `labels.py` returns
+"ORDER-42". Fix `shipping_label` so the id is zero-padded to 5 digits (ids with 5
+or more digits are shown as-is, e.g. 12345 -> "ORDER-12345"). There is a test in
+`test_labels.py`; you can run it with `python test_labels.py`.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

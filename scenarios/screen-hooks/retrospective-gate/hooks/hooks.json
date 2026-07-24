@@ -1,0 +1,17 @@
+{
+  "description": "Retrospective discipline gate: block the first Stop once with a reconsideration prompt.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv",
+            "args": ["run", "--no-project", "--", "python", "${CLAUDE_PLUGIN_ROOT}/gate.py"],
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

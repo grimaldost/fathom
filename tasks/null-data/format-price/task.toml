@@ -1,0 +1,15 @@
+id = "format-price"
+instruction = """
+The checkout tool needs to display prices. Add a function `format_price(cents)` to
+`money.py` that formats a whole number of cents as a dollar string with two decimal
+places: 1050 -> "$10.50", 7 -> "$0.07", 0 -> "$0.00". Inputs are always clean
+non-negative integers. There is a test in `test_money.py`; you can run it with
+`python test_money.py`.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

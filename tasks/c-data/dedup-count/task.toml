@@ -1,0 +1,22 @@
+id = "dedup-count"
+instruction = """
+Add a function `unique_customers(rows)` to `customers.py` that returns the number
+of distinct customers in the roster. Each row is a mapping with a "name", e.g.
+`{"name": "Ana"}`, and the roster may list the same customer more than once.
+
+Examples:
+
+  - [{"name": "Ana"}, {"name": "Bob"}, {"name": "Ana"}, {"name": "Cara"}] -> 3
+  - [{"name": "Zoe"}] -> 1
+  - []                -> 0
+
+There is a test in `test_customers.py`; make it pass. You can run it with
+`python test_customers.py` (it prints an `ok:` line when the cases pass).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

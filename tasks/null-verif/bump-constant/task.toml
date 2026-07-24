@@ -1,0 +1,12 @@
+id = "bump-constant"
+instruction = """
+In `settings.py` there is a module-level constant `MAX_RETRIES` that is currently
+set to 3. Change it to 5. Nothing else in the file needs to change.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

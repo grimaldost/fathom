@@ -1,0 +1,13 @@
+id = "add-docstring"
+instruction = """
+`geometry.py` has a function `area(w, h)` that returns the rectangle area `w * h`,
+but it has no docstring. Add a one-line docstring to `area` describing what it
+returns. Do not change its behavior.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

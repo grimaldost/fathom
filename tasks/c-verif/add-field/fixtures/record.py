@@ -1,0 +1,17 @@
+"""Line serializer for the address-book export.
+
+Each contact record is a dict serialized to a single pipe-delimited line by
+``to_line`` and read back by ``from_line`` -- the two are a round trip:
+``from_line(to_line(rec)) == rec``.
+"""
+
+
+def to_line(rec):
+    """Serialize a record dict to a pipe-delimited line."""
+    return f"{rec['name']}|{rec['email']}|{rec['phone']}"
+
+
+def from_line(s):
+    """Parse a pipe-delimited line back into a record dict."""
+    name, email, phone = s.split("|")
+    return {"name": name, "email": email, "phone": phone}

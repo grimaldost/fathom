@@ -1,0 +1,5 @@
+{
+  "name": "detector-nudge",
+  "version": "0.0.1",
+  "description": "Lane-3 arm 5a+5b: deterministic action-stream detector that fires a discipline nudge once, mid-trajectory, via PostToolUse additionalContext."
+}

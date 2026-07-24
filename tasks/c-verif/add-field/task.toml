@@ -1,0 +1,17 @@
+id = "add-field"
+instruction = """
+`record.py` serializes contact records to one delimited line each, for the
+address-book export. Records now also carry a short category `tag` (for example
+`"vip"` or `"lead"`). Update `to_line` in `record.py` so the serialized line
+includes the record's `tag`.
+
+There is a test in `test_roundtrip.py`; you can run it with
+`python test_roundtrip.py` (it prints an `ok:` line when it passes).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

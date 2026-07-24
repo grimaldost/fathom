@@ -1,0 +1,17 @@
+id = "theme-field"
+instruction = """
+`settings_codec.py` serializes a user-settings dict to one line and reads it back,
+for the preferences export. Settings now also carry a `theme` (for example "dark"
+or "light"). Update `dump` in `settings_codec.py` so the serialized line includes
+the settings' `theme`.
+
+There is a test in `test_roundtrip.py`; you can run it with
+`python test_roundtrip.py` (it prints an `ok:` line when it passes).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

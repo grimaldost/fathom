@@ -1,0 +1,5 @@
+{
+  "name": "retrospective-gate",
+  "version": "0.0.1",
+  "description": "Lane-3 arm 5e: end-of-turn gate. On the first Stop, block once and inject a 'did you apply the discipline?' reconsideration prompt."
+}

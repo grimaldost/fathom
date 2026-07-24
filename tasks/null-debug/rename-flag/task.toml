@@ -1,0 +1,14 @@
+id = "rename-flag"
+instruction = """
+Dark mode won't turn on. In `config.py` the feature-flag key for dark mode is
+misspelled "darkmoed", so `is_enabled("darkmode")` returns False. Fix the key so
+dark mode can be enabled. There is a test in `test_config.py`; you can run it with
+`python test_config.py`.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

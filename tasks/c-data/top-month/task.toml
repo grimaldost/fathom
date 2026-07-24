@@ -1,0 +1,18 @@
+id = "top-month"
+instruction = """
+Add a function `top_month(rows)` to `sales.py` that returns the month with the
+highest total sales amount. `rows` is a list of dicts like
+{"month": "Jan", "amount": "20.00"} (the amount is a string). When several rows
+share a month, add their amounts together and return the month label (a string)
+with the greatest total.
+
+There is a test in `test_sales.py`; make it pass. You can run it with
+`python test_sales.py` (it prints an `ok:` line when the cases pass).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

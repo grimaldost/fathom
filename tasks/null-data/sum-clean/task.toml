@@ -1,0 +1,15 @@
+id = "sum-clean"
+instruction = """
+In `totals.py` we have a list of sales line items. Each line item is a dict with a
+`sku` and an `amount`, and every amount is a plain float. Add a function
+`grand_total(rows)` to `totals.py` that returns the sum of the `amount` field across
+the given rows. There is a test in `test_totals.py`; you can run it with
+`python test_totals.py`.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

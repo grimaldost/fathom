@@ -1,0 +1,19 @@
+id = "pack-summary"
+instruction = """
+Add a function `packing_summary(items, per_box)` to `packing.py` that returns a
+short human-readable summary of how the items pack into boxes. Examples:
+
+  - 25 items at 10 per box -> "3 boxes (last box holds 5)"
+  - 20 items at 10 per box -> "2 boxes (last box holds 10)"
+  - 7 items at 10 per box  -> "1 box (last box holds 7)"   (note the singular "box")
+
+There is a test in `test_packing.py`; make it pass. You can run it with
+`python test_packing.py` (it prints an `ok:` line when the cases pass).
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"
