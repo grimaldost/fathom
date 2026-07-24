@@ -662,6 +662,7 @@ class ClaudeCliRunner:
                     result_text="claude CLI not found on PATH",
                     cli_version=self.cli_version,
                 )
+            self._tee_stream(proc.stdout or "", attempt)
             parsed = self._parse(proc.stdout or "")
             success = proc.returncode == 0 and not parsed.is_error
             # Infrastructure (never scored, never retried). A usage-limit/quota signature is
@@ -689,6 +690,29 @@ class ClaudeCliRunner:
 
     def _parse(self, stdout: str) -> _Parsed:
         return parse_stream(stdout.splitlines()) if self.stream else parse_result_json(stdout)
+
+    @staticmethod
+    def _tee_stream(stdout: str, attempt: int) -> None:
+        """Persist the raw spawn stdout when FATHOM_STREAM_DIR is set (opt-in).
+
+        The parsed RunRecord keeps only economy/result fields; post-hoc analyses
+        (tool-invocation counts, skill-activation measurement) need the raw
+        stream events, which are otherwise discarded. FATHOM_STREAM_TAG (set by
+        the run loop per trial) names the file. Best-effort: a persistence
+        failure must never affect the trial.
+        """
+        stream_dir = os.environ.get("FATHOM_STREAM_DIR")
+        if not stream_dir or not stdout:
+            return
+        try:
+            tag = os.environ.get("FATHOM_STREAM_TAG", "untagged")
+            safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in tag)
+            out = Path(stream_dir)
+            out.mkdir(parents=True, exist_ok=True)
+            name = f"{safe}--a{attempt}--{int(time.time() * 1000)}.ndjson"
+            (out / name).write_text(stdout, encoding="utf-8")
+        except OSError:
+            pass
 
     def _build_record(
         self,

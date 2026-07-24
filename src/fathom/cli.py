@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import os
 import pathlib
 import sys
 from typing import Any, Callable, TextIO
@@ -205,6 +206,9 @@ def run_matrix(
 
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
+        # Names the raw-stream file the adapter tees when FATHOM_STREAM_DIR is
+        # set (opt-in post-hoc analysis); harmless otherwise.
+        os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
         executor = _executor_factory(sc)
         runner = _runner_factory(sc)
 

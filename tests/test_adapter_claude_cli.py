@@ -828,3 +828,44 @@ if __name__ == "__main__":
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
     sys.exit(0 if result.wasSuccessful() else 1)
+
+
+# --- FATHOM_STREAM_DIR opt-in raw-stream tee (post-hoc activation analysis) ---
+
+
+def test_tee_stream_inert_without_env(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.delenv("FATHOM_STREAM_DIR", raising=False)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_tee_stream_writes_tagged_file(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm/tier--task--r0")
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2)
+    files = list(tmp_path.iterdir())
+    assert len(files) == 1
+    name = files[0].name
+    assert name.startswith("bank--arm_tier--task--r0--a2--"), name  # '/' sanitized
+    assert files[0].read_text(encoding="utf-8").count('"type"') == 2
+
+
+def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    blocker = tmp_path / "afile"
+    blocker.write_text("x", encoding="utf-8")
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(blocker / "sub"))  # dir under a file
+    ClaudeCliRunner._tee_stream("data", 1)  # must not raise
+
+
+def test_tee_stream_skips_empty_stdout(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    ClaudeCliRunner._tee_stream("", 1)
+    assert list(tmp_path.iterdir()) == []

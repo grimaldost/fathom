@@ -1,0 +1,22 @@
+name = "rg2x2-data-gate-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[plugins]
+mount = [
+    "../rg-assets/plugins-baseline/humblepowers",
+    "../rg-assets/plugins-baseline/engineering-discipline",
+    "../rg-assets/plugins-baseline/session-workflow",
+]
+
+[context]
+inject = "../rg-assets/forced-eval.md"
+
+[limits]
+trial_timeout_s = 600
