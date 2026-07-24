@@ -21,8 +21,12 @@ dev = ["ruff", "pytest"]
 target-version = "py312"
 line-length = 100
 exclude = [
+    # Vendored/mounted plugin trees are byte-preserved fixtures, not source:
+    # reformatting them would mutate the plugin-under-test. Every vendoring
+    # location must be listed here or CI re-breaks (3rd occurrence).
     "tasks/*/plugins",
     "scenarios/*/assets",
+    "scenarios/*-assets",
 ]
 
 [tool.ruff.format]
