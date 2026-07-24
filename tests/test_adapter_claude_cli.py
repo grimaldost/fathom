@@ -241,6 +241,31 @@ class TestIsolation(AdapterTestBase):
         finally:
             cleanup_dir(cfg)
 
+    def test_make_isolated_config_writes_scenario_settings(self):
+        """A scenario-declared settings_file is written as settings.json next to
+        the credential — an explicit per-arm treatment (the user's real
+        settings.json stays excluded, test above)."""
+        real = self._fake_real_config()
+        holder = Path(tempfile.mkdtemp(prefix="arm_settings_"))
+        self.addCleanup(cleanup_dir, str(holder))
+        body = '{"hooks": {"PreToolUse": []}}'
+        (holder / "arm.json").write_text(body, encoding="utf-8")
+        cfg = make_isolated_config(real, settings_file=str(holder / "arm.json"))
+        try:
+            self.assertEqual(sorted(os.listdir(cfg)), [".credentials.json", "settings.json"])
+            self.assertEqual((Path(cfg) / "settings.json").read_text(encoding="utf-8"), body)
+        finally:
+            cleanup_dir(cfg)
+
+    def test_make_isolated_config_no_settings_by_default(self):
+        """Without a settings_file the isolated config has no settings.json."""
+        real = self._fake_real_config()
+        cfg = make_isolated_config(real)
+        try:
+            self.assertNotIn("settings.json", os.listdir(cfg))
+        finally:
+            cleanup_dir(cfg)
+
     def test_execute_spawns_with_credentials_only_config(self):
         spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
         runner = self.make_runner(spawn)

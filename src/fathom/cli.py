@@ -343,6 +343,15 @@ def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | 
             f"missing/unreadable ({inject}); the treatment arm would spawn UN-SKILLED",
             file=sys.stderr,
         )
+    settings_file = scenario.settings.inject
+    if settings_file is not None and not pathlib.Path(settings_file).is_file():
+        # The treatment arm declares a settings.json that is missing/unreadable:
+        # the spawn would carry no hook and silently degrade to the control.
+        print(
+            f"WARNING: scenario '{scenario.name}' declares settings.inject but the file is "
+            f"missing/unreadable ({settings_file}); the treatment arm would spawn UN-HOOKED",
+            file=sys.stderr,
+        )
     for mount_dir in scenario.plugins.mount:
         p = pathlib.Path(mount_dir)
         try:
@@ -364,6 +373,7 @@ def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | 
         disallowed_tools=scenario.tools.disallowed,
         append_system_prompt_file=inject,
         plugin_dirs=scenario.plugins.mount,
+        settings_file=settings_file,
         **budget_kw,
     )
 

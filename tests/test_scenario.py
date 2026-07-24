@@ -16,6 +16,7 @@ from fathom.scenario import (
     PluginsConfig,
     ResolvedScenario,
     ScenarioConfig,
+    SettingsConfig,
     ToolsConfig,
     compute_config_hash,
     load_scenario,
@@ -625,6 +626,95 @@ class TestPluginMount(unittest.TestCase):
                 expected_hash,
                 f"{filename}: config_hash shifted — would break committed ledger resume keys",
             )
+
+
+class TestSettingsInjection(unittest.TestCase):
+    """The [settings] inject field: a treatment scenario writes a settings.json
+    into the spawn's isolated config dir, so a user-scope hook (e.g. a PreToolUse
+    rewrite) is active for the arm — the one thing a plugin mount cannot deliver
+    in headless `claude -p`. Absent inject == no settings (hash-stable vs
+    committed ledgers); the file's *content* (sha256), not the path, enters
+    config_hash. Distinct axis from [context]: identical bodies must not collide."""
+
+    def _write(self, tmp: Path, settings_block: str) -> Path:
+        p = tmp / "s.toml"
+        p.write_text(
+            'name = "s"\n'
+            'adapter = "claude-cli"\n'
+            'model = "m"\n'
+            'strategy = "single-session"\n'
+            'effort = "high"\n'
+            '[tools]\nsource = "none"\nallowed = ["Read"]\n'
+            f"{settings_block}\n",
+            encoding="utf-8",
+        )
+        return p
+
+    def test_absent_and_empty_settings_hash_identically(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            r = StubResolver()
+            absent = resolve_scenario(load_scenario(self._write(tmp, "")), r)
+            empty = resolve_scenario(load_scenario(self._write(tmp, "[settings]")), r)
+            self.assertEqual(absent.config_hash, empty.config_hash)
+
+    def test_setting_inject_changes_hash(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            (tmp / "settings.json").write_text('{"hooks": {}}', encoding="utf-8")
+            r = StubResolver()
+            without = resolve_scenario(load_scenario(self._write(tmp, "")), r)
+            armed = resolve_scenario(
+                load_scenario(self._write(tmp, '[settings]\ninject = "settings.json"')), r
+            )
+            self.assertNotEqual(without.config_hash, armed.config_hash)
+
+    def test_different_bodies_hash_differently(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            (tmp / "a.json").write_text('{"hooks": {"PreToolUse": []}}', encoding="utf-8")
+            (tmp / "b.json").write_text('{"hooks": {"PreToolUse": [1]}}', encoding="utf-8")
+            r = StubResolver()
+            ra = resolve_scenario(
+                load_scenario(self._write(tmp, '[settings]\ninject = "a.json"')), r
+            )
+            rb = resolve_scenario(
+                load_scenario(self._write(tmp, '[settings]\ninject = "b.json"')), r
+            )
+            self.assertNotEqual(ra.config_hash, rb.config_hash)
+
+    def test_inject_resolved_relative_to_scenario_dir(self):
+        import os
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            (tmp / "settings.json").write_text("{}", encoding="utf-8")
+            cfg = load_scenario(self._write(tmp, '[settings]\ninject = "settings.json"'))
+            self.assertIsInstance(cfg.settings, SettingsConfig)
+            self.assertTrue(os.path.isabs(cfg.settings.inject))
+            self.assertTrue(Path(cfg.settings.inject).is_file())
+
+    def test_settings_and_context_are_distinct_axes(self):
+        """A [settings] inject and a [context] inject with identical bodies must
+        not produce the same hash — they are different treatment channels."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            (tmp / "x").write_text("SAME BODY", encoding="utf-8")
+            r = StubResolver()
+            as_ctx = resolve_scenario(load_scenario(self._write(tmp, '[context]\ninject = "x"')), r)
+            as_set = resolve_scenario(
+                load_scenario(self._write(tmp, '[settings]\ninject = "x"')), r
+            )
+            self.assertNotEqual(as_ctx.config_hash, as_set.config_hash)
 
 
 if __name__ == "__main__":

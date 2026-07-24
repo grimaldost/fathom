@@ -100,11 +100,18 @@ _CONFIG_COPY_ALLOWLIST = frozenset({".credentials.json"})
 # ---------------------------------------------------------------------------
 
 
-def make_isolated_config(real_config: str | None = None) -> str:
+def make_isolated_config(real_config: str | None = None, settings_file: str | None = None) -> str:
     """Create a temp CLAUDE_CONFIG_DIR that is authenticated and nothing else.
 
-    Only the credential file is copied — no CLAUDE.md, no settings.json, no
-    history, no plugins.  Caller cleans up with :func:`cleanup_dir`.
+    Only the credential file is copied FROM THE REAL CONFIG — no CLAUDE.md, no
+    settings.json, no history, no plugins.  Caller cleans up with
+    :func:`cleanup_dir`.
+
+    ``settings_file`` is an OPTIONAL scenario-declared settings.json written into
+    the dir as ``settings.json`` — an explicit per-arm treatment (e.g. a
+    user-scope PreToolUse hook which, unlike a plugin hook, DOES fire in headless
+    ``claude -p``). It is the arm's own declaration, not the user's real
+    settings.json (which stays excluded — the point of the allowlist).
     """
     real = Path(real_config or (Path.home() / ".claude"))
     dest = Path(tempfile.mkdtemp(prefix="fathom_cfg_"))
@@ -115,6 +122,11 @@ def make_isolated_config(real_config: str | None = None) -> str:
                 shutil.copy2(src, dest / name)
             except OSError:
                 pass  # locked/unreadable; the smoke gate catches a dead config
+    if settings_file:
+        try:
+            shutil.copy2(settings_file, dest / "settings.json")
+        except OSError:
+            pass  # missing/unreadable; the factory warns and the arm degrades to control
     return str(dest)
 
 
@@ -563,6 +575,7 @@ class ClaudeCliRunner:
         disallowed_tools: Sequence[str] = (),
         append_system_prompt_file: str | None = None,
         plugin_dirs: Sequence[str] = (),
+        settings_file: str | None = None,
         real_config_dir: str | None = None,
         max_attempts: int = 3,
         default_max_turns: int = 30,
@@ -578,6 +591,7 @@ class ClaudeCliRunner:
         self.disallowed_tools = tuple(disallowed_tools)
         self.append_system_prompt_file = append_system_prompt_file
         self.plugin_dirs = tuple(plugin_dirs)
+        self.settings_file = settings_file
         self.real_config_dir = real_config_dir
         self.max_attempts = max_attempts
         self.default_max_turns = default_max_turns
@@ -607,7 +621,7 @@ class ClaudeCliRunner:
         """
         timeout = scenario.limits.trial_timeout_s or self.default_timeout_s
         turns = max_turns if max_turns else self.default_max_turns
-        config_dir = make_isolated_config(self.real_config_dir)
+        config_dir = make_isolated_config(self.real_config_dir, settings_file=self.settings_file)
         try:
             return self._run(
                 prompt,
