@@ -56,6 +56,26 @@ class ContextConfig:
 
 
 @dataclasses.dataclass(frozen=True)
+class SettingsConfig:
+    """Per-scenario Claude Code settings.json injected into the spawn's isolated
+    config dir (the treatment arm).
+
+    ``inject`` is an absolute path to a JSON file written verbatim as
+    ``<CLAUDE_CONFIG_DIR>/settings.json`` at spawn time, so a *user-scope* hook
+    (e.g. a PreToolUse command rewrite) is active for the arm — the one thing a
+    ``[plugins]`` mount cannot deliver, because plugin hooks do not fire in
+    headless ``claude -p`` while user-settings hooks do. ``None`` means no
+    settings (the control arm). Like ``[context]``, the file's *content* (sha256)
+    — not the path — enters ``config_hash``: editing the body forks longitudinal
+    history; relocating the file does not. This is an EXPLICIT per-arm treatment,
+    distinct from the user's real settings.json (which stays excluded from the
+    isolated config, ADR-0004); the injected file is the arm's own declaration.
+    """
+
+    inject: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
 class PluginsConfig:
     """Per-scenario plugin mounts.
 
@@ -115,6 +135,7 @@ class ScenarioConfig:
     tools: ToolsConfig
     limits: LimitsOverride
     context: ContextConfig = dataclasses.field(default_factory=ContextConfig)
+    settings: SettingsConfig = dataclasses.field(default_factory=SettingsConfig)
     plugins: PluginsConfig = dataclasses.field(default_factory=PluginsConfig)
     env: EnvConfig = dataclasses.field(default_factory=EnvConfig)
     gate: GateConfig = dataclasses.field(default_factory=GateConfig)
@@ -141,6 +162,7 @@ class ResolvedScenario:
     tool_invocation_cmd: str | None  # e.g. "uv run --project <repo> convoy"
     config_hash: str  # SHA-256 over canonicalized resolved scenario
     context: ContextConfig = dataclasses.field(default_factory=ContextConfig)
+    settings: SettingsConfig = dataclasses.field(default_factory=SettingsConfig)
     plugins: PluginsConfig = dataclasses.field(default_factory=PluginsConfig)
     env: EnvConfig = dataclasses.field(default_factory=EnvConfig)
     gate: GateConfig = dataclasses.field(default_factory=GateConfig)
@@ -222,6 +244,8 @@ def _resolved_to_dict(
     tool_invocation_cmd: str | None,
     inject_set: bool = False,
     inject_sha: str | None = None,
+    settings_set: bool = False,
+    settings_sha: str | None = None,
     plugins_entries: list | None = None,
     env_vars: list | None = None,
     gate_extra: list | None = None,
@@ -237,6 +261,10 @@ def _resolved_to_dict(
     The ``plugins`` block is included only when ``plugins_entries`` is a
     non-empty list, for the same reason: absent ``[plugins]`` and empty
     ``mount`` must not shift existing resume keys (ADR-0002).
+
+    The ``settings`` block mirrors ``context`` exactly (conditional on
+    ``settings_set``) and is keyed under its own name, so a body injected as
+    settings never collides with the same body injected as context.
     """
     d = {
         "adapter": adapter,
@@ -252,6 +280,8 @@ def _resolved_to_dict(
     }
     if inject_set:
         d["context"] = {"inject_sha": inject_sha}
+    if settings_set:
+        d["settings"] = {"inject_sha": settings_sha}
     if plugins_entries:
         d["plugins"] = plugins_entries
     if env_vars:
@@ -314,6 +344,15 @@ def load_scenario(path: Path) -> ScenarioConfig:
         inject = str(inject_path.resolve())
     context = ContextConfig(inject=inject)
 
+    settings_raw = data.get("settings", {})
+    settings_inject = settings_raw.get("inject")
+    if settings_inject is not None:
+        settings_path = Path(settings_inject)
+        if not settings_path.is_absolute():
+            settings_path = path.parent / settings_path
+        settings_inject = str(settings_path.resolve())
+    settings = SettingsConfig(inject=settings_inject)
+
     plugins_raw = data.get("plugins", {})
     raw_mount = plugins_raw.get("mount", [])
     abs_mount = []
@@ -339,6 +378,7 @@ def load_scenario(path: Path) -> ScenarioConfig:
         tools=tools,
         limits=limits,
         context=context,
+        settings=settings,
         plugins=plugins,
         env=env,
         gate=gate,
@@ -370,6 +410,15 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
             # bucket (fathom never lets longitudinal history silently fork).
             inject_sha = "<unreadable>:" + config.context.inject
 
+    settings_sha: str | None = None
+    if config.settings.inject:
+        try:
+            settings_sha = hashlib.sha256(Path(config.settings.inject).read_bytes()).hexdigest()
+        except OSError:
+            # Same discipline as context.inject: a missing settings file is discriminated
+            # by path so two distinct-but-missing arms never share a ledger bucket.
+            settings_sha = "<unreadable>:" + config.settings.inject
+
     plugins_entries: list | None = None
     if config.plugins.mount:
         plugins_entries = []
@@ -390,6 +439,8 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
         tool_invocation_cmd=tool_invocation_cmd,
         inject_set=bool(config.context.inject),
         inject_sha=inject_sha,
+        settings_set=bool(config.settings.inject),
+        settings_sha=settings_sha,
         plugins_entries=plugins_entries,
         env_vars=[list(p) for p in config.env.vars] or None,
         gate_extra=list(config.gate.extra) or None,
@@ -409,6 +460,7 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
         tool_invocation_cmd=tool_invocation_cmd,
         config_hash=config_hash,
         context=config.context,
+        settings=config.settings,
         plugins=config.plugins,
         env=config.env,
         gate=config.gate,
