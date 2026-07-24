@@ -1,0 +1,22 @@
+name = "rg2x2-debug-both-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[plugins]
+mount = [
+    "../rg-assets/plugins-directive/humblepowers",
+    "../rg-assets/plugins-directive/engineering-discipline",
+    "../rg-assets/plugins-directive/session-workflow",
+]
+
+[context]
+inject = "../rg-assets/forced-eval.md"
+
+[limits]
+trial_timeout_s = 600
