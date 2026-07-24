@@ -23,3 +23,6 @@ tasks/*/plugins/superpowers@*/
 
 # per-phase scenario staging dirs (copies of scenarios/ablation-v2 arms)
 scenarios/_p*/
+streams-screen/
+streams-smoke/
+ledger-smoke/

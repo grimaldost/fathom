@@ -1,0 +1,38 @@
+{
+  "note": "FRESH SEALED oblique-selection holdout for the Lane-1 selection-recall screen (2026-07-24). Prompts are paraphrased so they do NOT use the target skill's trigger words. Never re-fit; measure each selector against it ONCE. Distinct from the two existing sealed sets (dispatch-router-recall.json, dispatch-router-adversarial.json).",
+  "labels": [
+    "humblepowers:systematic-debugging",
+    "engineering-discipline:data-engineering-discipline",
+    "humblepowers:verification-before-completion",
+    "humblepowers:test-driven-development",
+    "humblepowers:brainstorming",
+    "humblepowers:receiving-code-review",
+    "none"
+  ],
+  "items": [
+    {"prompt": "I patched the thing that was throwing, but the same trouble popped up in another spot a minute later.", "skill": "humblepowers:systematic-debugging"},
+    {"prompt": "Every time I smooth over one of these failures a fresh one shows up right next to it.", "skill": "humblepowers:systematic-debugging"},
+    {"prompt": "The error went away where I changed it but it clearly came back somewhere else in a different shape.", "skill": "humblepowers:systematic-debugging"},
+    {"prompt": "I keep slapping little fixes on this and it keeps coming apart in new places.", "skill": "humblepowers:systematic-debugging"},
+    {"prompt": "When I add up the rows in my monthly summary by hand the overall figure comes out different from what it reports.", "skill": "engineering-discipline:data-engineering-discipline"},
+    {"prompt": "A handful of entries seem to quietly disappear from the grouped counts.", "skill": "engineering-discipline:data-engineering-discipline"},
+    {"prompt": "The rolled-up numbers look believable but a couple of them are just wrong when I check the source.", "skill": "engineering-discipline:data-engineering-discipline"},
+    {"prompt": "Some of my totals are double what they should be after I combined the two feeds.", "skill": "engineering-discipline:data-engineering-discipline"},
+    {"prompt": "I want to be sure this edit didn't quietly break something that used to work before I hand it off.", "skill": "humblepowers:verification-before-completion"},
+    {"prompt": "How do I convince myself the old behaviour still holds now that I've changed this function.", "skill": "humblepowers:verification-before-completion"},
+    {"prompt": "I'm about to call this finished but I haven't actually confirmed it does what it should.", "skill": "humblepowers:verification-before-completion"},
+    {"prompt": "Before I ship this I'd like something that would catch it if the change slipped a regression in.", "skill": "humblepowers:verification-before-completion"},
+    {"prompt": "I'm starting a brand-new helper from scratch and I'd like to pin down the checks it must satisfy before I write it.", "skill": "humblepowers:test-driven-development"},
+    {"prompt": "Let's build this feature by describing the expected outcomes first and letting them drive the code.", "skill": "humblepowers:test-driven-development"},
+    {"prompt": "This ask is pretty fuzzy and bundles a few different things together; help me pin down what we're actually building before any code.", "skill": "humblepowers:brainstorming"},
+    {"prompt": "I don't have a clear shape for this yet, can we talk through the design and trade-offs first.", "skill": "humblepowers:brainstorming"},
+    {"prompt": "A colleague left a bunch of remarks on my change and I'm not sure which ones I actually agree with.", "skill": "humblepowers:receiving-code-review"},
+    {"prompt": "Someone pushed back on my patch in review; help me weigh whether their points hold up.", "skill": "humblepowers:receiving-code-review"},
+    {"prompt": "Please rename this variable to something clearer.", "skill": "none"},
+    {"prompt": "Bump the copyright year in the file header to the current one.", "skill": "none"},
+    {"prompt": "Add a one-line docstring to this function describing what it returns.", "skill": "none"},
+    {"prompt": "Change the default page size constant from 20 to 50.", "skill": "none"},
+    {"prompt": "Reformat this file so the imports are alphabetised.", "skill": "none"},
+    {"prompt": "Fix the typo in this log message: 'recieved' should be 'received'.", "skill": "none"}
+  ]
+}
