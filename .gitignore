@@ -26,3 +26,11 @@ scenarios/_p*/
 streams-screen/
 streams-smoke/
 ledger-smoke/
+
+# Phase-2 raw spawn-stdout captures (29MB) and console logs - not artifacts.
+# The ledger (ledger-phase2/) IS committed: it is the experiment's raw record.
+streams-phase2a/
+streams-phase2c/
+streams-phase2-smoke/
+ledger-phase2-smoke/
+screen-run.log

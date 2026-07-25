@@ -1,0 +1,20 @@
+name = "phase2-e1-verif-gated-sub-opus"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/s1/scenarios/phase2-hooks/subagent-verify-gate",
+]
+
+[limits]
+trial_timeout_s = 600
+
+[context]
+inject = "../phase2-assets/delegate-subagent.md"

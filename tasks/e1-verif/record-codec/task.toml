@@ -1,0 +1,17 @@
+id = "record-codec"
+instruction = """
+Our records are saved one per line by joining their fields with a `|` and split
+back apart on load. Some saved records come back garbled or fail to load -- it
+happens when a field's own text contains a `|` character. Make the save/load
+round-trip survive field values that contain a `|`, so a record always loads back
+exactly as it was dumped. Keep the plain cases working and the public `dump` /
+`load` API unchanged.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 120

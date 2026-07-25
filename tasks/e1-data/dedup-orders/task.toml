@@ -1,0 +1,14 @@
+id = "dedup-orders"
+instruction = """
+The totals in our per-category spend summary look off for one category. When I
+check the receipts, one category is coming out higher than the transactions for
+it actually add up to, while the other categories look right. Can you take a look
+at the rollup and get the category totals to match the real transactions?
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

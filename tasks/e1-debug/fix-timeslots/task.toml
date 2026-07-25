@@ -1,0 +1,16 @@
+id = "fix-timeslots"
+instruction = """
+Our booking view shows a window of time as a strip of numbered slots you can
+click. The slots keep coming up short: a 65-minute window offered in 30-minute
+slots only shows 2 slots, so the final 5 minutes are stranded in a 3rd slot that
+nobody can click through to. A 65-minute window at 30 minutes per slot should
+offer 3 slots (1, 2, 3). Please fix the slot strip so every minute of the window
+is reachable from the slot numbers.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 40
+
+[verify]
+entry = "verify.py"

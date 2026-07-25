@@ -1,0 +1,5 @@
+{
+  "name": "subagent-verify-gate",
+  "version": "0.0.1",
+  "description": "Phase-2 gated-sub arm: a SubagentStop verification-before-completion gate that blocks each subagent once and injects a reconsideration."
+}
