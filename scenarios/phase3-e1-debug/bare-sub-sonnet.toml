@@ -1,0 +1,15 @@
+name = "phase3-e1-debug-bare-sub-sonnet"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[limits]
+trial_timeout_s = 600
+
+[context]
+inject = "../phase2-assets/delegate-subagent.md"

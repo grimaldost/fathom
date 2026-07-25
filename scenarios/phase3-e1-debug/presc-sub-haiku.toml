@@ -1,0 +1,24 @@
+name = "phase3-e1-debug-presc-sub-haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/s1/scenarios/phase3-hooks/subagent-gate-multi",
+]
+
+[env]
+GATE_DISCIPLINE = "debug"
+GATE_REGISTER = "prescriptive"
+
+[limits]
+trial_timeout_s = 600
+
+[context]
+inject = "../phase2-assets/delegate-subagent.md"

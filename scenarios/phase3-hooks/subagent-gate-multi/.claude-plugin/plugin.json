@@ -1,0 +1,5 @@
+{
+  "name": "subagent-gate-multi",
+  "version": "0.0.1",
+  "description": "Phase-3: one SubagentStop gate parameterized by GATE_DISCIPLINE x GATE_REGISTER, to test whether the discipline-vs-prescriptive wording effect generalizes beyond verification."
+}
