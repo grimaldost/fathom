@@ -1,0 +1,47 @@
+name = "serena"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# ARMING NOTE (2026-07-25): a plugin-mounted MCP server's tools are named
+# mcp__plugin_<plugin-name>_<server-name>__<tool>, NOT mcp__<server-name>__<tool>.
+# The first authoring of this arm allowed "mcp__serena", which matched nothing, so
+# all 23 serena tools were denied under headless default-deny and the arm ran
+# unarmed (ledger/archive/serena-nav-v1-*.jsonl). Verify with arming_probe.py
+# before any paid run.
+[tools]
+source = "none"
+allowed = [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Bash(python:*)",
+    "mcp__plugin_serena-arm_serena",
+    "mcp__plugin_serena-arm_serena__activate_project",
+    "mcp__plugin_serena-arm_serena__get_symbols_overview",
+    "mcp__plugin_serena-arm_serena__find_symbol",
+    "mcp__plugin_serena-arm_serena__find_referencing_symbols",
+    "mcp__plugin_serena-arm_serena__find_declaration",
+    "mcp__plugin_serena-arm_serena__find_implementations",
+    "mcp__plugin_serena-arm_serena__replace_symbol_body",
+    "mcp__plugin_serena-arm_serena__rename_symbol",
+    "mcp__plugin_serena-arm_serena__insert_after_symbol",
+    "mcp__plugin_serena-arm_serena__insert_before_symbol",
+    "mcp__plugin_serena-arm_serena__replace_content",
+    "mcp__plugin_serena-arm_serena__replace_in_files",
+    "mcp__plugin_serena-arm_serena__safe_delete_symbol",
+    "mcp__plugin_serena-arm_serena__get_diagnostics_for_file",
+    "mcp__plugin_serena-arm_serena__initial_instructions",
+]
+
+[context]
+inject = "assets/serena-brief.md"
+
+[plugins]
+mount = ["assets/serena-plugin"]
+
+[limits]
+trial_timeout_s = 900

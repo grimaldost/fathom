@@ -1,0 +1,18 @@
+id = "rename-reconcile"
+instruction = """This repository is a large Python package (~420 modules across 14 domains). Rename the function `reconcile` defined in `reconciler/core/engine.py` to `reconcile_entries`, and update every genuine reference to it - direct imports, aliased imports, module-attribute calls, and the package re-exports in `reconciler/__init__.py` and `reconciler/core/__init__.py` - so the full test suite passes.
+
+The word "reconcile" also appears in roughly 150 unrelated modules: same-named methods on unrelated classes (`def reconcile(self)`), near-miss function names (`reconcile_batch`, `pre_reconcile`), docstrings, comments, and string literals. Those files are NOT references to the function you are renaming and must be left byte-for-byte unchanged. Any edit to one of them fails the task.
+
+Run `python -m pytest -q` to confirm the suite is green before finishing."""
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 300
+hard_criteria = ["decoys_byte_identical", "no_stale_genuine_refs"]
+
+[gate]
+run = "python -m pytest -q"

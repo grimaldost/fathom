@@ -1,0 +1,20 @@
+id = "disambiguate-fee"
+instruction = """This repository is a large Python package (~420 modules across 14 domains). The fee amount produced by the daily pipeline (`reconciler/pipelines/daily.py`) is wrong: the fee function it ultimately calls rounds to 1 decimal place, and it must round to 2.
+
+Four different modules under `reconciler/fees/` each define a function named `apply_fee`. Only one of them is actually reached from the daily pipeline. Find that one and change its rounding to 2 decimal places.
+
+The other three `apply_fee` implementations are frozen and must be left byte-for-byte unchanged - editing any of them fails the task, as does changing the call chain to point at a different implementation.
+
+Run `python -m pytest -q` to confirm the suite stays green before finishing."""
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 300
+hard_criteria = ["correct_target_fixed", "fee_decoys_identical"]
+
+[gate]
+run = "python -m pytest -q"

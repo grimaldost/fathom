@@ -1,0 +1,18 @@
+id = "thread-param"
+instruction = """Add an optional `rounding` parameter (default `"bankers"`) to the function `convert` in `ledgerline/core/fx.py`: `"bankers"` keeps the current behavior (Python's built-in round), `"half-up"` rounds halves away from zero to 2 decimals (use the `decimal` module with ROUND_HALF_UP, converting via `str()` to avoid float artifacts).
+
+Then thread the parameter through the three public call paths that reach `convert` - `build_report` in `ledgerline/adapters/report.py`, `run_daily` in `ledgerline/pipelines/daily.py`, and `run_monthly` in `ledgerline/pipelines/monthly.py` - each gaining its own optional `rounding="bankers"` parameter that is passed through to `convert`.
+
+Do not change any other call sites or any behavior under the default. Run `python -m pytest -q` to confirm the full test suite passes before finishing."""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 150
+hard_criteria = ["threaded_report", "threaded_daily", "threaded_monthly"]
+
+[gate]
+run = "python -m pytest -q"

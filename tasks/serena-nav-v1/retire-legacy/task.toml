@@ -1,0 +1,18 @@
+id = "retire-legacy"
+instruction = """Internal code must stop depending on the frozen module `ledgerline/legacy/oldapi.py`. Find every internal import/usage of `oldapi` (they exist in `ledgerline/analytics/`, `ledgerline/validators/`, and `tests/`) and repoint each one to the equivalent core functionality in `ledgerline.core.compute`, preserving behavior exactly.
+
+Keep `ledgerline/legacy/oldapi.py` itself completely unchanged - it remains for external callers - but after your change nothing in this repository outside `ledgerline/legacy/` may reference `oldapi`.
+
+Run `python -m pytest -q` to confirm the full test suite passes before finishing."""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 150
+hard_criteria = ["no_internal_legacy_refs", "module_preserved"]
+
+[gate]
+run = "python -m pytest -q"

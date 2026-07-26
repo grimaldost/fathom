@@ -1,0 +1,20 @@
+name = "brief-only"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# The inject-without-tools control: same navigation brief as the `serena` arm,
+# no MCP server mounted. Separates "the brief made it careful" from "the tools
+# made it correct" - the same three-arm shape as scenarios/skill-pyeng
+# (bare / generic-nudge / pyeng-skill). This condition was measured accidentally
+# on 2026-07-25 (the mislabeled `serena` rows in the archived ledger) at 9/9.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+inject = "assets/serena-brief.md"
+
+[limits]
+trial_timeout_s = 1800

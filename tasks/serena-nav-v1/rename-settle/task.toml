@@ -1,0 +1,18 @@
+id = "rename-settle"
+instruction = """In this repository, rename the function `settle` defined in `ledgerline/core/compute.py` to `settle_entries`, and update every reference to it across the entire codebase - direct imports, aliased imports, module-attribute calls, package re-exports (`ledgerline/__init__.py`, `ledgerline/core/__init__.py`), and tests - so the full test suite passes.
+
+Two unrelated things share the name and must NOT be renamed: the `Money.settle` method in `ledgerline/utils/money.py`, and the public wrapper function `settle` in `ledgerline/legacy/oldapi.py` (a frozen external-compatibility surface - it keeps its public name but must keep working, so update its internals as needed).
+
+Run `python -m pytest -q` to confirm everything is green before finishing."""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 150
+hard_criteria = ["no_stale_references", "decoy_method_intact", "decoy_wrapper_intact"]
+
+[gate]
+run = "python -m pytest -q"

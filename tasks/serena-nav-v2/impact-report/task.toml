@@ -1,0 +1,19 @@
+id = "impact-report"
+instruction = """This repository is a large Python package (~420 modules across 14 domains). Determine the blast radius of the function `reconcile` defined in `reconciler/core/engine.py`.
+
+Write a file `impact.json` at the repository root containing a JSON array of dotted module paths (e.g. "reconciler.accounts.api") for every module inside the `reconciler` package that calls `reconcile` either directly, or calls something that transitively reaches it. Sort the array alphabetically.
+
+Exclude the defining module itself (`reconciler.core.engine`) and pure re-export `__init__` modules, which only import the name without calling it.
+
+Be aware that the word "reconcile" appears in roughly 150 unrelated modules - same-named methods on unrelated classes, near-miss function names like `reconcile_batch`, docstrings, comments, and string literals. Those are not callers. Precision matters: the array must contain exactly the calling modules, with no extras and none missing.
+
+This is a read-only analysis task: do not modify any existing source file."""
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+timeout_s = 300
+hard_criteria = ["closure_exact", "sources_untouched"]
