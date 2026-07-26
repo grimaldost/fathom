@@ -1,0 +1,20 @@
+name = "phase4-null-verif-disc-sub-opus"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/s1/scenarios/phase2-hooks/subagent-generic-gate",
+]
+
+[limits]
+trial_timeout_s = 900
+
+[context]
+inject = "../phase2-assets/delegate-subagent.md"

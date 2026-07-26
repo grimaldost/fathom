@@ -38,6 +38,16 @@ WORDING = {
         "and reconcile them line by line against the source rows to confirm every "
         "row is accounted for. Do that now, then stop."
     ),
+    # Phase-4 (H3, successor to the withdrawn register rule): a prescriptive gate for
+    # the DEBUGGING discipline whose artifact is producible regardless of
+    # applicability -- a test can be written for any edit, unlike "find the root
+    # cause", which needs a fault to exist. If over-triggering tracks artifact
+    # producibility rather than the prescriptive register, THIS arm over-triggers on
+    # trivial edits where ("debug", "prescriptive") did not.
+    ("debug", "artifact"): (
+        "Before you finish: add a test that covers the behavior you changed, confirm "
+        "it passes, then stop."
+    ),
 }
 
 
