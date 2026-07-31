@@ -1,6 +1,6 @@
 ---
 description: Run the paid fathom scenario matrix against a bank (real spend; resumable)
-argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--max-budget-usd USD] [--include-holdout]"
+argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--ledger-dir DIR] [--limit N] [--max-budget-usd USD] [--include-holdout]"
 allowed-tools: Bash
 ---
 
@@ -24,6 +24,11 @@ Tell the user before/while running:
 - It is resumable — re-invoking skips completed trials; interrupt and resume freely.
 - `--limit N` caps fresh trials; `--max-budget-usd USD` is the real per-**spawn**
   cap (a `series` trial spawns several subagents and can spend several times it).
+- `--tasks-dir` / `--ledger-dir` relocate the bank source and the ledger
+  destination (defaults `tasks/`, `ledger/`); `--ledger-dir` writes the
+  append-only record somewhere other than the committed `ledger/`, so use it
+  only for a side study you intend to keep separate — `fathom report` has no
+  matching flags and always reads `ledger/<bank>.jsonl` and `tasks/<bank>/`.
 - `--include-holdout` also runs the bank's sealed holdout tasks (trials marked
   `holdout` in the ledger, reported separately) — only for a deliberate promotion
   decision (ADR-0005), never by default.

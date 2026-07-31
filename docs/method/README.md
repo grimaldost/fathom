@@ -23,7 +23,7 @@ The method (§7) needs five slots filled in any project. Each maps to a template
 | DoR gate | `definition-of-ready.md` |
 | Pre-mortem | `pre-mortem-prompt.md` |
 | Close the loop | `reflection-triage.md` |
-| Wave budget | `series-toml-skeleton.md` (`[budget]` block) |
+| Wave budget | `series-toml-skeleton.md` (`[governance.budgets]` — per-phase per-spawn USD caps) |
 | Portability | `method-bindings.md` |
 
 ## Using the kit in a new project

@@ -19,11 +19,15 @@ integration = "<topic>/integration"  # the engine leaves this checked out — fa
 prompts = "prompts"                # fathom rewrites to an absolute path outside the workspace
 outputs = "outputs"                # spawns.jsonl telemetry lands here
 
-[governance]                       # fathom PINS these from the resolved scenario
-model = "claude-opus-4-8"
-effort = "high"
-permission_mode = "default"        # never bypassPermissions (§6 parity)
-timeout_seconds = 1800
+[governance]                       # fathom PINS model / effort / permission_mode / budgets
+model = "claude-opus-4-8"          # <- overwritten from the resolved scenario
+effort = "high"                    # <- overwritten from the resolved scenario
+permission_mode = "default"        # <- overwritten; never bypassPermissions (§6 parity)
+timeout_seconds = 1800             #    NOT pinned — the template's value is used as authored;
+                                   #    the trial's own wall-clock ceiling is the scenario's
+                                   #    [limits] trial_timeout_s, applied to the engine subprocess
+# tier = "strong"                  #    dropped, not overwritten — fathom removes `tier` so the
+                                   #    explicit model pin is authoritative
 
 [governance.budgets]               # per-phase USD ceilings — TOML numbers, not strings.
 implementation = 20.0              # a spawn that exceeds its cap halts un-integrated

@@ -10,6 +10,7 @@ table — the old design-spec example showing one is stale).
 ```
 tasks/<bank>/
   bank.toml                 # the manifest
+  scores.toml               # optional — per-task complexity scores (calibration banks only)
   <task-id>/
     task.toml               # the task definition
     verify.py               # the blind verifier (reads only the result-view)
@@ -52,6 +53,40 @@ allowed and consumed downstream; the keys above are the ones the CLI and
 strategies actually read. Only `verify.entry` is enforced as required within
 `[verify]`.
 
+## Calibration-bank extras (optional)
+
+A bank that ships these renders the Calibration section of the scorecard; every
+other bank's scorecard is unchanged.
+
+`tasks/<bank>/scores.toml` — per-task complexity scores, read by the confusion
+matrix:
+
+```toml
+[scores]
+fix-clamp = 18        # 0-100; predicted tier = 0-25 weak / 26-55 mid / 56-100 strong
+```
+
+`task.toml` `[context]` — tags for the context-size view (matched-pair banks
+only):
+
+```toml
+[context]
+size = "large"            # "small" | "large" only — any other value still switches the heading to
+                          # Context-Size Calibration but is dropped from the per-pair table
+pair = "loyalty-reward"   # joins the matched small/large pair
+```
+
+Any `size` value at all switches the heading to Context-Size Calibration, but the
+per-pair table groups only tasks whose `size` is exactly `small` or `large` — a
+typo there yields the context heading over an empty pair table.
+
+Both are read together with `[verify] hard_criteria`: a bank missing
+`scores.toml` or `hard_criteria` simply gets no calibration section. One
+limitation to know about — `fathom report` resolves the bank at
+`tasks/<bank>/` regardless of the `--tasks-dir` a run used, so a calibration
+bank kept in an alternate tasks dir renders with no Calibration section and no
+warning.
+
 ## Scenario (arm) TOML
 
 ```toml
@@ -70,6 +105,14 @@ allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]   # empty 
 [context]                     # optional treatment arm — appends this file's body to the spawn's
                               # system prompt (via --append-system-prompt-file)
 inject = "assets/python-engineering.md"   # path relative to THIS scenario file; its CONTENT sha256 enters config_hash
+
+[settings]                    # optional treatment arm — this file is copied verbatim into the
+                              # spawn's isolated CLAUDE_CONFIG_DIR as settings.json, so a
+                              # user-scope hook (e.g. a PreToolUse rewrite) is live for the arm.
+                              # That is what the arm buys: a plugin hook does not fire in headless
+                              # `claude -p`, a user-scope one does (`make_isolated_config`,
+                              # src/fathom/adapters/claude_cli.py)
+inject = "assets/hook-settings.json"      # path relative to THIS scenario file; its CONTENT sha256 enters config_hash
 
 [plugins]                     # optional treatment arm — mount plugin dirs into the spawn
 mount = ["C:/…/some-plugin"]  # paths relative to this scenario file; each dir's tree_sha enters config_hash
@@ -119,10 +162,11 @@ longitudinal history and re-spend "done" trials:
   fixtures, or verifier. It is in the resume key; forgetting to bump means a
   changed task resumes against stale results.
 - **`config_hash`** — a SHA-256 over the resolved scenario. It includes the
-  `[context].inject` file's **content sha256**, each mounted plugin's `tree_sha`
-  (a hash over every file under the dir), the tool repo's git SHA, and the
-  `[gate].extra` command text. So **editing an inject brief, a mounted plugin
-  file, or bumping the engine repo forks the hash** and re-spends resumed trials.
+  `[context].inject` file's **content sha256**, the `[settings].inject` file's
+  **content sha256**, each mounted plugin's `tree_sha` (a hash over every file
+  under the dir), the tool repo's git SHA, and the `[gate].extra` command text.
+  So **editing an inject brief, a settings file, a mounted plugin file, or
+  bumping the engine repo forks the hash** and re-spends resumed trials.
   Absent optional tables and empty lists deliberately do **not** shift the hash,
   so adding the schema never breaks existing ledgers.
 
