@@ -26,7 +26,7 @@ Prerequisites: [`uv`](https://docs.astral.sh/uv/) and a local fathom checkout.
 
 ## Install
 
-### Local (works today)
+### From a local checkout
 
 You already have the checkout — install the plugin from this path and set
 `FATHOM_HOME`:
@@ -37,19 +37,15 @@ claude plugin marketplace add /path/to/fathom
 claude plugin install fathom@fathom
 ```
 
-### Marketplace (after the repo is published)
-
-Once the repo is pushed to a public remote (e.g. `grimaldost/fathom`):
+### Marketplace
 
 ```sh
 claude plugin marketplace add grimaldost/fathom
 claude plugin install fathom@fathom
 ```
 
-`.claude-plugin/marketplace.json` is authored for this path but is inert until
-the public remote exists. The plugin still shells into your `FATHOM_HOME`
-checkout for the actual runs — it does not run fathom from the marketplace
-cache-clone.
+The plugin still shells into your `FATHOM_HOME` checkout for the actual runs —
+it does not run fathom from the marketplace cache-clone.
 
 ## Surfaces
 

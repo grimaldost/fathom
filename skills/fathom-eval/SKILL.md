@@ -67,7 +67,8 @@ uv run python -m fathom smoke
 uv run python -m fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 
 # 3. Run — the real, paid matrix. Resumable: re-invoking skips completed trials.
-uv run python -m fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--max-budget-usd USD]
+uv run python -m fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] \
+    [--ledger-dir DIR] [--limit N] [--max-budget-usd USD] [--include-holdout]
 
 # 4. Report — render the scorecard from the ledger. Idempotent; regenerate any time.
 uv run python -m fathom report <bank>
@@ -92,12 +93,31 @@ is **`skill-pyeng-v1`** — one task (`modernize-timeflow`) against **three arms
   A `series` trial spawns several subagents, so it can spend several times the cap.
 - **`--limit N`** caps fresh trials (applied after resume filtering) — a partial-
   matrix spend rail.
+- **`--tasks-dir` / `--ledger-dir`** relocate the bank source and the ledger
+  destination (defaults `tasks/`, `ledger/`). `--ledger-dir` writes the
+  append-only record somewhere other than the committed `ledger/`, so use it
+  only for a side study you intend to keep separate — `fathom report` has no
+  matching flags and always reads `ledger/<bank>.jsonl` and `tasks/<bank>/`.
 - Prefer a small `--dry-run` and a `--limit`ed pilot before committing to a full
   matrix. Re-run to resume; nothing is wasted.
 
 Do **not** start a paid run when: smoke has not passed this session; the plan/USD
 ceiling has not been reviewed; the bank ships its own arms but `--scenarios-dir`
 was not set; or you only need to re-read an existing verdict (`report` is free).
+
+## Environment and exit codes
+
+- `FATHOM_HOME` — the checkout to run in (plugin surfaces only; see above).
+- `FATHOM_STREAM_DIR` — optional. When set, each spawn's raw stream-json stdout
+  is written there as an `.ndjson` file named after the trial, for post-hoc
+  analysis (tool-invocation counts, skill activation). Best-effort: a
+  persistence failure never affects the trial.
+
+`fathom run` exits `0` on success, `10` on an infrastructure error (auth or
+usage limit — the matrix stops cleanly and the ledger stays the resume
+checkpoint), and `1` on a usage error (unloadable bank, no scenarios found in
+the scenarios dir, unknown strategy). `fathom smoke` exits `0` only when every
+check passes.
 
 ## Strategy catalog
 
@@ -117,7 +137,7 @@ repo=<convoy>`); it is paid and long (`trial_timeout_s=3600`) and dominates
 matrix cost. `gated-*` are meaningless for a task with no gate — the bank must
 ship one.
 
-## The four invariants (each has an ADR under `docs/adr/`)
+## The four invariants (the first three have an ADR under `docs/adr/`)
 
 - **Blindness** (ADR-0003) — verifiers see only the final workspace; judges see
   outputs labeled A/B with scenario identity removed; economy joins **after** scoring.

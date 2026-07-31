@@ -35,6 +35,7 @@ One decision per file; an accepted ADR is never edited, only superseded.
 | [0005](adr/0005-sealed-holdout-tasks.md) | Every bank carries sealed holdout tasks; a spent holdout is dev data. |
 | [0006](adr/0006-plugin-mount-fidelity.md) | Mount whole plugins via `--plugin-dir` to preserve triggering fidelity. |
 | [0007](adr/0007-model-tier-calibration.md) | Model-tier calibration study design (hard-criteria fraction, ε + CI-overlap tier rule). |
+| [0008](adr/0008-oracle-quality-crossing.md) | Oracle quality as a third calibration factor, crossed 3×3 against model tier (**Proposed**). |
 
 ## reports/ — the per-analysis record
 
@@ -49,8 +50,9 @@ run" table is the authoritative index with verdicts; by series:
 | Skill effectiveness: `python-engineering` (2026-06-13) | [design](specs/2026-06-13-fathom-skill-eval-pyeng-design.md) · [plan](plans/2026-06-13-skill-eval-pyeng-plan.md) | run notes: [`2026-06-13-skill-pyeng-v1-first-matrix.md`](reports/2026-06-13-skill-pyeng-v1-first-matrix.md) |
 | Plugin eval: humblepowers vs superpowers, v1–v4 (2026-06-14 → 06-16) | [design](specs/2026-06-14-fathom-humble-vs-super-design.md) | run notes: [`v1 first matrix`](reports/2026-06-14-humble-vs-super-v1-first-matrix.md) · findings: [`v1`](reports/2026-06-14-humblepowers-vs-superpowers.md), [`v2` (corrected by v3/v4)](reports/2026-06-15-humblepowers-0.4.0-vs-superpowers.md), [`v3/v4 powered confirmatory`](reports/2026-06-16-humble-vs-super-powered-confirmatory.md) |
 | Model-tier calibration (2026-06-16 → 07-01) | [design](specs/2026-06-16-fathom-model-tier-calibration-design.md) · ADR-0007 | findings: [`calibration`](reports/2026-06-16-model-tier-calibration.md), [`Sonnet-5 recalibration`](reports/2026-07-01-model-tier-recalibration.md) |
-| Context-size calibration: does volume shift the tier? (2026-06-16) | bank README `tasks/context-size-v1/README.md` (design + GO gate; its cited ADR-0008 was lost in the history squash — see STATUS open items) | findings: [`context-size`](reports/2026-06-16-context-size-calibration.md) |
+| Context-size calibration: does volume shift the tier? (2026-06-16) | bank README `tasks/context-size-v1/README.md` (design + GO gate; its cited ADR-0008 predates the 2026-07 history squash and that number was later reused by [`adr/0008-oracle-quality-crossing.md`](adr/0008-oracle-quality-crossing.md) — the citation does not resolve; see STATUS open items) | findings: [`context-size`](reports/2026-06-16-context-size-calibration.md) |
 | Series-engine usefulness + value ablation (2026-07-01) | [usefulness v2](specs/2026-07-01-pr-pilot-usefulness-v2-design.md) · [full ablation (superseded)](specs/2026-07-01-pr-pilot-full-ablation-design.md) · [ablation v2 brownfield](specs/2026-07-01-ablation-v2-brownfield-design.md) | findings: [`usefulness`](reports/2026-07-01-pr-pilot-usefulness-findings.md), [`beyond the engine` (analysis, no run)](reports/2026-07-01-pr-pilot-beyond-the-engine.md), [`ablation v2`](reports/2026-07-01-pr-pilot-ablation-v2-findings.md) |
+| Data-context surface: tool granularity, consumer personas, full stack (2026-07-11) | phase-2 [design](specs/2026-07-11-dc-stack-v1-design.md) | findings: [`dc-granularity`](reports/2026-07-11-dc-granularity-v1-first-matrix.md), [`dc-consumers`](reports/2026-07-11-dc-consumers-v1-first-matrix.md), [`dc-stack`](reports/2026-07-11-dc-stack-v1-first-matrix.md) |
 
 Naming note: files named `pr-pilot-*` predate the engine's rename to **convoy** and are kept as
 historical slugs; their prose says "the series engine".

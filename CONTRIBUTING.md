@@ -29,7 +29,9 @@ or the series engine boundary; it has caught real shipped regressions that the u
 
 ## Invariants (the things a change must not break)
 
-Each has an ADR under `docs/adr/`; the build spec's enforcement table
+The first three have an ADR under `docs/adr/`; stdlib core has none — every core module and test
+imports stdlib only, so `python tests/test_<name>.py` runs without uv; that is a convention, not a
+CI gate (CI runs the suite under `uv run pytest`). The build spec's enforcement table
 (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is checked.
 
 - **Append-only ledger (ADR-0002).** Never edit `ledger/*.jsonl` — by hand or in code. No code
@@ -49,7 +51,7 @@ Each has an ADR under `docs/adr/`; the build spec's enforcement table
 ## Adding a bank or an arm
 
 Schemas (flat-TOML scenario, `bank.toml`, `task.toml`, the `verify.py` contract) are in
-`CLAUDE.md` → "Authoring banks / scenarios"; the parsers in `src/fathom/scenario.py` and
+`skills/fathom-eval/reference/authoring.md`; the parsers in `src/fathom/scenario.py` and
 `src/fathom/taskbank.py` are the source of truth.
 
 1. Author the bank under `tasks/<bank>/` and its arms under `scenarios/<bank>/`.

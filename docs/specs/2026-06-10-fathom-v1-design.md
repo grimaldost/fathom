@@ -93,6 +93,13 @@ manages dev tooling. `typing.Protocol` at the seams.
 
 ### 4.2 Task bank format (Harbor-shaped [R§2], minus Docker)
 
+> **⚠ As-built note (2026-07-31):** the blocks below are the *design-time* sketch and drifted
+> in implementation. Both files are **flat top-level TOML** — no `[bank]` / `[task]` wrapper:
+> `bank.toml` carries `name`, `dataset_version`, `holdout`; `task.toml` carries `id`,
+> `instruction`, `[limits]`, `[verify]` (and an optional `[gate]`). Source of truth:
+> `src/fathom/taskbank.py`; the as-built schema is in
+> `skills/fathom-eval/reference/authoring.md`.
+
 `tasks/<bank>/bank.toml`:
 
 ```toml
