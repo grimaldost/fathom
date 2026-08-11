@@ -27,10 +27,10 @@ would ship a language with a hole in it for PR02 to inherit.
 2. **Boolean literals.** `true` and `false` evaluate to Python `True` / `False`. They are
    keywords, not variables.
 
-3. **Arithmetic rejects booleans.** The arithmetic operators `+ - * / %` and the unary
-   `-` / `+` require NUMERIC (int or float) operands, and an operand of the wrong type
-   raises `TypeMismatchError`. Existing arithmetic on numbers keeps working exactly as it
-   does today — that behaviour is under test and must not regress.
+3. **Arithmetic rejects booleans.** The arithmetic operators `+ - * / %` require NUMERIC
+   (int or float) operands, and an operand of the wrong type raises `TypeMismatchError`.
+   Existing arithmetic on numbers keeps working exactly as it does today — that behaviour
+   is under test and must not regress.
 
 ## Interface this PR must publish (later PRs depend on it)
 
@@ -53,11 +53,12 @@ above.
 ## Constraints
 
 - Standard library only; add no dependencies.
-- **Do not modify or delete any existing test.** `tests/test_arithmetic.py` is the
-  baseline and must stay green; `tests/test_feature.py` describes the whole five-PR
-  feature, so most of it is still red after this PR — that is expected, and it is not
-  yours to edit.
-- Add your own tests for what this PR delivers in a NEW file under `tests/`.
+- **Do not modify or delete `tests/test_arithmetic.py` or `tests/test_feature.py`.**
+  `tests/test_arithmetic.py` is the baseline and must stay green; `tests/test_feature.py`
+  describes the whole five-PR feature, so most of it is still red after this PR — that is
+  expected, and it is not yours to edit.
+- Add your own tests for what this PR delivers in a NEW file under `tests/`. A later PR of
+  this series may correct one of them if it turns out to contradict that PR's brief.
 
 ## How this PR is judged
 

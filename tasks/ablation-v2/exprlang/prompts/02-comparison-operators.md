@@ -19,9 +19,7 @@ before you start and reuse the guards — do not write a second copy of either.
 
 The six comparison operators: `==`, `!=`, `<`, `<=`, `>`, `>=`.
 
-1. **Lexing.** They are new tokens. Four of them are two characters long, and three of
-   those begin with a character the tokenizer must also be able to read on its own, so the
-   two-character forms have to be recognised as single tokens.
+1. **Lexing.** They are new tokens.
 
 2. **Parsing.** They are binary and left-associative. In the language's precedence table,
    from LOWEST to HIGHEST binding:
@@ -53,10 +51,13 @@ The six comparison operators: `==`, `!=`, `<`, `<=`, `>`, `>=`.
 ## Constraints
 
 - Standard library only; add no dependencies.
-- **Do not modify or delete any existing test.** `tests/test_arithmetic.py` is the
-  baseline and must stay green; `tests/test_feature.py` describes the whole five-PR
-  feature, so parts of it are still red after this PR — that is expected, and it is not
-  yours to edit.
+- **Do not modify or delete `tests/test_arithmetic.py` or `tests/test_feature.py`.**
+  `tests/test_arithmetic.py` is the baseline and must stay green; `tests/test_feature.py`
+  describes the whole five-PR feature, so parts of it are still red after this PR — that is
+  expected, and it is not yours to edit.
+- The tests an EARLIER PR of this series added under `tests/` are yours to correct: if one
+  of them contradicts the specification in this brief, fix that test. The two files named
+  above are the only ones that are fixed.
 - Add your own tests for what this PR delivers in a NEW file under `tests/`.
 
 ## How this PR is judged

@@ -29,11 +29,7 @@ The prefix operator `not`.
    or  <  and  <  not  <  (comparisons)  <  + -  <  * / %  <  unary - +
    ```
 
-   `not` binds TIGHTER than `and` and `or`, and LOOSER than the comparison operators. The
-   second half of that is the part worth slowing down for, because the language's other
-   prefix operators — unary `-` and `+` — sit at the opposite end of the table and bind
-   tightest of all, so `not` cannot simply copy their treatment. Binding looser than the
-   comparisons means a `not` operand reaches across a whole comparison:
+   `not` binds TIGHTER than `and` and `or`, and LOOSER than the comparison operators, so
    `not 1 < 2` parses as `not (1 < 2)`.
 
 3. **Evaluation.** `not` requires a BOOLEAN operand and produces a `bool`; an operand of
@@ -46,8 +42,11 @@ Nothing new is added after this PR. PR05 is a conformance pass over the finished
 ## Constraints
 
 - Standard library only; add no dependencies.
-- **Do not modify or delete any existing test.** `tests/test_arithmetic.py` is the
-  baseline and must stay green.
+- **Do not modify or delete `tests/test_arithmetic.py` or `tests/test_feature.py`.**
+  `tests/test_arithmetic.py` is the baseline and must stay green.
+- The tests an EARLIER PR of this series added under `tests/` are yours to correct: if one
+  of them contradicts the specification in this brief, fix that test. The two files named
+  above are the only ones that are fixed.
 - Add your own tests for what this PR delivers in a NEW file under `tests/`, including
   the parse-shape case above.
 

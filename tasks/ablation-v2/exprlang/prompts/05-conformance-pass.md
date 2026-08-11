@@ -25,8 +25,7 @@ or  <  and  <  not  <  (comparisons)  <  + -  <  * / %  <  unary - +
 
 All binary operators are left-associative; `not` and unary `-` / `+` are prefix. Four PRs
 each inserted one level into this table without being able to check the neighbours they
-did not add. Verify the ordering holds across every adjacent pair AND across
-non-adjacent pairs, and fix the parser where it does not.
+did not add. Verify the ordering holds, and fix the parser where it does not.
 
 ## 2. The type-rule matrix, as a whole
 
@@ -38,9 +37,8 @@ rules, stated in full:
 - `and` / `or` / `not` require BOOLEAN operands and reject numbers.
 
 Every operator in the language falls under exactly one of those two rows. Check each
-operator against the row it belongs to, on both operand positions for the binary ones, and
-fix any that does not comply. Values are `int`, `float` and `bool` — there is no fourth
-kind to consider.
+operator against the row it belongs to, and fix any that does not comply. Values are
+`int`, `float` and `bool` — there is no fourth kind to consider.
 
 ## 3. The tests the feature owes
 
@@ -58,8 +56,12 @@ division/modulo-by-zero handling must not have regressed.
 ## Constraints
 
 - Standard library only; add no dependencies.
-- **Do not modify or delete any existing test.** If a test in `tests/` fails, the
-  implementation is what changes.
+- **Do not modify or delete `tests/test_arithmetic.py` or `tests/test_feature.py`.** If a
+  test in either of those two files fails, the implementation is what changes.
+- The tests PR01–PR04 of this series added under `tests/` are yours to correct: each was
+  written against one level of the language in isolation, so if one of them contradicts
+  the specification above or the finished feature, fix that test. The two files named
+  above are the only ones that are fixed.
 
 ## How this PR is judged
 
