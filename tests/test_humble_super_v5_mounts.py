@@ -175,8 +175,12 @@ class ForkIntegrityTests(unittest.TestCase):
         self.assertNotEqual(
             meta["dataset_version"],
             v2["dataset_version"],
-            "dataset_version is in the resume key — a fork that reuses v2's could pool "
-            "two instruments into one ledger bucket",
+            "v5 must not present itself as the same instrument as v2. The bank NAME is "
+            "already in the resume key (bank, dataset_version, task_id, config_hash, "
+            "repeat), so this bump is NOT collision protection — a v2 resume was never "
+            "possible. It is a deliberate fork marker: the task content is byte-identical "
+            "to v2's, so `dataset_version` is the only field left that records that the "
+            "measured instrument (plugins + model) moved.",
         )
 
     def test_task_content_is_a_byte_identical_fork_of_v2(self) -> None:

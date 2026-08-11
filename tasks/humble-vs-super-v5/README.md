@@ -12,8 +12,11 @@ same tasks, blind to which arm produced each result (ADR-0003).
 > minors back), and the base model is **`claude-opus-5`** (v1–v4 measured
 > `claude-opus-4-8`, which the lineup no longer serves). Its numbers are a **new
 > measurement**. They may not be pooled with, differenced against, or read as a
-> replication of the v1–v4 ledgers. `dataset_version` is bumped to `2` so no ledger line
-> can be mistaken for a v2 resume. See `V5_NOTES.md` for the full design rationale.
+> replication of the v1–v4 ledgers. `dataset_version` is bumped to `2` as a **fork
+> marker** — not as collision protection, since the bank name is already in the resume
+> key and a v2 resume was never possible; with the task content byte-identical to v2's it
+> is the only field left that records that the instrument moved. See `V5_NOTES.md` for the
+> full design rationale, the pre-registered gates, and the spend rails.
 
 ## Task families
 
@@ -39,12 +42,15 @@ incomplete fix and fail `fix_correct`.
 | tz/dst | DST decided by month only (`4 ≤ month ≤ 10`), ignoring the exact transition days | widening to `3 ≤ month ≤ 11` (breaks early-March / November) |
 | cache | `get` does not refresh recency, so eviction degrades to FIFO | wrong `popitem`/insertion order (breaks the shipped overflow test) |
 
-**Known and priced:** on this task family, correctness has already been shown to ceiling.
-v3 at n=45/arm recorded **0/180 correctness failures including the unarmed `bare` arm**
-(`docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md`). v5 therefore does
+**Known and priced:** on **these exact tasks**, correctness has already ceilinged. Pooled
+over v1 and v2 — which ran this same task content — `fix_correct` and `no_regression` are
+**50/50 in every arm on both `fix-*` tasks**, and every criterion of both feature tasks is
+**40/40**, the unarmed `bare` arm included. v3 replicated the pattern on a different task
+set (0/180 at n=45,
+`docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md`). v5 therefore does
 **not** expect the correctness criteria to discriminate, and no verdict about correctness
-should be read off them. What this bank measures is stated in `V5_NOTES.md` §
-"What v5 can and cannot answer".
+should be read off them. What this bank measures — and the single criterion-slot that
+still has headroom — is stated in `V5_NOTES.md` § "What v5 can and cannot answer".
 
 ## Layout
 
@@ -88,6 +94,16 @@ v2's byte-for-byte).
   regression test, so the criterion varies across arms. **It is the only criterion that
   has ever discriminated on this bank family**, and it separates `bare` (0%) from every
   disciplined arm (~100%) rather than separating the disciplined arms from each other.
+  Per task, pooled over v1+v2, even that is narrow: on `fix-tz-dst-normalize` the armed
+  arms are 44/45 (97.8% — a ceiling with one stray failure), and **`fix-offbyone-paginator`
+  at 32/45 (71%) is the only criterion-slot in the whole bank with material headroom** —
+  see `V5_NOTES.md`.
+
+The two **feature** tasks score a different set — `behavior_correct`, `tests_present`, and
+three per-task edge criteria. All ten are **40/40 in every arm** across v1+v2, `bare`
+included, because those instructions enumerate the exact edges the verifier checks: their
+`tests_present` is *prompted*, not elicited. **The feature tasks cannot produce quality
+signal on this bank**; they are retained as economy samples only (`V5_NOTES.md`).
 
 ### Blindness
 
@@ -111,7 +127,11 @@ ever appears in the verifier's argv or env.
   hook-assisted onboarding. This has been true of every humble-vs-super run since v1, so
   it is a constant of the series rather than a v5 change; it still bounds what the numbers
   mean, most sharply for superpowers, whose hook is the arm that would otherwise announce
-  the skill library.
+  the skill library. **Its bias has a direction and it is not symmetric: the dead hook
+  works *against* superpowers on quality (its dispatch skill is never injected) but *for*
+  it on cost (less injected corpus to pay for).** Superpowers nonetheless measured dearer
+  in v1, v2 and v3 — so the harness constant does not manufacture the observed cost gap,
+  it understates it. Carry this sentence into any published verdict.
 - **The bank has no power over the third-party snapshot's presence.** `superpowers@6fd4507`
   is gitignored and untracked; see `plugins/VENDORED.md` for the decision, the integrity
   manifest, and the four controls that stand in for tracking it.
