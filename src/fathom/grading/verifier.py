@@ -134,6 +134,52 @@ def _build_minimal_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k in _SYSTEM_ENV_KEYS}
 
 
+def extract_criteria(stdout: str) -> dict[str, Any] | None:
+    """The criteria dict from a verifier's *stdout*, or None if there is none.
+
+        Tolerant of noise AROUND the JSON, strict about the JSON itself.
+
+        A verifier that checks behaviour-preservation has to import the agent's
+        modified package, so whatever that package prints at import time lands on the
+        verifier's stdout ahead of its answer.  Requiring the whole of stdout to parse
+        therefore threw away trials whose criteria had been computed correctly — and
+        threw them away in an ARM-CORRELATED way, since whether the agent adds a print
+        is a property of the arm being measured.  That is a silent bias, not just a
+        lost trial.  Measured on a real bank at $2.00 a trial: stdout read
+        ``configuring timeflow
+    {"behavior_preserved": true, ...}`` and the trial was
+        scored errored.
+
+        The rule: scan lines back-to-front and take the LAST line that parses as a JSON
+        object.  The criteria line is the last thing a verifier emits, so a debug dict
+        printed earlier never wins.  A stdout containing no JSON object is still None —
+        the tolerance must not degrade into "find something, anything", or a crashed
+        verifier would start scoring.
+    """
+    if not stdout:
+        return None
+    # Whole-stdout parse first: the overwhelmingly common case, and it also handles
+    # a pretty-printed multi-line object that a line scan would miss.
+    try:
+        whole = json.loads(stdout.strip())
+    except (json.JSONDecodeError, ValueError):
+        pass
+    else:
+        return whole if isinstance(whole, dict) else None
+
+    for line in reversed(stdout.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            obj = json.loads(line)
+        except (json.JSONDecodeError, ValueError):
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
 def run_verifier(verify_entry: Path, workspace: Path, timeout_s: int = 60) -> VerifierResult:
     """Extract the result view from *workspace*, invoke *verify_entry*, return the outcome.
 
@@ -152,7 +198,8 @@ def run_verifier(verify_entry: Path, workspace: Path, timeout_s: int = 60) -> Ve
     Outcome rules:
     - exit 0  + valid JSON dict  → "pass"
     - exit ≠0 + valid JSON dict  → "fail"
-    - crash or non-JSON stdout   → "error"
+    - crash, or no JSON object anywhere on stdout → "error"
+      (noise around the object is tolerated — see :func:`extract_criteria`)
     """
     tmp = tempfile.mkdtemp(prefix="fathom-result-view-")
     try:
@@ -199,18 +246,8 @@ def run_verifier(verify_entry: Path, workspace: Path, timeout_s: int = 60) -> Ve
         stderr = proc.stderr
         exit_code = proc.returncode
 
-        try:
-            criteria = json.loads(stdout.strip())
-        except (json.JSONDecodeError, ValueError):
-            return VerifierResult(
-                outcome="error",
-                criteria=None,
-                stdout=stdout,
-                stderr=stderr,
-                exit_code=exit_code,
-            )
-
-        if not isinstance(criteria, dict):
+        criteria = extract_criteria(stdout)
+        if criteria is None:
             return VerifierResult(
                 outcome="error",
                 criteria=None,

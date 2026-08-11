@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom.grading.verifier import extract_result_view, run_verifier
+from fathom.grading.verifier import extract_criteria, extract_result_view, run_verifier
 
 # ---------------------------------------------------------------------------
 # Inline verify.py fixture scripts — written to temp dirs during tests
@@ -626,11 +626,89 @@ sys.exit(0)
 
 
 # ---------------------------------------------------------------------------
+# Criteria recovery from a noisy stdout
+#
+# A verifier that checks behaviour-preservation has to IMPORT the agent's modified
+# package, so whatever that package prints at import time lands on the verifier's
+# stdout ahead of its answer. Requiring the WHOLE of stdout to parse threw away
+# trials whose criteria had been computed correctly — and threw them away in an
+# ARM-CORRELATED way, since whether the agent adds a print is a property of the arm
+# being measured. That is a silent bias, not merely a lost trial.
+#
+# Measured on a real bank at $2.00 a trial: a skill-pyeng-v1 trial was scored
+# `errored` with a stdout whose second line was the complete, correct criteria dict.
+# ---------------------------------------------------------------------------
+
+
+def test_a_leading_print_does_not_destroy_the_result():
+    stdout = 'configuring timeflow\n{"behavior_preserved": true, "uv": false}\n'
+    assert extract_criteria(stdout) == {"behavior_preserved": True, "uv": False}
+
+
+def test_trailing_noise_is_tolerated():
+    assert extract_criteria('{"a": true}\nteardown complete\n') == {"a": True}
+
+
+def test_plain_json_still_works():
+    assert extract_criteria('{"a": true}') == {"a": True}
+    assert extract_criteria('  {"a": false}  \n') == {"a": False}
+
+
+def test_the_last_object_wins_when_several_are_printed():
+    # The criteria line is the last thing a verifier emits, so a debug dict printed
+    # earlier must never be mistaken for the answer.
+    stdout = '{"debug": true}\n{"a": true, "b": false}\n'
+    assert extract_criteria(stdout) == {"a": True, "b": False}
+
+
+def test_genuinely_absent_json_is_still_an_error():
+    # The tolerance must not degrade into "find something, anything": a verifier
+    # that crashed before printing has to stay unscoreable.
+    assert extract_criteria("Traceback (most recent call last):\n  boom\n") is None
+    assert extract_criteria("") is None
+
+
+def test_a_non_dict_json_document_is_still_an_error():
+    assert extract_criteria("[1, 2, 3]") is None
+    assert extract_criteria('"just a string"') is None
+
+
+def test_a_brace_inside_a_log_line_does_not_confuse_it():
+    assert extract_criteria('loaded config {broken: yes}\n{"a": true}\n') == {"a": True}
+
+
+def test_run_verifier_recovers_criteria_past_an_import_time_print():
+    """End to end through the real subprocess boundary, not just the parser."""
+    with tempfile.TemporaryDirectory() as tmp:
+        t = Path(tmp)
+        ws = _make_workspace(t, "ws", {"a.txt": "x"})
+        verify = _write_verify(
+            t,
+            "verify_noisy.py",
+            "import json, sys\n"
+            "print('configuring something')\n"
+            'print(json.dumps({"criterion_a": True}))\n'
+            "sys.exit(0)\n",
+        )
+        result = run_verifier(verify, ws)
+        assert result.outcome == "pass", result
+        assert result.criteria == {"criterion_a": True}
+
+
+# ---------------------------------------------------------------------------
 # stdlib runner
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     tests = [
+        test_a_leading_print_does_not_destroy_the_result,
+        test_trailing_noise_is_tolerated,
+        test_plain_json_still_works,
+        test_the_last_object_wins_when_several_are_printed,
+        test_genuinely_absent_json_is_still_an_error,
+        test_a_non_dict_json_document_is_still_an_error,
+        test_a_brace_inside_a_log_line_does_not_confuse_it,
+        test_run_verifier_recovers_criteria_past_an_import_time_print,
         test_pass_with_criteria,
         test_fail_with_criteria,
         test_error_on_crash,
