@@ -1,0 +1,232 @@
+# Oracle levels for model-tier-v2 — the machine-readable half of the
+# model x oracle-quality crossing.
+#
+# Every task's verify.py emits ONE criterion dict covering all three levels. The
+# levels are strictly nested — thin subset of standard subset of strong — so a
+# criterion in `thin` also appears in `standard` and `strong`. The `[verify]
+# hard_criteria` in each task.toml is the capability-gated subset of `standard`
+# (excluding the anchor, no_regression and regression_test_present); that is what
+# calibration.py reads today, and it is unchanged from the model-tier-v1 contract.
+#
+# WHY THERE IS NO ORACLE ARM. The crossing is open-loop: the arm produces an
+# artifact, the verifier grades it afterwards, and nothing about the oracle reaches
+# the spawn (single-session arms run no gate, and verify.py never enters the
+# workspace). Three same-model arms differing only in verify.py would therefore
+# sample the SAME artifact distribution three times. Grading one artifact at all
+# three levels is the same experiment for a third of the spend, and it makes the
+# nesting exact per artifact instead of true only in expectation. The oracle axis is
+# a criterion slice over this file, not an arm dimension.
+#
+# WHAT STILL HAS TO BE BUILT: calibration.py has no oracle axis. Rendering the
+# model x oracle interaction (each tier's slope across thin -> standard -> strong)
+# needs a slicer that reads this file and re-computes the hard fraction per level.
+# That is analysis code over an existing ledger — it can be written after the run,
+# and it is gated behind ADR-0008 like the rest of the oracle dimension.
+
+schema_version = "1"
+
+[levels]
+thin = "The anchor plus the symptom site the instruction names. A patch at the reported failure passes."
+standard = "The model-tier-v1 contract: thin, plus the hard criteria at the displaced consumers, plus no_regression and regression_test_present. This level gates the verifier's exit code."
+strong = "Standard, plus an independent check the symptom patch cannot satisfy — a consumer the instruction never names, a property over the invariant, or an input shape the root cause alone handles."
+
+[tasks.fix-clamp2]
+thin = ["clamp_in_range", "clamp_below_reported"]
+standard = [
+    "clamp_in_range",
+    "clamp_below_reported",
+    "clamp_below_general",
+    "clamp_above_preserved",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "clamp_in_range",
+    "clamp_below_reported",
+    "clamp_below_general",
+    "clamp_above_preserved",
+    "no_regression",
+    "regression_test_present",
+    "clamp_float_exact",
+    "clamp_bounded_and_idempotent",
+]
+independent_check = "A property sweep over a value/bound grid the instruction never names: boundedness, idempotence, and value identity for a float already inside the range."
+
+[tasks.fix-strip-unicode]
+thin = ["ascii_unchanged", "accent_stripped_reported"]
+standard = [
+    "ascii_unchanged",
+    "accent_stripped_reported",
+    "non_latin_preserved",
+    "symbols_preserved",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "ascii_unchanged",
+    "accent_stripped_reported",
+    "non_latin_preserved",
+    "symbols_preserved",
+    "no_regression",
+    "regression_test_present",
+    "decomposed_input_equivalent",
+    "covers_unlisted_accents",
+    "idempotent_and_mark_free",
+]
+independent_check = "Decomposed (NFD) input and accents outside any hand-written fold table, plus a mark-free/idempotence property — reachable only by removing combining marks rather than listing characters."
+
+[tasks.feature-ndjson-merge]
+thin = ["merge_text_disjoint", "merge_text_dedupes"]
+standard = [
+    "merge_text_disjoint",
+    "merge_text_dedupes",
+    "merge_lines_dedupes",
+    "merge_lines_position_preserved",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "merge_text_disjoint",
+    "merge_text_dedupes",
+    "merge_lines_dedupes",
+    "merge_lines_position_preserved",
+    "no_regression",
+    "regression_test_present",
+    "merge_records_dedupes",
+    "merge_all_paths_agree",
+]
+independent_check = "merge_records, the shared entry point the instruction never names, plus a parity check that all three documented paths return the same result."
+
+[tasks.fix-tz-window]
+thin = ["hours_ordinary_day", "hours_spring_forward"]
+standard = [
+    "hours_ordinary_day",
+    "hours_spring_forward",
+    "hours_fall_back",
+    "slots_cover_transition_day",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "hours_ordinary_day",
+    "hours_spring_forward",
+    "hours_fall_back",
+    "slots_cover_transition_day",
+    "no_regression",
+    "regression_test_present",
+    "window_bounds_every_day",
+    "windows_tile_without_gap",
+]
+independent_check = "day_window itself, over all 365 days: each window must start and end at the documented local midnights and tile the year without a gap."
+
+[tasks.fix-decimal-round]
+thin = ["fast_no_tie", "fast_half_up_reported"]
+standard = [
+    "fast_no_tie",
+    "fast_half_up_reported",
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "fast_no_tie",
+    "fast_half_up_reported",
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "no_regression",
+    "regression_test_present",
+    "backend_parity_decimal_literals",
+    "parity_through_line_total",
+]
+independent_check = "Decimal literals a float cannot hold exactly (2.675, 1.005, 8.615), and the order-line consumer — both distinguish quantising the number the caller wrote from quantising the float's error."
+
+[tasks.fix-quota-rollup]
+thin = ["member_usage_recorded", "team_usage_reported"]
+standard = [
+    "member_usage_recorded",
+    "team_usage_reported",
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "member_usage_recorded",
+    "team_usage_reported",
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "no_regression",
+    "regression_test_present",
+    "rollup_invariant_at_source",
+    "rollup_invariant_with_late_member",
+]
+independent_check = "The rollup field itself against the members' own totals, checked after every step of an interleaving the instruction never describes — unreachable by patching readers one at a time."
+
+[tasks.fix-graph-cycle]
+thin = ["topo_order_plain", "topo_order_with_duplicate_edge"]
+standard = [
+    "topo_order_plain",
+    "topo_order_with_duplicate_edge",
+    "dependency_count_deduplicated",
+    "tree_lists_each_dependency_once",
+    "real_cycle_still_raises",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "topo_order_plain",
+    "topo_order_with_duplicate_edge",
+    "dependency_count_deduplicated",
+    "tree_lists_each_dependency_once",
+    "real_cycle_still_raises",
+    "no_regression",
+    "regression_test_present",
+    "neighbours_lists_each_dependency_once",
+    "add_edge_idempotent",
+]
+independent_check = "Graph.neighbours, the documented accessor every reader goes through, plus idempotence of the build itself — the invariant at the site the duplicate is created."
+
+[tasks.fix-merge-3way]
+thin = ["merge_one_sided_change", "merge_same_change_agrees"]
+standard = [
+    "merge_one_sided_change",
+    "merge_same_change_agrees",
+    "nested_same_change_agrees",
+    "true_conflict_still_reported",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "merge_one_sided_change",
+    "merge_same_change_agrees",
+    "nested_same_change_agrees",
+    "true_conflict_still_reported",
+    "no_regression",
+    "regression_test_present",
+    "deletion_applies_flat",
+    "deletion_applies_nested",
+]
+independent_check = "The deletion rule, in both entry points: documented in the README, named nowhere in the instruction, and reached only by a fix that replaces the duplicated rule table rather than adding one branch to it."
+
+[tasks.fix-ledger-replay]
+thin = ["parity_posts_only", "parity_single_void"]
+standard = [
+    "parity_posts_only",
+    "parity_single_void",
+    "parity_duplicate_void",
+    "fold_excludes_voided",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "parity_posts_only",
+    "parity_single_void",
+    "parity_duplicate_void",
+    "fold_excludes_voided",
+    "no_regression",
+    "regression_test_present",
+    "parity_void_before_post",
+    "parity_prefix_sweep",
+]
+independent_check = "A void arriving before the post it cancels, and fold-vs-replay parity at every prefix of a longer log — both need the incremental path to carry the voided set, which no patch to the reported case reaches."

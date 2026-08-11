@@ -1,0 +1,27 @@
+id = "feature-ndjson-merge"
+instruction = """
+The `ndj` package README states that merging keeps one record per id — a record on
+the right replaces the record with the same id on the left, in the replaced
+record's position. `merge_text` does not do that: merging a document containing
+`{"id": "a", "v": 1}` with one containing `{"id": "a", "v": 9}` returns both
+records instead of just the newer one. Make the package behave as the README
+documents. Preserve the existing public API, and keep the shipped test suite
+passing.
+"""
+
+[limits]
+trial_timeout_s = 1200
+max_turns = 100
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+hard_criteria = ["merge_lines_dedupes", "merge_lines_position_preserved"]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

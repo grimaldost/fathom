@@ -1,0 +1,130 @@
+# Per-task complexity scores for the calibration confusion matrix.
+#
+# RATING STATUS: **author-only, one rater**. The design's acceptance criteria ask for
+# two blind raters, as model-tier-v1 had. The bank was authored in a single
+# non-interactive session with no way to convene a second, blind rater, so the second
+# rating is an OPEN pre-run step, not a completed one. The per-axis breakdown below is
+# recorded in full precisely so a second rater can check the arithmetic rather than
+# re-derive it, and so a disagreement lands on a named axis. Until that rating exists,
+# every band claim in README.md is provisional.
+#
+# Rubric: the pinned model-complexity rubric shipped at
+# `choosing-models/references/scoring-rubric.md` (the same rubric model-tier-v1 used,
+# kept pinned for cross-study continuity). Base 30 for anything with logic; the
+# cross-shape floor raises a sub-26 score to 26 but never lowers one.
+#
+# Predicted tier = tier_for_score(score): 0-25 weak / 26-55 mid / 56-100 strong.
+
+[scores]
+fix-clamp2 = 20
+fix-strip-unicode = 40
+feature-ndjson-merge = 38
+fix-tz-window = 50
+fix-decimal-round = 54
+fix-quota-rollup = 60
+fix-graph-cycle = 62
+fix-merge-3way = 67
+fix-ledger-replay = 71
+
+# Per-axis breakdown, for the second rater. Keys are the rubric's own axes:
+# base + structure + reasoning + domain + context + output + adjustments.
+# `cross_shape` records whether the cross-shape floor fired (it never lowers a score).
+
+[breakdown.fix-clamp2]
+base = 30
+structure = 0
+reasoning = 0
+domain = 0
+context = 0
+output = 0
+adjustments = -10
+cross_shape = false
+note = "the high bound already works; the fix mirrors an existing branch — copy/paste reasoning, mechanical verification and clear acceptance both discount"
+
+[breakdown.fix-strip-unicode]
+base = 30
+structure = 0
+reasoning = 5
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = false
+note = "single function, fix site named; Unicode normalisation is a domain rule the prompt does not state"
+
+[breakdown.feature-ndjson-merge]
+base = 30
+structure = 5
+reasoning = 10
+domain = 0
+context = 3
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered shared-helper fan-out: the prompt names one of three entry points for one rule"
+
+[breakdown.fix-tz-window]
+base = 30
+structure = 5
+reasoning = 10
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered displaced cause: symptom in the report layer, fault in the window bound; DST-shaped day arithmetic"
+
+[breakdown.fix-decimal-round]
+base = 30
+structure = 5
+reasoning = 10
+domain = 12
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered backend parity; money rounding scored regulatory (+12) rather than domain-rule (+8) — the axis a second rater is most likely to move, and the one that puts this rung on the 55 edge"
+
+[breakdown.fix-quota-rollup]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "cross-module invariant across four modules; reasoning scored trade-off (+15) because the fix has to choose between refreshing the cached rollup and deriving it"
+
+[breakdown.fix-graph-cycle]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "displaced cause across builder/traverse/report; the fix must also leave genuine cycle detection intact"
+
+[breakdown.fix-merge-3way]
+base = 30
+structure = 10
+reasoning = 20
+domain = 8
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "a duplicated four-rule resolution table with two rules wrong; proof-like case analysis over base/ours/theirs including absence"
+
+[breakdown.fix-ledger-replay]
+base = 30
+structure = 10
+reasoning = 20
+domain = 12
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "incremental fold must equal a whole-log replay under out-of-order and repeated events; ledger reconciliation scored regulatory"

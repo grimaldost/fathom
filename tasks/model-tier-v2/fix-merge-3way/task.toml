@@ -1,0 +1,25 @@
+id = "fix-merge-3way"
+instruction = """
+Users of the `cfg` package report that `merge({"a": 1}, {"a": 2}, {"a": 2})` returns
+a `Conflict`. Both sides made the *same* change, so per the package README the
+result should be `{"a": 2}` — there is nothing to disagree about. Find and fix the
+bug so the package behaves as the README documents. Preserve the existing public
+API, and keep the shipped test suite passing.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+hard_criteria = ["nested_same_change_agrees", "true_conflict_still_reported"]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

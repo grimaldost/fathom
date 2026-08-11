@@ -1,0 +1,25 @@
+id = "fix-strip-unicode"
+instruction = """
+Users of the `textnorm` package report that `strip_accents("café")` comes back as
+`"caf"` — the accented letter is dropped instead of being replaced by its
+unaccented form. `strip_accents("naïve")` is wrong in the same way. Find and fix
+the bug so `strip_accents` behaves as documented in the package README for every
+input. Preserve the existing public API, and keep the shipped test suite passing.
+"""
+
+[limits]
+trial_timeout_s = 1200
+max_turns = 80
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+hard_criteria = ["non_latin_preserved", "symbols_preserved"]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."
