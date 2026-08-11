@@ -60,6 +60,22 @@ argument that motivated them stays readable beside the change that answered it.
   that would prevent recurrence — the five write-ups were the live dependency; the ratchet
   is the follow-up.
 
+Two rows shipped from **Next** because the paid run walked into them:
+
+- **FATH-B14 — SHIPPED.** The verifier's `stdout`/`stderr` are persisted on the trial row (bounded
+  at 4096 chars, since the ledger is committed). Promoted mid-wave: a $2.00 trial errored with
+  `verifier error: non-JSON/crash` and the reason was unrecoverable, which is precisely the cost
+  this row predicted.
+- **A verifier-protocol defect found by that same trial, not previously on the backlog.** A verifier
+  that checks behaviour-preservation must import the agent's modified package, so anything that
+  package prints at import time lands on stdout ahead of the JSON — and the whole-stdout parse threw
+  the trial away. The discard is **arm-correlated**: whether the agent adds a print is a property of
+  the arm, so an arm that writes chattier code loses more trials. That is a silent bias, not merely
+  a lost trial. `extract_criteria` now takes the last JSON object on stdout. Reproduced locally
+  before fixing; absence of any object is still an error. **`fathom validate` cannot catch this
+  class**, because validation only ever runs the verifier against the *unmodified* fixture — worth
+  writing into FATH-B10's bank-design reference when it is split.
+
 Two rows moved by evidence this wave rather than by argument:
 
 - **FATH-B20** is now urgent, not S-effort housekeeping. `tasks/serena-nav-v1/` and
@@ -67,6 +83,29 @@ Two rows moved by evidence this wave rather than by argument:
   be re-measured at all** — the instrument is fixed and the experiment is unrecoverable.
 - **FATH-B19** partially addressed: `fathom report` now takes `tasks_dir` (needed for the
   turn caps). `--scenarios-dir` / `--ledger-dir` are still not threaded.
+
+### Cross-project gate status after this wave
+
+Recorded here because four sibling backlogs read this file for it.
+
+| Gate | Verdict | Evidence |
+|---|---|---|
+| **CRAF-B01** (flagship skills vs no-skill baseline) | **confirmed, and it points away from retirement** for `python-engineering`; **un-invalidated** for the process-discipline banks | `docs/reports/2026-08-11-skill-pyeng-v1-revalidation.md`. Skill arm 3/3 vs 0/7 pooled controls on `uv` and `ruff-single-quote`, p = 0.0083, and the cheapest arm. Both preconditions the item names (FATH-B01, FATH-B02) are closed and both were checked against these banks. Covers 1 of the 5 skills the item names; the other four are unmeasured. |
+| **CRAF-B21** (retire the always-on injected prose) | **confirmed as far as it goes — but the item's phrasing overstates it** | `docs/reports/2026-07-23-inject-content-v1-findings.md`. Injecting the generic protocol did not beat injecting nothing (9/10 vs 9/10, difference zero, and it was not more expensive). That supports retiring for want of demonstrated benefit. It does **not** show no effect: the interval on the difference spans about ±30 pp, the bank ceilings with bare already at 90%, and the arm that swept (10/10) is itself an injected surface. |
+| **KEEL-B09** (pre-mortem directive ablation) | **still-unmeasured** | Needs a bank that does not exist. Skeleton and cost plan: `docs/specs/2026-08-11-cross-project-gate-banks.md` (~72 trials, ~$20, plus a human adjudication pass the tokens do not cover). Both fathom preconditions are now closed, so the gate is unblocked. |
+| **MANT-B36** (multi-substrate research vs single-provider) | **still-unmeasured** | Same document (~60 trials, ~$70). Unblocked by FATH-B01/B02 closing, but the long pole is a question set with defensible post-hoc answers, which does not exist. Note: the armed arm bills a second provider account that `cost_usd_est` cannot see, so the 8.8× comparison is unmeasurable without recording provider-side cost separately. |
+| **CONV-B28** (measure convoy's own skill) | **still-unmeasured, and not fathom's to run alone** | It gates on the collection's CRAF-B29, not on a fathom row; the recall half is meant to be imported from CRAF-B29's sealed holdout rather than re-purchased here. (CONV-B17 is a CLI argument-name bug with no measurement — it does not belong in this list.) |
+
+**The one thing that cannot be re-measured.** The unarmed-arm run that motivated FATH-B01 is
+unrecoverable: `tasks/serena-nav-v1/` and `-v2/` hold no bank and no ledger. The instrument is fixed
+and the experiment is gone, so "did the arming defect change that verdict?" is now permanently
+unanswerable. That is FATH-B20, and it is the strongest argument in this file for closing it.
+
+**The two 0/180 banks were not re-run, deliberately.** `humble-vs-super-v3` and `-v4` both pass
+validation now (3 pass / 0 fail and 2 pass / 0 fail): their fixtures do leave work for an arm. Their
+ceiling was the *other* mode — tasks too easy, so every arm succeeds — which the triad explicitly
+cannot detect and which a re-run would simply reproduce at full price. Re-running them would buy a
+known answer.
 
 ## Reconciled — shipped since the last sweep, not re-proposed
 
@@ -366,7 +405,7 @@ elsewhere.** *(S · [triage] T3a/T3b + [review])*
   and skipped counts, and total USD; and either a cost/tokens field on new trial rows or a
   `fathom report --per-trial` view. Both are additive.
 
-**FATH-B14 — Trials destroy their own evidence, and the fix is smaller than the reports proposed.**
+[SHIPPED 2026-08-11] **FATH-B14 — Trials destroy their own evidence, and the fix is smaller than the reports proposed.**
 *(S · [triage] T5a)*
 
 - **Cause / evidence:** the verifier's parsed answers are discarded, so a failing criterion cannot be
