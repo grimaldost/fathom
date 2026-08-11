@@ -192,6 +192,27 @@ def mcp_tools_in(tools: Sequence[str]) -> list[str]:
     return [t for t in tools if t.startswith(MCP_TOOL_PREFIX)]
 
 
+def server_tool_prefix(server_name: str) -> str:
+    """The ``mcp__<slug>`` prefix the tools of *server_name* carry.
+
+    The CLI slugifies a server's display name by collapsing every run of
+    non-alphanumerics to a single underscore, so ``plugin:serena:serena`` serves
+    ``mcp__plugin_serena_serena__*`` and the account-level ``claude.ai Context7``
+    serves ``mcp__claude_ai_Context7__*``.  Attribution matters: the first live
+    run of this gate failed three correctly-armed arms because ambient
+    account-level connectors leak into the isolated spawn and register tools no
+    arm asked for.  Charging those to an arm is a false positive, and a gate that
+    cries wolf is how an operator learns to pass the override.
+    """
+    return MCP_TOOL_PREFIX + re.sub(r"[^A-Za-z0-9]+", "_", server_name).strip("_")
+
+
+def tools_served_by(servers: Sequence[Mapping[str, Any]], tools: Sequence[str]) -> list[str]:
+    """The entries of *tools* attributable to one of *servers*."""
+    prefixes = tuple(server_tool_prefix(str(s.get("name", ""))) + "__" for s in servers)
+    return [t for t in tools if t.startswith(prefixes)]
+
+
 def _declared_hook_events(settings_path: str) -> list[str]:
     """Hook event kinds the arm's settings.json declares."""
     try:
@@ -272,7 +293,10 @@ def _check_plugins(sc: ResolvedScenario, obs: ArmingObservation) -> list[ArmingC
             )
         )
 
-    mcp_tools = mcp_tools_in(obs.tools)
+    # Only the tools the ARM's own servers serve. Ambient account-level connectors
+    # register mcp__* tools in every spawn; default-deny already refuses them, and
+    # they are no part of this arm's treatment.
+    mcp_tools = tools_served_by(owned, obs.tools)
     if owned and not mcp_tools:
         checks.append(
             ArmingCheck(
@@ -280,7 +304,8 @@ def _check_plugins(sc: ResolvedScenario, obs: ArmingObservation) -> list[ArmingC
                 "plugin-served MCP tools registered",
                 False,
                 f"servers={[s.get('name') for s in owned]} registered NO mcp__* tools — "
-                "the arm's tools are absent from the spawn",
+                f"the arm's tools are absent from the spawn "
+                f"(ambient tools present: {mcp_tools_in(obs.tools)})",
             )
         )
         return checks

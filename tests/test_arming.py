@@ -244,6 +244,40 @@ class MisarmedAllowlistTests(unittest.TestCase):
         )
         self.assertFalse(arming.all_ok(arming.verify_arming(sc, obs)))
 
+    def test_ambient_mcp_tools_are_not_charged_to_the_arm(self) -> None:
+        # Caught by the first live run of this gate: account-level connectors leak
+        # into the isolated spawn and register their own mcp__* tools.  They are
+        # not the arm's treatment, and default-deny already refuses them — failing
+        # a skills-only plugin arm because an unrelated connector is unreachable
+        # would be a false positive that trains the operator to pass --force.
+        sc = self._scenario(("Read", "Write"))
+        obs = make_obs(
+            plugins=(self.registered,),
+            tools=("Read", "mcp__claude_ai_Context7__query-docs"),
+            mcp_servers=({"name": "claude.ai Context7", "status": "pending"},),
+        )
+        checks = arming.verify_arming(sc, obs)
+        self.assertTrue(arming.all_ok(checks), [c.detail for c in checks if not c.ok])
+
+    def test_a_mount_serving_a_server_that_registers_no_tools_FAILS(self) -> None:
+        sc = self._scenario(("Read", "mcp__plugin_serena_serena"))
+        obs = make_obs(
+            plugins=(self.registered,),
+            # An ambient connector's tools are present; the arm's own are not.
+            tools=("Read", "mcp__claude_ai_Context7__query-docs"),
+            mcp_servers=(
+                {"name": "plugin:serena:serena", "status": "connected"},
+                {"name": "claude.ai Context7", "status": "pending"},
+            ),
+        )
+        self.assertFalse(arming.all_ok(arming.verify_arming(sc, obs)))
+
+    def test_server_tool_prefix_matches_the_observed_spelling(self) -> None:
+        self.assertEqual(
+            arming.server_tool_prefix("plugin:serena:serena"), "mcp__plugin_serena_serena"
+        )
+        self.assertEqual(arming.server_tool_prefix("claude.ai Context7"), "mcp__claude_ai_Context7")
+
     def test_an_ambient_unhealthy_server_is_ignored(self) -> None:
         # Account-level connectors leak into the spawn's init event as `pending` /
         # `needs-auth`.  They are not the arm's treatment and must not fail its gate.
