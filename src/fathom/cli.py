@@ -398,6 +398,20 @@ def run_matrix(
             # is never scored as a silent FAIL and is re-run on resume (spec §6).
             status_value = "errored" if verifier_errored else trial_result.status.value
             detail = "; ".join(p for p in (trial_result.detail, verifier_note) if p)
+
+            # FATH-B03: a trial that did not run must not look like one that ran and
+            # failed. `verifier_results` used to be written for every status except
+            # INFRASTRUCTURE, so 166 usage-limit casualties landed as errored trials
+            # carrying {correctness: false, footprint: false, trigger_reached: false}
+            # — structurally identical to real negatives. The first analysis pass read
+            # them as such and depressed every affected arm's rate on a paid analysis
+            # until it was caught by hand. Drop the criteria and mark the row invalid,
+            # so the distinction is a property of the data rather than a discipline
+            # every reader has to remember. Additive and append-only-safe: no existing
+            # line is rewritten, and a legacy row without `valid` still loads.
+            valid = status_value == "completed"
+            if not valid:
+                verifier_data = None
             trial_rec = _ledger.TrialRecord(
                 bank=bank.name,
                 task_id=task.id,
@@ -412,6 +426,7 @@ def run_matrix(
                 detail=detail,
             )
             trial_dict = dataclasses.asdict(trial_rec)
+            trial_dict["valid"] = valid
             trial_dict["scenario"] = sc.name
             trial_dict["holdout"] = task.id in bank.holdout
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)

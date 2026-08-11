@@ -1153,6 +1153,85 @@ class ArmingGateTests(unittest.TestCase):
         self.assertEqual(probe.calls, [])
 
 
+class UnrunTrialsAreStructurallyDistinctTests(_Base):
+    """An un-run trial must not look like a real negative (FATH-B03).
+
+    ``verifier_results`` was written whenever ``trial_result.scored`` was true —
+    every status except INFRASTRUCTURE. 166 usage-limit casualties therefore
+    landed as ``status="errored"`` carrying ``{correctness: false, footprint:
+    false, trigger_reached: false}``, structurally identical to a trial that ran
+    and failed. The first analysis pass read them as real negatives and depressed
+    every affected arm's rate on a paid analysis until it was caught by hand.
+
+    Correctness must not depend on every reader independently remembering to
+    filter on ``status``.
+    """
+
+    def _errored_executor(self):  # noqa: ANN202
+        def _fn(task, workspace, scenario):  # noqa: ANN001, ANN202
+            return TrialResult(
+                status=TrialStatus.ERRORED,
+                runs=[_ok_run()],
+                pin_level=PIN_STRONG,
+                detail="usage limit reached mid-matrix",
+            )
+
+        return StubExecutor(_fn)
+
+    def _trials(self, ledger_dir):  # noqa: ANN001, ANN202
+        """Read the raw on-disk JSONL — the shape external consumers actually see."""
+        import json
+
+        path = pathlib.Path(ledger_dir) / f"{self.bank.name}.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+        return [r for r in rows if r.get("kind") == "trial"]
+
+    def test_an_errored_trial_carries_no_criteria_dict(self) -> None:
+        executor = self._errored_executor()
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            executor_factory=lambda sc: executor,
+        )
+        trials = self._trials(self.ledger_dir)
+        self.assertTrue(trials)
+        for t in trials:
+            self.assertEqual(t["status"], "errored")
+            self.assertIsNone(
+                t["verifier_results"],
+                "an errored trial must not emit criteria a reader can mistake for a "
+                "measured failure",
+            )
+
+    def test_an_errored_trial_is_explicitly_marked_invalid(self) -> None:
+        executor = self._errored_executor()
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            executor_factory=lambda sc: executor,
+        )
+        for t in self._trials(self.ledger_dir):
+            self.assertIs(t.get("valid"), False)
+
+    def test_a_completed_trial_keeps_its_criteria_and_is_valid(self) -> None:
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+        )
+        trials = self._trials(self.ledger_dir)
+        self.assertTrue(trials)
+        for t in trials:
+            self.assertEqual(t["status"], "completed")
+            self.assertEqual(t["verifier_results"], {"ok": True})
+            self.assertIs(t.get("valid"), True)
+
+
 class BankValidationGateTests(unittest.TestCase):
     """`fathom run` must refuse to spend on a bank that cannot discriminate (FATH-B02)."""
 
