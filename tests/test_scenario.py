@@ -598,7 +598,17 @@ class TestPluginMount(unittest.TestCase):
         keys depend on these being byte-identical (ADR-0002).
 
         Hashes were captured with StubResolver before PluginsConfig was added;
-        they must remain stable across any schema extension."""
+        they must remain stable across any schema extension.
+
+        A *deliberate* change to an arm's injected asset legitimately shifts that
+        arm's hash — the content sha256 is an input by design (ADR-0002), which is
+        what keeps the old ledger rows distinguishable from the new ones. When that
+        happens the golden below is updated in the same commit as the asset, and the
+        run notes say why. What this test forbids is a hash moving because *code*
+        moved: `pyeng-skill` was last updated on 2026-08-11, when the injected body
+        was refreshed from the snapshot at `scenarios/skill-pyeng/assets/` to the
+        merged engineering-discipline 0.4.0 SKILL.md
+        (`docs/reports/2026-08-11-skill-pyeng-v1-merged-content-rerun.md`)."""
         known = {
             # top-level arms (scenarios/)
             "bare.toml": "bbc88a419d2128e34d8c1cc864f08dbc76591581c86b02f12da36807d302f810",
@@ -612,8 +622,11 @@ class TestPluginMount(unittest.TestCase):
             "skill-pyeng/generic-nudge.toml": (
                 "2c9a96a307f60f72ece5fcfe78148989fa0c459291d20260348954c1510ff8b5"
             ),
+            # refreshed 2026-08-11 to the merged 0.4.0 skill body (was
+            # 427bd061011bc4cf7a29cbdfb7fb88a2935222a44b5afb15137b8081d12107bf,
+            # the 2026-07-03 snapshot)
             "skill-pyeng/pyeng-skill.toml": (
-                "427bd061011bc4cf7a29cbdfb7fb88a2935222a44b5afb15137b8081d12107bf"
+                "794e39f78b0d3b4b0ac006981c1f5742364893fdf48cae626fc5996d69636a9a"
             ),
         }
         r = StubResolver()
