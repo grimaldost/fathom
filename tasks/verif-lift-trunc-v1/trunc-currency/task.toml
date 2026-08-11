@@ -1,0 +1,17 @@
+id = "trunc-currency"
+instruction = """
+A defect in `amounts/money.py` shows up as a large amount renders without thousands separators; the reported
+symptom points at `amounts/money.py:1-21`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

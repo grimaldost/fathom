@@ -1,0 +1,17 @@
+id = "data-null-rate"
+instruction = """
+`quality.nulls.null_rate` counts only `None` as null, so an empty or
+whitespace-only string is reported as populated and the rate understates the
+problem. Count the null-ish values the README lists.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

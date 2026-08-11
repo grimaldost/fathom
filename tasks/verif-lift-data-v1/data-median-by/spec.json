@@ -1,0 +1,75 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.medgroup",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "g": "a",
+            "value": 1
+          },
+          {
+            "g": "a",
+            "value": 2
+          },
+          {
+            "g": "a",
+            "value": 9
+          }
+        ],
+        "g"
+      ],
+      {
+        "a": 2.0
+      }
+    ]
+  ],
+  "func": "median_by",
+  "module_filename": "medgroup.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "g": "a",
+            "value": 1
+          },
+          {
+            "g": "a",
+            "value": null
+          },
+          {
+            "g": "a",
+            "value": 3
+          }
+        ],
+        "g"
+      ],
+      {
+        "a": 2.0
+      }
+    ],
+    [
+      [
+        [
+          {
+            "g": "a",
+            "value": null
+          }
+        ],
+        "g"
+      ],
+      {
+        "a": null
+      }
+    ]
+  ]
+}

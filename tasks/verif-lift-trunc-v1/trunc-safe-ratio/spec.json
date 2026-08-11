@@ -1,0 +1,46 @@
+{
+  "cited_slice_end": 21,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "ratios.ratio",
+  "edge_cases": [
+    [
+      [
+        1.0,
+        0.0
+      ],
+      null
+    ],
+    [
+      [
+        0.0,
+        0.0
+      ],
+      null
+    ]
+  ],
+  "func": "safe_ratio",
+  "func_past_slice": "safe_growth",
+  "module_filename": "ratio.py",
+  "package": "ratios",
+  "past_slice_cases": [
+    [
+      [
+        0.0,
+        5.0
+      ],
+      null
+    ],
+    [
+      [
+        0.0,
+        0.0
+      ],
+      null
+    ]
+  ],
+  "twin_def_line": 27
+}

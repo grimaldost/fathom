@@ -1,0 +1,17 @@
+id = "data-weekly-buckets"
+instruction = """
+`series2.resample.to_weekly` omits a week that has no rows, so the returned
+series has holes and is shorter than `weeks`. Emit one entry per requested
+week, with 0 for the empty ones, as the README describes.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

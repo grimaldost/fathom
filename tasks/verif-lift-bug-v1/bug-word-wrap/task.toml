@@ -1,0 +1,17 @@
+id = "bug-word-wrap"
+instruction = """
+`textkit.wrap.wrap_words` silently discards any word longer than `width`, so
+text goes missing from the wrapped output. Give an over-long word its own line
+as the README describes; leave the packing of ordinary words alone.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,17 @@
+id = "bug-interval-merge"
+instruction = """
+`intervals.merge.merge_spans` treats two spans that merely touch as separate,
+so `[0, 5]` and `[5, 9]` come back as two spans instead of one. Merge touching
+spans as the README requires; overlapping spans already behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

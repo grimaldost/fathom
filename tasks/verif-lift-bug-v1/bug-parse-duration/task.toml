@@ -1,0 +1,18 @@
+id = "bug-parse-duration"
+instruction = """
+`durationkit.parse.parse_duration` skips any component written as zero and
+returns 0 for a string that is not a duration at all, so a malformed input is
+indistinguishable from a genuine zero. Count zero components, and raise
+`ValueError` when the text contains no duration component, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

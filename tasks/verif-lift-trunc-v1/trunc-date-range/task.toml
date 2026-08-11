@@ -1,0 +1,17 @@
+id = "trunc-date-range"
+instruction = """
+A defect in `calendars/dates.py` shows up as a January date renders as 2026-1-5; the reported
+symptom points at `calendars/dates.py:1-19`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

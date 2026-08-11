@@ -1,0 +1,17 @@
+id = "data-weighted-avg"
+instruction = """
+`rollup.wavg.weighted_avg` returns `0.0` when the total weight is zero, which a
+consumer cannot tell apart from a genuine zero mean. Report an undefined mean as
+`None`, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

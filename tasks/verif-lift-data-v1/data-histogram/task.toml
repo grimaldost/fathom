@@ -1,0 +1,17 @@
+id = "data-histogram"
+instruction = """
+`rollup.hist.histogram` drops a value that sits exactly on the highest edge,
+because every bucket is half-open. The README closes the LAST bucket so the
+maximum is counted. Fix the counting; values outside the edges stay uncounted.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,54 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "paging.window",
+  "edge_cases": [
+    [
+      [
+        22,
+        5
+      ],
+      [
+        [
+          0,
+          5
+        ],
+        [
+          5,
+          10
+        ],
+        [
+          10,
+          15
+        ],
+        [
+          15,
+          20
+        ],
+        [
+          20,
+          22
+        ]
+      ]
+    ],
+    [
+      [
+        4,
+        10
+      ],
+      [
+        [
+          0,
+          4
+        ]
+      ]
+    ]
+  ],
+  "func": "page_bounds",
+  "module_filename": "window.py",
+  "package": "paging"
+}

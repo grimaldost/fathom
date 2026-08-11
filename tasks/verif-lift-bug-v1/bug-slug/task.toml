@@ -1,0 +1,17 @@
+id = "bug-slug"
+instruction = """
+`textkit.slug.slugify` emits one hyphen per separator character instead of one
+per run, so `a -- b` becomes `a----b`. Collapse each run to a single hyphen as
+the README describes; the trimming already behaves.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
