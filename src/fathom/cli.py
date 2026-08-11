@@ -9,6 +9,7 @@ import pathlib
 import sys
 from typing import Any, Callable, TextIO
 
+import fathom.arming as _arming
 import fathom.ledger as _ledger
 from fathom.grading.verifier import run_verifier
 from fathom.scenario import ResolvedScenario
@@ -17,12 +18,18 @@ from fathom.taskbank import Bank, Task, load_bank, stage_task
 _DEFAULT_REPEATS = 2
 _DEFAULT_BASE_BRANCH = "main"
 _CEILING_PER_TRIAL_USD = 2.00
+# Bound on the verifier output persisted per trial (FATH-B14). The ledger is
+# committed, so this is the line between "diagnosable" and "a megabyte of agent
+# output in git history on one bad trial".
+_VERIFIER_OUTPUT_CAP = 4096
 SCENARIOS_DIR = pathlib.Path("scenarios")
 TASKS_DIR = pathlib.Path("tasks")
 
 # Named exit codes (spec §10)
 EXIT_OK = 0
 EXIT_INFRASTRUCTURE = 10
+EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
+EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -94,8 +101,58 @@ def _build_parser() -> argparse.ArgumentParser:
         "cost guard for a paid matrix (§11)",
     )
 
+    run_p.add_argument(
+        "--skip-bank-validation",
+        action="store_true",
+        dest="skip_bank_validation",
+        help="Spend WITHOUT checking that the bank can discriminate. The check is "
+        "free and two banks have already ceilinged at 0/180 correctness failures "
+        "after the spend; skip it only when re-running a bank validated this session.",
+    )
+    run_p.add_argument(
+        "--skip-arming-check",
+        action="store_true",
+        dest="skip_arming_check",
+        help="Spend WITHOUT proving the treatment arms are armed. The arming gate "
+        "costs a fraction of a cent per arm and exists because an entirely unarmed "
+        "arm once scored 100%% over 9 trials; skip it only to re-run a matrix whose "
+        "arming was already verified this session.",
+    )
+
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
+
+    val_p = sub.add_parser(
+        "validate",
+        help="Check the bank-validation triad before any spend (free — no spawns)",
+    )
+    val_p.add_argument("bank", help="Bank name (tasks/<bank>/ directory)")
+    val_p.add_argument(
+        "--tasks-dir",
+        type=pathlib.Path,
+        default=TASKS_DIR,
+        dest="tasks_dir",
+        metavar="DIR",
+        help="Directory holding <bank>/ task banks (default: tasks/).",
+    )
+    val_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Also fail on UNVERIFIABLE properties (no reference solution, no gate).",
+    )
+
+    arm_p = sub.add_parser(
+        "verify-arming",
+        help="Prove each treatment arm is actually armed on a real spawn (§FATH-B01)",
+    )
+    arm_p.add_argument(
+        "--scenarios-dir",
+        type=pathlib.Path,
+        default=SCENARIOS_DIR,
+        dest="scenarios_dir",
+        metavar="DIR",
+        help="Directory globbed (non-recursively) for arm *.toml (default: scenarios/).",
+    )
 
     smoke_p = sub.add_parser("smoke", help="Real-spawn isolation smoke gate (§11)")
     smoke_p.add_argument(
@@ -126,6 +183,9 @@ def run_matrix(
     ledger_dir: pathlib.Path | None = None,
     max_budget_usd: float | None = None,
     include_holdout: bool = False,
+    arming_probe: Any | None = None,
+    skip_arming_check: bool = False,
+    skip_bank_validation: bool = False,
     out: TextIO | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
@@ -194,6 +254,75 @@ def run_matrix(
         print("nothing to do", file=_out)
         return EXIT_OK
 
+    # --- Bank validity gate: can this bank measure anything at all? ---------
+    # Free (local verifier runs, no spawns) and ordered first, because a bank that
+    # cannot discriminate makes the arming question moot: every arm scores 100%
+    # and the run returns a null manufactured by the instrument (FATH-B02).
+    if skip_bank_validation:
+        print("WARNING: --skip-bank-validation: spending on an unvalidated bank", file=_out)
+    else:
+        import fathom.validate as _validate
+
+        print(f"validate: checking bank '{bank.name}' can discriminate...", file=_out)
+        bank_checks = _validate.validate_bank(bank, stage_fn=_stage_fn, verifier_fn=_verifier)
+        if not _validate.validation_ok(bank_checks):
+            print(_validate.render_validation(bank.name, bank_checks), file=_out)
+            print(
+                "\nREFUSING TO RUN: this bank cannot measure what it claims to measure.\n"
+                "Fix the bank, or re-run with --skip-bank-validation to spend anyway.",
+                file=_out,
+            )
+            return EXIT_BANK_INVALID
+        unver = sum(1 for c in bank_checks if c.status == _validate.STATUS_UNVERIFIABLE)
+        print(
+            f"validate: bank discriminates on all {len(bank.tasks)} task(s)"
+            + (f" ({unver} propert(y/ies) unverifiable — see `fathom validate`)" if unver else ""),
+            file=_out,
+        )
+
+    # --- Arming gate: prove the treatment reached the spawn BEFORE spending ---
+    # fathom used to validate declarations only, so an entirely unarmed arm could
+    # score 100% over 9 trials with a clean smoke and zero infra errors. A null
+    # result from an unarmed arm is indistinguishable from "the tool does not
+    # help" — and a null is what the decisions downstream of this harness are
+    # looking for, so the instrument's failure mode and the reader's expectation
+    # point the same way. Hence: refuse, loudly, rather than warn (FATH-B01).
+    if skip_arming_check:
+        armed_arms = [sc.name for sc in resolved_scenarios if _arming.needs_verification(sc)]
+        if armed_arms:
+            print(
+                f"WARNING: --skip-arming-check: spending on treatment arms {armed_arms} "
+                "WITHOUT proof they are armed",
+                file=_out,
+            )
+    else:
+        to_verify = [sc for sc in resolved_scenarios if _arming.needs_verification(sc)]
+        probe = arming_probe
+        if probe is None and to_verify:
+            # Constructed only when there is something to prove, so a matrix of
+            # plain control arms neither spawns nor imports the probe.
+            from fathom.armingprobe import RealArmingProbe
+
+            probe = RealArmingProbe()
+        if to_verify:
+            print(
+                f"arming: verifying {len(to_verify)} treatment arm(s) on real spawns...",
+                file=_out,
+            )
+        armed_ok, arming_report = _arming.verify_all(resolved_scenarios, probe)
+        if arming_report:
+            print(arming_report, file=_out)
+        if not armed_ok:
+            print(
+                "\nREFUSING TO RUN: at least one treatment arm could not be proven armed.\n"
+                "An unarmed arm scores as the control and manufactures a null result.\n"
+                "Fix the arm, or re-run with --skip-arming-check to spend anyway.",
+                file=_out,
+            )
+            return EXIT_UNARMED
+        if to_verify:
+            print("arming: all declared treatments verified\n", file=_out)
+
     _executor_factory = (
         executor_factory if executor_factory is not None else _default_executor_factory
     )
@@ -228,10 +357,19 @@ def run_matrix(
             verifier_data: dict[str, Any] | None = None
             verifier_errored = False
             verifier_note = ""
+            # FATH-B14: the verifier's own output is in hand here and used to be
+            # dropped, so a failing criterion could not be diagnosed without
+            # re-running the trial — and a crashed verifier took its error message
+            # with it. Bounded because the ledger is committed: one bad trial must
+            # not put a megabyte of agent output into git history.
+            verifier_stdout = ""
+            verifier_stderr = ""
             if trial_result.scored:
                 verify_entry = task.task_dir / task.verify["entry"]
                 verify_timeout = int(task.verify.get("timeout_s", 60))
                 vr = _verifier(verify_entry, workspace, timeout_s=verify_timeout)
+                verifier_stdout = (vr.stdout or "")[:_VERIFIER_OUTPUT_CAP]
+                verifier_stderr = (vr.stderr or "")[:_VERIFIER_OUTPUT_CAP]
                 if vr.outcome == "error":
                     # A verifier crash / timeout / non-JSON is NOT a task failure — it
                     # means we have no valid score. Recording it as a completed trial
@@ -273,6 +411,20 @@ def run_matrix(
             # is never scored as a silent FAIL and is re-run on resume (spec §6).
             status_value = "errored" if verifier_errored else trial_result.status.value
             detail = "; ".join(p for p in (trial_result.detail, verifier_note) if p)
+
+            # FATH-B03: a trial that did not run must not look like one that ran and
+            # failed. `verifier_results` used to be written for every status except
+            # INFRASTRUCTURE, so 166 usage-limit casualties landed as errored trials
+            # carrying {correctness: false, footprint: false, trigger_reached: false}
+            # — structurally identical to real negatives. The first analysis pass read
+            # them as such and depressed every affected arm's rate on a paid analysis
+            # until it was caught by hand. Drop the criteria and mark the row invalid,
+            # so the distinction is a property of the data rather than a discipline
+            # every reader has to remember. Additive and append-only-safe: no existing
+            # line is rewritten, and a legacy row without `valid` still loads.
+            valid = status_value == "completed"
+            if not valid:
+                verifier_data = None
             trial_rec = _ledger.TrialRecord(
                 bank=bank.name,
                 task_id=task.id,
@@ -287,6 +439,9 @@ def run_matrix(
                 detail=detail,
             )
             trial_dict = dataclasses.asdict(trial_rec)
+            trial_dict["valid"] = valid
+            trial_dict["verifier_stdout"] = verifier_stdout
+            trial_dict["verifier_stderr"] = verifier_stderr
             trial_dict["scenario"] = sc.name
             trial_dict["holdout"] = task.id in bank.holdout
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
@@ -393,6 +548,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_report(args)
     if args.command == "smoke":
         return _cmd_smoke(args)
+    if args.command == "verify-arming":
+        return _cmd_verify_arming(args)
+    if args.command == "validate":
+        return _cmd_validate(args)
     parser.print_help()
     return 1
 
@@ -447,7 +606,95 @@ def _cmd_run(args: argparse.Namespace) -> int:
         ledger_dir=ledger_dir,
         max_budget_usd=args.max_budget_usd,
         include_holdout=args.include_holdout,
+        skip_arming_check=args.skip_arming_check,
+        skip_bank_validation=args.skip_bank_validation,
     )
+
+
+def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenario]:
+    """Parse and resolve every arm in *scenarios_dir*, skipping unparsable files."""
+    from fathom.scenario import load_scenario, resolve_scenario
+
+    resolver = _DefaultResolver()
+    out: list[ResolvedScenario] = []
+    for sc_file in sorted(scenarios_dir.glob("*.toml")):
+        try:
+            out.append(resolve_scenario(load_scenario(sc_file), resolver))
+        except Exception as exc:  # noqa: BLE001 - one bad arm must not hide the rest
+            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
+    return out
+
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    """Check the bank-validation triad. Free — local verifier runs, no spawns."""
+    import fathom.validate as _validate
+
+    try:
+        bank = load_bank(args.tasks_dir / args.bank)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        return 1
+
+    checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
+    print(_validate.render_validation(bank.name, checks))
+    return EXIT_OK if _validate.validation_ok(checks, strict=args.strict) else EXIT_BANK_INVALID
+
+
+def _cmd_verify_arming(args: argparse.Namespace) -> int:
+    """Prove every declaring arm in a scenarios dir is armed, on real spawns."""
+    from fathom.armingprobe import RealArmingProbe
+
+    scenarios = _load_resolved_scenarios(args.scenarios_dir)
+    if not scenarios:
+        print(f"error: no scenarios found in {args.scenarios_dir}", file=sys.stderr)
+        return 1
+
+    declaring = [sc for sc in scenarios if _arming.needs_verification(sc)]
+    print(
+        f"verify-arming: {len(scenarios)} arm(s) in {args.scenarios_dir}, "
+        f"{len(declaring)} declaring a treatment axis"
+    )
+    for sc in scenarios:
+        axes = _arming.declared_axes(sc)
+        print(f"  {sc.name}: {', '.join(axes) if axes else '(control — nothing to verify)'}")
+    if not declaring:
+        return EXIT_OK
+
+    print("\nspawning one cheap probe per declaring arm...\n")
+    ok, report = _arming.verify_all(scenarios, RealArmingProbe())
+    print(report)
+    print("\nARMING RESULT:", "ALL VERIFIED" if ok else "SOME ARMS ARE NOT ARMED")
+    return EXIT_OK if ok else EXIT_UNARMED
+
+
+def _warn_if_unpublished(bank: str) -> None:
+    """Warn when a bank's conclusion is findable in neither a report nor STATUS.
+
+    Rendering the scorecard is free and repeatable; publishing the verdict where a
+    consumer can find it is the step that was unenforced prose and recurred until
+    five analyses' conclusions survived only in commit messages — one of which a
+    sibling backlog was citing to retire a shipped surface (FATH-B06). The warn
+    helps in the moment; `tests/test_ledger_coverage.py` is the part that binds.
+    """
+    reports_dir = pathlib.Path("docs") / "reports"
+    status = pathlib.Path("docs") / "STATUS.md"
+    try:
+        in_report = any(
+            bank in p.name or bank in p.read_text(encoding="utf-8", errors="replace")
+            for p in reports_dir.glob("*.md")
+        )
+        in_status = status.is_file() and bank in status.read_text(
+            encoding="utf-8", errors="replace"
+        )
+    except OSError:
+        return
+    if not in_report and not in_status:
+        print(
+            f"WARNING: no docs/reports/ entry and no docs/STATUS.md row mentions "
+            f"'{bank}'. The scorecard regenerates for free; the verdict does not. "
+            f"Write it up before the conclusion survives only in a commit message.",
+            file=sys.stderr,
+        )
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
@@ -456,6 +703,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     try:
         out_path = _report.render(args.bank)
         print(f"report written to {out_path}")
+        _warn_if_unpublished(args.bank)
         return EXIT_OK
     except Exception as exc:
         print(f"error rendering report: {exc}", file=sys.stderr)
