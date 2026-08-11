@@ -22,6 +22,7 @@ Stdlib only; runs without uv (`python tests/test_keel_kit_proof_assets.py`).
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import tomllib
 import unittest
@@ -57,6 +58,18 @@ def sha256(p: Path) -> str:
 
 def nonblank(text: str) -> list[str]:
     return [ln for ln in text.splitlines() if ln.strip()]
+
+
+def fenced(text: str) -> str:
+    """The fenced blocks of *text* — for these bodies, the gate's own reference contract."""
+    out, inside = [], False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            inside = not inside
+            continue
+        if inside:
+            out.append(line)
+    return "\n".join(out)
 
 
 def is_ordered_subsequence(sub: list[str], sup: list[str]) -> bool:
@@ -118,6 +131,92 @@ class TestDeletionOnly(unittest.TestCase):
         delta = (len(full) - len(core)) / len(full)
         self.assertLess(delta, 0.15, "if the cut grew, re-derive the power discussion")
         self.assertGreater(delta, 0.02)
+
+
+class TestWhatTheArmsShareAndWhatTheCutRemoves(unittest.TestCase):
+    """The two facts that decide which classes the run may be read on.
+
+    Both were missing from the first publication of this report and both change the reading, so
+    they are asserted rather than described: a later edit that makes either false must fail here
+    before it can quietly restore the stronger claim.
+    """
+
+    def test_every_armed_body_states_the_oracles_predicates_verbatim(self):
+        """The behaviour class is not "stated by neither body" — every armed arm holds the key.
+
+        Consequence, in the verifier's docstring and report §1.6: an armed-versus-bare gap on
+        `anchors_resolve` / `concept_map_paths_resolve` / `section_refs_resolve` /
+        `ledger_rows_anchor` measures possession of the rubric, not craft.
+        """
+        for arm in ARMED:
+            block = fenced(injected(arm).read_text(encoding="utf-8"))
+            for predicate in (
+                "A5 each concept->module path",
+                "A6 each `path:line` anchor",
+                "A8 each bare intra-spec `§N` reference",
+                "A12 when a `### Fold ledger` sub-table is present",
+            ):
+                self.assertIn(predicate, block, f"{arm}: the fence no longer states {predicate}")
+
+    def test_the_cut_pair_shares_a_byte_identical_fence(self):
+        """B and C state the ruler in the same words, so a B→C null on it is not a measurement."""
+        full = fenced(injected("b-vnext-full.toml").read_text(encoding="utf-8"))
+        core = fenced(injected("c-vnext-core.toml").read_text(encoding="utf-8"))
+        self.assertEqual(
+            full,
+            core,
+            "the cut pair's reference fences now differ — the behaviour class is no longer held "
+            "constant across them and §1.6's reading rules must be re-derived",
+        )
+
+    def test_the_relocation_pair_does_not_share_a_fence(self):
+        """A→B is not one edit: the vNext fence describes a gate the pinned ruler does not run.
+
+        The A12 clause is the demonstrated case — B and C tell the author a fold-ledger
+        confirmation may be `artifact:lo-hi`, and the pinned 0.14.0 oracle's `_LEDGER_ANCHOR_RE`
+        has no range form, so an arm that obeys the newer kit loses `gate_part_a_passes` and
+        `ledger_rows_anchor`. The penalty falls only on B and C; report §1.1 records it.
+        """
+        old = fenced((PREREG / "assets" / "kit-full.md").read_text(encoding="utf-8"))
+        new = fenced(injected("b-vnext-full.toml").read_text(encoding="utf-8"))
+        self.assertNotEqual(old, new)
+        self.assertIn("or `artifact:lo-hi`", new)
+        self.assertNotIn("artifact:lo-hi", old)
+
+    def test_most_of_the_cut_is_invisible_to_the_bank(self):
+        """The B→C words the bank cannot see, measured — the coverage gap in report §1.2.
+
+        11 of the 21 removed lines are Definition-of-Ready checklist items ("every invariant …
+        has an ADR", the post-fold coherence re-read, the measurement-profile item). No criterion
+        in `keelgate_verify.py` can detect their loss: they are asks about the spec's substance,
+        not about a construct the pinned gate parses. Only the A10/A9/A11 template notes map to a
+        criterion at all.
+        """
+        full = injected("b-vnext-full.toml").read_text(encoding="utf-8").splitlines()
+        core = injected("c-vnext-core.toml").read_text(encoding="utf-8").splitlines()
+        removed = [
+            ln[1:]
+            for ln in difflib.unified_diff(full, core, lineterm="", n=0)
+            if ln.startswith("-") and not ln.startswith("---")
+        ]
+        checklist, mode = [], None
+        for line in removed:
+            if not line.strip():
+                continue
+            if line.lstrip().startswith("- [ ]"):
+                mode = "checklist"
+            elif not line.startswith("      "):
+                mode = "note"
+            if mode == "checklist":
+                checklist.append(line)
+        words = sum(len(ln.split()) for ln in removed)
+        blind = sum(len(ln.split()) for ln in checklist)
+        self.assertGreater(
+            blind / words,
+            0.5,
+            "the majority of the cut is no longer DoR-checklist prose — re-derive the coverage "
+            "gap in §1.2 before reading a B→C null as licensing the cut",
+        )
 
 
 class TestOneAxisOnly(unittest.TestCase):
