@@ -323,9 +323,13 @@ def run_matrix(
         if to_verify:
             print("arming: all declared treatments verified\n", file=_out)
 
-    _executor_factory = (
-        executor_factory if executor_factory is not None else _default_executor_factory
-    )
+    if executor_factory is not None:
+        _executor_factory = executor_factory
+    else:
+
+        def _executor_factory(sc: ResolvedScenario) -> Any:
+            return _default_executor_factory(sc, max_budget_usd=max_budget_usd)
+
     if runner_factory is not None:
         _runner_factory = runner_factory
     else:
@@ -449,11 +453,25 @@ def run_matrix(
     return EXIT_OK
 
 
-def _default_executor_factory(scenario: ResolvedScenario) -> Any:
+def _default_executor_factory(
+    scenario: ResolvedScenario, max_budget_usd: float | None = None
+) -> Any:
     if scenario.strategy == "series":
         from fathom.strategies.series import SeriesExecutor
 
-        return SeriesExecutor()
+        if max_budget_usd is None:
+            return SeriesExecutor()
+        # `--max-budget-usd` is the per-spawn cost rail, and the engine's spawns are
+        # spawns. Without this the flag silently did nothing on a series arm — the
+        # runner it caps is the one the engine never uses (ADR-0001) — so the only
+        # ceiling in force was SeriesExecutor's own $20/$5/$3 default, and an operator
+        # who set the rail believed in one that was not there. Every role gets the
+        # same cap because the flag names a per-spawn cap, not a per-role policy.
+        return SeriesExecutor(
+            budget_impl=max_budget_usd,
+            budget_review=max_budget_usd,
+            budget_fix=max_budget_usd,
+        )
     if scenario.strategy in ("gated-session", "gated-review"):
         from fathom.strategies.gated_session import GatedSessionExecutor
 

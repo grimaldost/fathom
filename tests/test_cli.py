@@ -993,6 +993,35 @@ class TestUnknownStrategyRejected(unittest.TestCase):
             with self.subTest(strategy=strat):
                 self.assertIsNotNone(_default_executor_factory(self._resolved(strat)))
 
+    def test_series_arm_honours_the_max_budget_rail(self):
+        """`--max-budget-usd` must reach the ENGINE's spawns, not only the adapter's.
+
+        The series executor ignores the Runner (the engine spawns the CLI itself,
+        ADR-0001), so capping the runner caps nothing on a series arm. Before this,
+        the flag was silently inert there and the only ceiling in force was the
+        executor's own $20/$5/$3 default — an operator who set a rail had one they
+        did not have.
+        """
+        from fathom.cli import _default_executor_factory
+
+        ex = _default_executor_factory(self._resolved("series"), max_budget_usd=2.0)
+        self.assertEqual((ex.budget_impl, ex.budget_review, ex.budget_fix), (2.0, 2.0, 2.0))
+
+    def test_series_arm_without_a_rail_keeps_the_recorded_defaults(self):
+        """No flag means the executor's explicit, recorded defaults — not zero, not none."""
+        from fathom.cli import _default_executor_factory
+        from fathom.strategies.series import (
+            DEFAULT_BUDGET_FIX,
+            DEFAULT_BUDGET_IMPL,
+            DEFAULT_BUDGET_REVIEW,
+        )
+
+        ex = _default_executor_factory(self._resolved("series"))
+        self.assertEqual(
+            (ex.budget_impl, ex.budget_review, ex.budget_fix),
+            (DEFAULT_BUDGET_IMPL, DEFAULT_BUDGET_REVIEW, DEFAULT_BUDGET_FIX),
+        )
+
     def test_dry_run_rejects_unknown_strategy(self):
         """--dry-run must catch a bad strategy up front (before planning/spawning)."""
         import contextlib
