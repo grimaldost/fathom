@@ -24,6 +24,50 @@ estimate (**S** — one focused change; **M** — a small series with tests; **L
 a multi-PR series), and the source tag. Feedback reports are cited by their corpus stem. Where the
 triage and the review disagree, the item says so rather than quietly picking a side.
 
+## Shipped in the 2026-08-11 instrument-trust wave (`backlog/wave-1`)
+
+The Now section's instrument-trust rows, in the order they were built. Each item below
+carries its inline status; the entries are kept in place rather than deleted so the
+argument that motivated them stays readable beside the change that answered it.
+
+- **FATH-B01 — SHIPPED.** `fathom.streams` (packaged stream-json reader) + `fathom.arming`
+  (four-axis verification) + `fathom.armingprobe` (one cheap real spawn per declaring arm)
+  + `fathom verify-arming` + a pre-flight in `fathom run` that refuses with `EXIT_UNARMED`
+  (11). Reverting `verify_arming` to the pre-fix "declaration is proof" behaviour turns 15
+  tests red, including the recorded serena-nav BLOCKER. One false positive found and fixed
+  on the first live run: ambient account-level MCP connectors leak into the isolated spawn
+  and were being charged to arms that never declared them.
+- **FATH-B02 — SHIPPED.** `fathom validate <bank>` (free) + a pre-flight in `fathom run`
+  refusing with `EXIT_BANK_INVALID` (12). Two false positives found by running it against
+  the real banks and fixed before trusting it: property 1 now reads the verifier's
+  **criteria** rather than its exit code (`skill-pyeng-v1`, the strongest-discriminating
+  bank in the corpus, was being reported unmeasurable), and property 3 refuses only when
+  the gate cannot execute at all, warning rather than failing on a red baseline
+  (`ablation-v2`'s visible suite encodes its target feature, so its baseline is red by
+  design). **Not claimed:** the triad cannot catch a bank whose tasks are simply too easy —
+  that ceiling stays authoring judgement, exactly as this item's own split says.
+- **FATH-B03 — SHIPPED.** A trial row drops its criteria and carries `valid=false` unless
+  `status == "completed"`. Additive; no committed line rewritten.
+- **FATH-B05 — SHIPPED (core).** Economy and Efficiency carry per-cell N and per-trial
+  min/median/max for tokens and turns; the Pareto star renders as a contested `★?` with a
+  footnote when the arms' per-trial ranges overlap; a new Arm Health table names trials at
+  or over `max_turns` and states that such an arm's pass rate is a lower bound. **Deferred:**
+  the successful-`mcp__*`-invocation count per arm, because it needs stream data that is
+  opt-in (`FATHOM_STREAM_DIR`) and absent from most committed runs — `fathom.streams` now
+  packages the parsing, so this is a small follow-up rather than new work.
+- **FATH-B06 — SHIPPED.** All five open analyses written up under `docs/reports/`, in the
+  order the cross-review specifies. **Deferred:** the `fathom report` warn and the CI gate
+  that would prevent recurrence — the five write-ups were the live dependency; the ratchet
+  is the follow-up.
+
+Two rows moved by evidence this wave rather than by argument:
+
+- **FATH-B20** is now urgent, not S-effort housekeeping. `tasks/serena-nav-v1/` and
+  `-v2/` hold no bank and no ledger, so the arming defect that motivated FATH-B01 **cannot
+  be re-measured at all** — the instrument is fixed and the experiment is unrecoverable.
+- **FATH-B19** partially addressed: `fathom report` now takes `tasks_dir` (needed for the
+  turn caps). `--scenarios-dir` / `--ledger-dir` are still not threaded.
+
 ## Reconciled — shipped since the last sweep, not re-proposed
 
 - `[settings] inject`, the user-scope hook arming axis (`1d6de89`). Its two follow-ups did not ship and
@@ -44,7 +88,7 @@ been open since the first triage pass.
 
 ## Now
 
-**FATH-B01 — An arm's arming is asserted, never verified, so an entirely unarmed arm can score 100%.**
+[SHIPPED 2026-08-11] **FATH-B01 — An arm's arming is asserted, never verified, so an entirely unarmed arm can score 100%.**
 *(M · [triage] T9a, reinforced by [review])*
 
 - **Cause / evidence:** fathom validates declarations — the inject file exists, the mount dir is
@@ -75,7 +119,7 @@ been open since the first triage pass.
   part that was not written down, and it is the argument that keeps this first when something cheaper
   looks more urgent. FATH-B02 is the other half of the same precondition.
 
-**FATH-B02 — The rule that decides whether a bank can measure anything is a paragraph, and it has
+[SHIPPED 2026-08-11] **FATH-B02 — The rule that decides whether a bank can measure anything is a paragraph, and it has
 already failed twice at real cost.** *(M · [review] + [triage] T13c + [research])*
 
 - **Cause / evidence:** CONTRIBUTING states the validation triad in prose — the verifier must fail on
@@ -99,7 +143,7 @@ already failed twice at real cost.** *(M · [review] + [triage] T13c + [research
   instrument's failure mode and the decision's preferred answer point the same way. With FATH-B01 this
   is their precondition; neither should be traded against a cheaper row.
 
-**FATH-B03 — A trial that never ran emits a full criteria dict, so un-run trials read as real
+[SHIPPED 2026-08-11] **FATH-B03 — A trial that never ran emits a full criteria dict, so un-run trials read as real
 negatives.** *(S · [triage] T12b)*
 
 - **Cause / evidence:** `verifier_results` is written whenever `trial_result.scored` is true, which is
@@ -143,7 +187,7 @@ end runs.** *(M · [triage] T11a/T11b + [review])*
   stall already falsified launch-time-only — and take the review's empirical per-strategy figure as the
   default the ceiling uses when no cap is set, printed with its provenance.
 
-**FATH-B05 — The scorecard renders point estimates it already has the data to qualify, and verdicts
+[SHIPPED 2026-08-11 (core; MCP-invocation count deferred)] **FATH-B05 — The scorecard renders point estimates it already has the data to qualify, and verdicts
 have flipped as a result.** *(M · [triage] T10a/T10c)*
 
 - **Cause / evidence:** spread, per-cell N, truncation and arming tells all sit in the ledger or one
@@ -163,7 +207,7 @@ have flipped as a result.** *(M · [triage] T10a/T10c)*
   when a large cache-token delta meets zero MCP calls. Home: `report.py`, plus turn accounting in the
   adapter for the cap tell, reading the same packaged stream helper FATH-B01 extracts.
 
-**FATH-B06 — A committed ledger with no report is invisible, and five analyses are already in that
+[SHIPPED 2026-08-11 (write-ups; warn + CI gate deferred)] **FATH-B06 — A committed ledger with no report is invisible, and five analyses are already in that
 state.** *(M · [triage] T2a + [review] + [research])*
 
 - **Cause / evidence:** 14 reports against 19 committed ledgers. STATUS itself marks five analyses
