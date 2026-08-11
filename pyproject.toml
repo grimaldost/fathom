@@ -27,6 +27,9 @@ exclude = [
     "tasks/*/plugins",
     "scenarios/*/assets",
     "scenarios/*-assets",
+    # A sha256-pinned copy of the gate a bank scores with. Reformatting it would move the
+    # ruler the run is measured against, and the pin assertion would (correctly) refuse to run.
+    "tasks/*/_oracle",
 ]
 
 [tool.ruff.format]

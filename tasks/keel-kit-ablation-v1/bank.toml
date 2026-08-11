@@ -1,0 +1,27 @@
+name = "keel-kit-ablation-v1"
+dataset_version = "1"
+# The spec-kit ablation. What is bought: whether the kit's PROSE is necessary to produce a design
+# spec that the method's own readiness gate accepts — the full kit (3,789 w) versus a candidate
+# core (2,109 w, a strict deletion of the full body) versus nothing at all, on realistic briefs.
+#
+# What is NOT bought: whether any CHECK is worth keeping, and whether a spec produced under any arm
+# leads to a better project. A null here licenses cutting prose and nothing else; the checks'
+# dispositions are answered by a free fixture corpus and a forward gate ledger, not by this bank.
+#
+# Circularity, stated up front rather than in a footnote: the oracle IS a component of the artifact
+# under study, so the armed arms are handed a description of the ruler. That is why the verifier
+# splits its criteria into four classes and why the BEHAVIOUR class — anchors, concept paths,
+# section references, runnable criteria, brief coverage, none of which any arm's prose asks for in
+# those words — is the load-bearing one. A full-arm win confined to the shared class measures
+# instruction-following, not value. See keelgate_verify.py.
+#
+# Circular-eval discipline on the fixtures: no fixture is a method document and no brief is about
+# specs, gates or method. Every task is staged against one invented package (`tinyetl`, order
+# records over invented `orders`/`regions` domains), so no arm can read the material under
+# measurement. Nothing in this bank names any environment-scoped internal tool.
+#
+# Two tasks are sealed as holdout (ADR-0005) because this bank feeds a retirement decision: one
+# authoring task whose sections relocate files (the pre-move anchor trap) and one repair task whose
+# planted defect is an enforcement over-claim in the forms the gate's own window heuristic is known
+# to miss. Neither was opened while the core arm's body was being worded.
+holdout = ["author-refactor-move", "repair-enforcement-overclaim"]
