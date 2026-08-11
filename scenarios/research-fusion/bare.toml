@@ -1,0 +1,15 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+# The control: a single-provider research run at the SAME tool budget as the armed
+# arm minus the mount. WebSearch/WebFetch are the single-provider substrate; the
+# fan-out and the epistemic sidecar are what the mount adds.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Glob", "Grep", "WebSearch", "WebFetch"]
+
+[limits]
+trial_timeout_s = 2400

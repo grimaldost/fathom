@@ -1,0 +1,1 @@
+For a ten-PR feature in an existing codebase, is a single long agent session better than a governed multi-session series with per-step quality gates, or the reverse? Give the trade-offs and a recommendation.

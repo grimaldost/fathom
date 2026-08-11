@@ -1,0 +1,34 @@
+id = "protocol-vs-abc"
+instruction = """
+Answer the research question in `question.txt` at the root of this workspace.
+
+Produce exactly two artifacts at the workspace root:
+
+1. `brief.md` — your answer: the trade-offs, the disagreements you found between
+   sources, and a recommendation.
+2. `sidecar.json` — a machine-readable epistemic record of the run, a single JSON
+   object with these keys:
+   - `question` (string, the question you answered)
+   - `generated_at` (ISO 8601 UTC timestamp)
+   - `sources` (list of objects, each with a `label` naming the source)
+   - `claims` (list)
+   - `divergences` (list; each object has `sides` — the steelmanned positions, one
+     per side — and `substrates`, naming which sources took which side; every
+     substrate named here must match one of the `sources[].label` values)
+   - `verification_queue` (list of things a reader should check)
+
+Do not modify `question.txt`.
+
+If any tool you use returns a path to a machine-readable record of its own run, read
+that file and use it — do not reconstruct from the tool's inline summary alone.
+"""
+
+[limits]
+# A fan-out research run is the slowest trial shape in the corpus: the armed arm
+# makes several provider calls and then a synthesis pass. 2400 s / 30 turns is sized
+# for that; the bare arm finishes well inside it.
+trial_timeout_s = 2400
+max_turns = 30
+
+[verify]
+entry = "verify.py"
