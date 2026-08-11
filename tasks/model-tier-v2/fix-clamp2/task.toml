@@ -13,7 +13,13 @@ max_turns = 80
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["clamp_below_general", "clamp_above_preserved"]
+# Derived, not chosen — see ../oracles.toml § HOW `hard_criteria` IS DERIVED: false on
+# the untouched fixture, false on counter/, true on solution/. The two dropped criteria
+# are why the rule exists: `clamp_below_general` is TRUE on the symptom patch and
+# `clamp_above_preserved` is TRUE on the untouched buggy source. This task admits only
+# two (one of them strong-level), the fewest in the bank — the weak anchor has no third
+# independent consumer to check.
+hard_criteria = ["clamp_two_sided_general", "clamp_bounded_and_idempotent"]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

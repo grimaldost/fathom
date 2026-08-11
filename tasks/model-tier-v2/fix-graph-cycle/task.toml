@@ -15,10 +15,14 @@ max_turns = 120
 [verify]
 entry = "verify.py"
 timeout_s = 180
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `real_cycle_still_raises`
+# is dropped: it is TRUE on the untouched buggy source, so it is a regression guard rather
+# than a capability check (it stays in the standard oracle and still gates the exit code).
+# Third is strong-level.
 hard_criteria = [
     "dependency_count_deduplicated",
     "tree_lists_each_dependency_once",
-    "real_cycle_still_raises",
+    "neighbours_lists_each_dependency_once",
 ]
 
 [gate]

@@ -3,10 +3,40 @@
 #
 # Every task's verify.py emits ONE criterion dict covering all three levels. The
 # levels are strictly nested — thin subset of standard subset of strong — so a
-# criterion in `thin` also appears in `standard` and `strong`. The `[verify]
-# hard_criteria` in each task.toml is the capability-gated subset of `standard`
-# (excluding the anchor, no_regression and regression_test_present); that is what
-# calibration.py reads today, and it is unchanged from the model-tier-v1 contract.
+# criterion in `thin` also appears in `standard` and `strong`.
+#
+# HOW `hard_criteria` IS DERIVED (the decision statistic; repaired 2026-08-11).
+# calibration.py computes each (arm, task) cell from `hard_criteria` ALONE, so any
+# criterion in that set which the plausible symptom patch already satisfies dilutes
+# the contrast: the counter scores 0.5 instead of 0, and a 0.5-vs-1.0 cell is
+# CI-overlapping — indeterminate — at every repeat count this bank can afford. The
+# first authoring shipped five such cells. The set is now derived mechanically,
+# from measurement rather than from judgement:
+#
+#   ADMIT a criterion iff, through the real verifier, it is FALSE on the untouched
+#   fixture (so it is capability-gated, not a regression guard that is already true
+#   at the starting state), FALSE on `counter/` (so the symptom patch cannot bank
+#   it), and TRUE on `solution/` (so it is reachable). Hygiene criteria
+#   (`no_regression`, `regression_test_present`) and the thin anchor are excluded
+#   by construction.
+#
+#   ORDER standard-level admissible criteria first, then strong-level ones in the
+#   order they appear below, and stop at THREE (never fewer than two).
+#
+# Three is a power target, not a taste: at repeats=2 a three-criterion cell pools
+# six Bernoulli draws, and Wilson keeps 1/6 (upper 0.56) disjoint from 6/6 (lower
+# 0.61) — so one criterion coming out true by luck still leaves the cell readable.
+# A two-criterion cell pools four draws, where 1/4 (upper 0.67) overlaps 4/4 (lower
+# 0.51) and the cell goes indeterminate. `tests/test_bank_model_tier_v2.py` asserts
+# the derivation, so a hand edit that re-dilutes a hard set fails the suite.
+#
+# CONSEQUENCE, RECORDED: on five tasks the third (and on two the second) admissible
+# criterion is a STRONG-level one, so `hard_criteria` is no longer a subset of
+# `standard` as it was in model-tier-v1. The pass bar on those tasks is "fixed the
+# root cause, checked independently" rather than "passes the standard oracle".
+# `bv.emit` still gates the EXIT CODE on `standard` only, so the two are decoupled:
+# raising the decision bar did not change any verifier's exit code, and the
+# thin/standard/strong slice below is unaffected.
 #
 # WHY THERE IS NO ORACLE ARM. The crossing is open-loop: the arm produces an
 # artifact, the verifier grades it afterwards, and nothing about the oracle reaches
@@ -22,6 +52,17 @@
 # needs a slicer that reads this file and re-computes the hard fraction per level.
 # That is analysis code over an existing ledger — it can be written after the run,
 # and it is gated behind ADR-0008 like the rest of the oracle dimension.
+#
+# ONE INSTRUCTION FOR WHOEVER BUILDS IT: compute the slope on the CAPABILITY subset,
+# excluding `no_regression` and `regression_test_present`. Both are test-writing
+# discipline, not oracle strength, and the committed record shows they swamp the
+# signal: `regression_test_present` is 0/5 for haiku/sonnet/sonnet5/opus on every
+# model-tier-v1 task and 0/15 for every `bare` arm in humble-vs-super-v3 against
+# 15/15 when a test-discipline skill is injected. Left in, the thin->standard slope
+# would be dominated by whether an arm writes tests, and the weak tier's slope would
+# look steeper than the strong tier's for entirely the wrong reason. They stay in the
+# `standard` level below because they are part of the v1 exit-code contract; they are
+# already excluded from `hard_criteria`, so the tier verdict is unaffected either way.
 
 schema_version = "1"
 
@@ -37,6 +78,7 @@ standard = [
     "clamp_below_reported",
     "clamp_below_general",
     "clamp_above_preserved",
+    "clamp_two_sided_general",
     "no_regression",
     "regression_test_present",
 ]
@@ -45,6 +87,7 @@ strong = [
     "clamp_below_reported",
     "clamp_below_general",
     "clamp_above_preserved",
+    "clamp_two_sided_general",
     "no_regression",
     "regression_test_present",
     "clamp_float_exact",
@@ -230,3 +273,24 @@ strong = [
     "parity_prefix_sweep",
 ]
 independent_check = "A void arriving before the post it cancels, and fold-vs-replay parity at every prefix of a longer log — both need the incremental path to carry the voided set, which no patch to the reported case reaches."
+
+# The positive control carries NO oracle slice: thin = standard = strong. It is ported
+# verbatim from model-tier-v1 so its observed tier gradient transfers (see its
+# task.toml), and inventing oracle levels for it would change the task whose prior
+# reading is the whole point. It is likewise exempt from the `hard_criteria` derivation
+# rule above — its two hard criteria are v1's, unchanged.
+[tasks.control-nonlocal-parse]
+thin = ["messages_quoted", "codes_quoted_tagged", "no_regression", "regression_test_present"]
+standard = [
+    "messages_quoted",
+    "codes_quoted_tagged",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "messages_quoted",
+    "codes_quoted_tagged",
+    "no_regression",
+    "regression_test_present",
+]
+independent_check = "None — the control is ported verbatim from model-tier-v1 and deliberately carries no independent check beyond its two hard criteria."

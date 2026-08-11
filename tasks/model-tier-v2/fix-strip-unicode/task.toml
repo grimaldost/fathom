@@ -14,7 +14,8 @@ max_turns = 80
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["non_latin_preserved", "symbols_preserved"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. Third is strong-level.
+hard_criteria = ["non_latin_preserved", "symbols_preserved", "covers_unlisted_accents"]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

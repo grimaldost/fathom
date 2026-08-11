@@ -31,6 +31,7 @@ STANDARD = [
     "clamp_below_reported",
     "clamp_below_general",
     "clamp_above_preserved",
+    "clamp_two_sided_general",
     "no_regression",
     "regression_test_present",
 ]
@@ -70,6 +71,20 @@ def main() -> int:
         #     still hold (a one-sided rewrite trips this) -------------------------
         "clamp_below_general": bv.check(lambda: clamp(-1, 2, 8) == 2 and clamp(3, 5, 5) == 5),
         "clamp_above_preserved": bv.check(lambda: clamp(20, 0, 10) == 10 and clamp(9, 5, 5) == 5),
+        # The capability-gated criterion of this task, and the reason it exists:
+        # `clamp_below_general` alone is satisfied by a one-sided rewrite, and
+        # `clamp_above_preserved` alone is satisfied by the untouched buggy source.
+        # Requiring BOTH bounds at once on inputs the instruction never names is
+        # false at the starting state AND false for a patch that trades one bound
+        # for the other, while any correct clamp satisfies it.
+        "clamp_two_sided_general": bv.check(
+            lambda: (
+                clamp(-1, 2, 8) == 2
+                and clamp(20, 0, 10) == 10
+                and clamp(3, 5, 5) == 5
+                and clamp(9, 5, 5) == 5
+            )
+        ),
         "no_regression": bv.check(lambda: bv.no_regression(view, SHIPPED_TESTS)),
         "regression_test_present": bv.check(
             lambda: bv.regression_test_present(view, PACKAGE, MODULE, BUGGY_ORIGINAL)

@@ -52,6 +52,7 @@ Scores are the pinned model-complexity rubric
 | `fix-graph-cycle` | displaced cause | 62 | strong | the other readers of the duplicated edge |
 | `fix-merge-3way` | cross-module | 67 | strong | the same rule in the nested entry point |
 | `fix-ledger-replay` | backend parity | 71 | strong | a repeated void the incremental path double-counts |
+| `control-nonlocal-parse` | **positive control** | 65 | strong | two consumers of one mis-split parser (ported from v1) |
 
 **Spread gate, honestly.** The 55 edge is **double-covered** — `fix-decimal-round` at 54
 (Δ1 below) and `fix-quota-rollup` at 60 (Δ5 above) — which the design expected the rubric
@@ -66,6 +67,44 @@ fix K.
 
 `fix-quota-rollup` is the sealed holdout (ADR-0005). It is the redundant half of the
 deliberately double-covered 55 rung, so sealing it costs the least band coverage.
+
+### The positive control
+
+`control-nonlocal-parse` is not a rung. It is `model-tier-v1`'s `fix-nonlocal-parse`,
+ported verbatim, and it is in the run set to make a **null interpretable**.
+
+Without it, the modal outcome of this bank — every task saturates, every cheapest-
+adequate arm reads `weak`, on-diagonal count near 1/9 — is numerically the v1 result
+this bank exists to replace, and nothing in the data separates *"the complexity score
+does not predict the tier"* from *"this bank had no headroom for a tier to matter"*.
+Those two license opposite decisions and one of them is a deletion. With K=9 the
+binomial 95% CI on any on-diagonal count spans both (5/9 → [0.21, 0.86]), and repeats
+cannot raise K.
+
+The control is the one task on the committed `ledger/model-tier-v1.jsonl` with an
+observed monotone tier gradient on its hard criteria: **haiku 2/5, sonnet 3/5,
+sonnet5 4/5, opus 5/5, opus5 5/5**. Nothing about it was retuned — same instruction,
+fixture, stashed original, shipped suite, and the same two hard criteria — because a
+control is worth having only if its prior reading transfers. It is therefore exempt
+from this bank's oracle slice, its `counter-strong` overlay, and the `hard_criteria`
+derivation rule; each exemption is asserted in the test suite rather than left to
+prose. Its score (65) is v1's two-rater final, which is why it has no per-axis
+breakdown in `scores.toml`.
+
+What it buys, in one line: **if the ladder does not separate on the control either,
+the run says nothing about tiers** — the instrument or the lineup moved, and no
+"retire tier X" conclusion is available from any part of the matrix.
+
+**How to read it — by its own rule, not by the confusion matrix.** "Separates" means
+`haiku`'s pooled Wilson CI is disjoint from `opus5`'s on its two hard criteria. Not
+"lands on-diagonal": at its own v1 rates the cheapest-adequate statistic reads
+*indeterminate* even at repeats=5, because `sonnet5` at 0.8 overlaps `opus5` while
+sitting outside ε — a correct answer to "which tier is cheapest-adequate" and a useless
+one for "does the ladder separate at all". The rule fixes the repeat count, too:
+haiku-vs-opus5 CIs are [0.150, 0.850] vs [0.510, 1.000] at repeats=2 (overlapping),
+[0.097, 0.700] vs [0.610, 1.000] at 3 (overlapping), and [0.168, 0.687] vs
+[0.722, 1.000] at **5 (disjoint)**. Bought at repeats 2 the control cannot separate
+even when the ladder does, so stage 1 is the minimum that answers its question.
 
 ## The evidence: satisfiable, violable, and where each oracle bites
 
@@ -139,19 +178,80 @@ whole standard oracle and fails at least one strong criterion, and a test assert
 strong oracle has demonstrable headroom over standard. Whether real models land in that
 gap is exactly what the run would measure.
 
-## The admission screen (Part B) is NOT satisfied
+## The decision statistic, and how `hard_criteria` is derived
 
-The design admits a task only after a two-arm screen — weak and strong, `--repeats 5`,
-unanimity on every repeat. **That screen has not run: it costs money and this program
-authored only.** What is done instead is the offline half — the counter/counter-strong
-demonstrations above, which prove the instrument can separate. What is undone is the
-empirical half, which is the half that catches a task that saturates in practice.
+`calibration.py` computes every (arm, task) cell from `hard_criteria` **alone**. That
+makes the choice of hard criteria the whole instrument, and it is now derived from
+measurement rather than picked:
 
-Concretely: the screen is 2 arms × 9 tasks × 5 repeats ≈ 90 trials, a $180 ceiling at the
-$2/trial rail. That is over the rail this bank's plan was sized to, which is the reason
-the first paid stage below is the full 3-arm matrix at low repeats rather than the
-screen: it buys the mid arm's boundary placement with the same trials, and a task that
-saturates shows up as 100% across all three arms just as visibly.
+> A criterion is admitted iff, through the real verifier, it is FALSE on the untouched
+> fixture, FALSE on `counter/`, and TRUE on `solution/`. Standard-level admissibles
+> come first, then strong-level ones, stopping at three and never below two.
+
+The rule exists because the first authoring picked by hand and shipped **five diluted
+cells**: on `fix-clamp2`, `fix-tz-window`, `fix-merge-3way`, `fix-ledger-replay` and
+`fix-graph-cycle`, the symptom patch already satisfied one hard criterion, so its cell
+scored 0.5 rather than 0. A 0.5-vs-1.0 cell is CI-overlapping — **indeterminate** — at
+every repeat count this program can afford, and indeterminate is the off-diagonal
+branch. Simulated through fathom's own `empirical_right_tier` under the noiseless
+alternative (the rubric is exactly right and every arm behaves as the overlays
+predict), the diluted variant ceilings at **4/8 on-diagonal with 4/8 indeterminate at
+repeats=2, and still 5/8 at repeats=5** — $240 for an instrument that cannot reach its
+own answer. The derived variant reaches **9/9 at repeats=2**, at no extra spend.
+
+Three, not two, is the power target: at repeats=2 a three-criterion cell pools six
+draws, and Wilson keeps 1/6 (upper 0.56) clear of 6/6 (lower 0.61) — one criterion
+coming out true by luck still leaves the cell readable, where a two-criterion cell
+(1/4 upper 0.67 vs 4/4 lower 0.51) goes indeterminate. `fix-clamp2` admits only two;
+it is the weak anchor and has no third independent consumer to check.
+
+**Recorded consequence.** On five tasks the last admissible criterion is a strong-level
+one, so `hard_criteria` is no longer a subset of `standard` as it was in v1: the pass
+bar on those tasks is "fixed the root cause, checked independently". Exit codes still
+gate on `standard`, so the two are decoupled. Three criteria that were in the v1-shaped
+hard sets are gone for cause — `clamp_above_preserved`, `real_cycle_still_raises` and
+`true_conflict_still_reported` are TRUE on the untouched buggy source, i.e. regression
+guards a do-nothing arm banks for free, not capability checks at a displaced consumer.
+They remain in the standard oracle and still gate the exit code.
+
+Raising the bar creates a floor hazard, and it is guarded: a task **no** arm can do
+would score 0.0 everywhere, the cheapest arm would be trivially "within ε of the best",
+and the row would read `weak` — a floored task masquerading as one the weak tier
+suffices for, in exactly the direction that would license retiring the dear tiers.
+`empirical_right_tier` now returns `indeterminate` when the best arm's mean is 0.
+
+## The admission screen (Part B): stage 0, priced and pre-registered
+
+The design admits a task only after a two-arm screen — weak and strong, `--repeats 5`.
+The first authoring skipped it as unaffordable and went straight to the 3-arm matrix.
+It is now stage 0, scoped to the four rungs that need it:
+
+```sh
+uv run fathom run model-tier-v2 \
+  --scenarios-dir scenarios/model-tier-v2-screen \
+  --tasks feature-ndjson-merge,fix-strip-unicode,fix-tz-window,fix-decimal-round \
+  --repeats 5 --max-budget-usd 2
+```
+
+40 trials, $80 ceiling, ~$9-20 observed. The four are the **mid band**, and the mid
+band is where the whole boundary-placement question lives: both the 25 and the 55 cut
+rest on the claim that a weak model fails these and a mid model passes them. Three
+reasons to doubt it, all of which the screen settles empirically: every fixture README
+states the full contract including the second consumer the instruction never names, and
+the instruction points the model at that README — so the discovery step the shape is
+meant to gate on is partly handed over; two of the counter overlays are violability
+probes rather than plausible model output (`fix-clamp2`'s deletes a working branch —
+no model writes that); and v1's own evidence has haiku acing 6/7 tasks including
+`fix-nonlocal-urlkey`, the same displaced-cause shape.
+
+**Decision rule, fixed before the spend.** Per task: if `haiku` passes every hard
+criterion on all 5 repeats, that task is SATURATED — it carries no information about a
+boundary and is reshaped or dropped before the mid arm is bought. If all four saturate,
+the mid band is empty and the matrix is not bought at all. A task neither arm passes is
+at the floor, not at a boundary.
+
+The screen is not an extra purchase: its arms resolve to the same `config_hash` as the
+matrix arms, so the matrix resumes over it (a test asserts the hashes match).
 
 ## The planned matrix
 
@@ -159,35 +259,70 @@ saturates shows up as 100% across all three arms just as visibly.
 uv run fathom smoke
 uv run fathom validate model-tier-v2 --strict
 uv run fathom verify-arming --scenarios-dir scenarios/model-tier-v2
-uv run fathom run model-tier-v2 --scenarios-dir scenarios/model-tier-v2 --repeats 2 --dry-run
-uv run fathom run model-tier-v2 --scenarios-dir scenarios/model-tier-v2 --repeats 2 --max-budget-usd 100
+
+# stage 0 — saturation screen (see above). Read the ledger, apply the decision rule.
+uv run fathom run model-tier-v2 --scenarios-dir scenarios/model-tier-v2-screen \
+  --tasks feature-ndjson-merge,fix-strip-unicode,fix-tz-window,fix-decimal-round \
+  --repeats 5 --max-budget-usd 2
+
+# stage 1 — the positive control, deep enough to show a gradient
+uv run fathom run model-tier-v2 --scenarios-dir scenarios/model-tier-v2 \
+  --tasks control-nonlocal-parse --repeats 5 --max-budget-usd 2
+
+# stage 2 — the matrix, resuming over both
+uv run fathom run model-tier-v2 --scenarios-dir scenarios/model-tier-v2 \
+  --repeats 2 --max-budget-usd 2
 uv run fathom report model-tier-v2
 ```
 
 **`--scenarios-dir` is load-bearing here, and this bank has a trap.** The default
 `scenarios/` glob also resolves to exactly **three** arms (`bare`, `series`,
-`single-long-session`), so omitting the flag prints an identical
-`scenarios=3 tasks=8 repeats=2 / planned: 48 trials` line and silently runs the wrong
-experiment. The arm names in the ledger are the only tell. Always pass the flag.
+`single-long-session`), so omitting the flag prints an identical count line and
+silently runs the wrong experiment. The plan now prints an `arms:` line naming them,
+which is the tell to read before letting a matrix run on; the ledger's `scenario`
+field is the after-the-fact confirmation.
 
-| stage | arms × tasks × repeats | trials | ceiling |
+| stage | arms × tasks × repeats | planned | ceiling @ $2 cap |
 |---|---|--:|--:|
-| first paid stage | 3 × 8 × 2 | 48 | **$96.00** |
-| full power target | 3 × 8 × 5 | 120 | $240.00 |
+| 0 — saturation screen | 2 × 4 × 5 | 40 | $80.00 |
+| 1 — positive control | 3 × 1 × 5 | 15 | $30.00 |
+| 2 — matrix, resuming over 0 and 1 | 3 × 9 × 2 − 22 done | 32 | $64.00 |
+| **program total** | 87 distinct trials | 87 | **$174.00** |
+| (matrix alone, if bought without staging) | 3 × 9 × 2 | 54 | $108.00 |
 
-The ceiling is the flat $2/trial rail (C4), not an expectation: `model-tier-v1`'s
-comparable 42-trial pilot cost about $6 in observed tokens, so the first stage should
-land nearer $7-15. Resume makes the staging free — the key is
-`(bank, dataset_version, task_id, config_hash, repeat)`, so re-invoking at `--repeats 5`
-later keeps the first two repeats and pays only for repeats 3-5.
+**Read the cost numbers correctly — this is where the first plan went wrong.**
+`--max-budget-usd` is a **per-spawn** cap, not a run total: fathom has no total-run cap
+at all. The first plan passed `--max-budget-usd 100`, which *raised* each spawn's cap
+from the $5 default to $100 — a 20x loosening of the only runaway guard — while reading
+in the report as a $100 program rail. The plan's ceiling line now derives from the cap
+that will actually bind, so the flag's real effect is visible before the spend: the
+same matrix prints $108 at `--max-budget-usd 2` and **$270** with no flag at all.
+
+`$2` per spawn is chosen against the record, not the rail: across 1059 committed spawns
+the max is $2.76 and only 8 exceed $2, none of them on a model-tier bank
+(`model-tier-v1`: mean $0.236, max $0.576). It should never bind — and if it does, the
+trial is visible in the ledger rather than silently truncated, so a spawn that lands
+within a few percent of the cap is re-run at a higher cap before the matrix is read.
+
+**The binding guard is cumulative, not per-invocation:** read the summed `cost_usd_est`
+out of `ledger/model-tier-v2.jsonl` between stages and stop at $100. At v1's observed
+rates the whole 87-trial program lands near **$22-55**, against a $174 worst case that
+has no precedent in the record. The aggregate ceiling exceeding the $100 rail is a real
+decision to take deliberately: a complete matrix WITH the control cannot fit a $100
+ceiling at $2/spawn (54 trials = $108 on its own), so the rail is either read as
+observed cumulative cost or the control is dropped — and dropping it puts the run back
+in v1's uninterpretable-null position.
 
 **Power, stated plainly.** At `--repeats 2` a (task, arm) cell pools 2 trials × 2-3 hard
 criteria = 4-6 Bernoulli draws; a 6/6 cell carries a Wilson 95% CI of roughly
-[0.61, 1.00]. That is **not** enough to call a cell saturated or to move a threshold —
-it is enough to see the ladder's shape and to catch a bank that ceilings. Moving a
-tier cut needs the `--repeats 5` stage and the cross-distribution rule in the
-recalibration playbook. No conclusion of the form "tier X should be dropped" can come
-from stage one.
+[0.61, 1.00]. Under the noiseless alternative the derived hard sets make every cell
+determinate at repeats=2 — but that is a statement about a perfect world, not a claim
+of power. Real arms land between the overlays, and a cell at 0.5 is indeterminate no
+matter how many repeats are bought. Stage 0's `--repeats 5` is the only part of this
+program with power to call a task saturated. Moving a tier cut needs the full
+`--repeats 5` matrix and the cross-distribution rule in the recalibration playbook.
+**No conclusion of the form "tier X should be dropped" is available from stage 2**, and
+none is available at any stage if the control does not separate.
 
 ## Decisions this bank made where the design left room
 

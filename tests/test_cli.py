@@ -252,9 +252,43 @@ class TestDryRun(_Base):
         _, output = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)
         self.assertIn("8 trials", output)
 
+    def test_prints_the_arm_names(self):
+        """The wrong --scenarios-dir with the same arm COUNT prints an identical count
+        line, so the plan must say which arms it is about to buy."""
+        _, output = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)
+        self.assertIn("arms:", output)
+        self.assertIn("bare", output)
+        self.assertIn("single-long", output)
+
     def test_prints_ceiling(self):
         _, output = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)
         self.assertIn("ceiling:", output)
+
+    def test_the_ceiling_tracks_the_per_spawn_cap(self):
+        """8 planned trials, cap $2/spawn -> $16.00; the default $5 cap -> $40.00."""
+        _, capped = _run_matrix(
+            self.bank,
+            self.scenarios,
+            ledger_dir=self.ledger_dir,
+            dry_run=True,
+            max_budget_usd=2.0,
+        )
+        self.assertIn("$16.00", capped)
+        _, default = _run_matrix(
+            self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True
+        )
+        self.assertIn("$40.00", default)
+
+    def test_raising_the_cap_raises_the_printed_ceiling(self):
+        """The failure this replaces: --max-budget-usd 100 printed a $2/trial ceiling."""
+        _, loosened = _run_matrix(
+            self.bank,
+            self.scenarios,
+            ledger_dir=self.ledger_dir,
+            dry_run=True,
+            max_budget_usd=100.0,
+        )
+        self.assertIn("$800.00", loosened)
 
     def test_prints_dry_run_marker(self):
         _, output = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)
@@ -1360,6 +1394,102 @@ class BankValidationGateTests(unittest.TestCase):
     def test_a_dry_run_is_not_blocked(self) -> None:
         code, _ = self._run("pass", dry_run=True)
         self.assertEqual(code, EXIT_OK, "planning spends nothing")
+
+
+# ---------------------------------------------------------------------------
+# --tasks: buy a screen before the full matrix
+# ---------------------------------------------------------------------------
+
+
+class TestTaskFilter(_Base):
+    """Staging by TASK, which --limit cannot express.
+
+    The plan is scenario-major, so --limit cuts whole arms off the end of it — it
+    can shorten a matrix but cannot select the rungs a screen needs to ask about
+    (one band, or a positive control, at higher repeats). Without this, "screen the
+    mid band before paying for the mid arm" is not a command anyone can type.
+    """
+
+    def _calls(self, **kw) -> list[str]:
+        calls: list[str] = []
+
+        def capturing_factory(sc):
+            class _E:
+                def run_trial(self, task, workspace, scenario, runner):
+                    calls.append(task.id)
+                    return _ok_result()
+
+            return _E()
+
+        _run_matrix(
+            kw.pop("bank", self.bank),
+            [self.sc_a],
+            kw.pop("repeats", 1),
+            ledger_dir=self.ledger_dir,
+            executor_factory=capturing_factory,
+            **kw,
+        )
+        return calls
+
+    def test_only_the_named_tasks_run(self):
+        self.assertEqual(self._calls(task_ids=["task-2"]), ["task-2"])
+
+    def test_omitting_the_filter_runs_everything(self):
+        self.assertEqual(sorted(self._calls()), ["task-1", "task-2"])
+
+    def test_duplicates_do_not_duplicate_trials(self):
+        self.assertEqual(self._calls(task_ids=["task-1", "task-1"]), ["task-1"])
+
+    def test_an_unknown_id_is_an_error_not_an_empty_run(self):
+        """A typo that silently runs nothing is a wasted stage and a false 'done'."""
+        err = io.StringIO()
+        with _capture_stderr(err):
+            code, output = _run_matrix(
+                self.bank,
+                [self.sc_a],
+                1,
+                ledger_dir=self.ledger_dir,
+                task_ids=["task-1", "taks-2"],
+            )
+        self.assertNotEqual(code, EXIT_OK)
+        self.assertIn("taks-2", err.getvalue())
+        self.assertNotIn("planned:", output, "nothing may be planned on a bad filter")
+
+    def test_it_cannot_be_used_to_unseal_a_holdout(self):
+        """Spending a holdout stays an --include-holdout decision the ledger records."""
+        err = io.StringIO()
+        sealed = _make_bank("test-bank", [self.task1, self.task2], holdout=["task-2"])
+        with _capture_stderr(err):
+            code, _ = _run_matrix(
+                sealed,
+                [self.sc_a],
+                1,
+                ledger_dir=self.ledger_dir,
+                task_ids=["task-2"],
+            )
+        self.assertNotEqual(code, EXIT_OK)
+        self.assertIn("--include-holdout", err.getvalue())
+
+    def test_the_plan_line_reports_the_filtered_task_count(self):
+        _, output = _run_matrix(
+            self.bank,
+            self.scenarios,
+            2,
+            ledger_dir=self.ledger_dir,
+            dry_run=True,
+            task_ids=["task-1"],
+        )
+        self.assertIn("tasks=1", output)
+        self.assertIn("4 trials", output)  # 2 scenarios x 1 task x 2 repeats
+
+
+@contextmanager
+def _capture_stderr(sink):
+    original, sys.stderr = sys.stderr, sink
+    try:
+        yield
+    finally:
+        sys.stderr = original
 
 
 if __name__ == "__main__":

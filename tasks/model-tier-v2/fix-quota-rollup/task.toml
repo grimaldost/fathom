@@ -13,7 +13,12 @@ max_turns = 120
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["remaining_reflects_usage", "over_quota_detected"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. Third is strong-level.
+hard_criteria = [
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "rollup_invariant_at_source",
+]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

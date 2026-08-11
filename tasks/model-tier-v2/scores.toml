@@ -16,6 +16,14 @@
 # Predicted tier = tier_for_score(score): 0-25 weak / 26-55 mid / 56-100 strong.
 
 [scores]
+# The positive control, ported verbatim from model-tier-v1's `fix-nonlocal-parse`. Its
+# score is v1's recorded FINAL, from v1's TWO-rater process (author 70, blind second
+# rater 61, final 65) — not from this bank's one-rater pass, and not re-derived here.
+# There is consequently no per-axis breakdown for it below: fabricating one that summed
+# to 65 would misrepresent where the number came from. The exemption is asserted in
+# tests/test_bank_model_tier_v2.py, not left to prose. Predicted tier: strong.
+control-nonlocal-parse = 65
+
 fix-clamp2 = 20
 fix-strip-unicode = 40
 feature-ndjson-merge = 38
@@ -128,3 +136,18 @@ output = 2
 adjustments = -10
 cross_shape = true
 note = "incremental fold must equal a whole-log replay under out-of-order and repeated events; ledger reconciliation scored regulatory"
+
+# Provenance of the control's score and its prior reading — the evidence that makes it
+# a usable positive control. Observed on ledger/model-tier-v1.jsonl at --repeats 5,
+# both hard criteria passing: haiku 2/5, sonnet 3/5, sonnet5 4/5, opus 5/5, opus5 5/5.
+[control_provenance.control-nonlocal-parse]
+bank = "model-tier-v1"
+task_id = "fix-nonlocal-parse"
+score_author = 70
+score_blind_rater = 61
+score_final = 65
+observed_hard_pass_haiku = "2/5"
+observed_hard_pass_sonnet = "3/5"
+observed_hard_pass_sonnet5 = "4/5"
+observed_hard_pass_opus = "5/5"
+observed_hard_pass_opus5 = "5/5"

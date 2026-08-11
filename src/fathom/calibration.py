@@ -211,6 +211,14 @@ def empirical_right_tier(stats_by_arm: dict[str, dict], eps: float = EPS) -> tup
     cheapest adequate TIER (the ε-decision rests on overlapping CIs, FM-10). The
     comparison is by tier, not arm identity, so two arms sharing a tier (``sonnet`` +
     ``sonnet5``) that agree on the verdict are not flagged as a disagreement.
+
+    FLOOR GUARD. "Cheapest tier that does the job" is undefined when NO tier does the
+    job. Without the guard, a task every arm fails scores 0.0 everywhere, the cheapest
+    arm is trivially within ε of the best, and the row reads ``weak`` — a floored task
+    is indistinguishable from one the weak tier genuinely suffices for, and it reads in
+    the direction that would license retiring the dear tiers. A floored task is
+    therefore ``indeterminate``: the instrument had no purchase on it, which is a
+    statement about the task, not about the ladder.
     """
     arms = [a for a in stats_by_arm if arm_tier(a)]
     if not arms:
@@ -218,6 +226,8 @@ def empirical_right_tier(stats_by_arm: dict[str, dict], eps: float = EPS) -> tup
     best_arm = max(arms, key=lambda a: stats_by_arm[a]["mean"])
     best_mean = stats_by_arm[best_arm]["mean"]
     best_lo = stats_by_arm[best_arm]["ci"][0]
+    if best_mean <= 0.0:
+        return ("indeterminate", True)
 
     def cheapest(passing: list[str]) -> str | None:
         return min(passing, key=_ladder_key) if passing else None

@@ -80,6 +80,41 @@ class TestConfusionMatrix(unittest.TestCase):
         self.assertEqual(by_task["overp"]["empirical"], "weak")
         self.assertFalse(by_task["overp"]["indeterminate"])
 
+    def test_a_task_no_arm_can_do_reads_indeterminate_not_weak(self):
+        """The floor guard. "Cheapest tier that does the job" needs a tier to do it.
+
+        Without it, a task every arm fails scores 0.0 everywhere, the cheapest arm is
+        trivially within eps of the best, and the row reads `weak` — a floored task
+        becomes indistinguishable from one the weak tier genuinely suffices for, and it
+        reads in the direction that would license retiring the dear tiers. Whether the
+        floor is the task's difficulty or a broken fixture, the instrument had no
+        purchase on it and the row must say so.
+        """
+        meta = {"floored": {"score": 70, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            for arm in ("haiku", "sonnet", "opus"):
+                raw.append(_trial(arm, "floored", rep, 0))
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        self.assertTrue(row["indeterminate"], f"a floored task must not read as a tier: {row}")
+        self.assertEqual(row["empirical"], "indeterminate")
+        self.assertEqual(out["confusion"]["strong"]["indeterminate"], 1)
+        self.assertEqual(out["confusion"]["strong"]["weak"], 0)
+
+    def test_a_partial_pass_is_still_a_real_reading(self):
+        """The guard fires only at a true floor, not at "hard but sometimes done"."""
+        meta = {"hard-task": {"score": 70, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("haiku", "hard-task", rep, 0))
+            raw.append(_trial("sonnet", "hard-task", rep, 0))
+            raw.append(_trial("opus", "hard-task", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        self.assertFalse(row["indeterminate"])
+        self.assertEqual(row["empirical"], "strong")
+
     def test_indeterminate_when_cis_overlap(self):
         # haiku 1/2 each trial (mean .5, wide CI), opus 2/2 (mean 1.0). Point says
         # strong (only opus within eps); CI overlap says haiku might suffice -> ?.

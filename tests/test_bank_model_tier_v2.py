@@ -7,24 +7,34 @@ criteria CAN be met and CAN fail, and that each oracle level bites where it clai
 Four overlays per task, each copied over a fresh copy of ``fixtures/``:
 
 ===================  =========================================================
-``fixtures/`` alone  the buggy starting state: at least one hard criterion is
-                     FALSE, so there is something to fix (violability floor,
-                     and the property ``fathom validate`` checks)
+``fixtures/`` alone  the buggy starting state: EVERY hard criterion is FALSE,
+                     so none of them is a regression guard that is already
+                     satisfied before the arm does anything
 ``solution/``        the reference fix: every criterion TRUE, exit 0
                      (satisfiability — no arm is being asked the impossible)
 ``counter/``         the plausible weak patch at the reported symptom: every
-                     THIN criterion TRUE, at least one STANDARD criterion
-                     FALSE (this is the separation mechanism, demonstrated)
+                     THIN criterion TRUE, every HARD criterion FALSE (this is
+                     the separation mechanism, demonstrated)
 ``counter-strong/``  a fix that satisfies the whole STANDARD oracle and still
                      misses the root cause: at least one STRONG criterion
                      FALSE (the standard->strong contrast has headroom, which
                      the design flags as its most fragile leg)
 ===================  =========================================================
 
-Plus the bank's own integrity: nine tasks, a resolvable holdout, byte-identical
-``original/`` stashes, nested oracle levels that match what the verifiers actually
-emit, score breakdowns that add up, and — the ablation-v2 defect class — no gate
-command anywhere in this bank or its arms carrying a path that does not exist.
+The counter's HARD row is the one that was missing. The first authoring asserted
+only that the counter failed SOME standard criterion, which five tasks satisfied
+while still handing the symptom patch a hard criterion for free — diluting those
+cells to 0.5-vs-1.0, which is CI-overlapping and reads INDETERMINATE at any repeat
+count this program can buy. ``TestHardCriteriaDerivation`` re-derives the hard set
+from the overlays and compares it to what each ``task.toml`` declares, so the
+decision statistic cannot silently drift back.
+
+Plus the bank's own integrity: ten tasks (nine ladder rungs and one positive
+control), a resolvable holdout, byte-identical ``original/`` stashes, nested oracle
+levels that match what the verifiers actually emit, score breakdowns that add up,
+screen arms that resolve to the matrix arms' own ``config_hash`` so a screen is not
+paid for twice, and — the ablation-v2 defect class — no gate command anywhere in
+this bank or its arms carrying a path that does not exist.
 
 Run directly: ``python tests/test_bank_model_tier_v2.py`` (exit 0 on success).
 """
@@ -43,9 +53,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 BANK = REPO / "tasks" / "model-tier-v2"
 ARMS = REPO / "scenarios" / "model-tier-v2"
+SCREEN_ARMS = REPO / "scenarios" / "model-tier-v2-screen"
 sys.path.insert(0, str(REPO / "src"))
 
-EXPECTED_TASKS = {
+# The nine displaced-cause rungs: the ladder whose tier boundaries are under test.
+LADDER_TASKS = {
     "fix-clamp2",
     "fix-strip-unicode",
     "feature-ndjson-merge",
@@ -56,12 +68,25 @@ EXPECTED_TASKS = {
     "fix-merge-3way",
     "fix-ledger-replay",
 }
+# The positive control, ported verbatim from model-tier-v1 (see its task.toml). It is
+# NOT a ladder rung and is deliberately exempt from three of this bank's shape rules —
+# the oracle slice, the counter-strong overlay, and the hard_criteria derivation — all
+# for the same reason: retuning it to this bank's shape would void the v1 reading that
+# makes it a control. Each exemption is asserted below, so it stays a decision on the
+# record rather than a gap in coverage.
+CONTROL_TASKS = {"control-nonlocal-parse"}
+EXPECTED_TASKS = LADDER_TASKS | CONTROL_TASKS
 HOLDOUT = ["fix-quota-rollup"]
 OVERLAYS = ("solution", "counter", "counter-strong")
 
 # Criteria that are part of the standard oracle but are not capability-gated: the
 # anchor lives in `thin`, and these two are the v1 contract's hygiene checks.
 NON_HARD = {"no_regression", "regression_test_present"}
+
+# The power target behind the derivation rule (oracles.toml § HOW hard_criteria IS
+# DERIVED): three pooled Bernoulli draws per repeat keep a 1/6-vs-6/6 cell readable
+# at repeats=2, where a two-criterion cell (1/4 vs 4/4) goes CI-overlapping.
+HARD_TARGET = 3
 
 # Placeholder shapes that mean a command string was never wired to a real path — the
 # ablation-v2 defect (a gate command shipped with a literal `/path/to/...` in it,
@@ -78,6 +103,10 @@ def load_bank():
     from fathom.taskbank import load_bank as _load
 
     return _load(BANK)
+
+
+def load_bank_task(task_id: str):  # noqa: ANN201 - a taskbank.Task
+    return next(t for t in load_bank().tasks if t.id == task_id)
 
 
 def oracles() -> dict:
@@ -105,13 +134,49 @@ def graded(task_id: str, overlay: str | None) -> tuple[dict, int]:
         return run_verify(task_id, view)
 
 
+def admissible(task_id: str) -> tuple[list[str], list[str]]:
+    """(standard-level, strong-level) criteria admissible as hard, MEASURED.
+
+    The derivation rule of ``oracles.toml``: a criterion is admissible iff, through
+    the real verifier, it is FALSE on the untouched fixture, FALSE on ``counter/``,
+    and TRUE on ``solution/``. Hygiene criteria and the thin anchor are excluded.
+    """
+    spec = oracles()[task_id]
+    fixt, _ = graded(task_id, None)
+    cnt, _ = graded(task_id, "counter")
+    sol, _ = graded(task_id, "solution")
+    std: list[str] = []
+    strong: list[str] = []
+    for name in spec["strong"]:
+        if name in NON_HARD or name in spec["thin"]:
+            continue
+        if fixt.get(name) is False and cnt.get(name) is False and sol.get(name) is True:
+            (std if name in spec["standard"] else strong).append(name)
+    return std, strong
+
+
 class TestBankIntegrity(unittest.TestCase):
-    def test_loads_nine_tasks_with_a_resolvable_holdout(self):
+    def test_loads_ten_tasks_with_a_resolvable_holdout(self):
         bank = load_bank()
         self.assertEqual(bank.name, "model-tier-v2")
         self.assertEqual(bank.dataset_version, "1")
         self.assertEqual(sorted(t.id for t in bank.tasks), sorted(EXPECTED_TASKS))
         self.assertEqual(bank.holdout, HOLDOUT)
+
+    def test_the_run_set_carries_a_positive_control(self):
+        """A null on this bank is only interpretable against a task known to separate.
+
+        model-tier-v1 returned 1/7 on-diagonal three times and could not tell "the
+        score does not predict the tier" from "the bank had no headroom" — the two
+        license opposite decisions and one of them is a deletion. The control is the
+        task that discriminates them, so it must be in the bank AND in the RUN set
+        (not sealed as a holdout, or it is not there when the matrix is read).
+        """
+        bank = load_bank()
+        for task_id in sorted(CONTROL_TASKS):
+            with self.subTest(task=task_id):
+                self.assertIn(task_id, {t.id for t in bank.tasks})
+                self.assertNotIn(task_id, bank.holdout, f"{task_id}: control cannot be sealed")
 
     def test_every_task_declares_at_least_two_hard_criteria(self):
         for task in load_bank().tasks:
@@ -149,8 +214,12 @@ class TestBankIntegrity(unittest.TestCase):
         for task_id in sorted(EXPECTED_TASKS):
             with self.subTest(task=task_id):
                 fixtures = BANK / task_id / "fixtures"
-                for name in ("solution", "counter", "counter-strong", "original"):
+                required = ["solution", "counter", "original"]
+                if task_id in LADDER_TASKS:
+                    required.append("counter-strong")
+                for name in required:
                     self.assertTrue((BANK / task_id / name).is_dir(), f"{task_id}: no {name}/")
+                for name in ("solution", "counter", "counter-strong", "original"):
                     self.assertFalse(
                         list(fixtures.rglob(name)), f"{task_id}: {name}/ leaked into fixtures/"
                     )
@@ -163,9 +232,16 @@ class TestOracleLevels(unittest.TestCase):
         for task_id, spec in levels.items():
             with self.subTest(task=task_id):
                 thin, standard, strong = (set(spec[k]) for k in ("thin", "standard", "strong"))
+                self.assertTrue(spec["independent_check"].strip())
+                if task_id in CONTROL_TASKS:
+                    # Exemption, asserted rather than assumed: the control carries no
+                    # oracle slice, because inventing levels for it would change the
+                    # task whose prior reading is the point of having it.
+                    self.assertEqual(thin, standard, f"{task_id}: control gained a slice")
+                    self.assertEqual(standard, strong, f"{task_id}: control gained a slice")
+                    continue
                 self.assertTrue(thin < standard, f"{task_id}: thin is not a proper subset")
                 self.assertTrue(standard < strong, f"{task_id}: standard is not a proper subset")
-                self.assertTrue(spec["independent_check"].strip())
 
     def test_strong_is_exactly_what_the_verifier_emits(self):
         levels = oracles()
@@ -178,19 +254,86 @@ class TestOracleLevels(unittest.TestCase):
                     f"{task_id}: oracles.toml and verify.py disagree on the criterion set",
                 )
 
-    def test_hard_criteria_are_the_capability_gated_slice_of_standard(self):
+    def test_hard_criteria_exclude_the_anchor_and_the_hygiene_checks(self):
         levels = oracles()
         for task in load_bank().tasks:
             with self.subTest(task=task.id):
-                spec = levels[task.id]
-                hard, standard, thin = (
-                    set(task.verify["hard_criteria"]),
-                    set(spec["standard"]),
-                    set(spec["thin"]),
-                )
-                self.assertTrue(hard <= standard, f"{task.id}: a hard criterion is not standard")
-                self.assertFalse(hard & thin, f"{task.id}: a hard criterion is in the thin oracle")
+                hard = set(task.verify["hard_criteria"])
+                thin = set(levels[task.id]["thin"])
+                if task.id not in CONTROL_TASKS:
+                    self.assertFalse(hard & thin, f"{task.id}: a hard criterion is in thin")
                 self.assertFalse(hard & NON_HARD, f"{task.id}: hygiene criterion marked hard")
+
+
+class TestHardCriteriaDerivation(unittest.TestCase):
+    """The decision statistic is derived from measurement, and re-derived here.
+
+    calibration.py computes every (arm, task) cell from ``hard_criteria`` ALONE. A
+    criterion in that set which the plausible symptom patch already satisfies dilutes
+    the cell to 0.5-vs-1.0, which is CI-overlapping — indeterminate — at every repeat
+    count this program can afford, and indeterminate is the off-diagonal branch that
+    the owner's rule treats as evidence against a tier. The first authoring of this
+    bank shipped five such cells and its suite did not catch them, because it only
+    ever asserted that the counter failed SOME standard criterion, never that it
+    failed every HARD one. These tests assert the property that was missing.
+    """
+
+    def test_no_hard_criterion_is_one_the_symptom_patch_already_satisfies(self):
+        """The dilution check, stated directly: counter scores 0 on the hard set."""
+        for task in load_bank().tasks:
+            if task.id in CONTROL_TASKS:
+                continue
+            with self.subTest(task=task.id):
+                criteria, _ = graded(task.id, "counter")
+                passed = sorted(c for c in task.verify["hard_criteria"] if criteria[c])
+                self.assertEqual(
+                    passed,
+                    [],
+                    f"{task.id}: the symptom patch banks hard criteria {passed}; "
+                    "the cell dilutes to 0.5-vs-1.0 and reads indeterminate",
+                )
+
+    def test_no_hard_criterion_is_already_true_at_the_starting_state(self):
+        """A criterion true on the untouched fixture is a regression guard, not capability."""
+        for task in load_bank().tasks:
+            with self.subTest(task=task.id):
+                criteria, _ = graded(task.id, None)
+                free = sorted(c for c in task.verify["hard_criteria"] if criteria[c])
+                self.assertEqual(free, [], f"{task.id}: hard criteria already true: {free}")
+
+    def test_the_declared_hard_set_is_exactly_what_the_rule_derives(self):
+        """Standard-level admissibles first, then strong-level, stop at three, min two."""
+        for task in load_bank().tasks:
+            if task.id in CONTROL_TASKS:
+                continue
+            with self.subTest(task=task.id):
+                std, strong = admissible(task.id)
+                expected = list(std)
+                for name in strong:
+                    if len(expected) >= max(2, HARD_TARGET):
+                        break
+                    expected.append(name)
+                self.assertGreaterEqual(
+                    len(expected), 2, f"{task.id}: fewer than two admissible criteria exist"
+                )
+                self.assertEqual(
+                    sorted(task.verify["hard_criteria"]),
+                    sorted(expected),
+                    f"{task.id}: hard_criteria is not what the derivation rule yields",
+                )
+
+    def test_the_control_is_exempt_and_keeps_its_v1_bar(self):
+        """Retuning the control to this bank's rule would void the reading it exists for."""
+        bank = {t.id: t for t in load_bank().tasks}
+        v1 = load_toml(REPO / "tasks" / "model-tier-v1" / "fix-nonlocal-parse" / "task.toml")
+        for task_id in sorted(CONTROL_TASKS):
+            with self.subTest(task=task_id):
+                self.assertEqual(
+                    bank[task_id].verify["hard_criteria"],
+                    v1["verify"]["hard_criteria"],
+                    f"{task_id}: hard criteria drifted from the v1 task it ports",
+                )
+                self.assertEqual(bank[task_id].instruction.strip(), v1["instruction"].strip())
 
 
 class TestScores(unittest.TestCase):
@@ -199,6 +342,15 @@ class TestScores(unittest.TestCase):
         scores, breakdown = data["scores"], data["breakdown"]
         self.assertEqual(sorted(scores), sorted(EXPECTED_TASKS))
         for task_id, score in scores.items():
+            if task_id in CONTROL_TASKS:
+                # Exemption, asserted: the control's score is model-tier-v1's recorded
+                # FINAL from v1's two-rater process, so there is no single per-axis
+                # breakdown to record — one that summed to it would be fabricated.
+                prov = data["control_provenance"][task_id]
+                self.assertNotIn(task_id, breakdown, f"{task_id}: breakdown was invented")
+                self.assertEqual(prov["score_final"], score)
+                self.assertEqual(prov["bank"], "model-tier-v1")
+                continue
             with self.subTest(task=task_id):
                 axes = breakdown[task_id]
                 total = sum(
@@ -235,8 +387,8 @@ class TestFixtureLeavesWorkToDo(unittest.TestCase):
                 for name in task.verify["hard_criteria"]:
                     self.assertIn(name, criteria, f"{task.id}: {name} not emitted")
                 self.assertTrue(
-                    any(not criteria[c] for c in task.verify["hard_criteria"]),
-                    f"{task.id}: no hard criterion fails on the buggy fixture",
+                    all(not criteria[c] for c in task.verify["hard_criteria"]),
+                    f"{task.id}: a hard criterion is already true on the buggy fixture",
                 )
                 self.assertFalse(criteria["regression_test_present"])
                 self.assertNotEqual(code, 0)
@@ -255,7 +407,7 @@ class TestSatisfiability(unittest.TestCase):
 class TestViolability(unittest.TestCase):
     def test_the_symptom_patch_passes_thin_and_fails_standard(self):
         levels = oracles()
-        for task_id in sorted(EXPECTED_TASKS):
+        for task_id in sorted(LADDER_TASKS):
             with self.subTest(task=task_id):
                 spec = levels[task_id]
                 criteria, code = graded(task_id, "counter")
@@ -267,10 +419,26 @@ class TestViolability(unittest.TestCase):
                 )
                 self.assertNotEqual(code, 0)
 
+    def test_the_controls_consumer_band_aid_fixes_the_reported_case_and_nothing_else(self):
+        """The control's violability evidence, in its own shape (it has no oracle slice).
+
+        The band-aid the v1 score rationale names: patch each consumer at its symptom
+        site, leave the shared parser alone. Both reported cases come out right and the
+        shipped suite stays green, but the tagged line defeats it — which is exactly
+        what its two hard criteria check.
+        """
+        for task_id in sorted(CONTROL_TASKS):
+            with self.subTest(task=task_id):
+                criteria, code = graded(task_id, "counter")
+                hard = load_bank_task(task_id).verify["hard_criteria"]
+                self.assertTrue(all(not criteria[c] for c in hard), f"{task_id}: band-aid passes")
+                self.assertTrue(criteria["no_regression"], f"{task_id}: band-aid breaks the suite")
+                self.assertNotEqual(code, 0)
+
     def test_the_standard_passing_patch_still_fails_the_strong_oracle(self):
         """The standard->strong contrast has headroom on every task, not just in prose."""
         levels = oracles()
-        for task_id in sorted(EXPECTED_TASKS):
+        for task_id in sorted(LADDER_TASKS):
             with self.subTest(task=task_id):
                 spec = levels[task_id]
                 criteria, code = graded(task_id, "counter-strong")
@@ -302,10 +470,11 @@ class TestGateCommandHygiene(unittest.TestCase):
             run = task.gate.get("run")
             if run:
                 yield f"tasks/model-tier-v2/{task.id} [gate].run", str(run)
-        for arm_path in sorted(ARMS.glob("*.toml")):
-            gate = load_toml(arm_path).get("gate", {})
-            for extra in gate.get("extra", []):
-                yield f"{arm_path.name} [gate].extra", str(extra)
+        for arm_dir in (ARMS, SCREEN_ARMS):
+            for arm_path in sorted(arm_dir.glob("*.toml")):
+                gate = load_toml(arm_path).get("gate", {})
+                for extra in gate.get("extra", []):
+                    yield f"{arm_dir.name}/{arm_path.name} [gate].extra", str(extra)
 
     def test_no_gate_command_carries_a_placeholder_path(self):
         for where, command in self._commands():
@@ -369,6 +538,39 @@ class TestGateCommandHygiene(unittest.TestCase):
         """A guard nobody can trip is a guard that proves nothing."""
         defective = "python /path/to/probe.py"
         self.assertTrue(any(token in defective for token in PLACEHOLDER_TOKENS))
+
+
+class TestScreenArms(unittest.TestCase):
+    """The stage-0 screen must reuse the matrix's ledger buckets, not fork them.
+
+    The resume key is (bank, dataset_version, task_id, config_hash, repeat), and
+    ``config_hash`` covers name, model, strategy, effort, tools and limits. If a
+    screen arm resolves to a different hash than its matrix twin, every screen trial
+    is paid for twice — once in the screen, once again in the matrix that cannot see
+    it. So the screen is admissible only while the hashes match.
+    """
+
+    def _resolved(self, directory: Path) -> dict:
+        from fathom.cli import _load_resolved_scenarios
+
+        return {sc.name: sc for sc in _load_resolved_scenarios(directory)}
+
+    def test_screen_arms_resolve_to_the_same_config_hash_as_the_matrix_arms(self):
+        matrix, screen = self._resolved(ARMS), self._resolved(SCREEN_ARMS)
+        self.assertEqual(sorted(screen), ["haiku", "opus5"], "screen is the weak-vs-strong pair")
+        self.assertTrue(set(screen) <= set(matrix), "a screen arm is not in the matrix")
+        for name in sorted(screen):
+            with self.subTest(arm=name):
+                self.assertEqual(
+                    screen[name].config_hash,
+                    matrix[name].config_hash,
+                    f"{name}: screen and matrix arms have forked; screen trials would be "
+                    "invisible to the matrix and paid for twice",
+                )
+
+    def test_the_screen_omits_the_arm_it_defers_buying(self):
+        """The whole point: decide whether the mid band has headroom before paying for it."""
+        self.assertNotIn("sonnet5", self._resolved(SCREEN_ARMS))
 
 
 if __name__ == "__main__":

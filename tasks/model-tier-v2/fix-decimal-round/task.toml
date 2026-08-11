@@ -14,7 +14,12 @@ max_turns = 100
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["fast_half_up_negative", "backend_parity_binary_grid"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. Third is strong-level.
+hard_criteria = [
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "backend_parity_decimal_literals",
+]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

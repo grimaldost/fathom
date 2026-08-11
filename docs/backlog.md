@@ -220,6 +220,14 @@ end runs.** *(M · [triage] T11a/T11b + [review])*
   `cleanup_dir`); if it does, copy-config-once-per-run or write-back is the durable half of the fix.
   (b) add `--max-run-usd` halting on cumulative `cost_usd_est`, correct `--max-budget-usd`'s help text
   to "per-spawn cap", and compute the dry-run ceiling from the cap in force.
+- **Partially shipped (2026-08-11, model-tier-v2 repair).** Half of (b) is built: the dry-run ceiling
+  is now `num_planned × the cap in force` (`--max-budget-usd`, else the adapter's $5), so raising the
+  cap raises the printed ceiling instead of hiding behind a flat $2 — the miss that let
+  `--max-budget-usd 100` be written up as a "$100 program rail" while it multiplied the per-spawn cap
+  by 20. The help text now leads with PER-SPAWN and says fathom has no run total. **Still open:**
+  `--max-run-usd` halting on cumulative `cost_usd_est` (today that guard is a human reading the ledger
+  between stages), the credential-TTL gate (a), and the per-strategy empirical default for the
+  no-cap case.
 - **Triage and review disagree on shape.** The review asks for a launch-time TTL pre-flight and a
   per-strategy recalibration of the flat ceiling from the committed ledger; the triage asks for a
   continuous gate and a ceiling derived from the cap in force. Take the triage's continuous form — the

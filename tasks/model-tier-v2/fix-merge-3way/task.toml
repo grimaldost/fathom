@@ -14,7 +14,14 @@ max_turns = 120
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["nested_same_change_agrees", "true_conflict_still_reported"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `true_conflict_still_reported`
+# is dropped: TRUE on the untouched buggy source AND on the symptom patch. Last two are
+# strong-level.
+hard_criteria = [
+    "nested_same_change_agrees",
+    "deletion_applies_flat",
+    "deletion_applies_nested",
+]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

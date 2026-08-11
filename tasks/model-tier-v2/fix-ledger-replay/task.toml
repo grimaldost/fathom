@@ -17,7 +17,13 @@ max_turns = 120
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["parity_duplicate_void", "fold_excludes_voided"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `fold_excludes_voided` is
+# dropped: the symptom patch already satisfies it. Last two are strong-level.
+hard_criteria = [
+    "parity_duplicate_void",
+    "parity_void_before_post",
+    "parity_prefix_sweep",
+]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

@@ -14,7 +14,13 @@ max_turns = 100
 [verify]
 entry = "verify.py"
 timeout_s = 180
-hard_criteria = ["hours_fall_back", "slots_cover_transition_day"]
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `hours_fall_back` is
+# dropped: the symptom patch already satisfies it. Last two are strong-level.
+hard_criteria = [
+    "slots_cover_transition_day",
+    "window_bounds_every_day",
+    "windows_tile_without_gap",
+]
 
 [gate]
 # The shipped suite, run from the workspace root. Green on the untouched fixture by

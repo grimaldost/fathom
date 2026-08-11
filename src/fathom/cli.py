@@ -7,6 +7,7 @@ import dataclasses
 import os
 import pathlib
 import sys
+from collections.abc import Sequence
 from typing import Any, Callable, TextIO
 
 import fathom.arming as _arming
@@ -17,7 +18,10 @@ from fathom.taskbank import Bank, Task, load_bank, stage_task
 
 _DEFAULT_REPEATS = 2
 _DEFAULT_BASE_BRANCH = "main"
-_CEILING_PER_TRIAL_USD = 2.00
+# The adapter's own per-spawn cap (ClaudeCliRunner.default_max_budget_usd). Mirrored
+# here so the plan's ceiling is computed from the cap that will actually bound the
+# spawns when --max-budget-usd is not given; test_cli_budget asserts the two agree.
+_DEFAULT_SPAWN_BUDGET_USD = 5.00
 # Bound on the verifier output persisted per trial (FATH-B14). The ledger is
 # committed, so this is the line between "diagnosable" and "a megabyte of agent
 # output in git history on one bad trial".
@@ -52,6 +56,15 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         metavar="N",
         help="Cap planned trials to N",
+    )
+    run_p.add_argument(
+        "--tasks",
+        default=None,
+        metavar="ID[,ID...]",
+        help="Run only these task ids. The way to buy a SCREEN before the full matrix "
+        "(e.g. one band, or the positive control, at higher repeats). --limit cannot do "
+        "it: the plan is scenario-major, so --limit cuts whole arms off the end. Unknown "
+        "ids are an error, never a silent empty run.",
     )
     run_p.add_argument(
         "--repeats",
@@ -97,8 +110,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         dest="max_budget_usd",
         metavar="USD",
-        help="Per-spawn budget cap (overrides the adapter default of 5.0); the real "
-        "cost guard for a paid matrix (§11)",
+        help="PER-SPAWN budget cap, not a run total (overrides the adapter default of "
+        "5.0). A value above the default LOOSENS the only runaway guard there is; the "
+        "printed ceiling is trials x this cap, so the plan shows what it really buys. "
+        "fathom has no total-run cap — for that, read cumulative cost_usd_est out of "
+        "the ledger between stages.",
     )
 
     run_p.add_argument(
@@ -180,6 +196,7 @@ def run_matrix(
     verifier_fn: Callable[[pathlib.Path, pathlib.Path], Any] | None = None,
     dry_run: bool = False,
     limit: int | None = None,
+    task_ids: Sequence[str] | None = None,
     ledger_dir: pathlib.Path | None = None,
     max_budget_usd: float | None = None,
     include_holdout: bool = False,
@@ -211,6 +228,31 @@ def run_matrix(
     tasks_to_run = (
         bank.tasks if include_holdout else [t for t in bank.tasks if t.id not in bank.holdout]
     )
+    # --tasks: buy a screen (one band, or the control, at higher repeats) before the
+    # full matrix. Applied AFTER the holdout filter, so it can never unseal a holdout
+    # by naming it — that still takes --include-holdout, which marks the ledger.
+    if task_ids is not None:
+        wanted = list(dict.fromkeys(task_ids))
+        known = {t.id for t in bank.tasks}
+        unknown = [t for t in wanted if t not in known]
+        if unknown:
+            print(
+                f"ERROR: --tasks names id(s) not in bank '{bank.name}': {', '.join(unknown)}\n"
+                f"known: {', '.join(sorted(known))}",
+                file=sys.stderr,
+            )
+            return 1
+        sealed = [t for t in wanted if t not in {task.id for task in tasks_to_run}]
+        if sealed:
+            print(
+                f"ERROR: --tasks names sealed holdout task(s): {', '.join(sealed)}. "
+                "Spending a holdout takes --include-holdout (ADR-0005), which marks the "
+                "trials in the ledger.",
+                file=sys.stderr,
+            )
+            return 1
+        tasks_to_run = [t for t in tasks_to_run if t.id in set(wanted)]
+
     done = _ledger.completed_keys(bank.name, ledger_dir=_ledger_dir)
 
     all_tuples: list[tuple[ResolvedScenario, Task, int]] = [
@@ -232,7 +274,14 @@ def run_matrix(
         planned = planned[:limit]
 
     num_planned = len(planned)
-    ceiling_usd = num_planned * _CEILING_PER_TRIAL_USD
+    # The ceiling must track the cap that actually bounds a spawn, not a constant that
+    # happens to equal the documented rail. `--max-budget-usd` is PER-SPAWN: passing a
+    # number larger than the default LOOSENS the only runaway guard there is, and while
+    # the ceiling was hardcoded at $2/trial it printed the same reassuring total either
+    # way — which is how a 20x loosening once got written up as a $100 rail. Deriving it
+    # makes the flag's real effect visible in the plan, before the spend.
+    per_trial_usd = max_budget_usd if max_budget_usd is not None else _DEFAULT_SPAWN_BUDGET_USD
+    ceiling_usd = num_planned * per_trial_usd
 
     # --- Print plan + ceiling BEFORE any spawn (spec §10 invariant) ---
     print(
@@ -240,6 +289,11 @@ def run_matrix(
         f"  tasks={len(tasks_to_run)}  repeats={repeats}",
         file=_out,
     )
+    # Name the arms. A wrong --scenarios-dir that happens to hold the same NUMBER of
+    # arms prints an identical count line, so the counts alone cannot tell a matrix
+    # from the wrong experiment — and the arm names are otherwise only visible after
+    # the spend, in the ledger.
+    print(f"arms:     {', '.join(sc.name for sc in resolved_scenarios)}", file=_out)
     print(
         f"planned:  {num_planned} trials ({already_done} already done)"
         f"  ceiling: ${ceiling_usd:.2f}",
@@ -603,6 +657,11 @@ def _cmd_run(args: argparse.Namespace) -> int:
         args.repeats,
         dry_run=args.dry_run,
         limit=args.limit,
+        task_ids=(
+            [t.strip() for t in args.tasks.split(",") if t.strip()]
+            if args.tasks is not None
+            else None
+        ),
         ledger_dir=ledger_dir,
         max_budget_usd=args.max_budget_usd,
         include_holdout=args.include_holdout,
