@@ -109,7 +109,37 @@ contested questions, and its output measured against the bank's verifier.
 control arm, n = 1, and it exercised the **installed plugin cache (0.1.2)**, not the merged 0.2.0
 worktree — the same staleness that runs through this whole wave.
 
-*(probe result section — see below)*
+### What the probe found: the fan-out is fast, the synthesis stage did not finish
+
+| step | outcome |
+|---|---|
+| `dry_run=true` (free, `cost_usd = 0`) | **orchestration is wired**: three OpenRouter substrates + synthesis, both stages exit 0, and the manifest returns the paths it will write |
+| real run, `assurance="fast"`, substrates `openai` / `deepseek` / `google` | **fan-out completed in ~3 minutes** — all three substrate briefs written (20,096 / 8,640 / 5,556 bytes) |
+| synthesis stage | **did not complete.** The MCP call aborted at the client's 1800 s idle timeout with no progress; the server's synthesis child (a local `claude -p`) was still alive **49 minutes** later with no synthesis and no `sidecar.json` on disk, and was terminated |
+
+So the precondition is **unverified, not refuted**: the bank's six well-formedness criteria never got a
+sidecar to score. What the probe does establish, and what the cost plan did not have, is where the
+latency lives — the multi-provider fan-out this tool exists for is the *cheap, fast* part, and the
+single-seat synthesis that follows it is the long pole.
+
+**Two things this makes concrete:**
+
+1. **The 60-trial matrix is not wall-clock feasible as designed.** At one observed run failing to
+   finish inside 50 minutes, 60 armed trials is well over a day of sequential wall-clock before any
+   repeat, and `trial_timeout_s` would have to exceed anything in this corpus (the current bank sets
+   2400 s, which this run would already have blown). Cost was never the binding constraint here.
+2. **The silent-run defect is real and is exactly what the merged version fixes.** The installed 0.1.2
+   reports nothing between call and return, so a client cannot distinguish a long run from a hang and
+   answers by giving up — which is precisely what happened. The merged 0.2.0 adds progress reporting
+   over the MCP context for this reason. **The probe therefore also demonstrates the wave's running
+   theme: the installed cache is not the merged tool**, and a measurement pointed at the cache would
+   have recorded a defect its subject had already fixed.
+
+One incidental observation worth a line: the run's outputs are written **inside the installed plugin
+cache** (`~/.claude/plugins/cache/mantis-research/mantis-research/0.1.2/outputs/…`). A plugin cache is
+a throwaway tree — this repo's own `_resolve.py` refuses `FATHOM_HOME` inside one precisely so a
+longitudinal record cannot be lost to a re-install — so research artifacts accumulating there are one
+`plugin update` away from disappearing.
 
 ## A confound the bank must carry into any future run
 
@@ -135,6 +165,7 @@ into.
 | Matrix | 2 arms × 10 questions × 3 repeats = 60 trials | unchanged in shape; the bank ships 3 dev + 1 holdout question and needs the other six |
 | Estimated | $40–150, most likely ~$70 | unchanged, and still the most expensive item across the four gates |
 | Blocking work | a question set with defensible post-hoc answers | **that, plus** vendoring an MCP-serving plugin tree with a materialisable environment, plus a `verify-arming` pass on the long tool spelling |
+| Wall-clock | not costed | **the binding constraint, newly measured**: one `fast` run did not finish inside 50 minutes (fan-out ~3 min, synthesis the remainder), so 60 armed trials is over a day sequential and needs a `trial_timeout_s` beyond anything in this corpus |
 | Unmeasurable without extra accounting | the armed arm's second-provider spend | confirmed: `OPENROUTER_API_KEY` is present so the arm *would* run, and `cost_usd_est` cannot see a cent of it — the 8.8× comparison needs provider-side cost recorded separately |
 
 **Recommendation, unchanged from the skeleton and now with evidence behind it:** author the question
