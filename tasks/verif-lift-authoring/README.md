@@ -139,7 +139,10 @@ screen runs at dataset_version 1, the floor and ceiling rules cut the pool to
 part of the resume key, so no screening trial can be reused as analysis data — the
 rule that screening data is never analysis data is enforced by the harness rather
 than by discipline. Post-screen the main matrix is 90 + 72 + 40 + 30 = 232 weak
-trials, so the program totals **56 + 232 + 72 = 360 trials ≈ $88.81** plus smoke.
+trials, so the program totals **56 + 232 + 72 = 360 trials**: 288 weak at $0.145 =
+$41.76, 72 strong at $0.73 = $52.56, **$94.32** plus the smoke line. Against the
+program's $120 ceiling with $0.22 already drawn, that leaves roughly $20 of reserve
+once smoke is paid — which is the reserve the plan pre-declared.
 
 The `--dry-run` line prints a fixed $2.00-per-trial ceiling; it is a worst case, not
 a projection, and it does not move with `--max-budget-usd`. Read the projection
