@@ -1,0 +1,20 @@
+id = "fix-tz-dst-normalize"
+instruction = """
+The `eastern` package converts US/Eastern wall-clock times to UTC via
+`eastern.dst.to_utc`. Users report that in the days right after the spring-forward
+transition their converted times come out an hour off. Find and fix the bug so the
+conversion uses the correct UTC offset on every date, including the days around both
+the spring and autumn daylight-saving transitions. Preserve the existing public API and
+all current behavior; the shipped test suite must still pass.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table. The cost-probe pilot
+# (spec DoD) recalibrates against observed turn/cost counts; the per-spawn budget cap is
+# the real spend guard, not these ceilings.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

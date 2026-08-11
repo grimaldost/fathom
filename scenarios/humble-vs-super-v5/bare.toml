@@ -1,0 +1,17 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "high"
+
+# Unarmed control: no plugins at all. Its job in v5 is CALIBRATION, not a verdict — it is
+# the floor that proves the instrument still discriminates. If `bare` does not land near
+# 0% on `regression_test_present` the way it did at n=45 in v3, the bank has stopped
+# measuring test-discipline on `claude-opus-5` and the disciplined arms' numbers mean
+# nothing. Identical to the stacked arms in every field except `[plugins]`.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 2400
