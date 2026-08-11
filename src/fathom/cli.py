@@ -18,6 +18,10 @@ from fathom.taskbank import Bank, Task, load_bank, stage_task
 _DEFAULT_REPEATS = 2
 _DEFAULT_BASE_BRANCH = "main"
 _CEILING_PER_TRIAL_USD = 2.00
+# Bound on the verifier output persisted per trial (FATH-B14). The ledger is
+# committed, so this is the line between "diagnosable" and "a megabyte of agent
+# output in git history on one bad trial".
+_VERIFIER_OUTPUT_CAP = 4096
 SCENARIOS_DIR = pathlib.Path("scenarios")
 TASKS_DIR = pathlib.Path("tasks")
 
@@ -353,10 +357,19 @@ def run_matrix(
             verifier_data: dict[str, Any] | None = None
             verifier_errored = False
             verifier_note = ""
+            # FATH-B14: the verifier's own output is in hand here and used to be
+            # dropped, so a failing criterion could not be diagnosed without
+            # re-running the trial — and a crashed verifier took its error message
+            # with it. Bounded because the ledger is committed: one bad trial must
+            # not put a megabyte of agent output into git history.
+            verifier_stdout = ""
+            verifier_stderr = ""
             if trial_result.scored:
                 verify_entry = task.task_dir / task.verify["entry"]
                 verify_timeout = int(task.verify.get("timeout_s", 60))
                 vr = _verifier(verify_entry, workspace, timeout_s=verify_timeout)
+                verifier_stdout = (vr.stdout or "")[:_VERIFIER_OUTPUT_CAP]
+                verifier_stderr = (vr.stderr or "")[:_VERIFIER_OUTPUT_CAP]
                 if vr.outcome == "error":
                     # A verifier crash / timeout / non-JSON is NOT a task failure — it
                     # means we have no valid score. Recording it as a completed trial
@@ -427,6 +440,8 @@ def run_matrix(
             )
             trial_dict = dataclasses.asdict(trial_rec)
             trial_dict["valid"] = valid
+            trial_dict["verifier_stdout"] = verifier_stdout
+            trial_dict["verifier_stderr"] = verifier_stderr
             trial_dict["scenario"] = sc.name
             trial_dict["holdout"] = task.id in bank.holdout
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)

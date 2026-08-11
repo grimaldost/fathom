@@ -1232,6 +1232,71 @@ class UnrunTrialsAreStructurallyDistinctTests(_Base):
             self.assertIs(t.get("valid"), True)
 
 
+class VerifierEvidenceIsRetainedTests(_Base):
+    """A trial must not destroy the evidence needed to diagnose it (FATH-B14).
+
+    `VerifierResult` already carries `stdout` and `stderr`, and both are in hand at
+    the ledger write site — they were simply dropped. So a failing criterion could
+    not be diagnosed without re-running the trial, and a verifier that crashed took
+    its own error message with it.
+
+    This is not hypothetical: a paid trial on `skill-pyeng-v1` errored with
+    `verifier error: non-JSON/crash` and the reason was unrecoverable, because the
+    verifier imports the agent's modified package and anything that package prints
+    at import time lands on the verifier's stdout ahead of the JSON.
+    """
+
+    def _crashing_verifier(self, stdout: str, stderr: str = ""):  # noqa: ANN202
+        def _fn(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+            return VerifierResult(
+                outcome="error", criteria=None, stdout=stdout, stderr=stderr, exit_code=1
+            )
+
+        return _fn
+
+    def _trials(self):  # noqa: ANN202
+        import json
+
+        path = pathlib.Path(self.ledger_dir) / f"{self.bank.name}.jsonl"
+        rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x]
+        return [r for r in rows if r.get("kind") == "trial"]
+
+    def test_a_crashed_verifiers_output_is_persisted(self) -> None:
+        noise = "Loading timeflow config...\n" + '{"src-layout": true}'
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            verifier_fn=self._crashing_verifier(noise, "Traceback: boom"),
+        )
+        trials = self._trials()
+        self.assertTrue(trials)
+        for t in trials:
+            self.assertIn("Loading timeflow config", t.get("verifier_stdout", ""))
+            self.assertIn("boom", t.get("verifier_stderr", ""))
+
+    def test_a_completed_trials_verifier_stdout_is_persisted(self) -> None:
+        _run_matrix(self.bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        for t in self._trials():
+            self.assertEqual(t["status"], "completed")
+            self.assertIn("ok", t.get("verifier_stdout", ""))
+
+    def test_persisted_output_is_bounded(self) -> None:
+        # The ledger is committed; an unbounded blob would put a megabyte of agent
+        # output into git history on one bad trial.
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            verifier_fn=self._crashing_verifier("x" * 50_000, "y" * 50_000),
+        )
+        for t in self._trials():
+            self.assertLessEqual(len(t.get("verifier_stdout", "")), 4096)
+            self.assertLessEqual(len(t.get("verifier_stderr", "")), 4096)
+
+
 class BankValidationGateTests(unittest.TestCase):
     """`fathom run` must refuse to spend on a bank that cannot discriminate (FATH-B02)."""
 
