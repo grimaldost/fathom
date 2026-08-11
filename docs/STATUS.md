@@ -146,7 +146,19 @@ below pending a second corroborating report:
 
 ## In flight
 
-- *(nothing in flight)* — the `humble-vs-super` plugin-eval is complete through **four** analyses (v1
+- **`e2-data-semantics` — instrument ready, matrix UNBOUGHT (2026-08-11).** The bank (6 dev + 2 sealed
+  holdout tasks) and all three arms (`bare` / `skill-current` / `skill-vnext`, in
+  `scenarios/e2-data-semantics/`) are authored, pinned and hash-distinct; `fathom validate --strict`
+  reads 24/24 and `tools/check_naive_refs.py --strict` reads 8 discriminate / 0 fail. **No trial has
+  run and no ledger exists**: `claude -p` cannot authenticate from a spawned process (OAuth refresh
+  token dead), so `fathom smoke` reads 5/8 and `verify-arming` reads *UNKNOWN, not armed*. Every
+  behavioural claim about the `data-engineering-discipline` revision is **Unproven** — including the
+  pre-registered `oracle-capture` adjudication that decides whether `oracle_guard.py` gets built. The
+  trigger-side reseal (craft-collection, 66 dev + 39 holdout spawns) is blocked identically. Verdict,
+  per-claim register and exact resume steps:
+  `docs/reports/2026-08-11-data-discipline-vnext-proof.md`. Unblocking needs an interactive
+  `claude login` by the operator.
+- *(otherwise nothing in flight)* — the `humble-vs-super` plugin-eval is complete through **four** analyses (v1
   0.3.1 baseline, v2 0.4.0 re-run, v3+v4 harder-bank retunes with the v3 powered confirmatory at n=45/arm;
   see Analyses run). Spec + instrument: `docs/specs/2026-06-14-fathom-humble-vs-super-design.md`, the
   keel-DoR-certified design; 11-PR build series in `pr-series/humble-vs-super/`. The four ledgers

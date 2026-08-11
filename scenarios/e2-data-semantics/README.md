@@ -8,11 +8,14 @@ arms.
 |---|---|---|
 | `bare` | none | the never-run baseline: does the surface beat no surface at all |
 | `skill-current` | `[context] inject = assets/skill-current.md` | does the surface as it stands beat bare |
+| `skill-vnext` | `[context] inject = assets/skill-vnext.md` | does the revised surface beat the shipped one, and does it still beat bare |
 
-A third arm carrying the revised surface is added later, as a second
-`[context] inject` asset beside this one. Arms differ in **one** thing: the
-injected body. Model, effort, strategy, tool allow-list and limits are identical,
-so nothing but the surface can explain a difference.
+Arms differ in **one** thing: the injected body. Model, effort, strategy, tool
+allow-list and limits are identical, so nothing but the surface can explain a
+difference. `skill-current` is byte-identical to the base commit the revision
+was written on top of (verified: `git show 07fea4f:<skill path>` diffs clean
+against the pinned asset), so `skill-current` → `skill-vnext` is exactly the
+revision series and nothing else.
 
 ## Asset provenance — `assets/skill-current.md`
 
@@ -33,6 +36,31 @@ Extracted verbatim (frontmatter included, no edits) from the published skill:
 git -C <craft-collection> show e836366d3438e676044f6923ea8267d4dfd2b73b \
     > scenarios/e2-data-semantics/assets/skill-current.md
 ```
+
+## Asset provenance — `assets/skill-vnext.md`
+
+Extracted verbatim (frontmatter included, no edits) from the revised skill, by
+the same recipe:
+
+| | |
+|---|---|
+| Repository | `craft-collection` |
+| Path | `plugins/engineering-discipline/skills/data-engineering-discipline/SKILL.md` |
+| Plugin version | `engineering-discipline` 0.5.0 |
+| Blob sha | `9541aff4d0647083227131f6236b480f29384bb6` |
+| Extracted at | `feat/data-discipline-vnext` = `a339aaaba369859f78535e3c966d1d92c5109efd` (branched off `07fea4f`) |
+| Asset content sha256 | `68ae1837f248554fd7cb873b0b8a5d792950b28914fc84773bdd98ab4275620d` |
+| Size | 16,511 bytes, 303 lines, LF |
+
+```sh
+git -C <craft-collection> show 9541aff4d0647083227131f6236b480f29384bb6 \
+    > scenarios/e2-data-semantics/assets/skill-vnext.md
+```
+
+The revision is unmerged at extraction time. That is deliberate: the point of
+the arm is to price the change *before* it ships, so the pin is a branch tip and
+a blob sha rather than a released tag. If the branch is rebased or amended, the
+blob sha above is what identifies what was measured — not the branch name.
 
 **Why a snapshot rather than a mounted checkout.** `[plugins] mount` takes a live
 directory and its tree hash enters `config_hash`, so a commit landing in a shared
