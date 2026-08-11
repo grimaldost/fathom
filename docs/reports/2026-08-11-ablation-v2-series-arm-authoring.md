@@ -1,8 +1,13 @@
 # ablation-v2: authoring the weak-tier series arm, and repairing the arm it is compared against
 
-**Status: authored, statically validated, rehearsed end-to-end without spending. NOT YET RUN.**
-Bank `ablation-v2`, task `exprlang`, dataset_version `1` (unchanged). Branch
-`eval/series-vs-bare`.
+**Status: authored, adversarially reviewed, repaired, statically validated, rehearsed
+end-to-end without spending. NOT YET RUN.** Bank `ablation-v2`, task `exprlang`,
+dataset_version `1` (unchanged). Branch `eval/series-vs-bare`.
+
+Five blocking findings from a blind review are repaired in **§7** — all of them before any
+trial exists, which matters because the decomposition is not covered by `config_hash` (§7e).
+Read **§5** for the run plan: it is now three ordered blocks, not one, and the treatment's
+honest ceiling is **$120.00, not the $16.00 of the pre-review draft** (§7c).
 
 The question this arm exists to answer: **at the weak tier, does routing a task through a
 governed multi-PR engine beat handing the same model the same task in one brief?** The
@@ -211,23 +216,83 @@ the failure data, and a reviewer should weigh it as such.
   `.wt-closeout/convoy`, which does not exist. The rehearsal above exercises the same
   boundary successfully against an absolute engine path.
 
-## 5. Run plan, and the precondition that must hold first
+## 5. Run plan, and the preconditions that must hold first
+
+The matrix runs in **three ordered blocks**. The order is load-bearing: the control block
+is what makes the comparison contemporaneous, and the pilot is what turns the treatment's
+ceiling from an assumption into a measurement.
+
+### Block A — contemporaneous control (~$4.50 expected, $32.00 ceiling)
 
 ```sh
-uv run fathom run ablation-v2 \
-    --scenarios-dir scenarios/ablation-v2-series \
-    --repeats 8 \
-    --max-budget-usd 2.0
+uv run fathom run ablation-v2 --scenarios-dir scenarios/ablation-v2-control --repeats 16
 ```
 
-- **Planned cells: 8** (1 arm × 1 task × 8 repeats, 0 already done).
-- **`--dry-run` ceiling: $16.00** — fathom's generic $2/trial ceiling, not a forecast. The
-  ledger-grounded expectation is lower: weak-tier spawns on this task cost $0.20–0.30 each
-  for the *whole* task, and a trial here is five narrower spawns plus fixes, so roughly
-  $0.5–2.0 per trial, i.e. **$4–16 for the arm**. `--max-budget-usd 2.0` now genuinely caps
-  each engine spawn (§2b) at ~8× the observed per-spawn cost, which trips only on a
-  runaway; note that a budget bust halts the PR and errors the cell, so a tighter rail buys
-  lost cells rather than savings.
+16 planned cells: repeats 8–15 of `haiku` and `haiku-gate`. `scenarios/ablation-v2-control/`
+holds byte-identical copies of the two baseline arms — verified to resolve to exactly the
+ledger's `5b86a237…` and `964e7a9a…`, so the new repeats **extend** those arms rather than
+forking them (`--repeats 8` against that directory plans 0 trials, which is the proof).
+
+Why it is not optional: every `haiku` and `haiku-gate` row in `ledger/ablation-v2.jsonl`
+was written in one commit dated 2026-07-04, and all 16 carry **empty `cli_version` and
+empty `tool_git_sha`** with no timestamp field. Measuring the treatment five weeks later
+against a subscription-served endpoint would put any endpoint or CLI drift inside the
+reported treatment effect. Ledger-grounded cost: the original 16 baseline trials cost
+$4.50 in total ($2.134 for `haiku`, $2.361 for `haiku-gate`; one spawn each).
+
+**Compare the new repeat block against repeats 0–7 BEFORE pooling them.** A material
+difference between the two blocks is itself the finding: it means the historical
+comparators cannot carry the ADR and the treatment must be read only against the new block.
+
+### Block B — treatment pilot, one trial ($15.00 ceiling, ~$0.5–2.0 expected)
+
+```sh
+uv run fathom run ablation-v2 --scenarios-dir scenarios/ablation-v2-series \
+    --repeats 8 --limit 1 --max-budget-usd 1.0
+```
+
+No real-spawn series trial has ever run on this bank — the end-to-end rehearsal (§4) used
+the recorder shim, so real per-spawn cost and the real blocked-vs-completed classification
+on real telemetry are still unmeasured. One trial buys both. `--max-budget-usd 1.0` is
+~2.8× the largest per-spawn cost ever observed in this bank ($0.356), and a budget bust
+halts the PR and ERRORs the cell out of the denominator, so the rail is set for headroom,
+not for savings.
+
+**Read out of the pilot before releasing Block C:** the per-run `cost_usd_est` values, the
+trial's `status` and `detail`, and how many spawns actually fired. Recompute the projected
+matrix cost from those numbers.
+
+### Block C — the remaining 7 treatment cells ($105.00 ceiling)
+
+```sh
+uv run fathom run ablation-v2 --scenarios-dir scenarios/ablation-v2-series \
+    --repeats 8 --max-budget-usd 1.0
+```
+
+Resumable on the `(bank, dataset_version, task_id, config_hash, repeat)` key, so this
+re-invocation skips the pilot and can itself be chunked with `--limit`.
+
+### The ceiling, stated honestly
+
+- **Planned cells: 24** (16 control + 8 treatment). **Full ceiling $152.00** — $32.00
+  control + $120.00 treatment.
+- **The treatment ceiling is $120.00, not $16.00.** The $16 figure in the pre-review draft
+  came from fathom's flat $2/trial rail, which prices ONE spawn per trial. A series trial
+  holds up to 5 PRs × (1 impl + 2 fix) = **15 spawns**, and `--max-budget-usd` is a
+  *per-spawn* cap on a series arm, so at a $1.00 rail the true worst case is $15.00/trial.
+  `fathom run --dry-run` now computes and prints this (§7c) instead of the understated
+  number:
+
+  ```
+  planned:  8 trials (0 already done)  ceiling: $120.00
+    series arm haiku-series/exprlang: 8 x $15.00/trial  (5 PRs x (1 impl + 2 fix) spawns; the per-spawn rail applies to each)
+  ```
+
+- **Ledger-grounded expectation is far below the ceiling**: weak-tier spawns on this task
+  cost $0.267–0.295 on average for the *whole* task (max $0.356), and a series spawn is
+  narrower, so a trial is realistically $0.5–2.0 and the arm $4–16. The gap between $16
+  expected and $120 worst case is exactly why Block B exists: **do not spend Block C on
+  the expectation, spend it on the pilot's measured numbers.**
 - **Precondition — the engine path.** `[tools].repo` is resolved against fathom's CWD, not
   against the scenario file, so **the matrix must be invoked from a checkout whose sibling
   `../convoy` is the convoy checkout** — the canonical `Documents/fathom`, not a worktree.
@@ -244,6 +309,12 @@ uv run fathom run ablation-v2 \
   `ledger/ablation-v2.jsonl` — the bank names the ledger, not the directory. Re-running
   `haiku-gate-sg2` has the same shape of problem and will need the same treatment or a
   full-group run.
+- **Freeze the convoy checkout for the whole run.** `config_hash` carries the resolved
+  absolute convoy invocation and convoy's HEAD sha (`tool_repo_sha`); convoy is at
+  `cdb48ee` (`v0.8.0-1-gcdb48ee`). A commit landing mid-matrix forks the arm's resume key.
+  Worse, `cli.py` returns the literal string `"unknown"` when `git -C <repo> rev-parse
+  HEAD` fails, so an invocation from the wrong CWD silently forks the key rather than
+  erroring — the same root cause as the engine-path precondition above.
 
 ## 6. What this arm can and cannot conclude
 
@@ -276,3 +347,120 @@ Three further limits a reader should carry:
    where `haiku-gate` spends 1–3. If the pass rates land equal, the economy axis is the
    verdict, and it will say the engine cost more for nothing on this task — which is a
    real finding, and a narrower one than "the engine does not work".
+4. **The governance machinery is expected to be inert, and the ADR must say so.**
+   `haiku-gate` produced exactly 8 spawn records for 8 trials — **zero fix spawns**, i.e.
+   the visible suite was green on the first attempt in every single trial. That is why
+   `haiku-gate` == `haiku` == 3/8: the failures live entirely outside the visible suite.
+   Every check this series runs is a subset of that same suite, and the decisive criterion
+   (`type_bool_in_arith`) is tested nowhere in it, so the per-PR gates and the bounded fix
+   loop will most likely never fire either. **Any lift is therefore attributable to the
+   decomposition and the split contexts, not to gating or repair.** Report blocked-vs-
+   integrated counts and fix-spawn counts alongside the pass rate, or the write-up will
+   credit machinery that never ran.
+5. **A series arm can fail in a way the single-spawn arms cannot.** An early blocking halt
+   scores a partially-implemented tree (the rehearsal scored 6/15 after a PR01 halt),
+   whereas a single-spawn arm always attempts the whole task. That is honest treatment
+   behaviour, not a defect — but it means a null or negative result is uninterpretable
+   without the **blocked-at-which-PR** breakdown, which must be read out of the ledger and
+   reported.
+
+---
+
+## 7. Repairs after adversarial review (still no spend)
+
+A blind adversarial review of the authored arm returned five blocking findings. All five
+are repaired below, before any trial exists. Nothing in this section was measured; it is
+all static.
+
+### 7a. The briefs stated scope the baselines' instruction does not
+
+The single most serious finding, in the unfair-advantage direction. Only three criteria
+ever fail in this bank, and two brief passages named coverage on exactly those:
+
+| where | said | the instruction says | the oracle case it handed over |
+|---|---|---|---|
+| PR01 | arithmetic "and the unary `-` / `+`" require numeric operands | item 4 enumerates only "`+ - * / %` and comparison operators" | `err_ok("-true")`, one of `type_bool_in_arith`'s four conjuncts |
+| PR05 | check each operator "on both operand positions for the binary ones" | "an operand of the wrong type" | the un-visible right-operand cases `1*false`, `1-true`, `1<true`, `true and 2`, `false or 2` — across all three failing criteria |
+
+Both are deleted. Three more of the same species, on criteria with less headroom, were cut
+in the same pass: PR02's warning that the two-character operators share a leading character
+(the instruction says nothing about lexing, and `lexing_multichar` never fails); PR04's
+explanation of *why* `not`'s slot is counter-intuitive (`not_op` fails 1/8 in `haiku-gate`,
+so this one was not harmless); PR05's "adjacent **and** non-adjacent pairs".
+
+What survives is what the instruction itself contains — the precedence table verbatim, its
+two worked examples (`1 < 2 and 3 < 4`, `not 1 < 2`), the short-circuit examples, and the
+`TypeMismatchError` contract — plus the decomposition's own scaffolding (dependency order,
+the published inter-PR interface, what is out of scope for each PR). That scaffolding *is*
+the treatment. A grep over `prompts/` confirms no remaining mention of operand positions,
+unary in a type rule, multi-character lexing, or non-adjacent precedence pairs, and nothing
+anywhere mentions that `bool` subclasses `int` in Python — the entire content of the
+dominant failure class.
+
+### 7b. The test-immutability rule could manufacture a defeat from the arm's own work
+
+PR01–PR04 each add tests in a new file that no later gate runs until PR05 discovers the
+whole `tests/` tree. A natural PR01 test — asserting `true and false` currently raises —
+survives into PR05, contradicts PR03's landed `and`, and the old wording ("do not modify or
+delete any existing test") forbade the only correct fix. The two fix attempts burn, the
+engine exits 1 blocked, and the partial tree is scored a task failure. The single-spawn
+arms have no equivalent lock-in.
+
+Immutability is now scoped to the two **given** files (`tests/test_arithmetic.py`,
+`tests/test_feature.py`), and PR02–PR05 each state that tests added by an earlier PR of the
+series may be corrected when they contradict the current brief.
+
+### 7c. The stated ceiling was not a ceiling
+
+Repaired in the tool, not only in the plan — see §5 and the commit. The number the operator
+reads is now the number the run is bounded by.
+
+### 7d. No contemporaneous control
+
+Repaired by `scenarios/ablation-v2-control/` — see §5 Block A.
+
+### 7e. The decomposition is unversioned in the ledger — so it is frozen from here
+
+`config_hash` covers only scenario fields (adapter, effort, limits, model, name, strategy,
+`tool_invocation_cmd`, `tool_repo_sha`, tools) and `dataset_version` is the declared string
+`"1"` in `bank.toml`. **Neither hashes `tasks/ablation-v2/exprlang/series.toml` or
+`prompts/`.** Two trials run against materially different decompositions would therefore
+share a resume key and pool silently into one pass rate.
+
+There is no mechanism to stop that, so the rule is procedural and stated here:
+
+1. **Every prompt edit landed before the first trial** — done; §7a and §7b are committed
+   ahead of any spend, and the ledger still carries no series-arm trial.
+2. **The decomposition is frozen at these object names** for the life of the resulting
+   number, which must cite them:
+
+   | path | git object |
+   |---|---|
+   | `tasks/ablation-v2/exprlang/` (tree) | `28fa4d94e5268bc1beb932102bb23e6eacd9eecf` |
+   | `tasks/ablation-v2/exprlang/prompts/` (tree) | `769f146b429c3b8041ecbe824f247047de2957bd` |
+   | `tasks/ablation-v2/exprlang/series.toml` (blob) | `b87cb53ae493a80dbe40ecff3a19730bb11a6b85` |
+
+   Re-derive with `git rev-parse HEAD:tasks/ablation-v2/exprlang`. If the tree SHA at run
+   time is not `28fa4d94`, the run is measuring a different decomposition than this note
+   describes and the note must be updated before the trials are read.
+3. **If the decomposition is ever revised after trials exist, it runs under a NEW arm
+   name** — never edited in place. Editing in place pools two experiments under one hash.
+
+### 7f. What the review confirmed, and what it left open
+
+Verified independently by the reviewer and not re-audited here: contract compliance under
+convoy 0.8.0's own loader after simulating fathom's regeneration; gate integrity (all six
+check commands red on the base fixture, green on the reference solution, verifier 15/15 on
+the solution); blindness of the staging path; cross-arm comparability of model, effort and
+tool allow-list; and the blocked-trial scoring change (`gated_session.py` already sets
+COMPLETED whenever the implementation spawn ran, so classifying engine exit 1 / `blocked`
+as COMPLETED matches it and matches contract §7 — under the old classification every
+non-integrated trial would have left the denominator, conditioning the pass rate on the
+engine having succeeded).
+
+Left open, and carried into §6: `haiku-gate-sg`'s 9/10 stays unattributable until
+`haiku-gate-sg2` re-runs, and no report may cite it as a probe-arm result. Also disclosed:
+the decomposition is defensible from the instruction's structure alone, but its author had
+already read the per-criterion table and knew item 4 is where weak-tier trials die. The cut
+that concentrates on item 4 is not innocent of the failure data and should be weighed as
+such.
