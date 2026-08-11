@@ -14,8 +14,7 @@ each write part of the same row.
 
 `period` is the shared key. Both producers commit to the **same** representation
 of it: a `datetime.date`. `reconcile()` joins on `(region, period)` with no
-coercion, so a producer that emits some other representation of the same day
-drops out of the join rather than failing loudly.
+coercion.
 
 Row cardinality: one row per `(region, period)` present in **both** producers'
 output. Amounts are `Decimal`, never `float`.

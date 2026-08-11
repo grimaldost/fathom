@@ -19,6 +19,3 @@ A category with no orders in the period does not appear.
 one row per product. A product that has been recategorised has several rows. The
 category that applies to an order is the row for that product with the greatest
 `effective_from` that is less than or equal to the order's `order_date`.
-
-Joining the order ledger to `product_lookup` on `product_id` alone is a fan-out:
-a recategorised product's orders match more than one lookup row.

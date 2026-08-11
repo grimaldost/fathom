@@ -23,6 +23,19 @@ A task that declares no ``[naive]`` table is ``UNVERIFIABLE`` — reported, and
 blocking under ``--strict``.  Calling an unmeasured property green is the
 vacuous-gate failure this file exists to remove.
 
+**What a PASS here is, and is not.**  The overlay in ``refs/naive/`` and the
+``[naive]`` contract it is scored against are written by the same bank author in
+the same commit, and no agent is spawned.  So a PASS is a *self-consistency*
+property — this author's idea of the first-pass fix misses this author's declared
+subtle criterion.  It bounds **one** easy path; it does not bound *the* easy path,
+and it observes no behaviour.  In particular it inherits the blind spot
+``src/fathom/validate.py`` names about its own triad: it does NOT catch a bank
+whose tasks are simply too easy, so every arm succeeds.  Only the bare arm's
+measured failure rate closes that, which is what a ``--repeats 1`` pilot with a
+saturation gate is for.  Do not write "N tasks re-confirm they discriminate" from
+this tool's output; write "N tasks' naive overlays honour their declared
+contract".
+
 Free — no spawn, no spend.
 
     python tools/check_naive_refs.py <bank> [--strict] [--tasks-dir tasks]
@@ -48,6 +61,10 @@ NAIVE_DIRNAME = "refs/naive"
 STATUS_PASS = "pass"
 STATUS_FAIL = "fail"
 STATUS_UNVERIFIABLE = "unverifiable"
+# A declared control is not a trap and must never be counted as one. It used to
+# return STATUS_PASS, so the summary line reported one more discriminating task
+# than the bank has -- and two documents carried the inflated count.
+STATUS_CONTROL = "control"
 
 EXIT_OK = 0
 EXIT_INVALID = 3
@@ -157,7 +174,7 @@ def check_task(task: Task, *, base_branch: str = "main") -> NaiveCheck:
     if control:
         return NaiveCheck(
             task.id,
-            STATUS_PASS,
+            STATUS_CONTROL,
             f"declared CONTROL: the obvious fix satisfies {must_pass}, by design. This task "
             "is not asked to discriminate; it is what makes the other tasks' numbers "
             "interpretable and where an arm that costs more than it buys becomes visible.",
@@ -183,6 +200,7 @@ def render(bank_name: str, checks: Sequence[NaiveCheck]) -> str:
         STATUS_PASS: "PASS",
         STATUS_FAIL: "FAIL",
         STATUS_UNVERIFIABLE: "UNVERIFIABLE",
+        STATUS_CONTROL: "CONTROL",
     }
     lines = [f"naive-refs: {bank_name}"]
     for check in checks:
@@ -191,10 +209,15 @@ def render(bank_name: str, checks: Sequence[NaiveCheck]) -> str:
     failed = sum(1 for c in checks if c.status == STATUS_FAIL)
     unver = sum(1 for c in checks if c.status == STATUS_UNVERIFIABLE)
     passed = sum(1 for c in checks if c.status == STATUS_PASS)
+    controls = sum(1 for c in checks if c.status == STATUS_CONTROL)
     lines.append("")
     lines.append(
-        f"NAIVE-REFS: {passed} discriminate, {failed} fail, {unver} unverifiable"
-        + ("  -- BANK CANNOT DISCRIMINATE" if failed else "")
+        f"NAIVE-REFS: {passed} discriminate, {controls} control, {failed} fail, "
+        f"{unver} unverifiable" + ("  -- BANK CANNOT DISCRIMINATE" if failed else "")
+    )
+    lines.append(
+        "  (a self-consistency property: the overlay and the contract it is checked "
+        "against are authored together, and no agent behaviour is observed)"
     )
     return "\n".join(lines)
 

@@ -20,7 +20,7 @@ root-cause) add the harder instruments + their `verify.py` discrimination tests 
 |---|---|---|---|
 | the series-engine bank | single long session vs the series engine's multi-session series vs bare, on 3 dev tasks | the series engine's pipeline gave **no quality gain** over a bare single session at ~4.6× tokens and 8 sessions/trial — the tasks sat below the coordination threshold (ceiling effect: bare 6/6). | `docs/reports/2026-06-10-pr-pilot-v1-first-matrix.md` |
 | `skill-pyeng-v1` | does `engineering-discipline:python-engineering` improve legacy-project modernization? | **Yes, and specifically:** the skill drove 5/5 doctor compliance 3/3 vs bare/generic ~2–3/5; `uv` build backend + ruff single-quote are skill-only (0% → 100%); `generic-nudge ≈ bare`, so it is the skill's content, not a generic nudge. | `docs/reports/2026-06-13-skill-pyeng-v1-first-matrix.md` |
-| `skill-pyeng-v1` (re-validation, 2026-08-11) | does the 2026-06-13 verdict survive once the arming and bank-validity defects are closed? | **Yes.** Both treatment arms observed armed on real spawns; the bank leaves 5 of 6 criteria false on the untouched fixture. At n=3/arm the skill arm is 3/3 against 0/6 pooled controls on `uv` and `ruff-single-quote` (Fisher p=0.0119) and is also the CHEAPEST and tightest arm — bare's turns run 44/61/260 at 1.67 sessions/trial. `generic-nudge` is identical to `bare` on every criterion. Binding limit: **K=1 task**, which repeats cannot fix. | `docs/reports/2026-08-11-skill-pyeng-v1-revalidation.md` |
+| `skill-pyeng-v1` (re-validation, 2026-08-11) | does the 2026-06-13 verdict survive once the arming and bank-validity defects are closed? | **Yes.** Both treatment arms observed armed on real spawns; the bank leaves 5 of 6 criteria false on the untouched fixture. At n=4/4/3 the skill arm is 3/3 against **0/8 pooled controls** on `uv` and `ruff-single-quote` (Fisher two-sided p=0.0061) and is also the CHEAPEST and tightest arm — bare's turns run 44/86/260 at 1.75 sessions/trial. `generic-nudge` is identical to `bare` on every criterion. Binding limit: **K=1 task**, which repeats cannot fix. | `docs/reports/2026-08-11-skill-pyeng-v1-revalidation.md` |
 | `humble-vs-super-v1` | humblepowers **0.3.1** vs superpowers, mounted as plugins (5 arms) | superpowers **more effective** — regression-test discipline 90–100% vs humble 50–60% — at ~30–40% higher cost; no clean efficiency win for humble. Ceiling: 10/11 criteria at 100%. | `docs/reports/2026-06-14-humblepowers-vs-superpowers.md` |
 | `humble-vs-super-v2` | re-run with humblepowers **0.4.0** (3 arms: stack-humble / super-only / stack-super) | **Verdict reversed.** 0.4.0 closed the discipline gap — regression-test 100% vs super 80% — and `stack-humble` is the **sole Pareto-optimal arm** (higher quality at ~16–20% lower cost/tokens/turns). Quality edge directional (n=10, overlapping CIs); cost edge robust. | `docs/reports/2026-06-15-humblepowers-0.4.0-vs-superpowers.md` |
 | `humble-vs-super-v3`/`v4` (harder banks; v3 powered to **n=45/arm**) | can a harder bank make **correctness** discriminate? + higher-n confirmatory of the v2 verdict | **Two findings.** (1) *Harder-bank goal failed, cleanly & replicated:* opus-bare nails correctness on self-contained tasks regardless of discipline — v3 (documented edges) **and** v4 (non-local root-cause) both ceiling; **0/180 correctness failures** at n=45. The disciplines move **test-hygiene, not correctness**. (2) *v2 corrected:* at n=45 humble ≈ super on test-discipline (100% vs 95.6–97.8%, **overlapping CIs**) — v2's "humble>super" was n=10 noise. `stack-humble` still **Pareto-dominates** both super arms, but via **cost** (~9–19% cheaper, ~21% fewer turns), not quality. | `docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md` |
@@ -148,8 +148,9 @@ below pending a second corroborating report:
 
 - **`e2-data-semantics` — instrument ready, matrix UNBOUGHT (2026-08-11).** The bank (6 dev + 2 sealed
   holdout tasks) and all three arms (`bare` / `skill-current` / `skill-vnext`, in
-  `scenarios/e2-data-semantics/`) are authored, pinned and hash-distinct; `fathom validate --strict`
-  reads 24/24 and `tools/check_naive_refs.py --strict` reads 8 discriminate / 0 fail. **No trial has
+  `scenarios/e2-data-semantics/`) are authored and pinned; `fathom validate --strict` reads 24/24 and
+  `tools/check_naive_refs.py --strict` reads **7 discriminate / 1 control / 0 fail** (the tool used to
+  count the declared control as a trap and print 8). **No trial has
   run and no ledger exists**: `claude -p` cannot authenticate from a spawned process (OAuth refresh
   token dead), so `fathom smoke` reads 5/8 and `verify-arming` reads *UNKNOWN, not armed*. Every
   behavioural claim about the `data-engineering-discipline` revision is **Unproven** — including the
@@ -158,6 +159,11 @@ below pending a second corroborating report:
   per-claim register and exact resume steps:
   `docs/reports/2026-08-11-data-discipline-vnext-proof.md`. Unblocking needs an interactive
   `claude login` by the operator.
+  **A referee pass on 2026-08-11 moved the bank to `dataset_version = 2`** (four contract fixtures
+  narrated their own trap in prose and were trimmed to the declarative contract) and re-pinned
+  `skill-vnext.md`. The resume recipe now runs the plan's mandatory `--repeats 1` pilot and its
+  saturation gate before the 90-trial matrix — `check_naive_refs` observes no agent behaviour and,
+  like `validate`, cannot detect a bank that is simply too easy for every arm.
 - *(otherwise nothing in flight)* — the `humble-vs-super` plugin-eval is complete through **four** analyses (v1
   0.3.1 baseline, v2 0.4.0 re-run, v3+v4 harder-bank retunes with the v3 powered confirmatory at n=45/arm;
   see Analyses run). Spec + instrument: `docs/specs/2026-06-14-fathom-humble-vs-super-design.md`, the

@@ -18,11 +18,8 @@ Every time-based decision in this transform is made on **event time, in UTC**.
 - **Rate.** The rate applied to an order is the `fx_rates` row whose `currency`
   matches and whose `rate_date` equals the order's **event date in UTC**.
 
-Both sides of the join are filtered and keyed on the same clock. `load_date` is
-the warehouse's local (UTC-03:00) load day: it records when a row reached us, not
-when the order happened, and the two disagree for any order placed near local
-midnight or late in a local day. It is not an event-time column and no metric is
-defined on it.
+`load_date` is the warehouse's local (UTC-03:00) load day: it records when a row
+reached us. No metric in this contract is defined on it.
 
 ## Fields
 

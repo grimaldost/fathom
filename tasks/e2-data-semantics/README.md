@@ -35,6 +35,37 @@ must_fail = ["<the discriminating criterion>"]
 A task whose naive overlay satisfies its subtle criterion is not a trap and is
 re-authored before the bank is run.
 
+### What the fourth property does *not* prove
+
+The overlay in `refs/naive/` and the `[naive]` contract it is checked against are
+written by the same author in the same commit. So `check_naive_refs` proves a
+**self-consistency** property — this author's idea of the first-pass fix misses
+this author's declared subtle criterion — and observes no agent behaviour at all.
+It bounds one easy path; it does not bound *the* easy path, and it cannot detect
+a bank that is simply too easy for every arm (`src/fathom/validate.py` says the
+same about its own triad). Only the bare arm's measured failure rate closes that,
+which is why the run has a saturation gate at `--repeats 1` before the full
+matrix is funded.
+
+### Fixtures do not narrate their own trap
+
+The staged workspace carries a declared contract because a real data change has
+one. It must not carry the diagnosis. At `dataset_version = 1` four contracts did
+— `refund_report.md` had a "Zero is a value" section spelling out netted-to-zero
+versus no-rows, `category_revenue.md` said joining on `product_id` alone "is a
+fan-out", `monthly_volume.md` ruled `load_date` "not an event-time column", and
+`region_daily.md` said a differing representation "drops out of the join rather
+than failing loudly". Each of those sentences hands the agent the answer, so the
+trap would have measured reading comprehension. They were cut at
+`dataset_version = 2`; the declarative semantics (types, grain, null rules,
+as-of rule, the UTC event-time rule) stayed, because an agent that cannot see
+them is being tested on guessing rather than on discipline.
+
+**Residual, not fixed:** three instructions still name the contract file to read
+(`null-vs-zero`, `time-window-misalignment`, `watermark-frozen-partition`).
+Finding the contract is a real part of the discipline and those three tasks do
+not measure it. Read their per-trap contrast accordingly.
+
 ## Dev tasks
 
 | Task | The drift it encodes | Easy criterion (naive passes) | Subtle criterion (naive misses) |
@@ -60,6 +91,19 @@ trials holdout in the ledger. Do not open them while iterating on the surface.
 |---|---|---|---|
 | `predicate-loss` | **a predicate dropped in a port.** The legacy query applies three predicates; the port carries one. The soft delete is visible in the sample data and in the reported symptom; the suspended-account predicate is only in the legacy SQL, several lines below it. A `closed` account is *in* the legacy rowset, so tightening beyond the source fails too. | `soft_deleted_excluded` | `rowset_matches_known_good` |
 | `watermark-frozen-partition` | **freshness self-report.** One global cursor skips a slow partition's late rows for good; giving each partition its own cursor fixes that and leaves the run declaring `success` while a partition's upstream has stopped entirely. | `late_rows_loaded` | `per_partition_cursor_advanced` — cycle 3 names the frozen partition and does not report plain success, while cycles 1 and 2 report nothing stale |
+
+**The holdout is sealed, not independent.** Both traps instantiate sentences that
+**both** injected bodies already carry: the frozen-partition trap instantiates
+"if the load is incremental, the cursor/watermark advanced this run — a
+self-reported `success` is not freshness", and the predicate-loss trap
+instantiates "for migration: bug-for-bug parity is the cutover criterion", with a
+`MIGRATION_NOTES.md` in the fixture whose first line states that criterion. The
+holdout was authored by someone holding both bodies. Sealing stops the surface
+being tuned to the holdout; it does not stop the holdout being written from the
+surface, and that is what happened here. **These two tasks therefore measure
+whether a body transmits a sentence it contains — not whether it generalises.**
+They still compare `skill-current` against `skill-vnext` fairly, because the
+sentences are in both; what they cannot support is a generalization claim.
 
 ## Arms
 

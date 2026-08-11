@@ -3,6 +3,30 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
+## [Unreleased]
+
+### Added
+
+- **The ledger index** (`tools/ledger_index.py`, `docs/reports/LEDGER-INDEX.md`) —
+  the publication ratchet proved a verdict existed somewhere; it could not prove
+  the verdict had been read against the ledger as committed. A re-validation
+  report was published against a 10-trial snapshot, an eleventh trial was
+  appended to the same ledger later in the same wave, and three documents then
+  carried three different control-pool sizes and three different p-values with
+  the suite green throughout. The index renders each committed ledger's sha256
+  and per-arm completed counts; `tests/test_ledger_coverage.py` compares it
+  byte-for-byte, so any append turns the suite red until it is re-stamped and the
+  re-render diff names the arms that moved. It does not read prose — stated in
+  its docstring rather than implied.
+
+### Fixed
+
+- `tools/check_naive_refs.py` counted a declared `[naive] control` task as
+  discriminating, so an 8-task bank with 7 traps printed "8 discriminate" and two
+  documents carried the inflated number. Controls report in their own column, and
+  the summary now names what a PASS is: a self-consistency property between an
+  overlay and a contract written together, with no agent behaviour observed.
+
 ## [0.2.0] - 2026-08-11
 
 The instrument-trust release: backlog wave 1 (`docs/backlog.md`), driven by the
@@ -39,8 +63,9 @@ discriminate, and the trial actually ran.
 
 ### Analyses published under the fixed instrument
 
-- `skill-pyeng-v1` re-validated: skill arm 3/3 vs 0/7 pooled controls (p=0.0083), and
-  the skill arm is also the cheapest. Binding limit K=1 task, stated on the scorecard.
+- `skill-pyeng-v1` re-validated: skill arm 3/3 vs 0/8 pooled controls (two-sided Fisher
+  p=0.0061), and the skill arm is also the cheapest. Binding limit K=1 task, stated on
+  the scorecard.
 - Cross-project gate verdicts recorded in `docs/backlog.md`; skeletons and cost plans
   for the two still-unmeasured gates in
   `docs/specs/2026-08-11-cross-project-gate-banks.md`.

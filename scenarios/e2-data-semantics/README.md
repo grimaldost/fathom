@@ -47,15 +47,24 @@ the same recipe:
 | Repository | `craft-collection` |
 | Path | `plugins/engineering-discipline/skills/data-engineering-discipline/SKILL.md` |
 | Plugin version | `engineering-discipline` 0.5.0 |
-| Blob sha | `9541aff4d0647083227131f6236b480f29384bb6` |
-| Extracted at | `feat/data-discipline-vnext` = `a339aaaba369859f78535e3c966d1d92c5109efd` (branched off `07fea4f`) |
-| Asset content sha256 | `68ae1837f248554fd7cb873b0b8a5d792950b28914fc84773bdd98ab4275620d` |
-| Size | 16,511 bytes, 303 lines, LF |
+| Blob sha | `8308333d0084bbd058c830818733673d5b3ab5a3` |
+| Extracted at | `feat/data-discipline-vnext` = `98a53f2635b02a74fd1a03dad76f7ecb4fa5db32` |
+| Asset content sha256 | `ecf0330119e6b3ed5c00925931db016f3f1b2dc2a1d5a8ce0e15be134fc602c8` |
+| Size | 16,574 bytes, 303 lines, LF |
 
 ```sh
-git -C <craft-collection> show 9541aff4d0647083227131f6236b480f29384bb6 \
+git -C <craft-collection> show 8308333d0084bbd058c830818733673d5b3ab5a3 \
     > scenarios/e2-data-semantics/assets/skill-vnext.md
 ```
+
+**Re-pinned 2026-08-11**, after the referee pass fixed sixteen defects in the
+revision. The previous pin (`9541aff4`, sha256 `68ae1837…`, 16,511 bytes) is
+superseded and was never run. The changes that move the injected body: the
+unsourced 73% time-filter statistic cut, a pointer back to
+`verification-before-completion` added beside the oracle-integrity rail, and the
+description's unauthorised fourth edit reverted (the closing `If so, this skill
+applies — …` clause restored). Body 2,323 -> 2,312 words; the `word_budget.json`
+ceiling now sits at the measured 2,312 rather than 2,380.
 
 The revision is unmerged at extraction time. That is deliberate: the point of
 the arm is to price the change *before* it ships, so the pin is a branch tip and
@@ -87,3 +96,18 @@ this repo alone.
   removes the trigger question entirely. This bank measures whether the content
   changes what the agent does, not whether the description fires. Trigger recall
   and specificity are a separate instrument and are not bought here.
+- **Distinct `config_hash` values prove non-collision, not distinct treatment.**
+  `src/fathom/scenario.py::_resolved_to_dict` puts the scenario `name` into the
+  hashed dict, so any two arms with different names hash differently even with
+  byte-identical treatment. What the ledger cannot do is merge these three arms;
+  what makes them different *treatments* is the injected asset sha256 above, and
+  that is the fact to quote.
+- **`null-vs-zero` cannot measure the T0.2 parity-numerics rail.** That
+  treatment is `parity_check.py --null-mismatch/--tol-col/--residual-zero` plus
+  `parity-recipes.md`, none of which is staged into the task workspace (see the
+  first limitation). What actually differs between the two injected bodies on
+  that trap is that `skill-current` carries MORE null guidance — the checklist
+  box "per-column null rate is consistent with the contract", and `parity_check`
+  described as a null-rate diff — both cut from `skill-vnext`. So this trap is
+  positioned to detect a REGRESSION from the cuts, not a lift from T0.2, and it
+  is the bank's one live test of whether the cutting wave cost correctness.

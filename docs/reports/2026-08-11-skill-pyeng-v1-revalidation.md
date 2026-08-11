@@ -30,9 +30,23 @@ was corrected to read the criteria before any of it was trusted.
 
 ## What was run
 
-3 arms x 1 task x up to 4 repeats (4 new trials this wave; n=4/3/3), single-session, `claude-opus-4-8` at high effort, headless default-deny,
-600 s trial cap, `max_turns = 80`. This wave added trials to the existing ledger at
+3 arms x 1 task x up to 4 repeats, single-session, `claude-opus-4-8` at high effort, headless
+default-deny, 600 s trial cap, `max_turns = 80`. This wave added trials to the existing ledger at
 `dataset_version = 1`; the resume key made the already-completed trials free.
+
+**Ledger state this report is read against: `n = 4 / 4 / 3`** (bare / generic-nudge / pyeng-skill,
+`status == "completed"` only), 14 trial rows and 14 run rows, ledger sha256 `c455b004…`. The stamp is
+in `docs/reports/LEDGER-INDEX.md`, which is regenerated from the ledger and gated by
+`tests/test_ledger_coverage.py`.
+
+**Correction, 2026-08-11.** The first version of this report was written against a 10-trial snapshot
+(`n = 4 / 3 / 3`, controls pooled 0/7, p = 0.0083). A fourth `generic-nudge` trial was appended to the
+same ledger afterwards, in the same wave, and no document was updated. Every figure below has been
+recomputed from the committed ledger; the pooled control pool is **0/8** and p = **0.0061**. The
+direction of the verdict is unchanged and the separation is slightly stronger; what changed is that
+the numbers now match the file they claim to read. The mechanism that let a report and its ledger
+drift apart is fixed in `tests/test_ledger_coverage.py` (see the ledger index), not in this
+paragraph.
 
 ## Result
 
@@ -41,34 +55,34 @@ was corrected to read the criteria before any of it was trusted.
 | Arm | Pass | N | Rate | Wilson 95% CI |
 |---|---|---|---|---|
 | bare | 0 | 4 | 0.0% | [0.0%, 49.0%] |
-| generic-nudge | 0 | 3 | 0.0% | [0.0%, 56.2%] |
+| generic-nudge | 0 | 4 | 0.0% | [0.0%, 49.0%] |
 | pyeng-skill | 3 | 3 | 100.0% | [43.8%, 100.0%] |
 
 ### Per-criterion — this is the signal
 
 | Criterion | bare | generic-nudge | pyeng-skill |
 |---|---|---|---|
-| `behavior_preserved` | 4/4 | 3/3 | 3/3 |
-| `dependency-groups` | 4/4 | 3/3 | 3/3 |
-| `src-layout` | 4/4 | 3/3 | 3/3 |
-| `pip-audit` | 1/4 | 1/3 | **3/3** |
-| `ruff-single-quote` | **0/4** | **0/3** | **3/3** |
-| `uv` | **0/4** | **0/3** | **3/3** |
+| `behavior_preserved` | 4/4 | 4/4 | 3/3 |
+| `dependency-groups` | 4/4 | 4/4 | 3/3 |
+| `src-layout` | 4/4 | 4/4 | 3/3 |
+| `pip-audit` | 1/4 | 1/4 | **3/3** |
+| `ruff-single-quote` | **0/4** | **0/4** | **3/3** |
+| `uv` | **0/4** | **0/4** | **3/3** |
 
 Three criteria are saturated — every arm preserves behaviour, adopts `src/` layout and writes
 `[dependency-groups]` unprompted. Those three measure nothing about the skill; a bank rebuilt today
 would drop or harden them.
 
 The separation lives in the other three, and on two of them it is total: `uv` and
-`ruff-single-quote` are 3/3 for the skill arm and **0/7 across both control arms pooled** — Fisher's
-exact two-sided p = 0.0083 for each, and the same for the all-criteria pass rate. These are the two
+`ruff-single-quote` are 3/3 for the skill arm and **0/8 across both control arms pooled** — Fisher's
+exact two-sided p = 0.0061 for each, and the same for the all-criteria pass rate. These are the two
 conventions a reader would call arbitrary — the choice of package manager and a quote style — which
 is exactly the kind of specific, non-obvious convention a general-purpose model has no reason to
 guess and a skill body can carry.
 
-`pip-audit` moves in the same direction (3/3 against 2/7) but does **not** separate: p = 0.167. It
+`pip-audit` moves in the same direction (3/3 against 2/8) but does **not** separate: p = 0.061. It
 should not be counted toward the verdict, and three simultaneous criterion tests would want a
-multiplicity correction in any case — at which point p = 0.0083 x 3 = 0.025 still holds for the two
+multiplicity correction in any case — at which point p = 0.0061 x 3 = 0.018 still holds for the two
 that separate, and nothing else does.
 
 `generic-nudge` — a short prompt telling the model to apply modern Python engineering practice, with
@@ -80,7 +94,7 @@ care"; it is the content.
 | Arm | N | Tokens (min/med/max) | Turns (min/med/max) | Sessions/trial |
 |---|---|---|---|---|
 | bare | 4 | 26,830 / 47,677 / 61,341 | 44 / 86 / **260** | 1.75 |
-| generic-nudge | 3 | 34,529 / 35,189 / 39,726 | 52 / 59 / 64 | 1.00 |
+| generic-nudge | 4 | 25,707 / 34,859 / 39,726 | 52 / 58 / 64 | 1.00 |
 | pyeng-skill | 3 | 25,018 / 36,835 / 39,846 | 51 / 52 / 59 | 1.00 |
 
 **The armed arm is the cheapest and the tightest.** That is worth stating plainly because the usual
@@ -163,4 +177,12 @@ activation are different questions, and the second one needs stream-level activa
 
 Appended to `ledger/skill-pyeng-v1.jsonl` at `dataset_version = 1`. Two trials in this wave were
 recorded `status="errored"`, and — as of this wave — carry `valid=false` with no criteria dict, so a
-later reader cannot mistake them for measured failures.
+later reader cannot mistake them for measured failures. (A third `bare` errored row predates the
+`valid` field; it too carries no criteria dict. All three are excluded from every count above, which
+reads `status == "completed"` only.)
+
+Per-arm completed counts and the ledger hash this report is bound to are stamped in
+`docs/reports/LEDGER-INDEX.md`; `tests/test_ledger_coverage.py` fails if the ledger moves and the
+stamp is not re-rendered. That gate exists because it did not: the first version of this report was
+published against a 10-trial snapshot and an eleventh trial landed afterwards with nothing to catch
+it.
