@@ -25,6 +25,7 @@ TASKS_DIR = pathlib.Path("tasks")
 EXIT_OK = 0
 EXIT_INFRASTRUCTURE = 10
 EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
+EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -97,6 +98,14 @@ def _build_parser() -> argparse.ArgumentParser:
     )
 
     run_p.add_argument(
+        "--skip-bank-validation",
+        action="store_true",
+        dest="skip_bank_validation",
+        help="Spend WITHOUT checking that the bank can discriminate. The check is "
+        "free and two banks have already ceilinged at 0/180 correctness failures "
+        "after the spend; skip it only when re-running a bank validated this session.",
+    )
+    run_p.add_argument(
         "--skip-arming-check",
         action="store_true",
         dest="skip_arming_check",
@@ -108,6 +117,25 @@ def _build_parser() -> argparse.ArgumentParser:
 
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
+
+    val_p = sub.add_parser(
+        "validate",
+        help="Check the bank-validation triad before any spend (free — no spawns)",
+    )
+    val_p.add_argument("bank", help="Bank name (tasks/<bank>/ directory)")
+    val_p.add_argument(
+        "--tasks-dir",
+        type=pathlib.Path,
+        default=TASKS_DIR,
+        dest="tasks_dir",
+        metavar="DIR",
+        help="Directory holding <bank>/ task banks (default: tasks/).",
+    )
+    val_p.add_argument(
+        "--strict",
+        action="store_true",
+        help="Also fail on UNVERIFIABLE properties (no reference solution, no gate).",
+    )
 
     arm_p = sub.add_parser(
         "verify-arming",
@@ -153,6 +181,7 @@ def run_matrix(
     include_holdout: bool = False,
     arming_probe: Any | None = None,
     skip_arming_check: bool = False,
+    skip_bank_validation: bool = False,
     out: TextIO | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
@@ -220,6 +249,32 @@ def run_matrix(
     if num_planned == 0:
         print("nothing to do", file=_out)
         return EXIT_OK
+
+    # --- Bank validity gate: can this bank measure anything at all? ---------
+    # Free (local verifier runs, no spawns) and ordered first, because a bank that
+    # cannot discriminate makes the arming question moot: every arm scores 100%
+    # and the run returns a null manufactured by the instrument (FATH-B02).
+    if skip_bank_validation:
+        print("WARNING: --skip-bank-validation: spending on an unvalidated bank", file=_out)
+    else:
+        import fathom.validate as _validate
+
+        print(f"validate: checking bank '{bank.name}' can discriminate...", file=_out)
+        bank_checks = _validate.validate_bank(bank, stage_fn=_stage_fn, verifier_fn=_verifier)
+        if not _validate.validation_ok(bank_checks):
+            print(_validate.render_validation(bank.name, bank_checks), file=_out)
+            print(
+                "\nREFUSING TO RUN: this bank cannot measure what it claims to measure.\n"
+                "Fix the bank, or re-run with --skip-bank-validation to spend anyway.",
+                file=_out,
+            )
+            return EXIT_BANK_INVALID
+        unver = sum(1 for c in bank_checks if c.status == _validate.STATUS_UNVERIFIABLE)
+        print(
+            f"validate: bank discriminates on all {len(bank.tasks)} task(s)"
+            + (f" ({unver} propert(y/ies) unverifiable — see `fathom validate`)" if unver else ""),
+            file=_out,
+        )
 
     # --- Arming gate: prove the treatment reached the spawn BEFORE spending ---
     # fathom used to validate declarations only, so an entirely unarmed arm could
@@ -465,6 +520,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_smoke(args)
     if args.command == "verify-arming":
         return _cmd_verify_arming(args)
+    if args.command == "validate":
+        return _cmd_validate(args)
     parser.print_help()
     return 1
 
@@ -520,6 +577,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         max_budget_usd=args.max_budget_usd,
         include_holdout=args.include_holdout,
         skip_arming_check=args.skip_arming_check,
+        skip_bank_validation=args.skip_bank_validation,
     )
 
 
@@ -535,6 +593,21 @@ def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenar
         except Exception as exc:  # noqa: BLE001 - one bad arm must not hide the rest
             print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
     return out
+
+
+def _cmd_validate(args: argparse.Namespace) -> int:
+    """Check the bank-validation triad. Free — local verifier runs, no spawns."""
+    import fathom.validate as _validate
+
+    try:
+        bank = load_bank(args.tasks_dir / args.bank)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        return 1
+
+    checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
+    print(_validate.render_validation(bank.name, checks))
+    return EXIT_OK if _validate.validation_ok(checks, strict=args.strict) else EXIT_BANK_INVALID
 
 
 def _cmd_verify_arming(args: argparse.Namespace) -> int:

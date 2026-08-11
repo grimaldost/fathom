@@ -138,7 +138,13 @@ def _stub_verifier(verify_entry, workspace, timeout_s=60) -> VerifierResult:
 
 
 def _run_matrix(bank, scenarios, repeats=2, **kw):
-    """Helper: call run_matrix with stubs filled in and capture stdout."""
+    """Helper: call run_matrix with stubs filled in and capture stdout.
+
+    Bank validation is skipped by default: the stub verifier reports every
+    fixture as already passing, which the FATH-B02 gate correctly refuses. Tests
+    that are ABOUT that gate live in BankValidationGateTests and opt back in.
+    """
+    kw.setdefault("skip_bank_validation", True)
     kw.setdefault("executor_factory", lambda sc: StubExecutor())
     kw.setdefault("runner_factory", lambda sc: StubRunner())
     kw.setdefault("stage_task_fn", _stub_stage)
@@ -282,6 +288,7 @@ class TestCeilingBeforeSpawn(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
             out=out,
         )
@@ -324,6 +331,7 @@ class TestLimit(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             limit=3,
             ledger_dir=self.ledger_dir,
         )
@@ -410,6 +418,7 @@ class TestResume(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         self.assertEqual(len(calls), 6, "8 total − 2 done = 6 spawns expected")
@@ -445,6 +454,7 @@ class TestInfrastructureStop(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         keys = _ledger.completed_keys(self.bank.name, ledger_dir=self.ledger_dir)
@@ -467,6 +477,7 @@ class TestInfrastructureStop(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         self.assertEqual(len(calls), 1, "matrix must stop after first infra error")
@@ -499,6 +510,7 @@ class TestInfrastructureStop(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         post_content = ledger_path.read_text()
@@ -520,6 +532,7 @@ class TestLedgerWrites(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         keys = _ledger.completed_keys(self.bank.name, ledger_dir=self.ledger_dir)
@@ -536,6 +549,7 @@ class TestLedgerWrites(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         run_recs = [
@@ -554,6 +568,7 @@ class TestLedgerWrites(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         run_matrix(self.bank, [self.sc_a], 1, **kw)
@@ -567,6 +582,7 @@ class TestLedgerWrites(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         self.assertEqual(len(executor.calls), 0, "second run must spawn nothing")
@@ -602,6 +618,7 @@ class TestHoldout(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         self.assertNotIn("task-2", calls, "holdout task must not be spawned")
@@ -636,6 +653,7 @@ class TestHoldout(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
             include_holdout=True,
         )
@@ -824,6 +842,7 @@ class TestModelIdPersisted(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         runs = [
@@ -862,6 +881,7 @@ class TestVerifierErrorNotScoredAsFail(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=self._erroring_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         trials = [
@@ -887,6 +907,7 @@ class TestVerifierErrorNotScoredAsFail(_Base):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=self._erroring_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
         )
         keys = _ledger.completed_keys(self.bank.name, ledger_dir=self.ledger_dir)
@@ -1076,6 +1097,7 @@ class ArmingGateTests(unittest.TestCase):
             runner_factory=lambda sc: StubRunner(),
             stage_task_fn=_stub_stage,
             verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
             ledger_dir=self.ledger_dir,
             arming_probe=probe,
             out=io.StringIO(),
@@ -1129,6 +1151,71 @@ class ArmingGateTests(unittest.TestCase):
         code, _ = self._run(sc, probe, dry_run=True)
         self.assertEqual(code, EXIT_OK, "planning spends nothing, so it needs no arming proof")
         self.assertEqual(probe.calls, [])
+
+
+class BankValidationGateTests(unittest.TestCase):
+    """`fathom run` must refuse to spend on a bank that cannot discriminate (FATH-B02)."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.mkdtemp()
+        self.bank = _make_bank("valid-bank", [_make_task("t1", Path(self._tmp))])
+        self.ledger_dir = pathlib.Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self._tmp, ignore_errors=True)
+        shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
+
+    @staticmethod
+    def _verifier(outcome: str):  # noqa: ANN205
+        def _fn(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+            return VerifierResult(
+                outcome=outcome,
+                criteria={"ok": outcome == "pass"},
+                stdout="{}",
+                stderr="",
+                exit_code=0 if outcome == "pass" else 1,
+            )
+
+        return _fn
+
+    def _run(self, outcome: str, **kw):  # noqa: ANN001, ANN202
+        executor = StubExecutor()
+        code = run_matrix(
+            self.bank,
+            [_make_scenario(name="bare")],
+            1,
+            executor_factory=lambda sc: executor,
+            runner_factory=lambda sc: StubRunner(),
+            stage_task_fn=_stub_stage,
+            verifier_fn=self._verifier(outcome),
+            ledger_dir=self.ledger_dir,
+            out=io.StringIO(),
+            **kw,
+        )
+        return code, executor
+
+    def test_a_bank_whose_verifier_already_passes_blocks_the_matrix(self) -> None:
+        from fathom.cli import EXIT_BANK_INVALID
+
+        code, executor = self._run("pass")
+        self.assertEqual(code, EXIT_BANK_INVALID)
+        self.assertEqual(
+            executor.calls, [], "a non-discriminating bank must cost nothing to discover"
+        )
+
+    def test_a_discriminating_bank_runs(self) -> None:
+        code, executor = self._run("fail")
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(executor.calls)
+
+    def test_skip_bank_validation_spends_anyway(self) -> None:
+        code, executor = self._run("pass", skip_bank_validation=True)
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(executor.calls)
+
+    def test_a_dry_run_is_not_blocked(self) -> None:
+        code, _ = self._run("pass", dry_run=True)
+        self.assertEqual(code, EXIT_OK, "planning spends nothing")
 
 
 if __name__ == "__main__":
