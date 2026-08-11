@@ -8,10 +8,12 @@ import pathlib
 import re
 import warnings
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import Any
 
 LEDGER_DIR = pathlib.Path("ledger")
 REPORT_DIR = pathlib.Path("report")
+TASKS_DIR = pathlib.Path("tasks")
 
 _BARE = "bare"
 _SERIES_KEY = "series"
@@ -101,6 +103,63 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
     return meta
 
 
+# --- FATH-B05: qualify the point estimates the ledger already lets us qualify ---
+
+
+def _spread(values: Sequence[float]) -> tuple[float, float, float]:
+    """(min, median, max) of *values*; (0, 0, 0) when empty.
+
+    Reported beside every mean because the mean alone reversed the direction of
+    the verdict on 3 of 5 banks in one campaign and moved the Pareto star between
+    n=2 and n=3 in another. A bimodal arm and a single blow-up run are invisible
+    in a mean and obvious in a range.
+    """
+    if not values:
+        return (0.0, 0.0, 0.0)
+    ordered = sorted(values)
+    n = len(ordered)
+    mid = n // 2
+    median = ordered[mid] if n % 2 else (ordered[mid - 1] + ordered[mid]) / 2
+    return (ordered[0], median, ordered[-1])
+
+
+def _fmt_spread(values: Sequence[float], *, precision: int = 0) -> str:
+    lo, med, hi = _spread(values)
+    return f"{lo:.{precision}f}/{med:.{precision}f}/{hi:.{precision}f}"
+
+
+def _load_turn_caps(bank: str, tasks_dir: pathlib.Path) -> dict[str, int]:
+    """{task_id: max_turns} from tasks/<bank>/*/task.toml.
+
+    An arm whose trials sit AT the cap has a pass rate that is a lower bound, not
+    a score — one recorded arm's mean turns (41.1) exceeded its task's max_turns
+    (40) with nothing on the page marking it.
+    """
+    import tomllib
+
+    caps: dict[str, int] = {}
+    bank_dir = pathlib.Path(tasks_dir) / bank
+    if not bank_dir.is_dir():
+        return caps
+    for task_toml in sorted(bank_dir.glob("*/task.toml")):
+        try:
+            with open(task_toml, "rb") as f:
+                data = tomllib.load(f)
+            cap = (data.get("limits") or {}).get("max_turns")
+            if data.get("id") and cap:
+                caps[str(data["id"])] = int(cap)
+        except Exception:
+            continue
+    return caps
+
+
+def _ranges_overlap(a: Sequence[float], b: Sequence[float]) -> bool:
+    """True when the observed [min, max] ranges of *a* and *b* intersect."""
+    if not a or not b:
+        return True
+    return min(a) <= max(b) and min(b) <= max(a)
+
+
 def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
     """Keep only records at the CURRENT dataset_version — the last-appended trial's.
 
@@ -144,12 +203,14 @@ def render(
     *,
     ledger_dir: pathlib.Path = LEDGER_DIR,
     report_dir: pathlib.Path = REPORT_DIR,
+    tasks_dir: pathlib.Path = TASKS_DIR,
 ) -> pathlib.Path:
     """Read ledger/<bank>.jsonl and write report/scorecard-<bank>.md."""
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", bank):
         raise ValueError(f"Invalid bank name: {bank!r}")
     raw = _read_raw(bank, ledger_dir)
     raw = _scope_to_current_dataset_version(bank, raw)
+    turn_caps = _load_turn_caps(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
@@ -390,10 +451,18 @@ def render(
         # when there is at least one data row (avoids an orphaned header when all
         # trials in the section are infra-errored).
         economy_rows: list[str] = []
+        # Per-trial values, kept rather than only summed: the spread beside each
+        # mean is the whole point of FATH-B05.
+        per_trial_tokens: dict[str, list[float]] = {}
+        per_trial_turns: dict[str, list[float]] = {}
+        turn_cap_hits: dict[str, tuple[int, int]] = {}
         for sc in all_sc:
             tokens = turns = 0
             wall = usd = 0.0
             sc_counts: list[int] = []
+            tok_list: list[float] = []
+            turn_list: list[float] = []
+            capped = 0
             for tid in task_list:
                 for rep in reps_for.get((sc, tid), []):
                     t = trials.get((sc, tid, rep))
@@ -405,31 +474,72 @@ def render(
                     # not a zero-session trial.
                     if trial_runs:
                         sc_counts.append(len(trial_runs))
+                    trial_tokens = 0
+                    trial_turns = 0
                     for run in trial_runs:
                         u = run.get("usage") or {}
-                        tokens += u.get("input_tokens", 0) + u.get("output_tokens", 0)
-                        turns += run.get("turns", 0)
+                        trial_tokens += u.get("input_tokens", 0) + u.get("output_tokens", 0)
+                        trial_turns += run.get("turns", 0)
                         wall += run.get("duration", 0.0)
                         # §11/D2: cost lives on the run record's top-level
                         # cost_usd_est (the adapter estimate persisted by cli.py),
                         # NOT usage['cost_usd'] — the CLI never emits that key.
                         # Legacy lines without the field default to 0.0.
                         usd += run.get("cost_usd_est", 0.0)
+                    tokens += trial_tokens
+                    turns += trial_turns
+                    if trial_runs:
+                        tok_list.append(trial_tokens)
+                        turn_list.append(trial_turns)
+                        cap = turn_caps.get(tid)
+                        if cap and trial_turns >= cap:
+                            capped += 1
             if not sc_counts:
                 continue
+            per_trial_tokens[sc] = tok_list
+            per_trial_turns[sc] = turn_list
+            turn_cap_hits[sc] = (capped, len(tok_list))
             spt = sum(sc_counts) / len(sc_counts)
             economy_rows.append(
-                f"| {sc} | {tokens} | {turns} | {wall:.1f} | {spt:.2f} | {usd:.4f} |"
+                f"| {sc} | {len(tok_list)} | {tokens} | {_fmt_spread(tok_list)} | {turns}"
+                f" | {_fmt_spread(turn_list)} | {wall:.1f} | {spt:.2f} | {usd:.4f} |"
             )
         if economy_rows:
             lines.append("### Economy")
             lines.append("")
             lines.append(
-                "| Scenario | Tokens | Turns | Wall-clock (s) | Sessions/Trial | Est. USD |"
+                "| Scenario | N | Tokens | Tokens (min/med/max) | Turns"
+                " | Turns (min/med/max) | Wall-clock (s) | Sessions/Trial | Est. USD |"
             )
-            lines.append("|---|---|---|---|---|---|")
+            lines.append("|---|---|---|---|---|---|---|---|---|")
             lines.extend(economy_rows)
             lines.append("")
+            lines.append(
+                "> **Read the spread, not the mean.** Totals and means pool every"
+                " task x repeat cell; a single blow-up trial or a bimodal arm moves a"
+                " mean without moving the median. Where min/med/max ranges overlap"
+                " between arms, the arms are not separated at this N."
+            )
+            lines.append("")
+
+            # --- Arm Health (FATH-B05): what makes a pass rate a lower bound ------
+            health_rows = [
+                f"| {sc} | {n} | {hit}/{n} |" for sc, (hit, n) in turn_cap_hits.items() if hit
+            ]
+            if health_rows:
+                lines.append("### Arm Health")
+                lines.append("")
+                lines.append("| Scenario | N | Trials at/over max_turns |")
+                lines.append("|---|---|---|")
+                lines.extend(health_rows)
+                lines.append("")
+                lines.append(
+                    "> An arm whose trials sit AT the turn cap was truncated, not"
+                    " finished: its pass rate is a **lower bound**, not a score. Raise"
+                    " `[limits] max_turns` and re-run before comparing it with an arm"
+                    " that had room to work."
+                )
+                lines.append("")
 
         # --- Efficiency view (§9): per-trial means + quality-per-100k + Pareto flag ---
         eff_data: dict[str, dict] = {}
@@ -485,26 +595,59 @@ def render(
             for sc_a, da in eff_data.items()
         }
 
+        # A star earned on means that sit inside each other's observed spread is an
+        # artefact of where this N happened to land — the recorded case moved the
+        # star between n=2 and n=3 on the same arms and bank. Qualify it rather than
+        # printing an unhedged frontier the data does not support.
+        contested: dict[str, bool] = {}
+        for sc_a in eff_data:
+            others = [
+                sc_b
+                for sc_b in eff_data
+                if sc_b != sc_a
+                and _ranges_overlap(per_trial_tokens.get(sc_a, []), per_trial_tokens.get(sc_b, []))
+            ]
+            contested[sc_a] = bool(others) and pareto.get(sc_a, False)
+
         if eff_data:
             lines.append("### Efficiency")
             lines.append("")
             lines.append(
-                "| Scenario | Mean In-Tok | Mean Out-Tok | Mean Cache-Tok"
-                " | Mean Turns | Mean Wall (s) | Quality / 100k Tok | Pareto |"
+                "| Scenario | N | Mean In-Tok | Mean Out-Tok | Mean Cache-Tok"
+                " | Mean Turns | Turns (min/med/max) | Mean Wall (s)"
+                " | Quality / 100k Tok | Pareto |"
             )
-            lines.append("|---|---|---|---|---|---|---|---|")
+            lines.append("|---|---|---|---|---|---|---|---|---|---|")
+            any_contested = False
             for sc in all_sc:
                 if sc not in eff_data:
                     continue
                 d = eff_data[sc]
                 mt = d["mean_total"]
                 qp100k = f"{d['quality'] * 100_000 / mt:.2f}" if mt > 0 else "N/A"
-                flag = "★" if pareto.get(sc, False) else ""
+                if not pareto.get(sc, False):
+                    flag = ""
+                elif contested.get(sc, False):
+                    flag = "★?"
+                    any_contested = True
+                else:
+                    flag = "★"
+                n_cell = len(per_trial_tokens.get(sc, []))
                 lines.append(
-                    f"| {sc} | {d['mean_in']:.0f} | {d['mean_out']:.0f} | {d['mean_cache']:.0f}"
-                    f" | {d['mean_turns']:.1f} | {d['mean_wall']:.1f} | {qp100k} | {flag} |"
+                    f"| {sc} | {n_cell} | {d['mean_in']:.0f} | {d['mean_out']:.0f}"
+                    f" | {d['mean_cache']:.0f} | {d['mean_turns']:.1f}"
+                    f" | {_fmt_spread(per_trial_turns.get(sc, []))} | {d['mean_wall']:.1f}"
+                    f" | {qp100k} | {flag} |"
                 )
             lines.append("")
+            if any_contested:
+                lines.append(
+                    "> **★? = contested frontier.** This arm is Pareto-optimal on the"
+                    " MEANS, but its per-trial token range overlaps another arm's, so"
+                    " the ordering is not established at this N. Treat it as"
+                    " directional; add repeats before quoting it as a result."
+                )
+                lines.append("")
 
     _section("Dev Tasks", dev_tasks)
     _section("Holdout Tasks", holdout_tasks)

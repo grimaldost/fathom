@@ -1120,9 +1120,10 @@ def _economy_tokens(content: str, sc: str) -> int:
         if ln.startswith("###") and ln != "### Economy":
             break  # next section — stop before Efficiency
         cols = [c.strip() for c in ln.split("|")]
-        # | scenario | tokens | turns | wall | sessions/trial | usd |
-        if len(cols) >= 7 and cols[1] == sc and cols[2].isdigit():
-            return int(cols[2])
+        # | scenario | N | tokens | tokens spread | turns | turns spread |
+        # | wall | sessions/trial | usd |   (FATH-B05 added N and the two spreads)
+        if len(cols) >= 10 and cols[1] == sc and cols[3].isdigit():
+            return int(cols[3])
     raise AssertionError(f"no Economy row for {sc!r} in:\n{content}")
 
 
