@@ -262,6 +262,93 @@ class TestDryRun(_Base):
 
 
 # ---------------------------------------------------------------------------
+# The ceiling must be a CEILING for a multi-spawn strategy (FATH-B18)
+#
+# `_CEILING_PER_TRIAL_USD` prices one spawn per trial. A `series` trial spends one
+# implementation spawn plus up to `max_fix_attempts` fix spawns for every PR in the
+# decomposition, and `--max-budget-usd` caps each of those spawns individually, so
+# the flat rail understated a 5-PR series arm by ~15x. An upfront number the run
+# exceeds by an order of magnitude is worse than no number: the operator stops
+# checking.
+# ---------------------------------------------------------------------------
+
+
+class TestSeriesCeiling(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self.task_dir = Path(self._tmp)
+        self.task = _make_task("t", self.task_dir)
+        self.bank = _make_bank("b", [self.task])
+        self.ledger_dir = pathlib.Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+        shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
+
+    def _write_series(self, n_prs: int, max_fix_attempts: int | None = 2) -> None:
+        body = "[series]\nid = 's'\nversion = '1'\n"
+        if max_fix_attempts is not None:
+            body += f"\n[review]\nmax_fix_attempts = {max_fix_attempts}\n"
+        for i in range(n_prs):
+            body += f"\n[[prs]]\nid = 'PR{i:02d}'\nbranch = 'b{i}'\nprompt = 'p{i}.md'\n"
+        (self.task_dir / "series.toml").write_text(body, encoding="utf-8")
+
+    def _plan(self, scenario, **kw) -> str:
+        _, output = _run_matrix(
+            self.bank, [scenario], repeats=1, ledger_dir=self.ledger_dir, dry_run=True, **kw
+        )
+        return output
+
+    def test_series_ceiling_counts_every_pr_and_every_fix_attempt(self):
+        self._write_series(5, max_fix_attempts=2)
+        sc = _make_scenario("haiku-series", config_hash="c" * 64, strategy="series")
+        output = self._plan(sc, max_budget_usd=1.0)
+        # 5 PRs x (1 impl + 2 fix) spawns x $1.00/spawn = $15.00 for the one trial.
+        self.assertIn("ceiling: $15.00", output)
+
+    def test_series_ceiling_shows_the_spawn_arithmetic(self):
+        self._write_series(5, max_fix_attempts=2)
+        sc = _make_scenario("haiku-series", config_hash="c" * 64, strategy="series")
+        output = self._plan(sc, max_budget_usd=1.0)
+        self.assertIn("series arm haiku-series/t", output)
+        self.assertIn("5 PRs x (1 impl + 2 fix) spawns", output)
+
+    def test_series_ceiling_uses_executor_defaults_without_a_rail(self):
+        """No --max-budget-usd means the executor's own $20 impl / $3 fix are in force."""
+        from fathom.strategies.series import DEFAULT_BUDGET_FIX, DEFAULT_BUDGET_IMPL
+
+        self._write_series(5, max_fix_attempts=2)
+        sc = _make_scenario("haiku-series", config_hash="c" * 64, strategy="series")
+        output = self._plan(sc)
+        expected = 5 * (DEFAULT_BUDGET_IMPL + 2 * DEFAULT_BUDGET_FIX)
+        self.assertIn(f"ceiling: ${expected:.2f}", output)
+
+    def test_single_spawn_strategies_keep_the_flat_rail(self):
+        """The fix must not inflate every other arm's ceiling."""
+        from fathom.cli import _CEILING_PER_TRIAL_USD
+
+        sc = _make_scenario("bare", config_hash="d" * 64, strategy="single-session")
+        output = self._plan(sc, max_budget_usd=1.0)
+        self.assertIn(f"ceiling: ${_CEILING_PER_TRIAL_USD:.2f}", output)
+        self.assertNotIn("series arm", output)
+
+    def test_unreadable_series_template_says_so_rather_than_quoting_a_number(self):
+        """A missing template must not silently reinstate the understated rail."""
+        sc = _make_scenario("haiku-series", config_hash="c" * 64, strategy="series")
+        output = self._plan(sc, max_budget_usd=1.0)  # no series.toml written
+        self.assertIn("spawn count UNKNOWN", output)
+
+    def test_missing_review_block_falls_back_to_the_engine_default(self):
+        from fathom.cli import _SERIES_DEFAULT_MAX_FIX_ATTEMPTS
+
+        self._write_series(3, max_fix_attempts=None)
+        sc = _make_scenario("haiku-series", config_hash="c" * 64, strategy="series")
+        output = self._plan(sc, max_budget_usd=1.0)
+        expected = 3 * (1 + _SERIES_DEFAULT_MAX_FIX_ATTEMPTS)
+        self.assertIn(f"ceiling: ${expected:.2f}", output)
+
+
+# ---------------------------------------------------------------------------
 # §10 invariant: ceiling printed BEFORE first spawn
 # ---------------------------------------------------------------------------
 
