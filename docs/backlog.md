@@ -90,10 +90,10 @@ Recorded here because four sibling backlogs read this file for it.
 
 | Gate | Verdict | Evidence |
 |---|---|---|
-| **CRAF-B01** (flagship skills vs no-skill baseline) | **confirmed, and it points away from retirement** for `python-engineering`; **un-invalidated** for the process-discipline banks | `docs/reports/2026-08-11-skill-pyeng-v1-revalidation.md`. Skill arm 3/3 vs 0/7 pooled controls on `uv` and `ruff-single-quote`, p = 0.0083, and the cheapest arm. Both preconditions the item names (FATH-B01, FATH-B02) are closed and both were checked against these banks. Covers 1 of the 5 skills the item names; the other four are unmeasured. |
+| **CRAF-B01** (flagship skills vs no-skill baseline) | **confirmed, and it points away from retirement** for `python-engineering` — now **at the merged version**; **un-invalidated but NOT re-validated** for the process-discipline banks | `docs/reports/2026-08-11-skill-pyeng-v1-revalidation.md`, then `…-merged-content-rerun.md` (wave 2). The first measured a 2026-07-03 snapshot of the skill body: 3/3 vs 0/7 pooled controls, p = 0.0083. The re-run refreshed the inject asset from the **worktree** (engineering-discipline 0.4.0 on merged `main`) and reproduced it criterion-for-criterion: 3/3 vs 0/8 pooled controls on `uv` and `ruff-single-quote`, p = 0.0061, at ~38% fewer tokens than the snapshot body. Covers 1 of the 5 skills the item names. The `humble-vs-super` banks vendor humblepowers 0.4.0 / engineering-discipline 0.1.2 / session-workflow 0.2.2 against merged 0.9.0 / 0.4.0 / 0.21.0 — a re-run there is ~$120 at published power (~$24 for a 1-repeat pilot) and was **not** bought. |
 | **CRAF-B21** (retire the always-on injected prose) | **confirmed as far as it goes — but the item's phrasing overstates it** | `docs/reports/2026-07-23-inject-content-v1-findings.md`. Injecting the generic protocol did not beat injecting nothing (9/10 vs 9/10, difference zero, and it was not more expensive). That supports retiring for want of demonstrated benefit. It does **not** show no effect: the interval on the difference spans about ±30 pp, the bank ceilings with bare already at 90%, and the arm that swept (10/10) is itself an injected surface. |
-| **KEEL-B09** (pre-mortem directive ablation) | **still-unmeasured** | Needs a bank that does not exist. Skeleton and cost plan: `docs/specs/2026-08-11-cross-project-gate-banks.md` (~72 trials, ~$20, plus a human adjudication pass the tokens do not cover). Both fathom preconditions are now closed, so the gate is unblocked. |
-| **MANT-B36** (multi-substrate research vs single-provider) | **still-unmeasured** | Same document (~60 trials, ~$70). Unblocked by FATH-B01/B02 closing, but the long pole is a question set with defensible post-hoc answers, which does not exist. Note: the armed arm bills a second provider account that `cost_usd_est` cannot see, so the 8.8× comparison is unmeasurable without recording provider-side cost separately. |
+| **KEEL-B09** (pre-mortem directive ablation) | **measured on the structural axis — arm B matches arm A, and the item's own rule fires there; the finding-quality axis remains unmeasured** | `docs/reports/2026-08-11-premortem-ablation-v1-first-matrix.md`. The bank now exists (`tasks/premortem-ablation-v1`, 6 dev + 2 sealed specs from sibling repos, 12 deterministic criteria, `validate` 16 pass / 0 fail). 18 trials, $20.13: the ~500-word core is **identical** to the full 2,429-word body on all nine shared-ask and citation-grounding criteria and loses **only** the three conventions it was never told to emit (p = 0.0022 each), at 80% of the cost, 74% of the tokens and 77% of the wall-clock. `bare` fails 11 of 12, so the directive's value is in being asked at all. **Do not retire on this alone:** whether a finding is an adjudicated real BLOCKER, and the false-positive rate, are the half assigned to a blinded human pass, which is unrun. Repeats 2–3 (~$60) were over the wave's rail and were recorded rather than bought. |
+| **MANT-B36** (multi-substrate research vs single-provider) | **still-unmeasured — now with a validated bank and two named blockers instead of a plan** | `docs/reports/2026-08-11-research-fusion-v1-bank-and-precondition-probe.md`. `tasks/research-fusion-v1` exists and validates (8 pass / 0 fail; 11 criteria; 3 dev + 1 sealed **contested** questions, chosen so a fan-out has something to disagree about — a factual set would ceiling and manufacture the null the retirement wants). It measures the moat's **precondition**, not its decision value, because a verifier cannot observe a counterfactual and the post-hoc-answerable question set still does not exist. Two blockers the cost plan did not have: (a) this is the repo's first **MCP-serving** mount, so the vendored tree needs an environment materialised inside `tasks/` at spawn time; (b) the tool's agent-facing result is a bounded projection carrying `divergences` but **not** `sources` / `question` / `generated_at`, so half the criteria need the arm to read the on-disk artifact. The second-provider spend remains invisible to `cost_usd_est`, confirmed. **A direct probe of the tool moved the binding constraint from cost to wall-clock:** one `fast` three-substrate run fanned out in ~3 minutes and then did not finish its synthesis stage inside 50 minutes, so a 60-trial armed arm is over a day sequential and needs a `trial_timeout_s` beyond anything in this corpus. |
 | **CONV-B28** (measure convoy's own skill) | **still-unmeasured, and not fathom's to run alone** | It gates on the collection's CRAF-B29, not on a fathom row; the recall half is meant to be imported from CRAF-B29's sealed holdout rather than re-purchased here. (CONV-B17 is a CLI argument-name bug with no measurement — it does not belong in this list.) |
 
 **The one thing that cannot be re-measured.** The unarmed-arm run that motivated FATH-B01 is
@@ -654,6 +654,47 @@ blocked experiment this row was waiting for. Gate telemetry as ledger columns in
 Retain-result-view-on-fail if FATH-B14 proves insufficient (T5b). And from the first pass: a `@version`
 re-vendor mismatch warn, design-effect-inflated Wilson as a mechanical guard if the K caveat proves
 insufficient, and a docs reference-checker.
+
+**FATH-B49 — Two `config_hash`es sharing an arm name are pooled in the economy views, so a tool-content
+re-run reads as a truncated arm.** *(S · [wave-2 run])*
+
+- **Cause / evidence:** `report.py` builds a `config_hash → scenario-name` map and then keys every
+  view by the **name**. Pass Rates and Per-Criterion key on `(scenario, task, repeat)` with
+  last-write-wins, so they correctly show the newer trials — but Economy, Efficiency and Arm Health
+  sum the run rows of *every* hash carrying that name. The 2026-08-11 wave-2 re-run of
+  `skill-pyeng-v1` against the merged skill body forked `pyeng-skill`'s hash without renaming the
+  arm, and the scorecard reported `Sessions/Trial 2.00`, turns `94/102/111` (the two versions' turns
+  summed per cell), and `Arm Health: 3/3 trials at/over max_turns` with the footnote that the arm's
+  pass rate is "a **lower bound**, not a score". The real turns were `43/43/59` against a cap of 80.
+  The verdict was recovered by aggregating the ledger by `config_hash` by hand — the same hand-join
+  FATH-B13 records, now with a wrong *rendered* number attached rather than only a missing one.
+- **Why it bites now:** re-running an existing arm against updated tool content is the standard
+  shape of a re-validation, and it is what every cross-project gate re-check will do. The failure is
+  silent and points the wrong way (it makes a healthy arm look truncated).
+- **Change:** key the economy views by `(scenario, config_hash)` and render the hash prefix when a
+  name carries more than one, or refuse-and-warn when a scoped `dataset_version` holds two hashes
+  under one arm name. Pairs with FATH-B28 (no way to render a chosen historical view) and
+  FATH-B11 (treatment identity vs the resume key).
+
+**FATH-B50 — A scenario whose treatment fails to load is warned about and then dropped, so the matrix
+runs without it.** *(S · [wave-2 run])*
+
+- **Cause / evidence:** authoring the `research-fusion-v1` arms in wave 2, the armed arm's
+  `[plugins] mount` pointed at a tree that was not yet vendored. `fathom run --dry-run` printed
+  `warning: skipping scenario fusion.toml: [Errno 2] ...plugin.json` and then planned the matrix
+  **anyway** — `scenarios=1`, three trials, ceiling $6.00. Had that been a paid run it would have
+  bought a full control arm, appended a ledger, and rendered a scorecard with no treatment in it at
+  all. The `verify-arming` pre-flight cannot catch it, because a scenario that failed to load never
+  reaches the list of arms to verify.
+- **Why this is FATH-B01's class, not a papercut:** the whole argument of FATH-B01 is that an arm
+  which is not armed can still produce a confident number. An arm that is *absent* produces a
+  confident number too, and the only thing standing between the operator and that number is one
+  warning line in a scroll of run output — the same "a check satisfied by absence" shape FATH-B12
+  names in the smoke gate.
+- **Change:** refuse the run when a scenario file in `--scenarios-dir` fails to load, with a
+  dedicated exit code beside `EXIT_UNARMED` / `EXIT_BANK_INVALID`, and `--force` (or an explicit
+  `--skip-broken-scenarios`) to proceed deliberately. Print the resolved arm count in the plan line
+  beside the file count so a dropped arm is visible in the one line an operator always reads.
 
 **FATH-B48 — This repo's skill and the collection's `evaluate-skill` claim the same job.** *(S ·
 [cross-review])*

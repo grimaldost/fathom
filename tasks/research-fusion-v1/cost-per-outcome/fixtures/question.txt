@@ -1,0 +1,1 @@
+When comparing LLM coding agents, is price per token the right primary currency, or should cost per successful outcome replace it? Give the trade-offs and a recommendation.

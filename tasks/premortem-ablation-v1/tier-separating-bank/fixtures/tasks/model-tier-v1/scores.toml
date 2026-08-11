@@ -1,0 +1,49 @@
+# Per-task complexity scores for the calibration confusion matrix (§2).
+#
+# Two independent raters scored each task with the pinned series engine pr-prompt-scorer
+# rubric (the series engine 0.8.1 @ 1c2748f): the bank author (first) and a blind second rater
+# (the subagent, given only the instruction + fixture). `final` is their average; the
+# report's predicted tier = tier_for_score(final) [0-25 weak / 26-55 mid / 56-100 strong].
+#
+# Tier agreement: 7/8. Only fix-titlecase disagreed, by exactly one band (author weak 22
+# vs rater mid 30) at the 25 boundary — within the §2 "<= one band" tolerance, no recut.
+#
+# SPREAD-GATE OUTCOME (honest): the independent rater CONFIRMED the pre-mortem's FM-3 —
+# the rubric clusters single-file bugfixes in the low-mid 30s-40s and jumps to ~61 for
+# the cross-module root-cause tasks, structurally avoiding the 55 boundary (its own
+# worked examples are 5/48/91). So the bank populates the three TIERS (weak/mid/strong)
+# and probes the 25 boundary (titlecase ~26), but the 55 boundary is only BRACKETED
+# (money 44 mid / nonlocal 65 strong), not hit. This is reported as a limitation of the
+# boundary-placement analysis (and itself a finding about the rubric), not papered over.
+# The weak band is thin: clamp (solidly weak) + titlecase (weak/mid boundary).
+
+[scores]
+fix-clamp = 18
+fix-titlecase = 26
+feature-csv-coalesce = 41
+fix-interval-merge = 39
+fix-money-split = 44
+fix-dedup-records = 40
+fix-nonlocal-parse = 65
+fix-nonlocal-urlkey = 67
+
+# Raw per-rater scores, for the record (author / blind second rater).
+[scores_author]
+fix-clamp = 10
+fix-titlecase = 22
+feature-csv-coalesce = 40
+fix-interval-merge = 45
+fix-money-split = 55
+fix-dedup-records = 50
+fix-nonlocal-parse = 70
+fix-nonlocal-urlkey = 74
+
+[scores_rater]
+fix-clamp = 25
+fix-titlecase = 30
+feature-csv-coalesce = 43
+fix-interval-merge = 33
+fix-money-split = 33
+fix-dedup-records = 30
+fix-nonlocal-parse = 61
+fix-nonlocal-urlkey = 61

@@ -1,0 +1,1 @@
+For a Python service that ships to Linux CI and is developed on macOS and Windows, is a single universal (multi-platform) lockfile the right default, or should each platform resolve and commit its own lockfile? Give the trade-offs and a recommendation.

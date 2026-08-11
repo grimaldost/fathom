@@ -1,0 +1,29 @@
+name = "research-fusion-v1"
+dataset_version = "1"
+# The multi-substrate research bank (mantis-research's MANT-B36), built to the
+# skeleton in docs/specs/2026-08-11-cross-project-gate-banks.md Gate B.
+#
+# It measures the PRECONDITION of the moat claim, not the claim: whether a real
+# fan-out over contested questions produces a well-formed epistemic sidecar whose
+# cross-substrate divergences join back to their sources. That is deterministic,
+# blind, and — the property that makes it worth running — able to REJECT the claim
+# on its own terms. It is NOT the decision-value measurement MANT-B36 asks for; see
+# fusion_verify.py for why a verifier cannot observe that and what would be needed.
+#
+# Questions are deliberately CONTESTED rather than factual: a question with one
+# right answer gives a fan-out nothing to disagree about, so the bank would ceiling
+# and manufacture the null the retirement decision is already leaning toward.
+#
+# ONE CONFOUND TO NAME BEFORE READING ANY RESULT. The tool's MCP result is a
+# BOUNDED PROJECTION of its sidecar (core/sidecar.py project_for_agent): it carries
+# claims, divergences, source_overlaps, verification_queue, agreements and coverage
+# notes, and it does NOT carry `question`, `generated_at`, `sources` or
+# `source_citations` — those stay in the on-disk artifact, whose path the manifest
+# returns. So `divergences_present` / `divergences_well_formed` / `claims_present` /
+# `verification_queue_present` are satisfiable from the tool result alone, while
+# `sidecar_required_fields` / `multi_substrate` / `substrate_source_join` require
+# the arm to READ the on-disk sidecar. That is a real property worth measuring — can
+# a consumer reconstruct the epistemic record from what the tool hands it? — but it
+# is a property of the agent-facing projection, not of the fan-out, and a report
+# that scores the two together will misattribute the result.
+holdout = ["cost-per-outcome"]

@@ -1,0 +1,21 @@
+id = "series-engine-contract"
+instruction = """
+You are reviewing a design spec before any code is written. The spec is `spec.md` at the
+root of this workspace; the source files it refers to, where they exist, are staged
+beside it under the same repo-relative paths.
+
+Review it adversarially and report the failure modes you find. Write your review to a
+file named `findings.md` at the root of this workspace. Do not modify `spec.md` or any
+staged source file, and do not write any implementation.
+"""
+
+[limits]
+# A spec review is a read-and-reason pass, not a build: the full-directive arm has the
+# most to read and the most to emit, so the cap is set from its shape rather than the
+# bare arm's. 900 s / 40 turns leaves room for a grounded pass over the staged surface
+# without inviting an open-ended exploration.
+trial_timeout_s = 900
+max_turns = 40
+
+[verify]
+entry = "verify.py"

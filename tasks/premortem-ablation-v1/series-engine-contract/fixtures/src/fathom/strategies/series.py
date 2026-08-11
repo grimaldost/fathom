@@ -122,12 +122,6 @@ ENGINE_EXIT_INFRASTRUCTURE = 2
 ENGINE_EXIT_USAGE = 3
 ENGINE_EXIT_BUDGET = 4
 
-# Engine 0.8.0's second terminal line: a run whose driver died, closed out by a later
-# `convoy clean` clearing its workspace lock. It is not one of the engine's own
-# outcomes — the writer was not there — but it joins the reconstructed vocabulary a
-# consumer branches on, so it is named here and classified infrastructure.
-ENGINE_OUTCOME_ABANDONED = "abandoned"
-
 
 # ---------------------------------------------------------------------------
 # Engine subprocess boundary — injectable; whole-process-tree kill on timeout
@@ -397,27 +391,16 @@ def _materialize_runs(events: list[dict], run_id: str | None) -> list[RunRecord]
 
 
 def _final_run_outcome(events: list[dict]) -> str | None:
-    """The engine's own coarse verdict from the terminal lifecycle line, or None.
+    """The ``outcome`` of the last ``run_complete`` event, or None if absent.
 
-    The engine states ``completed`` / ``blocked`` / ``infrastructure`` / ``budget``
-    on the terminal ``run_complete`` line; the most recent one is this invocation's
-    (a fresh per-trial outputs dir holds a single run).
-
-    Engine 0.8.0 added a **second** terminal line. ``run_abandoned`` is written by a
-    LATER process (``convoy clean``, clearing the workspace lock of a run whose driver
-    died) for a run that never reached a verdict of its own, and ``abandoned`` joined
-    the reconstructed outcome vocabulary with it. It carries no ``outcome`` field —
-    whoever wrote it was not there — so it is mapped here rather than read. A trial
-    that meets one is by construction outside its own work and is classified
-    infrastructure, not a task failure.
+    The engine states its own coarse verdict — ``completed`` / ``blocked`` /
+    ``infrastructure`` — on the terminal ``run_complete`` line; the most recent one
+    is this invocation's (a fresh per-trial outputs dir holds a single run).
     """
     for event in reversed(events):
-        kind = event.get("event")
-        if kind == "run_complete":
+        if event.get("event") == "run_complete":
             outcome = event.get("outcome")
             return str(outcome) if outcome is not None else None
-        if kind == "run_abandoned":
-            return ENGINE_OUTCOME_ABANDONED
     return None
 
 
@@ -440,7 +423,6 @@ def _classify(outcome: EngineOutcome, events: list[dict]) -> tuple[TrialStatus, 
     if (
         outcome.returncode == ENGINE_EXIT_INFRASTRUCTURE
         or run_outcome == "infrastructure"
-        or run_outcome == ENGINE_OUTCOME_ABANDONED
         or _classify_infra(own_channel)
     ):
         return TrialStatus.INFRASTRUCTURE, "engine infrastructure halt (auth/usage-limit/retry)"

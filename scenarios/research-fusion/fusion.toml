@@ -1,0 +1,34 @@
+name = "fusion"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+# The armed arm. NOTE THE TOOL NAME: a plugin-served MCP tool is
+# `mcp__plugin_<plugin>_<server>__<tool>`, NOT `mcp__<server>__<tool>`. The
+# short spelling is what produced the recorded unarmed-arm result — 23 tools denied
+# for 9 armed trials, scorecard 9/9, `Infra Errors: 0` — so `fathom verify-arming`
+# is a hard precondition for this arm, not a nicety (FATH-B01).
+#
+# The mount tree is NOT vendored yet: unlike every other mounted plugin in this repo
+# (all prose-only), this one serves an MCP server that self-installs with
+# `uv run --project ${CLAUDE_PLUGIN_ROOT}`, so the mounted copy needs a resolvable
+# Python environment created at spawn time inside the bank tree. That integration is
+# the unbought half of this gate — see the run notes.
+[tools]
+source = "none"
+allowed = [
+    "Read",
+    "Write",
+    "Glob",
+    "Grep",
+    "WebSearch",
+    "WebFetch",
+    "mcp__plugin_mantis-research_mantis-research__research",
+]
+
+[plugins]
+mount = ["../../tasks/research-fusion-v1/plugins/mantis-research@0.2.0"]
+
+[limits]
+trial_timeout_s = 2400

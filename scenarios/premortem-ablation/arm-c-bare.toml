@@ -1,0 +1,14 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+# The control: no directive at all. "bare" is the report's pairwise anchor name, so the
+# arm keeps that name rather than arm-c-bare.
+[tools]
+source = "none"
+allowed = ["Read", "Grep", "Glob", "Write"]
+
+[limits]
+trial_timeout_s = 900

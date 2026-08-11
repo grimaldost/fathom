@@ -1,0 +1,46 @@
+{
+  "sidecar_version": 2,
+  "question": "For new interfaces in a Python codebase in 2026, should typing.Protocol structural typing be the default seam over abstract base classes, or are ABCs still the better default? Give the trade-offs and a recommendation.",
+  "generated_at": "2026-08-11T00:00:00Z",
+  "sources": [
+    {
+      "label": "openai"
+    },
+    {
+      "label": "google"
+    },
+    {
+      "label": "deepseek"
+    }
+  ],
+  "claims": [
+    {
+      "text": "reference claim",
+      "support": "direct"
+    }
+  ],
+  "divergences": [
+    {
+      "topic": "reference divergence",
+      "sides": [
+        "position A",
+        "position B"
+      ],
+      "substrates": [
+        "openai",
+        "google"
+      ]
+    }
+  ],
+  "verification_queue": [
+    {
+      "item": "check the reference claim at source"
+    }
+  ],
+  "source_citations": [
+    {
+      "substrate": "openai",
+      "cited": []
+    }
+  ]
+}

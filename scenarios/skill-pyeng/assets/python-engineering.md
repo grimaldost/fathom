@@ -47,6 +47,48 @@ and configuration.
 
 ---
 
+## Modifying existing code (the edit lane)
+
+Most work in an existing project is an *edit*, not a scaffold. When the task
+is to change a few files in a project that already has its layout, tooling,
+and CI, the scaffolding, Docker, observability, and CI sections below are
+not the relevant rules — skip them. Match what the surrounding code already
+does, and apply only the rules that govern the lines you touch (for a
+**micro-edit** — a one-line docstring or string change — even these are mostly
+moot: match the touched line's local form, run the project's gate, and stop):
+
+- **Match the local convention first — project config governs.** Read 2–3
+  nearby files before editing. The project's existing patterns — even where
+  they differ from this skill's greenfield defaults — are the contract for an
+  edit; a one-file modernization that diverges from the rest of the module is
+  noise, not improvement. Where the project states its own conventions
+  (`AGENTS.md`, `CLAUDE.md`, `ruff.toml`, a style guide), **those govern and
+  this skill's defaults are the fallback** — defer, don't override.
+- **Protocol-first typing for new interfaces.** A new seam introduced inside
+  existing code prefers `typing.Protocol` (structural) over an ABC, unless the
+  surrounding code already commits to ABCs. See the Typing Philosophy section.
+- **`@override` semantics.** When overriding a real base-class method, annotate
+  it `@override` (PEP 698); do not add `@override` to a class that only
+  structurally satisfies a `Protocol` — see the caveat in Typing Philosophy.
+- **Import hygiene.** Keep imports at module top, grouped stdlib / third-party /
+  first-party (ruff's isort handles ordering). When a format-on-save or
+  autofix hook strips unused imports, add an import in the *same* edit that
+  first references it — an "import now, use later" split loses the import to
+  the hook between edits.
+- **Quoting and docstrings.** Single quotes for code literals, double quotes
+  for docstrings (the project's ruff config enforces this; an edit that fights
+  it just gets reformatted).
+- **Don't widen the scope.** An edit's diff is its scope. Adjacent cleanup,
+  renames, and "while I'm here" refactors belong in a separate change — the
+  same scope discipline `data-engineering-discipline` applies to a migration.
+
+If the task is actually to *modernize* an inherited project's tooling (assess
+the current setup and bring it to standard), that is the broader scope the
+rest of this skill and `scripts/doctor.py` cover — run the doctor, then work
+through its findings.
+
+---
+
 ## The Canonical Stack
 
 | Layer            | Tool                  | Notes                                      |
@@ -64,6 +106,7 @@ and configuration.
 | Security audit   | `pip-audit`           | CVE scanning against OSV database in CI    |
 | CLI (if needed)  | `typer`               | Type-hint-driven argument parsing          |
 | Web (if needed)  | `fastapi`             | Interface layer only — keep logic in core/ |
+| HTTP client      | `httpx`               | Sync + async, HTTP/2; default for new code |
 
 ### A note on type checkers
 
@@ -117,6 +160,14 @@ evaluated. Forward references work natively — no need for
 explicit method overriding, `ParamSpec` for typed decorators, and
 `TypeIs` / `TypeGuard` for type narrowing in guards.
 
+> **`@override` caveat (PEP 698).** `@override` requires an actual base-class
+> method to override. On a plain structural class that satisfies a `Protocol`
+> *without* subclassing it — the Protocol-first default above — do not add
+> `@override`: there is no base method, so the type checker flags it as an
+> error. Structural conformance and `@override` are mutually exclusive; reach
+> for `@override` only inside a real inheritance chain (an ABC subclass, or a
+> class that explicitly subclasses its base).
+
 → Full architecture rationale: **Read `references/ecosystem_rationale.md`**
 
 ---
@@ -130,6 +181,10 @@ Ask (or infer) whether the project is a **Library/Data tool** or an
   (`src/mylib/datatools/`, `src/mylib/core/`)
 - **Application layout** → decouple logic from entry points
   (`src/myapp/core/` + `src/myapp/interface/`)
+- **Tests** → a top-level `tests/` tree, **never inside `src/`**. Colocated
+  `src/.../tests/` modules ship inside the built wheel and pollute the installed
+  package; for per-unit suites (datajobs, plugins) mirror the package under
+  `tests/<area>/<name>/`. (`doctor.py` flags any `test_*.py` found under `src/`.)
 
 The application layout follows the **functional core / imperative shell**
 pattern: `core/` contains pure business logic (no I/O, fully testable),
@@ -167,43 +222,13 @@ When generating a project for a user:
 ## Dependency Management (PEP 735)
 
 Use `[dependency-groups]` (PEP 735) for development dependencies — **not**
-`[project.optional-dependencies]`. Dev deps are local-only and must not ship
-with the package.
+`[project.optional-dependencies]`, which is for end-user feature extras
+(`pip install mylib[cli]`). Dev deps are local-only and must not ship with the
+package. Group into `lint` / `test` / `security`, plus a `dev` group that
+includes them.
 
-```toml
-[dependency-groups]
-dev = [
-    { include-group = "lint" },
-    { include-group = "test" },
-    { include-group = "security" },
-    "pre-commit",
-]
-lint = [
-    "ruff>=0.15",
-    "ty",
-]
-test = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "pytest-asyncio>=0.24",
-    "hypothesis",
-]
-security = [
-    "pip-audit",
-]
-```
-
-Reserve `[project.optional-dependencies]` for **feature extras** that end users
-install (e.g., `pip install mylib[cli]`).
-
-Key commands:
-```bash
-uv add --dev pytest              # Adds to [dependency-groups] dev
-uv add --group lint ruff         # Adds to [dependency-groups] lint
-uv sync                          # Installs all default groups
-uv sync --group test             # Installs specific group
-uv run pytest                    # Runs in project venv
-```
+→ The authoritative `[dependency-groups]` block:
+**Read `references/project_templates.md`**
 
 ---
 
@@ -221,46 +246,34 @@ docstring-quotes = "double"
 multiline-quotes = "double"
 ```
 
-### Ruff 0.8+ Migration Notes
-
-- The `TCH` rule category was renamed to **`TC`**. Use `"TC"` in `select`.
-- `ANN101` / `ANN102` were **removed** — do not list them in `ignore`.
-- Block suppression comments are now supported:
-  `# ruff: disable[N803]` / `# ruff: enable[N803]` to suppress rules for a
-  block of code without per-line `# noqa`.
+Ruff 0.8+ deltas: the `TCH` category is now `TC` (use `"TC"` in `select`);
+`ANN101` / `ANN102` were removed (don't list them in `ignore`); block
+suppression via `# ruff: disable[RULE]` / `# ruff: enable[RULE]` avoids per-line
+`# noqa`.
 
 ---
 
 ## Configuration Management Pattern
 
-Never use `os.getenv()` directly. Always use `pydantic-settings`:
+Never read `os.getenv()` directly. Use a typed `Settings(BaseSettings)` from
+`pydantic-settings`, with `SecretStr` for secrets (masked in logs). Keep `.env`
+gitignored and commit `.env.template` to document required keys.
 
 ```python
-# src/my_package/core/config.py
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application configuration — loaded from .env."""
-
-    DEBUG: bool = False
-    APP_NAME: str = 'My App'
-    API_KEY: SecretStr  # Masked in logs automatically
-
-    model_config = SettingsConfigDict(
-        env_file='.env',
-        env_file_encoding='utf-8',
-        case_sensitive=True,
-        extra='ignore',
-    )
+    API_KEY: SecretStr
+    model_config = SettingsConfigDict(env_file='.env', extra='ignore')
 
 
 settings = Settings()
 ```
 
-Use `.env` (gitignored) for secrets and `.env.template` (committed) to
-document required keys.
+→ Why typed config (fail-fast at startup, validation): **Read
+`references/ecosystem_rationale.md`**
 
 ---
 
@@ -284,7 +297,11 @@ call it once at application startup (CLI entry point or FastAPI `lifespan`).
 `scripts/scaffold.py` writes the canonical `.pre-commit-config.yaml`
 (trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files,
 plus `ruff` + `ruff-format` at the revs pinned in `stack.toml`). Install with
-`uv run pre-commit install`.
+`uv run pre-commit install`. Enforcement is a ladder, not an assumption: on a
+harness with act-time hooks (Claude Code) this plugin formats each edit and
+blocks pip/poetry in uv projects as it happens; elsewhere the same rules hold
+at commit time via this pre-commit config (plus the exported
+`check-uv-hygiene` hook), and as advisory text where neither exists.
 
 > **Note on ty in pre-commit**: `ty` has no official pre-commit hook yet. Run it
 > via `uv run ty check src` in CI or as a local script.
@@ -348,36 +365,16 @@ via `uv lock`.
 
 ## Reference Files
 
-For exhaustive templates and patterns, read these as needed:
+Exhaustive templates and patterns — read on demand:
 
-- **`references/project_templates.md`** — Full `pyproject.toml` template
-  (Build, Ruff, ty, Mypy, Pytest), both directory layouts, GitHub Actions CI
-  workflow. Read this when scaffolding any project or generating config files.
-
-- **`references/ecosystem_rationale.md`** — Rationale for each tool choice,
-  Protocol vs ABC philosophy, architecture patterns (functional core /
-  imperative shell, dependency injection). Read when explaining *why*.
-
-- **`references/observability.md`** — Full structlog + OpenTelemetry setup:
-  stdlib bridge, trace ID correlation, FastAPI middleware, metrics, and
-  pytest integration. Read when setting up logging or observability.
-
-- **`references/testing_and_qa.md`** — Pytest patterns, Hypothesis for
-  property-based testing, snapshot testing, testcontainers, unit vs
-  integration split, async testing. Read when generating tests or QA strategy.
-
-- **`references/docker_patterns.md`** — Multi-stage Dockerfile with uv, CI/CD
-  Docker caching. Read when containerizing a Python project.
-
-- **`references/security.md`** — Supply-chain security: Trusted Publishers,
-  Sigstore attestations, pip-audit, dependency pinning, CI pipeline.
-  Read when hardening a project's security posture.
-
-- **`references/ai_config.md`** — Templates for CLAUDE.md, Cursor rules,
-  and Copilot instructions. Read when setting up AI-assistant configuration.
-
-- **`references/currency_review.md`** — Quarterly review protocol and
-  checklist for keeping the skill up-to-date with the Python ecosystem.
+- **`project_templates.md`** — `pyproject.toml` master config, both directory layouts, GitHub Actions CI.
+- **`ecosystem_rationale.md`** — why each tool, Protocol vs ABC, functional core / imperative shell, DI.
+- **`observability.md`** — structlog + OpenTelemetry setup, trace correlation, FastAPI middleware.
+- **`testing_and_qa.md`** — pytest, Hypothesis, mutation/snapshot testing, testcontainers, unit/integration split.
+- **`docker_patterns.md`** — multi-stage Dockerfile with uv, CI/CD Docker caching.
+- **`security.md`** — Trusted Publishers, Sigstore, pip-audit, dependency pinning.
+- **`ai_config.md`** — CLAUDE.md, Cursor rules, Copilot instructions.
+- **`currency_review.md`** — quarterly review protocol for keeping the skill current.
 
 ---
 
