@@ -49,8 +49,8 @@ intervals overlap over most of their length. Fisher's exact on `protocol` vs `ba
 p = 1.0; on `nudge` vs `bare`, p = 1.0.
 
 **The per-criterion view is the real read, and it says the two misses are unrelated
-failure modes on different tasks, not a graded effect.** Twelve of the fourteen criteria
-are at 100% in every arm. Only three cells are not:
+failure modes on different tasks, not a graded effect.** Eleven of the fourteen criteria
+are at 100% in all three arms; only three rows are not:
 
 | Criterion | `bare` | `nudge` | `protocol` | Where |
 |---|---|---|---|---|
@@ -118,9 +118,9 @@ primary economy currency.
 | `nudge` | $2.18 / 74 turns | $1.69 / 56 turns |
 | `protocol` | $1.90 / 61 turns | $1.65 / 48 turns |
 
-The register moves cost more than the arm does (embedded instructions run ~20-30% dearer
-in every arm, consistently), which is a property of the longer instructions, not of
-dispatch.
+The register moves cost more than the arm does — embedded instructions run 15-29% dearer
+in every arm, consistently in direction — which is a property of the longer instructions,
+not of dispatch.
 
 ## Verdict
 

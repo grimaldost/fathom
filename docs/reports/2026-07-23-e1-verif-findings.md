@@ -73,7 +73,7 @@ construction, so a red can only come from a candidate-added check that pins the 
   banks whose n=2 is genuinely n=2.
 - **The strongest-looking pattern in the whole experiment sits here, and it is still
   n=2.** Every mid-tier arm except `classifier-sonnet` scored 0/2 on the proxy, at 3-8
-  turns per trial; the weak-tier arms scored 1/2 each at 5-19 turns. Pooled by tier that
+  turns per trial; the weak-tier arms scored 1/2 each at 9-19 turns. Pooled by tier that
   is haiku 4/8 versus sonnet 2/8 on the proxy — the faster, more capable model fixed the
   bug and left nothing behind more often. That is a plausible mechanism (fewer turns,
   more confidence, less scaffolding) and it is **not** established by 16 trials.
@@ -94,11 +94,13 @@ construction, so a red can only come from a candidate-added check that pins the 
 | `classifier-sonnet` | $0.569 | 17 | 1,384 | 31.6 |
 
 Bank total **$2.73 estimated, 160 turns, 8.4 min** of summed trial time — $0.78 across
-the eight haiku trials and $1.96 across the eight sonnet trials. The turn and
-output-token columns track the proxy result closely: the arms that left a regression
-check spent more turns doing it, at both tiers. That association is descriptive, not
-causal, and it is the same 16 trials. USD is the adapter's token×price estimate under
-subscription auth (STATUS D2).
+the eight haiku trials and $1.96 across the eight sonnet trials. Within the mid tier the
+turn and output-token columns track the proxy: the three arms that left nothing ran at
+9-15 turns and 528-975 mean output tokens, while the one arm that swept ran 17 turns and
+1,384. **That association does not hold within the weak tier** — all four haiku arms
+scored 1/2 across a much wider 18-36 turn range. Descriptive, not causal, and the same 16
+trials either way. USD is the adapter's token×price estimate under subscription auth
+(STATUS D2).
 
 ### The cross-bank pooling this run's decision actually rested on
 
