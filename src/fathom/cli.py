@@ -652,12 +652,43 @@ def _cmd_verify_arming(args: argparse.Namespace) -> int:
     return EXIT_OK if ok else EXIT_UNARMED
 
 
+def _warn_if_unpublished(bank: str) -> None:
+    """Warn when a bank's conclusion is findable in neither a report nor STATUS.
+
+    Rendering the scorecard is free and repeatable; publishing the verdict where a
+    consumer can find it is the step that was unenforced prose and recurred until
+    five analyses' conclusions survived only in commit messages — one of which a
+    sibling backlog was citing to retire a shipped surface (FATH-B06). The warn
+    helps in the moment; `tests/test_ledger_coverage.py` is the part that binds.
+    """
+    reports_dir = pathlib.Path("docs") / "reports"
+    status = pathlib.Path("docs") / "STATUS.md"
+    try:
+        in_report = any(
+            bank in p.name or bank in p.read_text(encoding="utf-8", errors="replace")
+            for p in reports_dir.glob("*.md")
+        )
+        in_status = status.is_file() and bank in status.read_text(
+            encoding="utf-8", errors="replace"
+        )
+    except OSError:
+        return
+    if not in_report and not in_status:
+        print(
+            f"WARNING: no docs/reports/ entry and no docs/STATUS.md row mentions "
+            f"'{bank}'. The scorecard regenerates for free; the verdict does not. "
+            f"Write it up before the conclusion survives only in a commit message.",
+            file=sys.stderr,
+        )
+
+
 def _cmd_report(args: argparse.Namespace) -> int:
     import fathom.report as _report
 
     try:
         out_path = _report.render(args.bank)
         print(f"report written to {out_path}")
+        _warn_if_unpublished(args.bank)
         return EXIT_OK
     except Exception as exc:
         print(f"error rendering report: {exc}", file=sys.stderr)
