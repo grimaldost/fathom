@@ -1021,5 +1021,115 @@ class TestUnknownStrategyRejected(unittest.TestCase):
             self.assertIn("gated-sesion", buf.getvalue())
 
 
+class ArmingGateTests(unittest.TestCase):
+    """`fathom run` must refuse to spend on an arm it cannot prove armed (FATH-B01)."""
+
+    class _Probe:
+        """Stub arming probe returning a canned observation; counts its spawns."""
+
+        def __init__(self, obs) -> None:  # noqa: ANN001
+            self.obs = obs
+            self.calls: list[str] = []
+
+        def observe(self, scenario):  # noqa: ANN001, ANN202
+            self.calls.append(scenario.name)
+            return self.obs
+
+    @staticmethod
+    def _obs(**kw):  # noqa: ANN205
+        from fathom.arming import ArmingObservation
+
+        base = dict(
+            spawn_ok=True,
+            init_present=True,
+            plugins=(),
+            skills=(),
+            tools=(),
+            mcp_servers=(),
+            hooks_fired=(),
+            successful_mcp_calls=(),
+            denied_tools=(),
+            argv=(),
+            spawn_env={},
+            config_dir_files=(),
+            settings_sha=None,
+        )
+        base.update(kw)
+        return ArmingObservation(**base)
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.mkdtemp()
+        self.bank = _make_bank("arming-bank", [_make_task("t1", Path(self._tmp))])
+        self.ledger_dir = pathlib.Path(tempfile.mkdtemp())
+
+    def tearDown(self) -> None:
+        shutil.rmtree(self._tmp, ignore_errors=True)
+        shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
+
+    def _run(self, scenario, probe, **kw):  # noqa: ANN001, ANN202
+        executor = StubExecutor()
+        code = run_matrix(
+            self.bank,
+            [scenario],
+            1,
+            executor_factory=lambda sc: executor,
+            runner_factory=lambda sc: StubRunner(),
+            stage_task_fn=_stub_stage,
+            verifier_fn=_stub_verifier,
+            ledger_dir=self.ledger_dir,
+            arming_probe=probe,
+            out=io.StringIO(),
+            **kw,
+        )
+        return code, executor
+
+    def test_an_unarmed_treatment_arm_blocks_the_matrix(self) -> None:
+        from fathom.cli import EXIT_UNARMED
+        from fathom.scenario import EnvConfig
+
+        sc = _make_scenario(name="armed", env=EnvConfig(vars=(("FATHOM_MARK", "1"),)))
+        probe = self._Probe(self._obs(spawn_env={}))  # var never reached the spawn
+        code, executor = self._run(sc, probe)
+        self.assertEqual(code, EXIT_UNARMED)
+        self.assertEqual(
+            executor.calls, [], "no trial may be spawned when arming verification fails"
+        )
+
+    def test_a_verified_treatment_arm_runs(self) -> None:
+        from fathom.scenario import EnvConfig
+
+        sc = _make_scenario(name="armed", env=EnvConfig(vars=(("FATHOM_MARK", "1"),)))
+        probe = self._Probe(self._obs(spawn_env={"FATHOM_MARK": "1"}))
+        code, executor = self._run(sc, probe)
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(executor.calls)
+
+    def test_skip_arming_check_spends_anyway(self) -> None:
+        from fathom.scenario import EnvConfig
+
+        sc = _make_scenario(name="armed", env=EnvConfig(vars=(("FATHOM_MARK", "1"),)))
+        probe = self._Probe(self._obs(spawn_env={}))
+        code, executor = self._run(sc, probe, skip_arming_check=True)
+        self.assertEqual(code, EXIT_OK)
+        self.assertTrue(executor.calls)
+        self.assertEqual(probe.calls, [], "the override must not spawn a probe at all")
+
+    def test_a_control_arm_is_never_probed(self) -> None:
+        probe = self._Probe(self._obs())
+        code, executor = self._run(_make_scenario(name="bare"), probe)
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(probe.calls, [])
+        self.assertTrue(executor.calls)
+
+    def test_a_dry_run_never_probes(self) -> None:
+        from fathom.scenario import EnvConfig
+
+        sc = _make_scenario(name="armed", env=EnvConfig(vars=(("FATHOM_MARK", "1"),)))
+        probe = self._Probe(self._obs(spawn_env={}))
+        code, _ = self._run(sc, probe, dry_run=True)
+        self.assertEqual(code, EXIT_OK, "planning spends nothing, so it needs no arming proof")
+        self.assertEqual(probe.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -9,6 +9,7 @@ import pathlib
 import sys
 from typing import Any, Callable, TextIO
 
+import fathom.arming as _arming
 import fathom.ledger as _ledger
 from fathom.grading.verifier import run_verifier
 from fathom.scenario import ResolvedScenario
@@ -23,6 +24,7 @@ TASKS_DIR = pathlib.Path("tasks")
 # Named exit codes (spec §10)
 EXIT_OK = 0
 EXIT_INFRASTRUCTURE = 10
+EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -94,8 +96,31 @@ def _build_parser() -> argparse.ArgumentParser:
         "cost guard for a paid matrix (§11)",
     )
 
+    run_p.add_argument(
+        "--skip-arming-check",
+        action="store_true",
+        dest="skip_arming_check",
+        help="Spend WITHOUT proving the treatment arms are armed. The arming gate "
+        "costs a fraction of a cent per arm and exists because an entirely unarmed "
+        "arm once scored 100%% over 9 trials; skip it only to re-run a matrix whose "
+        "arming was already verified this session.",
+    )
+
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
+
+    arm_p = sub.add_parser(
+        "verify-arming",
+        help="Prove each treatment arm is actually armed on a real spawn (§FATH-B01)",
+    )
+    arm_p.add_argument(
+        "--scenarios-dir",
+        type=pathlib.Path,
+        default=SCENARIOS_DIR,
+        dest="scenarios_dir",
+        metavar="DIR",
+        help="Directory globbed (non-recursively) for arm *.toml (default: scenarios/).",
+    )
 
     smoke_p = sub.add_parser("smoke", help="Real-spawn isolation smoke gate (§11)")
     smoke_p.add_argument(
@@ -126,6 +151,8 @@ def run_matrix(
     ledger_dir: pathlib.Path | None = None,
     max_budget_usd: float | None = None,
     include_holdout: bool = False,
+    arming_probe: Any | None = None,
+    skip_arming_check: bool = False,
     out: TextIO | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
@@ -193,6 +220,49 @@ def run_matrix(
     if num_planned == 0:
         print("nothing to do", file=_out)
         return EXIT_OK
+
+    # --- Arming gate: prove the treatment reached the spawn BEFORE spending ---
+    # fathom used to validate declarations only, so an entirely unarmed arm could
+    # score 100% over 9 trials with a clean smoke and zero infra errors. A null
+    # result from an unarmed arm is indistinguishable from "the tool does not
+    # help" — and a null is what the decisions downstream of this harness are
+    # looking for, so the instrument's failure mode and the reader's expectation
+    # point the same way. Hence: refuse, loudly, rather than warn (FATH-B01).
+    if skip_arming_check:
+        armed_arms = [sc.name for sc in resolved_scenarios if _arming.needs_verification(sc)]
+        if armed_arms:
+            print(
+                f"WARNING: --skip-arming-check: spending on treatment arms {armed_arms} "
+                "WITHOUT proof they are armed",
+                file=_out,
+            )
+    else:
+        to_verify = [sc for sc in resolved_scenarios if _arming.needs_verification(sc)]
+        probe = arming_probe
+        if probe is None and to_verify:
+            # Constructed only when there is something to prove, so a matrix of
+            # plain control arms neither spawns nor imports the probe.
+            from fathom.armingprobe import RealArmingProbe
+
+            probe = RealArmingProbe()
+        if to_verify:
+            print(
+                f"arming: verifying {len(to_verify)} treatment arm(s) on real spawns...",
+                file=_out,
+            )
+        armed_ok, arming_report = _arming.verify_all(resolved_scenarios, probe)
+        if arming_report:
+            print(arming_report, file=_out)
+        if not armed_ok:
+            print(
+                "\nREFUSING TO RUN: at least one treatment arm could not be proven armed.\n"
+                "An unarmed arm scores as the control and manufactures a null result.\n"
+                "Fix the arm, or re-run with --skip-arming-check to spend anyway.",
+                file=_out,
+            )
+            return EXIT_UNARMED
+        if to_verify:
+            print("arming: all declared treatments verified\n", file=_out)
 
     _executor_factory = (
         executor_factory if executor_factory is not None else _default_executor_factory
@@ -393,6 +463,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_report(args)
     if args.command == "smoke":
         return _cmd_smoke(args)
+    if args.command == "verify-arming":
+        return _cmd_verify_arming(args)
     parser.print_help()
     return 1
 
@@ -447,7 +519,49 @@ def _cmd_run(args: argparse.Namespace) -> int:
         ledger_dir=ledger_dir,
         max_budget_usd=args.max_budget_usd,
         include_holdout=args.include_holdout,
+        skip_arming_check=args.skip_arming_check,
     )
+
+
+def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenario]:
+    """Parse and resolve every arm in *scenarios_dir*, skipping unparsable files."""
+    from fathom.scenario import load_scenario, resolve_scenario
+
+    resolver = _DefaultResolver()
+    out: list[ResolvedScenario] = []
+    for sc_file in sorted(scenarios_dir.glob("*.toml")):
+        try:
+            out.append(resolve_scenario(load_scenario(sc_file), resolver))
+        except Exception as exc:  # noqa: BLE001 - one bad arm must not hide the rest
+            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
+    return out
+
+
+def _cmd_verify_arming(args: argparse.Namespace) -> int:
+    """Prove every declaring arm in a scenarios dir is armed, on real spawns."""
+    from fathom.armingprobe import RealArmingProbe
+
+    scenarios = _load_resolved_scenarios(args.scenarios_dir)
+    if not scenarios:
+        print(f"error: no scenarios found in {args.scenarios_dir}", file=sys.stderr)
+        return 1
+
+    declaring = [sc for sc in scenarios if _arming.needs_verification(sc)]
+    print(
+        f"verify-arming: {len(scenarios)} arm(s) in {args.scenarios_dir}, "
+        f"{len(declaring)} declaring a treatment axis"
+    )
+    for sc in scenarios:
+        axes = _arming.declared_axes(sc)
+        print(f"  {sc.name}: {', '.join(axes) if axes else '(control — nothing to verify)'}")
+    if not declaring:
+        return EXIT_OK
+
+    print("\nspawning one cheap probe per declaring arm...\n")
+    ok, report = _arming.verify_all(scenarios, RealArmingProbe())
+    print(report)
+    print("\nARMING RESULT:", "ALL VERIFIED" if ok else "SOME ARMS ARE NOT ARMED")
+    return EXIT_OK if ok else EXIT_UNARMED
 
 
 def _cmd_report(args: argparse.Namespace) -> int:
