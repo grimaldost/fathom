@@ -20,7 +20,7 @@ prompts = "prompts"                # fathom rewrites to an absolute path outside
 outputs = "outputs"                # spawns.jsonl telemetry lands here
 
 [governance]                       # fathom PINS model / effort / permission_mode / budgets
-model = "claude-opus-4-8"          # <- overwritten from the resolved scenario
+model = "claude-opus-5"          # <- overwritten from the resolved scenario
 effort = "high"                    # <- overwritten from the resolved scenario
 permission_mode = "default"        # <- overwritten; never bypassPermissions (§6 parity)
 timeout_seconds = 1800             #    NOT pinned — the template's value is used as authored;
