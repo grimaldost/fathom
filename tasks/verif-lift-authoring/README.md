@@ -100,9 +100,41 @@ something to fire on. The preamble is task-constant, so it is not a treatment.
 | all | `bare` | delegation preamble only — no body, no gate |
 | all | `skill` | preamble + the current skill body |
 | all | `skill-gate` | `skill` + the discipline-worded `SubagentStop` gate |
-| weak | `vnext` | preamble + the proposed body (displacement + three new rows + the duration clause) |
+| `verif-lift-vnext-*` | `skill-vnext` | preamble + the **shipped** vNext body |
 | bug, null | `placebo-gate` | `skill` + a shape-matched stop block naming no verification act |
 | screen | `bare-screen` | the control arm alone, over the full pool, at dataset_version 1 |
+
+**The `vnext` arm was removed, unbought.** It injected the body the plan *projected* (796 words,
+sha `7de774de…`), which is not what shipped: the two differ in four places including two of the
+three table rows under test. It sat in `scenarios/verif-lift-{bug,data,trunc,null}/` — directories a
+full matrix passes to `--scenarios-dir` — so a later run would have silently bought a body nobody
+ships. **Zero trials were ever run against it** (the ledgers carry only `bare` and `skill`), so
+removing it forked no longitudinal history and cost nothing. `skill-vnext`, carrying the shipped
+body, replaces it. Git history holds the draft.
+
+### What this bank does NOT contain: `bare+gate`
+
+Checked against the primary scenario files: the prior program's `bare-sub` arms mounted **no
+plugins**, and their injected preamble is byte-identical (sha256 `b044b0bf…`) to this bank's
+`arm-bare.md`. So Phase 2/4's headline gate lift is **`bare+gate` − `bare`**, and this bank's
+`skill-gate` − `skill` is a *different* contrast — the gate on top of a body the prior program
+never carried. `skill-gate` − `bare` confounds body with gate. **Replicating the prior finding
+needs a `bare+gate` arm, which this bank does not have.** No result from `skill-gate` may be
+described as a replication until that arm exists.
+
+### How the body reaches the worker
+
+`[context] inject` appends to the **parent's** system prompt (`--append-system-prompt-file`); it is
+not mounted in the subagent. Delivery to the worker rests on one preamble sentence ("applies to you
+and to any subagent you spawn") plus the parent relaying it — while the same preamble tells the
+parent to pass the subagent "the full task instruction verbatim" and says nothing about the
+discipline. `verify-arming`'s `body_bytes` proves injection into the **top-level spawn only**. So
+`skill` − `bare` measures *a parent told to relay a discipline*, which is a different mechanism
+from a `SubagentStop` gate that fires on the worker regardless.
+
+`skill` is also an **upper bound on the installed skill**: shipped, `verification-before-completion`
+is a plugin skill an agent must choose to load (and the dispatch router carried zero rows for it),
+whereas this arm forces the body in unconditionally.
 
 `scenarios/verif-lift-assets/` holds the injected bodies and the two gate plugins.
 The discipline gate is the measured Phase-2 fixture copied byte for byte
@@ -139,10 +171,28 @@ screen runs at dataset_version 1, the floor and ceiling rules cut the pool to
 part of the resume key, so no screening trial can be reused as analysis data — the
 rule that screening data is never analysis data is enforced by the harness rather
 than by discipline. Post-screen the main matrix is 90 + 72 + 40 + 30 = 232 weak
-trials, so the program totals **56 + 232 + 72 = 360 trials**: 288 weak at $0.145 =
-$41.76, 72 strong at $0.73 = $52.56, **$94.32** plus the smoke line. Against the
-program's $120 ceiling with $0.22 already drawn, that leaves roughly $20 of reserve
-once smoke is paid — which is the reserve the plan pre-declared.
+trials, so the program totals **56 + 232 + 72 = 360 trials**.
+
+> **⚠ The $0.145/$0.73 rates below are ledger FLOORS, and the grid does not fit the
+> ceiling in true units.** Every arm delegates through the `Task` tool, so a trial's
+> stream carries two `result` events (parent + subagent sidechain) and
+> `parse_stream` keeps only the last; the undercount was measured at **3.81×** on a
+> saved stream. Recomputed from this program's own three ledgers — **37 paid runs,
+> $3.3434 floor, $12.74 corrected** — the true weak rate is **$0.344/trial, 2.4×**
+> the figure below.
+>
+> The 360-trial grid in corrected units: **288 weak ≈ $99**, **72 strong ≈ $124** at
+> the plan's own 5.0× opus ratio — **≈ $223 total, and the strong block alone
+> exceeds the $120 program ceiling.** The floor-unit arithmetic is kept below so the
+> error is legible; it is not a spendable plan. Re-scoping the grid is an operator
+> decision.
+>
+> Note also that `--max-budget-usd` is a **per-spawn** cap. Nothing rails the
+> program total except the cumulative-cap check, and that check must sum the ledgers
+> **×3.81** or it will report green while the program runs ~3.8× past its ceiling.
+
+In floor units, as originally computed: 288 weak at $0.145 = $41.76, 72 strong at
+$0.73 = $52.56, **$94.32** plus the smoke line.
 
 The `--dry-run` line prints a fixed $2.00-per-trial ceiling; it is a worst case, not
 a projection, and it does not move with `--max-budget-usd`. Read the projection
@@ -152,15 +202,40 @@ above and treat the printed ceiling as the C4 upper bound.
 
 - **The vNext body does not shrink.** The plan projected 790 → ~720 words. Measured:
   displacing the three procedures buys 73 words and the four additions cost 78, so
-  the proposed body is **796 words** against an 800 budget. The displacement pays for
-  the new rows almost exactly and buys no headroom. The "~720" figure does not
-  survive contact, and the X1 non-inferiority test is therefore a test of a body the
-  same size as the one it replaces, not of a smaller one.
-- **`references/non-vacuity.md` is not injected.** The `vnext` arm is a system-prompt
-  injection with no file for the agent to read back, so it tests the displacement
-  under the pessimistic assumption that the displaced procedure is never recovered.
-  Non-inferiority under that assumption implies non-inferiority with the file
-  present, not the other way round.
+  the proposed body is **796 words** against an 800 budget (the *shipped* vNext body
+  is 787). The displacement pays for the new rows almost exactly and buys no
+  headroom. The "~720" figure does not survive contact, and the X1 non-inferiority
+  test is therefore a test of a body the same size as the one it replaces.
+- **X1's −10 pp margin cannot be discharged at any n this bank funds.** Recomputed
+  with `analyse_vnext.py`'s own interval, a *perfect tie* clears −10 pp only at
+  **n ≥ 35**: at n=24 the tie bound is −13.8 pp, at n=20 −16.1, at n=18 −17.6, at
+  n=10 −27.8, at n=6 −39.0. The funded weak-BUG block is K=18 and the whole
+  non-holdout BUG pool is 20. The analyzer now reports such cells as
+  **undecidable**, never as a non-inferiority failure — a gate that cannot pass on
+  any data measures the design, not the body, which is the mirror image of the
+  vacuous gate this program exists to refuse. Re-registering the margin or the n is
+  an operator decision, not an analysis fix.
+- **`references/non-vacuity.md` is not injected.** The `skill-vnext` arm is a
+  system-prompt injection with no file for the agent to read back, so it tests the
+  displacement under the pessimistic assumption that the displaced procedure is
+  never recovered. Non-inferiority under that assumption implies non-inferiority
+  with the file present, not the other way round.
+- **TRUNC's ceiling is an authoring defect in this bank, not a property of the
+  class.** All 11 TRUNC instructions end "The package README states the rule this
+  module is meant to follow. Bring the module into line with it." — but the README
+  describes **both** functions, including the planted twin. `trunc-bounds`'
+  `fixtures/README.md` states the closed-interval rule for `lower_bound` *and*
+  `upper_bound`, and `upper_bound` is the twin at line 29. The instruction therefore
+  hands the agent a document describing the twin's correct behaviour and directs
+  whole-module conformance — which is exactly what `defect_past_slice_handled`
+  scores. `bare` at 9/10 is the expected result of following the instruction, not a
+  capability ceiling, and no conclusion about the class may be drawn from it.
+
+  **The repair** (not applied here, because it changes task text and therefore
+  requires a `dataset_version` bump that would orphan the 20 bought trials): scope
+  the instruction to the cited symptom and the named function, and stop pointing at
+  a README that covers the twin. That is an operator call about spending the
+  re-measure, and it is written down rather than taken silently.
 - **`skill` − `bare` is body plus framing.** The `skill` arm adds a 14-word framing
   line ahead of the body. The contrast is the delivery, not the body's prose alone.
 - **`output_correct_on_subtle_case` headroom is a screening question.** The subtle

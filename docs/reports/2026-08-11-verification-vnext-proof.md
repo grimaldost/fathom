@@ -9,6 +9,16 @@
   sibling MAP matrix. Every vNext verdict below is therefore *not-proven* or *not-measurable*.
   Nothing here licenses shipping the vNext body, and — the more important half — **nothing here
   licenses stripping anything from the shipped skill either.**
+- **Revised 2026-08-11 after referee review.** Six findings were wrong or missing and are corrected
+  in place, each marked where it lands: the pre-registered non-inferiority margin **cannot pass at
+  any funded n** (§3); the intervals were **unpaired beside a paired test** (§3); the n=6 power row
+  was **overstated into an absolute** (§3); the TRUNC ceiling is an **authoring defect, not a
+  property of the class** (§3, §5); the cost-to-finish table was **left in floor units while
+  spend-to-date was corrected** (§7); and the reason given for forking a new arm — a longitudinal
+  `config_hash` — **did not exist**, while the live hazard it masked did (§2). Two caveats that
+  bound every number here were absent and are now stated: the body is **not mounted in the
+  subagent**, and the `skill` arm is **not the skill as installed** (§8). The shipped
+  `SubagentStop` gate's own proof obligation is **undischarged**, and this report now says so (§5).
 
 ---
 
@@ -48,21 +58,47 @@ The file hash matches the implementer's declared hash exactly. Because both arms
 head, `skill-vnext − skill` is the body diff alone.
 
 **A `vnext` arm already existed and was deliberately not used.**
-`scenarios/verif-lift-{bug,data,trunc,null}/vnext.toml` injects the body the *plan projected*
+`scenarios/verif-lift-{bug,data,trunc,null}/vnext.toml` injected the body the *plan projected*
 (796 words, sha `7de774de…`). That is not what shipped: the two bodies differ in four places,
 including two of the three table rows under test — the shipped body renames `Data output right`
 to `Data output correct`, replaces `A cited file says X` with `Doc/report claim accurate`, and
 adds a `references/non-vacuity.md` pointer to gate step 3 that the draft did not have. Measuring
-that arm would have measured a draft nobody will ship; editing it would have forked a
-longitudinal `config_hash` the ledger keys on. The new arm lives in three new scenario
-directories and **no existing scenario file was touched.**
+that arm would have measured a draft nobody will ship. That reason is sufficient and it is the
+only one that holds.
+
+**Correction to this report's first revision.** It also claimed that "editing it would have forked
+a longitudinal `config_hash` the ledger keys on". **There was no longitudinal history to fork.**
+Every trial in every verif-lift ledger is scenario `bare` or `skill` — 37 runs, zero `vnext` — so
+that arm's `config_hash` had never appeared in a ledger line. The claim dressed a free choice as a
+constrained one.
+
+**And it left a live hazard unflagged, which this revision removes.** Those four `vnext.toml` files
+sat in the very directories a full 5-arm matrix passes to `--scenarios-dir`, so the next run would
+have silently bought the 796-word draft. With zero trials behind them there was nothing to
+preserve: **the four scenario files and the `arm-vnext.md` asset are deleted**, and `skill-vnext`
+— carrying the shipped body — replaces them. Git history holds the draft. The three `skill-vnext`
+scenario directories are new and **no other existing scenario file was touched.**
 
 ## 3. The three-arm per-cell table
 
 Arms run the same tasks, so every contrast is paired and read with exact McNemar. `n` is tasks
 scored in every arm present. The `skill-vnext` column is empty in every row for the reason in §1.
 
-| tier | class | criterion | n | bare | skill | **skill-vnext** | skill−bare | 95% Newcombe | McNemar |
+> **Instrument correction.** The intervals in the table below were computed with the Newcombe
+> *hybrid* interval for two **independent** proportions — printed beside an exact McNemar p, on
+> arms that run the same tasks. The test was paired and the interval was not. `analyse_vnext.py`
+> now computes **Newcombe's correlated-proportions interval** (`newcombe_paired`), which is the
+> matching instrument and is materially narrower whenever the pairing is estimable.
+>
+> **The printed numbers below do not change**, and the reason is worth stating rather than hiding:
+> in all four of these rows one margin is degenerate (an arm at 100%), so the correlation is not
+> estimable, φ̂ falls back to 0, and the paired interval coincides with the unpaired one. The
+> correction bites on every non-ceilinged cell this program has yet to buy — on mid-rate cells with
+> realistic positive correlation it removes roughly a fifth to a third of the width — and it
+> matters most for the one-sided non-inferiority read, which is where an interval of the wrong
+> width turns into a wrong verdict.
+
+| tier | class | criterion | n | bare | skill | **skill-vnext** | skill−bare | 95% CI | McNemar |
 |---|---|---|---|---|---|---|---|---|---|
 | weak | TRUNC | **`defect_past_slice_handled`** | 10 | 9/10 (90%) | 10/10 (100%) | **not run** | +10.0 | [−18.9, +40.4] | 1.0000 |
 | weak | TRUNC | `spec_met` | 10 | 10/10 (100%) | 10/10 (100%) | **not run** | +0.0 | [−27.8, +27.8] | 1.0000 |
@@ -80,7 +116,26 @@ Two facts in that table matter more than the empty column.
 **The two cells that finished are ceilinged in the `skill` arm.** TRUNC is 10/10 and NULL is 6/6
 on their primary criteria. A criterion already at 100% cannot show a lift for *any* body change;
 it can only show a loss. So even a fully-bought vNext arm could not have produced a positive
-result in either cell — those two cells are downside checks, permanently.
+result in either cell **as this bank is currently authored**.
+
+**But the TRUNC ceiling is an authoring defect, not a property of the class** — and the first
+revision of this report called those cells "downside checks, permanently", which generalised a
+fixable wording bug into an impossibility. All 11 TRUNC instructions end:
+
+> *"The package README states the rule this module is meant to follow. Bring the module into line
+> with it."*
+
+The README covers **both** functions. `tasks/verif-lift-trunc-v1/trunc-bounds/fixtures/README.md`
+states the closed-interval rule for `lower_bound` **and** `upper_bound` — and `upper_bound` is the
+planted twin, at line 29 of the module. So the instruction hands the agent a document describing
+the twin's correct behaviour and then directs whole-module conformance, which is precisely what
+`defect_past_slice_handled` scores. **`bare` at 9/10 is the expected result of obeying the
+instruction, not a capability ceiling.** The repair is to scope the instruction to the cited
+symptom and the named function; it is recorded in the bank README and not applied here, because
+changing task text requires a `dataset_version` bump that would orphan the 20 bought trials.
+
+NULL's 6/6 is a different matter: `scope_respected` is a false-positive guard, and 100% is the
+*desired* reading, not a ceiling on an effect. It is a downside check by construction.
 
 **The one cell with real headroom is the one whose comparator is missing.** On weak/BUG the bare
 arm is 4/4 on `spec_met` and **0/4** on `regression_check_present` — fixing the bug and leaving no
@@ -97,10 +152,53 @@ Exact McNemar reaches p<0.05 only at six discordant pairs all in one direction:
 | 20 | 30 pp |
 | 12 | 50 pp |
 | 10 | 60 pp |
-| 6 | **not detectable at any effect size** |
+| 6 | **100 pp — only a total flip** |
+| ≤5 | not detectable at any effect size |
+
+**The n=6 row is corrected.** The first revision printed "not detectable at any effect size",
+which is false. The generator, `mdd_pp()`, returns **100 pp** at n=6 — a real, if brutal,
+detectable difference: six discordant pairs all one way gives exact-McNemar p = 0.031. Confirmed by
+enumeration: at n=6 against a lift of 0.99 the exact power is **0.941**. The script's honest "100
+pp" had been editorialised into an absolute. The function was itself conflating two cases — it
+returned `100.0` both for "detectable only by a total flip" and for "not detectable at all" (which
+begins at n≤5) — and now returns `None` for the latter so the two stay distinguishable.
 
 At n=1 repeat this design resolves only large effects. The `+10.0` on TRUNC and the `+0.0` on
 NULL are **not** evidence of no effect; they are intervals so wide they exclude almost nothing.
+
+### The pre-registered non-inferiority gate cannot pass at any funded n
+
+Independently of whether any trial is bought: the vNext body's non-inferiority margin is **−10 pp**,
+read one-sided off the interval's lower bound. Recomputed with the analyzer's own interval, at a
+**perfect tie** — the most favourable data the test can ever see:
+
+| n | lower bound at 100% vs 100% | clears −10 pp? |
+|---|---|---|
+| 6 | −39.0 pp | no |
+| 10 | −27.8 pp | no |
+| 12 | −24.3 pp | no |
+| 18 | −17.6 pp | no |
+| 20 | −16.1 pp | no |
+| 24 | −13.8 pp | no |
+| **35** | **−9.9 pp** | **first n that clears** |
+
+The plan funds weak BUG at K=18; the bank holds 20 non-holdout BUG tasks; the finish plan in §7
+buys n=20 per class. **The obligation therefore fails regardless of the data** — a gate that
+cannot pass, which is the mirror image of the vacuous gate this discipline exists to refuse. This
+report's own table proves it: *weak TRUNC `spec_met` 10/10 vs 10/10 → +0.0 [−27.8, +27.8]* — a
+perfect tie scored as a failure.
+
+The feasibility bound above is read at the **all-pass tie**, which is the configuration this bank's
+ceilinged cells actually occupy and the one where φ̂ is not estimable, so the paired and unpaired
+intervals coincide and the number does not depend on which instrument is used. That matters,
+because Newcombe's method 10 **degenerates at φ̂ = 1** — a perfectly concordant tie at a mid rate
+returns a zero-width interval, which would trivially "pass" any margin. No feasibility or
+non-inferiority claim in this report is read off that configuration, and none should be.
+
+`analyse_vnext.py` now checks feasibility before reading the bound and reports such cells as
+**undecidable**, never as a non-inferiority failure. Fixing this is a pre-registration decision —
+re-register the margin, re-register n, or withdraw the displacement — and it belongs to the
+operator, not to an analysis pass. It must not be fixed by dropping the margin after seeing data.
 
 ## 4. Verdict per claim
 
@@ -114,9 +212,9 @@ exactly `spec_met`, `regression_check_present`, `proxy_instrument_ok`,
 | D1 | gate step 3: the `$?`-after-a-pipe procedure → `references/non-vacuity.md` | none exists | **not-measurable** |
 | D2 | seen-red section: failure examples + inverse-edit rationale → pointer, bright line kept | `regression_check_present` (BUG, DATA) | **not-proven** — cell never bought |
 | D3 | finishing: baseline-capture procedure → pointer | none exists | **not-measurable** |
-| A1 | new row *A check ran → the count of units it saw, non-zero* | `defect_past_slice_handled` (TRUNC) | **not-proven** — and unprovable in this cell, §5 |
+| A1 | new row *A check ran → the count of units it saw, non-zero* | `defect_past_slice_handled` (TRUNC) | **not-proven** — cell ceilinged as authored; the ceiling is repairable, §3 |
 | A2 | new row *Data output correct → a hard case named and its value written before the fix* | `output_correct_on_subtle_case` (DATA) | **not-proven** — cell never bought |
-| A3 | new row *Doc/report claim accurate → the cited span read whole* | `defect_past_slice_handled` (TRUNC) | **not-proven** — and unprovable in this cell, §5 |
+| A3 | new row *Doc/report claim accurate → the cited span read whole* | `defect_past_slice_handled` (TRUNC) | **not-proven** — cell ceilinged as authored; the ceiling is repairable, §3 |
 | A4 | finishing: "or a jumped runtime" | none exists | **not-measurable** |
 | — | the three additions as a group (false-positive risk) | `scope_respected` (NULL) | **not-proven** — and undetectable at n=6 |
 | X1 | "the vNext body is smaller" (the plan's 790 → ~720) | direct measurement, no trial needed | **refuted** — see below |
@@ -162,10 +260,41 @@ rather than a rewrite:
    earns its context — naming the tier/class where the lift is real — and drop any implication of
    uniform benefit. That edit is licensed by a measured null with a stated interval, and by
    nothing else.
-3. **Two of the four weak classes can never supply that evidence.** TRUNC and NULL are ceilinged
-   in the `skill` arm. Any future attempt to establish "the skill does / does not help" must buy
-   BUG and DATA, where headroom is demonstrated (weak/BUG bare 0/4), and must not read a ceiling
-   as a null.
+3. **Two of the four weak classes cannot supply that evidence as authored — and one of them is
+   repairable.** TRUNC and NULL are ceilinged in the `skill` arm. The first revision said they
+   "can never supply that evidence"; that is wrong for TRUNC, whose ceiling comes from an
+   instruction that points at a README describing the planted twin (§3). Repair the wording and
+   TRUNC has headroom again — which matters, because TRUNC is the only class the plan built to
+   test H5, P1 and V5, and retiring it would retire those obligations by accident. NULL's 6/6 is
+   a false-positive guard reading its desired value, not a ceiling on an effect. Any attempt to
+   establish "the skill does / does not help" should buy BUG and DATA, where headroom is
+   demonstrated (weak/BUG bare 0/4), and must not read a ceiling as a null.
+
+### The question this report did not answer: is the shipped gate allowed to ship?
+
+The first revision answered only "should a repair pass delete this?" — correctly, *strip nothing*.
+It never answered the other question, and the plan's answer to that one is **no**.
+
+`craft` branch `feat/verification-vnext` already carries `5b2eb1a` (V1, the router rows),
+`3ac471d` (V2, the `SubagentStop` gate) and `609f6ef` (0.10.0). The plan makes **V2 a full gate on
+G1**: H1 or H2 at ≥ +0.15, **and** H6 (FP ≤ +0.05), **and** H3 (beats placebo by ≥ +0.10).
+
+**None of the three was measured. Not one gate trial and not one placebo trial has ever been
+bought** — the ledgers carry `bare` and `skill` only. So G1 is undischarged in every conjunct, and
+undischarged here means *unmeasured*, not *unmet*.
+
+The two facts are not in tension, and both belong in the record:
+
+- **Nothing licenses deleting the gate.** An unmeasured mechanism is not a refuted one.
+- **Nothing licenses shipping it as measured either.** The gate is in the tree ahead of its own
+  gate. It is default-off and fails open, which bounds the blast radius to whoever opts in — but
+  default-off is a safety property, not evidence, and the plan's obligation was not written to be
+  discharged by being cautious.
+
+The honest disposition is the one the craft CHANGELOG now carries: the gate ships **opt-in and
+explicitly unmeasured in this codebase**, with the prior program's numbers named for what they are
+— a different contrast (`bare+gate` − `bare`) on a different bank at n=9. V1 is unaffected: its
+obligation was the offline trigger check, and that ran.
 
 ### Instruction to the repair pass
 
@@ -212,20 +341,34 @@ Banked, free, and reusable the moment the lock clears:
   rule: **no vNext trial is bought in a cell that lacks a `bare`+`skill` comparator** — a vNext
   trial with no comparator is not a contrast, it is spend.
 
-Cost to finish, at the ledger-floor per-trial rates observed here:
+Cost to finish. **The correction is applied to this table too** — the first revision corrected
+spend-to-date ($3.34 floor ≈ $12.7 corrected) but left the cost-to-finish rows in floor units,
+labelled "floors, not estimates" rather than multiplied. That asymmetry ran in exactly one
+direction: the uncorrected column is the one that makes finishing look affordable.
 
-| block | trials | ledger-floor cost | note |
-|---|---|---|---|
-| weak BUG + DATA (vNext) | 40 | ~$4 | the decisive cells; needs the MAP's `skill` arm too |
-| weak NULL + TRUNC (vNext) | 16 | ~$1.5 | downside checks only — both ceilinged |
-| strong BUG + DATA (vNext) | 24 | ~$18 | needs the MAP's strong arms, which do not exist |
+| block | trials | ledger floor | **corrected (×3.81)** | note |
+|---|---|---|---|---|
+| weak BUG + DATA (vNext) | 40 | ~$4 | **~$15** | the decisive cells; needs the MAP's `skill` arm too |
+| weak NULL + TRUNC (vNext) | 16 | ~$1.5 | **~$6** | downside checks; TRUNC's ceiling is repairable (§3) |
+| strong BUG + DATA (vNext) | 24 | ~$18 | **~$69** | needs the MAP's strong arms, which do not exist |
 
-**These are floors, not estimates.** Every arm delegates through the `Task` tool, so each trial's
-stream carries two `result` events — parent and subagent sidechain — and `parse_stream` keeps the
-last; a saved stream measured the undercount at 3.81×. The bias is not guaranteed common-mode
-across arms, so no arm-to-arm economy claim is made from these figures at all. Recorded spend
-across the verif-lift ledgers stands at a **$3.34 ledger floor** (≈$12.7 corrected), all of it the
-MAP's; this run added $0 of matrix spend and three sub-cent arming probes.
+Why the floors are floors: every arm delegates through the `Task` tool, so each trial's stream
+carries two `result` events — parent and subagent sidechain — and `parse_stream` keeps the last; a
+saved stream measured the undercount at **3.81×**. The bias is not guaranteed common-mode across
+arms, so no arm-to-arm economy claim is made from these figures at all — but a *budget* must use
+the corrected column, because the bias is one-directional and large.
+
+Recorded spend across the verif-lift ledgers stands at **37 paid runs, a $3.34 ledger floor,
+≈$12.74 corrected** — $0.344/trial true against the plan's assumed $0.145. All of it is the MAP's;
+this run added $0 of matrix spend and three sub-cent arming probes.
+
+**The program's budget is denominated in a unit its own ledger understates ~3.8× on the only path
+it uses.** In corrected units the plan's 368-trial grid is ≈$99 weak + ≈$124 strong ≈ **$223
+against a $120 ceiling — the strong block alone exceeds the ceiling.** And the
+`--max-budget-usd` rails ($10/$35/$56) are **per-spawn caps**, so nothing rails the program total;
+the cumulative-cap check is the only thing that can, and it must sum ledgers ×3.81 or it will
+report green throughout. Re-scoping the grid is an operator decision and it is a precondition for
+the next block, not a footnote to it.
 
 ## 8. Limits that bound every future verdict from this arm
 
@@ -235,6 +378,29 @@ MAP's; this run added $0 of matrix spend and three sub-cent arming probes.
   pointer pays for a failed read. Non-inferiority measured this way would imply non-inferiority
   with the file present; the converse does not hold, and no result from this arm is evidence
   about the packaged skill's reference file.
+- **The body is NOT mounted in the subagent.** `arm-skill.md` (and `arm-skill-vnext.md`) is
+  appended to the **parent's** system prompt via `--append-system-prompt-file`
+  (`src/fathom/adapters/claude_cli.py`), and `verify-arming`'s `body_bytes=5192` proves injection
+  into the **top-level spawn only**. Delivery to the worker rests on one preamble sentence — *"The
+  following working discipline applies to you and to any subagent you spawn"* — plus the parent
+  choosing to relay it, while the same preamble instructs the parent to hand the subagent "the full
+  task instruction verbatim" and says nothing about forwarding the discipline. So `skill` − `bare`
+  measures **a parent told to relay a discipline**, not a subagent carrying the skill. That is the
+  difference between this arm and the prior program's `SubagentStop` mechanism, which fires on the
+  worker regardless of what the parent forwarded — and it means these two arms are not two
+  deliveries of the same thing.
+- **The `skill` arm is not the skill as installed.** Shipped,
+  `verification-before-completion` is a plugin skill an agent must *choose* to load, and the audit
+  records **zero** dispatch-router rows for it — in practice it may never load at all. This arm
+  forces 4775 bytes of body into the system prompt unconditionally. A1 is therefore an **upper
+  bound**: a positive on `skill` − `bare` overstates what installing the plugin delivers by
+  however often the real dispatch surface fails to load it. A null on this arm is the stronger
+  result of the two, because it is a null under the most favourable delivery available.
+- **`skill-gate` − `skill` is not a replication of anything.** The prior program's `bare-sub` arms
+  mounted **no plugins**, and their injected preamble is byte-identical (sha256 `b044b0bf…`) to
+  this bank's `arm-bare.md`. Phase 2/4's headline lift is therefore `bare+gate` − `bare` — a
+  contrast this bank does not contain, because every gate scenario here also injects `arm-skill.md`.
+  Replicating +0.22/+0.44 needs a `bare+gate` arm that does not yet exist.
 - **The strong tier is unmeasured**, so the tier × class map the program is named for does not
   exist.
 - **n=1 repeat.** Nothing here separates a real effect from a single lucky trial below the

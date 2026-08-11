@@ -8,12 +8,24 @@ preamble, same framing line, same model, effort, tools and limits.
 Every contrast is computed on tasks scored in ALL arms present, because the arms
 run the same tasks and the paired test is the one the design licenses. Emits per
 (tier, class, criterion): the arm rates with Wilson intervals, each pairwise lift
-with a Newcombe interval, and the exact McNemar p on the discordant pairs.
+with a **paired** difference interval, and the exact McNemar p on the discordant
+pairs.
+
+The interval and the test must match. An earlier revision printed the Newcombe
+hybrid interval for two INDEPENDENT proportions beside an exact McNemar p on the
+same row -- arms that run the same tasks, tested as paired and interval-ed as
+unpaired. `newcombe_paired` (Newcombe's correlated-proportions method) is the
+matching instrument and is materially narrower whenever the pairing is
+estimable; `newcombe` is retained only for the pooled table, where per-task
+pairing cannot be reconstructed from cell summaries, and is labelled there.
 
 Non-inferiority is decided against a pre-declared margin (NI_MARGIN_PP), one
-sided, on the Newcombe lower bound -- and the achieved half-width is printed
-beside it so an interval too wide to decide is reported as such rather than
-read as a pass.
+sided, on the PAIRED lower bound. Before that bound is read, the cell is checked
+for whether the margin is decidable at its n at all: if a perfect tie could not
+clear the margin, the cell reports **undecidable** rather than a failure, because
+a "no" there describes the design and not the result. At NI_MARGIN_PP = -10 pp a
+perfect tie needs n >= 35, which no block in this program's funded grid reaches
+-- see the report and the plan's X1 block.
 
 Stdlib only. Free -- reads the ledger, spawns nothing.
 
@@ -37,7 +49,8 @@ LEDGER = pathlib.Path("ledger")
 ARMS = ("bare", "skill", "skill-vnext")
 
 # Pre-declared before the spend: vNext is non-inferior on a criterion when the
-# 95% Newcombe lower bound of (skill-vnext - skill) sits above -10 pp.
+# 95% PAIRED lower bound of (skill-vnext - skill) sits above -10 pp -- and
+# only when that margin is decidable at the cell's n (see ni_decidable_at).
 NI_MARGIN_PP = -10.0
 
 BLOCKS = [
@@ -68,7 +81,13 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 
 def newcombe(k1: int, n1: int, k2: int, n2: int) -> tuple[float, float]:
-    """Newcombe score interval for p2 - p1 (arm2 minus arm1)."""
+    """Newcombe hybrid score interval for p2 - p1, INDEPENDENT proportions.
+
+    Kept for reference and for the two-sample case. **Do not print this beside a
+    McNemar p, and never read its lower bound for the non-inferiority test** --
+    the arms here run the same tasks, so this interval ignores the pairing and is
+    materially wider than the matching instrument. Use `newcombe_paired`.
+    """
     if n1 == 0 or n2 == 0:
         return (0.0, 0.0)
     p1, p2 = k1 / n1, k2 / n2
@@ -80,6 +99,82 @@ def newcombe(k1: int, n1: int, k2: int, n2: int) -> tuple[float, float]:
     return (max(-1.0, lo), min(1.0, hi))
 
 
+def phi_paired(a: int, b: int, c: int, d: int) -> float:
+    """Phi coefficient of the paired 2x2 table, Newcombe's correlation estimate.
+
+    a = pass in both arms, b = arm1 only, c = arm2 only, d = neither.
+    Returns 0.0 when any margin is degenerate -- which is Newcombe's own
+    recommendation, and makes the paired interval fall back to the independent
+    one exactly when an arm sits at 0% or 100% and no correlation is estimable.
+    """
+    denom = (a + b) * (c + d) * (a + c) * (b + d)
+    if denom <= 0:
+        return 0.0
+    return (a * d - b * c) / math.sqrt(denom)
+
+
+def newcombe_paired(a: int, b: int, c: int, d: int) -> tuple[float, float]:
+    """Newcombe's correlated-proportions interval (method 10) for p2 - p1.
+
+    The paired counterpart of `newcombe`: the same square-and-add construction
+    over the two Wilson intervals, with the cross term the pairing supplies. It
+    reduces to `newcombe` exactly when phi = 0, so the difference between the two
+    IS the pairing that the McNemar test beside it already uses. On ordinary cells
+    with positive correlation it removes roughly a fifth to a third of the width.
+
+    This is the interval the non-inferiority margin is read from.
+
+    **Known degeneracy: at phi = 1 this returns a zero-width interval.** A
+    perfectly concordant tie away from the boundary (e.g. a=10, b=c=0, d=10)
+    gives phi=1, the cross term cancels the radicand, and the interval collapses
+    to a point -- which would pass any non-inferiority margin trivially. Do not
+    read a feasibility or non-inferiority verdict off such a cell. `ni_decidable_at`
+    deliberately probes the ALL-PASS tie instead, where phi is not estimable, the
+    fallback to 0 applies, and the answer does not depend on the instrument.
+    """
+    n = a + b + c + d
+    if n == 0:
+        return (0.0, 0.0)
+    k1, k2 = a + b, a + c
+    p1, p2 = k1 / n, k2 / n
+    l1, u1 = wilson(k1, n)
+    l2, u2 = wilson(k2, n)
+    ph = phi_paired(a, b, c, d)
+    d_hat = p2 - p1
+
+    def _root(x: float, y: float) -> float:
+        # x, y are non-negative Wilson half-widths; the cross term can only
+        # shrink the radius, and a negative radicand means the correlation
+        # accounts for all of it.
+        return math.sqrt(max(0.0, x * x + y * y - 2 * ph * x * y))
+
+    lo = d_hat - _root(p2 - l2, u1 - p1)
+    hi = d_hat + _root(u2 - p2, p1 - l1)
+    return (max(-1.0, lo), min(1.0, hi))
+
+
+def ni_decidable_at(n: int, margin_pp: float = None) -> bool:
+    """Could a PERFECT TIE at this n clear the non-inferiority margin?
+
+    If not, the cell cannot pass the test on any data, and reporting it as a
+    non-inferiority failure would be reporting the design rather than the result.
+    """
+    if margin_pp is None:
+        margin_pp = NI_MARGIN_PP
+    if n <= 0:
+        return False
+    lo, _ = newcombe_paired(n, 0, 0, 0)
+    return lo * 100 > margin_pp
+
+
+def min_n_for_ni(margin_pp: float = None, cap: int = 4000) -> int | None:
+    """Smallest n at which a perfect tie clears the margin. None if never."""
+    for n in range(1, cap + 1):
+        if ni_decidable_at(n, margin_pp):
+            return n
+    return None
+
+
 def mcnemar_exact(b: int, c: int) -> float:
     n = b + c
     if n == 0:
@@ -89,13 +184,74 @@ def mcnemar_exact(b: int, c: int) -> float:
     return min(1.0, 2 * tail)
 
 
-def mdd_pp(n: int) -> float:
-    """Minimum detectable difference: the discordant split at n that McNemar
-    would call at p<0.05, expressed in points of the paired rate."""
+def mdd_pp(n: int) -> float | None:
+    """Minimum detectable difference: the smallest all-one-way discordant split
+    at n that exact McNemar calls at p<0.05, in points of the paired rate.
+
+    Returns **None** when no split at this n reaches p<0.05 -- i.e. the cell is
+    genuinely undetectable at any effect size. That case starts at n<=5, where
+    even a total flip gives p=0.0625.
+
+    The two cases must stay distinguishable. Returning 100.0 for both conflates
+    "detectable, but only by a total flip" with "not detectable at all", and the
+    conflation was published once as `n=6 | not detectable at any effect size` --
+    which is false: mdd_pp(6) is 100 pp, and the exact power at n=6 against a
+    near-total lift is 0.94.
+    """
     for d in range(1, n + 1):
         if mcnemar_exact(0, d) < 0.05:
             return d / n * 100
-    return 100.0
+    return None
+
+
+def mdd_label(n: int) -> str:
+    """The honest one-line rendering of `mdd_pp`, for tables and prose."""
+    m = mdd_pp(n)
+    if m is None:
+        return "not detectable at any effect size"
+    if m >= 100.0:
+        return "100 pp (only a total flip)"
+    return f"{m:.0f} pp"
+
+
+def self_check() -> None:
+    """Prove the instrument before it reads a ledger, in `generate.py`'s idiom.
+
+    Each assertion pins a defect that was published once and is not to return.
+    """
+    # 1. The paired interval reduces to the unpaired one exactly at phi = 0.
+    for a, b, c, d in [(10, 0, 0, 0), (6, 0, 0, 0), (9, 0, 1, 0)]:
+        n = a + b + c + d
+        assert phi_paired(a, b, c, d) == 0.0, (a, b, c, d)
+        lp = newcombe_paired(a, b, c, d)
+        lu = newcombe(a + b, n, a + c, n)
+        assert all(abs(x - y) < 1e-12 for x, y in zip(lp, lu)), (lp, lu)
+
+    # 2. Pairing NARROWS the interval whenever the correlation is positive.
+    for a, b, c, d in [(10, 1, 4, 5), (8, 2, 5, 5), (14, 1, 3, 2), (20, 2, 6, 12)]:
+        n = a + b + c + d
+        assert phi_paired(a, b, c, d) > 0, (a, b, c, d)
+        lp, hp = newcombe_paired(a, b, c, d)
+        lu, hu = newcombe(a + b, n, a + c, n)
+        assert (hp - lp) < (hu - lu), (a, b, c, d, hp - lp, hu - lu)
+
+    # 3. mdd keeps "only a total flip" distinct from "nothing is detectable".
+    assert mdd_pp(6) == 100.0, mdd_pp(6)
+    assert mdd_pp(5) is None, mdd_pp(5)
+    assert "not detectable" in mdd_label(5)
+    assert "total flip" in mdd_label(6)
+
+    # 4. The pre-declared margin is infeasible at every n this program funds, and
+    #    the feasibility probe sits at the all-pass tie where phi is not
+    #    estimable -- so the answer does not depend on the instrument.
+    for n in (6, 10, 12, 18, 20, 24):
+        assert not ni_decidable_at(n), n
+    assert min_n_for_ni() == 35, min_n_for_ni()
+
+    # 5. The known degeneracy is real, and nothing reads a verdict off it.
+    assert phi_paired(10, 0, 0, 10) == 1.0
+    lo, hi = newcombe_paired(10, 0, 0, 10)
+    assert hi - lo == 0.0, (lo, hi)
 
 
 def load(bank: str) -> tuple[list[dict], list[dict]]:
@@ -117,12 +273,25 @@ def load(bank: str) -> tuple[list[dict], list[dict]]:
 
 
 def main() -> None:
+    self_check()
+
     hash_to_arm: dict[str, str] = {}
     hash_to_block: dict[str, tuple[str, str]] = {}
 
     print("# verification-lift vNext — three-arm per-cell contrast (n=1)\n")
     print(f"Arms: {', '.join(ARMS)}.  Non-inferiority margin: {NI_MARGIN_PP:+.0f} pp ")
-    print("(pre-declared; one-sided on the Newcombe lower bound of skill-vnext − skill).\n")
+    print(
+        "(pre-declared; one-sided on the PAIRED lower bound of skill-vnext − skill "
+        "— Newcombe's correlated-proportions method, the instrument that matches "
+        "the exact McNemar beside it).\n"
+    )
+    need = min_n_for_ni()
+    print(
+        f"**Feasibility of the margin, before any data:** a *perfect tie* clears "
+        f"{NI_MARGIN_PP:+.0f} pp only at **n >= {need}**. Every cell below n={need} "
+        f"reports the margin as **undecidable**, never as a failure — a cell that "
+        f"cannot pass on any data measures the design, not the body.\n"
+    )
 
     all_cells: list[dict] = []
     for bank, tier, klass in BLOCKS:
@@ -163,11 +332,19 @@ def main() -> None:
             f"tasks scored in every arm present: {n}  "
             + "  ".join(f"({a} {counts[a]}, err {errored[a]})" for a in present)
         )
-        print(f"minimum detectable paired difference at n={n}: {mdd_pp(n):.0f} pp\n")
+        print(f"minimum detectable paired difference at n={n}: {mdd_label(n)}")
+        if not ni_decidable_at(n):
+            need = min_n_for_ni()
+            print(
+                f"**non-inferiority at {NI_MARGIN_PP:+.0f} pp is UNDECIDABLE at n={n}** — "
+                f"even a perfect tie gives a lower bound of "
+                f"{newcombe_paired(n, 0, 0, 0)[0] * 100:+.1f} pp; it needs n>={need}."
+            )
+        print()
 
         header = "| criterion | " + " | ".join(present) + " |"
         for a in present[1:]:
-            header += f" {a}−{present[0]} | 95% | McNemar |"
+            header += f" {a}−{present[0]} | 95% paired | McNemar |"
         print(header)
         print("|---" * (1 + len(present) + 3 * (len(present) - 1)) + "|")
 
@@ -182,7 +359,6 @@ def main() -> None:
             )
             contrasts = {}
             for a in present[1:]:
-                lo, hi = newcombe(k[present[0]], n, k[a], n)
                 b_only = sum(
                     1
                     for t in tasks
@@ -193,6 +369,10 @@ def main() -> None:
                     for t in tasks
                     if not by_arm[present[0]][t].get(crit) and by_arm[a][t].get(crit)
                 )
+                both = sum(
+                    1 for t in tasks if by_arm[present[0]][t].get(crit) and by_arm[a][t].get(crit)
+                )
+                lo, hi = newcombe_paired(both, b_only, c_only, n - both - b_only - c_only)
                 p_m = mcnemar_exact(b_only, c_only)
                 lift = (k[a] - k[present[0]]) / n * 100
                 row += f" {lift:+.1f} | [{lo * 100:+.1f}, {hi * 100:+.1f}] | {p_m:.4f} |"
@@ -208,7 +388,6 @@ def main() -> None:
             body_diff = None
             if "skill" in present and "skill-vnext" in present:
                 ks, kv = k["skill"], k["skill-vnext"]
-                lo, hi = newcombe(ks, n, kv, n)
                 b_only = sum(
                     1
                     for t in tasks
@@ -219,13 +398,25 @@ def main() -> None:
                     for t in tasks
                     if not by_arm["skill"][t].get(crit) and by_arm["skill-vnext"][t].get(crit)
                 )
+                both = sum(
+                    1
+                    for t in tasks
+                    if by_arm["skill"][t].get(crit) and by_arm["skill-vnext"][t].get(crit)
+                )
+                lo, hi = newcombe_paired(both, b_only, c_only, n - both - b_only - c_only)
+                decidable = ni_decidable_at(n)
                 body_diff = {
                     "lift_pp": (kv - ks) / n * 100,
                     "ci": (lo * 100, hi * 100),
                     "mcnemar": mcnemar_exact(b_only, c_only),
                     "discordant": (b_only, c_only),
-                    "non_inferior": lo * 100 > NI_MARGIN_PP,
+                    # A cell whose n cannot clear the margin even on a perfect tie
+                    # is UNDECIDABLE, not non-inferior and not inferior. Scoring it
+                    # "no" reports the design, not the result.
+                    "ni_decidable": decidable,
+                    "non_inferior": (lo * 100 > NI_MARGIN_PP) if decidable else None,
                     "ci_halfwidth_pp": (hi - lo) * 100 / 2,
+                    "ni_min_n": min_n_for_ni(),
                 }
 
             all_cells.append(
@@ -246,7 +437,10 @@ def main() -> None:
 
     # ---------------- the body diff, gathered ----------------
     print("\n# The body diff — skill-vnext − skill, every cell\n")
-    print("| tier | class | criterion | n | skill | vnext | diff (pp) | 95% | McNemar | NI@-10pp |")
+    print(
+        "| tier | class | criterion | n | skill | vnext | diff (pp) "
+        "| 95% paired | McNemar | NI@-10pp |"
+    )
     print("|---|---|---|---|---|---|---|---|---|---|")
     for c in all_cells:
         bd = c["vnext_vs_skill"]
@@ -255,7 +449,10 @@ def main() -> None:
         ks = c["arms"].get("skill", 0)
         kv = c["arms"].get("skill-vnext", 0)
         n = c["n"]
-        verdict = "yes" if bd["non_inferior"] else "no"
+        if not bd["ni_decidable"]:
+            verdict = f"**undecidable at n={n}** (needs n>={bd['ni_min_n']})"
+        else:
+            verdict = "yes" if bd["non_inferior"] else "no"
         print(
             f"| {c['tier']} | {c['class']} | {c['criterion']} | {n} "
             f"| {ks}/{n} ({ks / n:.0%}) | {kv}/{n} ({kv / n:.0%}) "
@@ -265,7 +462,15 @@ def main() -> None:
 
     # ---------------- pooled footprint (BUG + DATA, same criterion) ----------------
     print("\n\n# Pooled footprint criterion (BUG + DATA, per tier)\n")
-    print("| tier | n | bare | skill | vnext | skill−bare | vnext−skill | 95% (vnext−skill) |")
+    print(
+        "The pooled interval below is the **independent-proportions** Newcombe "
+        "interval — the per-task pairing is not reconstructable across pooled "
+        "cells — so it is wider than the paired truth. The per-cell tables above "
+        "carry the paired intervals.\n"
+    )
+    print(
+        "| tier | n | bare | skill | vnext | skill−bare | vnext−skill | 95% unpaired (vnext−skill) |"
+    )
     print("|---|---|---|---|---|---|---|---|")
     for tier in ("weak", "strong"):
         pooled = [
@@ -289,6 +494,9 @@ def main() -> None:
                 f"| — | {sb:+.1f} | — | — |"
             )
             continue
+        # Pooled across cells the per-task pairing is not reconstructable from the
+        # cell summaries, so this one interval stays the INDEPENDENT one and is
+        # labelled as such in the header. It is wider than the paired truth.
         lo, hi = newcombe(ks, n, kv, n)
         print(
             f"| {tier} | {n} | {kb}/{n} ({kb / n:.0%}) | {ks}/{n} ({ks / n:.0%}) "
