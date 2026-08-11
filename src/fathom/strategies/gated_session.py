@@ -18,6 +18,7 @@ Stdlib only.
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fathom.adapters.base import ExitStatus
@@ -25,13 +26,23 @@ from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-    from pathlib import Path
 
     from fathom.adapters.base import RunRecord, Runner
     from fathom.scenario import ResolvedScenario
     from fathom.taskbank import Task
 
 _GATE_TIMEOUT_S = 120
+
+# Run-time path placeholders a scenario's ``[gate].extra`` command may carry.
+# A gate command runs with ``cwd`` = the trial workspace (a fresh temp dir), so a
+# harness-side probe living in the task directory is unreachable by any relative
+# path and a machine-absolute path is neither portable nor committable.  These are
+# substituted at RUN time, exactly as ``[env]`` substitutes ``${workspace}`` at
+# spawn time, so the *template* — not a per-machine path — is what enters
+# ``config_hash`` (scenario.py ``GateConfig``): the arm stays reproducible across
+# checkouts, and relocating the repo does not fork longitudinal history.
+PLACEHOLDER_TASK_DIR = "${task_dir}"
+PLACEHOLDER_WORKSPACE = "${workspace}"
 _FIX_PROMPT = (
     "The project's quality gate is failing. Fix the implementation so the gate passes. "
     "Do not modify the tests.\n\nGate command: {cmd}\nGate output (tail):\n{output}"
@@ -41,6 +52,24 @@ _REVIEW_PROMPT = (
     "correct, reply with a line 'VERDICT: APPROVE'. Otherwise reply 'VERDICT: "
     "REQUEST_CHANGES' followed by the specific fixes needed."
 )
+
+
+def _as_posix(path: Path) -> str:
+    """Absolute, forward-slash path string (safe inside a shell command on both OSes)."""
+    return str(Path(path).resolve()).replace("\\", "/")
+
+
+def expand_gate_placeholders(cmd: str, *, task_dir: Path, workspace: Path) -> str:
+    """Substitute :data:`PLACEHOLDER_TASK_DIR` / :data:`PLACEHOLDER_WORKSPACE` in *cmd*.
+
+    Substitution happens here — at run time, per trial — and never at parse time,
+    so the hashed scenario keeps the portable template.  A command carrying no
+    placeholder is returned unchanged, so every pre-existing gate string is
+    byte-identical and no committed resume key moves.
+    """
+    return cmd.replace(PLACEHOLDER_TASK_DIR, _as_posix(task_dir)).replace(
+        PLACEHOLDER_WORKSPACE, _as_posix(workspace)
+    )
 
 
 class GatedSessionExecutor:
@@ -73,7 +102,11 @@ class GatedSessionExecutor:
         max_turns = task.limits.get("max_turns")
         runs: list[RunRecord] = []
         gate_cmd = (getattr(task, "gate", None) or {}).get("run", "")
-        gate_cmds = [c for c in (gate_cmd, *self.extra_gate_cmds) if c]
+        extra = [
+            expand_gate_placeholders(c, task_dir=Path(task.task_dir), workspace=workspace)
+            for c in self.extra_gate_cmds
+        ]
+        gate_cmds = [c for c in (gate_cmd, *extra) if c]
 
         impl = runner.execute(task.instruction, workspace, scenario, max_turns=max_turns)
         runs.append(impl)
