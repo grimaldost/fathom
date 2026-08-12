@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from fathom.adapters.base import ExitStatus, RunRecord
 from fathom.strategies.base import TrialStatus
-from fathom.strategies.gated_session import GatedSessionExecutor
+from fathom.strategies.gated_session import GatedSessionExecutor, expand_gate_placeholders
 from fathom.taskbank import Task
 
 # Gate passes iff a file named `done` exists in the workspace (cwd).
@@ -127,12 +127,68 @@ def test_extra_gate_runs_without_task_gate():
     assert "first=green" in res.detail and "final=green" in res.detail
 
 
+# --- run-time placeholder expansion in scenario gate commands -----------------
+#
+# A harness-side probe lives in the TASK directory and the gate runs with cwd =
+# the trial workspace, so the only forms that resolve are a machine-absolute path
+# (unportable, uncommittable) or a placeholder expanded per trial. The committed
+# `haiku-gate-sg` arm shipped the placeholder-shaped literal
+# `python /path/to/fathom/.../type_probe.py .`, which the shell ran verbatim: the
+# probe never executed and the arm silently degraded to the plain gate arm.
+
+_PROBE = "import os,sys; sys.exit(0 if os.path.exists(os.path.join(sys.argv[1],'ok')) else 1)"
+
+
+def test_task_dir_placeholder_resolves_to_a_runnable_probe():
+    """`${task_dir}` reaches a script that no relative path from the workspace could."""
+    with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as wd:
+        task_dir, ws = Path(td), Path(wd)
+        (task_dir / "probe.py").write_text(_PROBE, encoding="utf-8")
+        task = Task(id="t", instruction="x", limits={}, verify={"entry": "v.py"}, task_dir=task_dir)
+        # Probe green only once the impl spawn writes `ok` into the workspace.
+        runner = _StubRunner(write_done_on_call=99, files_by_call={1: "ok"})
+        ex = GatedSessionExecutor(extra_gate_cmds=['python "${task_dir}/probe.py" "${workspace}"'])
+        res = ex.run_trial(task, ws, None, runner)
+    assert runner.calls == 1
+    assert "first=green" in res.detail and "final=green" in res.detail
+
+
+def test_unexpanded_placeholder_would_fail_the_gate():
+    """Guards the regression: an unsubstituted literal path is a red gate, not a green one.
+
+    Without expansion the same arm runs `python /path/to/.../probe.py .`, which the
+    shell resolves to nothing — so this asserts the failure mode is loud (red +
+    fix spawns) rather than the silent pass the broken arm produced.
+    """
+    with tempfile.TemporaryDirectory() as td, tempfile.TemporaryDirectory() as wd:
+        task_dir, ws = Path(td), Path(wd)
+        (task_dir / "probe.py").write_text(_PROBE, encoding="utf-8")
+        task = Task(id="t", instruction="x", limits={}, verify={"entry": "v.py"}, task_dir=task_dir)
+        runner = _StubRunner(write_done_on_call=99, files_by_call={1: "ok"})
+        ex = GatedSessionExecutor(
+            max_fix_attempts=1, extra_gate_cmds=["python /path/to/fathom/probe.py ."]
+        )
+        res = ex.run_trial(task, ws, None, runner)
+    assert "final=red" in res.detail
+
+
+def test_commands_without_placeholders_are_byte_identical():
+    """No placeholder means no rewrite — committed resume keys and gates cannot move."""
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        for cmd in (_GATE, _GATE2, "python -m unittest discover -s tests -t ."):
+            assert expand_gate_placeholders(cmd, task_dir=ws, workspace=ws) == cmd
+
+
 if __name__ == "__main__":
     for fn in (
         test_gate_green_on_first_check_is_one_spawn,
         test_gate_red_then_green_drives_one_fix,
         test_fix_attempts_are_capped_and_still_scored,
         test_no_gate_degrades_to_single_spawn,
+        test_task_dir_placeholder_resolves_to_a_runnable_probe,
+        test_unexpanded_placeholder_would_fail_the_gate,
+        test_commands_without_placeholders_are_byte_identical,
     ):
         fn()
         print(f"ok {fn.__name__}")
