@@ -114,6 +114,73 @@ cannot be measured until that bank runs.** This design does not work around that
 substituting a guess; `Substrate.require` raises rather than inventing a row, and every
 result carries `n_missing`.
 
+### The coordination surface, and how the two halves compose
+
+Merged 2026-08-12. `calibration.routing_substrate` emits the agreed artifact and
+`Substrate.from_artifact` consumes it. The division of labour is explicit on both sides
+and the two are complements, not duplicates:
+
+| term | owner |
+|---|---|
+| `execution_cost`, `retry_cost`, `quality`, `cheapest_adequate_tier` | `calibration.mechanism_costs` (the substrate bank) |
+| `decision_cost` | **this bank** — measured by running each mechanism |
+
+Their `mechanism_costs` reports `decision_cost_usd` as `null` rather than `0` and calls
+it "a different programme", so its `total_cost_usd` is a documented **lower bound**.
+C(m) is complete only when the two are added. A test asserts that `null` contract, so
+the day it silently becomes `0` this study finds out.
+
+**One field is derived, not copied.** Their `gate_caught_failures` is a *count of
+failures the gate caught*; `detect_rate` here is a *per-failure probability*. The
+denominator is therefore `trials - passing`, not `trials`. Dividing by trials would
+understate detection on a mostly-passing tier and quietly turn repairable failures into
+escapes — which biases every mechanism that starts cheap. Pinned by a test.
+
+**A divergence found by a cross-implementation test, now resolved.** Running both
+implementations on the same fixture, the **cost terms agree exactly** — a strong
+independent check on both. **The quality terms did not**: theirs 0.55, mine 0.70.
+
+**Resolution, decided 2026-08-12: quality is measured POST-REPAIR.** If C(m) charges
+the retry, the quality term must credit the repair that retry produces, or every
+cheap-start-and-escalate mechanism pays twice — once in cost, once in an unearned
+quality penalty. It is also what the work is for: a failure the gate caught and
+repaired is *delivered correct*, at a price already on the books; an escape is not.
+That is precisely why the `detect_rate` denominator (`trials - passing`, not `trials`)
+is load-bearing, and its test stays.
+
+So that neither programme owns the other's estimand:
+
+- The substrate emits **raw facts only** — per tier: passes, failures, and how many of
+  those failures the gate detected. Its mechanism-level field is being renamed
+  `quality` -> `first_attempt_pass_rate`, because one name meant two things for a week.
+- This module owns the derived estimand and names it **`quality_post_repair`**, with
+  the derivation in code. `first_attempt_pass_rate` is reported alongside it, so the
+  two quantities sit next to each other rather than in two documents.
+- The cross-implementation test is now an **identity**, not a snapshot:
+  `quality_post_repair = first_attempt_pass_rate + repair_credit`, with the credit
+  recomputed from the raw per-tier facts. It fails if *either* side silently changes
+  meaning — which a test pinning today's 0.55 and 0.70 would not catch. It reads
+  either spelling, so the rename strengthens it instead of breaking it.
+- The `decision_cost_usd is None` contract keeps its own test. A `null` that silently
+  becomes `0` is the same failure class as a gate that cannot fail: it reads as a
+  measurement when it is an absence.
+
+### Two design elements leaning the same way — worth stating plainly
+
+The quality definition is the **second** element found biasing in the same direction.
+The first was the substrate's admission screen: dropping saturated rungs deletes
+exactly the evidence of over-provisioning, which favours the dearer mechanism. The
+quality definition understated exactly the mechanisms that start cheap and escalate,
+which again favours the dearer mechanism.
+
+Neither was deliberate and each had a defensible local rationale. That is the point:
+**two independent elements leaned toward the incumbent**, and the direction is the one
+that protects the thing under test from being retired. A study whose incidental design
+choices all point one way should be read as having a thumb on the scale until each is
+checked, so this section exists to make the pattern visible rather than to litigate
+either choice. A third element leaning the same way should be treated as a finding
+about the design process, not another local fix.
+
 ## The composition
 
 `src/fathom/routing.py`. Given the substrate table and the measured decision costs, C(m)
@@ -162,23 +229,20 @@ a mid-run token expiry costs nothing but a re-invocation.
 
 ### How a tranche is actually invoked
 
-`fathom run` has no `--tasks` filter, and `--limit` truncates a **scenario-major**
-comprehension (`for scenario, for task, for repeat`), so it cannot select two of four
-blocks without skewing the arms. A tranche is therefore staged: copy `bank.toml`,
-`routingverify.py`, `provenance.toml` and only that tranche's block directories into a
-scratch `<dir>/routing-decision-v1/`, and point `--tasks-dir` at `<dir>`.
-
-This is safe against the resume key, which is
-`(bank, dataset_version, task_id, config_hash, repeat)` — **the task set does not enter
-it**. A staged subset therefore appends to the same ledger and resumes correctly against
-a later full-bank invocation.
+`--limit` cannot select a tranche: it truncates a **scenario-major** comprehension
+(`for scenario, for task, for repeat`), so capping it drops whole arms rather than whole
+blocks. `--tasks` is the flag for this, and it names the blocks directly:
 
 ```sh
 uv run fathom run routing-decision-v1 \
     --scenarios-dir scenarios/routing-decision \
-    --tasks-dir <staged-dir> \
+    --tasks route-1-mechanical,route-9-mixed \
     --repeats N --max-budget-usd 2
 ```
+
+This is safe against the resume key, `(bank, dataset_version, task_id, config_hash,
+repeat)` — **the task set does not enter it** — so a tranche appends to the same ledger
+and a later full-bank invocation resumes over it rather than re-buying it.
 
 Chunk by **raising `--repeats` one at a time** (1, then 2, then 3) rather than by
 splitting arms: each invocation adds one complete repeat layer across every arm, so an

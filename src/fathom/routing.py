@@ -5,7 +5,7 @@ rubric worth what it costs to run". Those come apart, and the pre-registered est
 is the second one:
 
     C(m) = decision_cost(m) + execution_cost(tier chosen by m) + retry_cost(m)
-    subject to  quality(m) >= quality(best) - delta
+    subject to  quality_post_repair(m) >= quality_post_repair(best) - delta
 
 Winner is argmin C(m). **Quality is a constraint, not the objective.** Every term is
 measured or computed from measurements; nothing here defaults to an assumed number.
@@ -224,6 +224,68 @@ class Substrate:
 
     tasks: Mapping[str, TaskOutcome]
 
+    @classmethod
+    def from_artifact(cls, artifact: Mapping[str, object]) -> Substrate:
+        """Load `calibration.routing_substrate`'s JSON — the coordination surface.
+
+        THE DIVISION OF LABOUR THIS ENCODES. That artifact owns execution cost, retry,
+        quality and `cheapest_adequate_tier`; it reports `decision_cost_usd` as `null`
+        and says so explicitly, because measuring it means *running* each mechanism,
+        which is this bank's programme. Its `total_cost_usd` is therefore a documented
+        LOWER BOUND, and C(m) is only complete once the decision term measured here is
+        added to the execution term measured there. Neither half is a duplicate of the
+        other and neither is sufficient alone.
+
+        The field translation is where the two schemas actually meet, and one field is
+        derived rather than copied: their `gate_caught_failures` is a COUNT of failures
+        the gate caught, while `detect_rate` here is the per-failure probability that a
+        failure is caught. So the denominator is the number of FAILURES (`trials -
+        passing`), not the number of trials. Dividing by trials instead would understate
+        detection on a mostly-passing tier and silently convert repairable failures into
+        escapes — which biases every mechanism that starts cheap.
+
+        A tier whose cell records no failures has no evidence about detection at all.
+        It gets `detect_rate = 1.0`, which is inert there (the retry term is multiplied
+        by `1 - pass_rate`, which is 0) rather than a claim.
+        """
+        tasks: dict[str, TaskOutcome] = {}
+        for row in artifact.get("tasks", []) or []:
+            if not isinstance(row, Mapping):
+                continue
+            per_tier = row.get("per_tier") or {}
+            if not isinstance(per_tier, Mapping) or not per_tier:
+                continue  # no measured cells: excluded, and it will show up as missing
+
+            pass_rate: dict[str, float] = {}
+            exec_cost: dict[str, float] = {}
+            detect_rate: dict[str, float] = {}
+            for tier, cell in per_tier.items():
+                if tier not in TIERS or not isinstance(cell, Mapping):
+                    continue
+                trials = int(cell.get("trials") or 0)
+                passing = int(cell.get("passing") or 0)
+                pass_rate[tier] = float(cell.get("pass_rate") or 0.0)
+                exec_cost[tier] = float(cell.get("mean_cost_usd") or 0.0)
+                failures = trials - passing
+                caught = float(cell.get("gate_caught_failures") or 0.0)
+                detect_rate[tier] = (caught / failures) if failures > 0 else 1.0
+
+            if not pass_rate:
+                continue
+
+            needed = row.get("cheapest_adequate_tier")
+            tasks[str(row["task_id"])] = TaskOutcome(
+                task_id=str(row["task_id"]),
+                rubric_score=int(row.get("rubric_score") or 0),
+                pass_rate=pass_rate,
+                exec_cost=exec_cost,
+                detect_rate=detect_rate,
+                # `indeterminate` means no tier cleared the bar. That is NOT a tier, and
+                # coercing it to `strong` would invent an adequacy the run refuted.
+                cheapest_adequate_tier=needed if needed in TIERS else None,
+            )
+        return cls(tasks)
+
     def require(self, task_id: str) -> TaskOutcome:
         if task_id not in self.tasks:
             raise MissingGroundTruth(
@@ -379,8 +441,38 @@ def always_weak_escalate() -> Mechanism:
 
 @dataclasses.dataclass(frozen=True)
 class TaskResult:
+    """One task's expected cost and BOTH quality quantities, kept separate.
+
+    Two different things have been called "quality" in this study's two halves, so
+    neither is allowed to travel unnamed:
+
+    * ``p_first_attempt`` — the pass rate at the tier the mechanism chose, with no
+      repair. This is what `calibration.mechanism_costs` reports.
+    * ``p_correct_post_repair`` — P(the task ends correct) after any gate-DETECTED
+      failure has been escalated and retried. **This is the pre-registered estimand**
+      and the quantity the non-inferiority constraint is written against.
+
+    The exact relation is ``p_correct_post_repair = p_first_attempt + repair_credit``,
+    and :attr:`repair_credit` is exposed so the difference is a value that can be
+    asserted rather than a discrepancy to be explained.
+
+    Why post-repair is the right estimand, decided rather than assumed: C(m) already
+    CHARGES the retry. If quality did not credit the repair that retry buys, every
+    mechanism that starts cheap and escalates would pay twice — once in cost, once in
+    an unearned quality penalty. It also matches what the work is for: a failure the
+    gate caught and repaired is delivered correct, at a price already on the books. An
+    escape is not delivered correct, which is why ``detect_rate`` decides which of the
+    two a failure becomes.
+    """
+
     expected_cost: float
-    p_correct: float
+    p_correct_post_repair: float
+    p_first_attempt: float
+
+    @property
+    def repair_credit(self) -> float:
+        """Quality the retry bought — exactly the term the cost side already paid for."""
+        return self.p_correct_post_repair - self.p_first_attempt
 
 
 def expected_task(outcome: TaskOutcome, start_tier: str, *, max_escalations: int = 2) -> TaskResult:
@@ -411,9 +503,9 @@ def expected_task(outcome: TaskOutcome, start_tier: str, *, max_escalations: int
         if p_retry > 0.0:
             deeper = expected_task(outcome, TIERS[index + 1], max_escalations=max_escalations - 1)
             cost += p_retry * deeper.expected_cost
-            p_correct += p_retry * deeper.p_correct
+            p_correct += p_retry * deeper.p_correct_post_repair
 
-    return TaskResult(expected_cost=cost, p_correct=p_correct)
+    return TaskResult(expected_cost=cost, p_correct_post_repair=p_correct, p_first_attempt=p_pass)
 
 
 # ---------------------------------------------------------------------------- the mix
@@ -480,10 +572,20 @@ class MechanismCost:
     decision_usd: float
     execution_usd: float  # includes the retry expectation
     total_usd: float
-    quality: float
+    # THE ESTIMAND, named so it cannot be confused with the sibling programme's number.
+    # `calibration.mechanism_costs` reports a first-attempt rate; this is P(delivered
+    # correct) after gate-detected repair. Both are carried so the difference is a
+    # reported value rather than an unexplained gap between two documents.
+    quality_post_repair: float
+    first_attempt_pass_rate: float
     n_tasks: int
     n_missing: int
     missing: tuple[str, ...]
+
+    @property
+    def repair_credit(self) -> float:
+        """The quality the retry bought — the term the cost side already paid for."""
+        return self.quality_post_repair - self.first_attempt_pass_rate
 
 
 def evaluate(
@@ -508,6 +610,7 @@ def evaluate(
 
     execution = 0.0
     quality = 0.0
+    first_attempt = 0.0
     live_weight = sum(weights[t] for t in covered)
     for task_id in covered:
         outcome = substrate.require(task_id)
@@ -516,7 +619,8 @@ def evaluate(
         )
         share = weights[task_id] / live_weight
         execution += share * result.expected_cost
-        quality += share * result.p_correct
+        quality += share * result.p_correct_post_repair
+        first_attempt += share * result.p_first_attempt
 
     decision = mechanism.decision_cost.per_task(episode_size)
     return MechanismCost(
@@ -525,7 +629,8 @@ def evaluate(
         decision_usd=decision,
         execution_usd=execution,
         total_usd=decision + execution,
-        quality=quality,
+        quality_post_repair=quality,
+        first_attempt_pass_rate=first_attempt,
         n_tasks=len(covered),
         n_missing=len(missing),
         missing=tuple(missing),
@@ -533,8 +638,13 @@ def evaluate(
 
 
 def non_inferior(candidate: MechanismCost, best_quality: float, delta: float) -> bool:
-    """The pre-registered constraint: quality(m) >= quality(best) - delta."""
-    return candidate.quality >= best_quality - delta
+    """The pre-registered constraint, on the POST-REPAIR estimand.
+
+    Running it on first-attempt rates instead would penalise every mechanism that
+    starts cheap and escalates a second time — once in the retry cost C(m) already
+    charges, and again in a quality figure that ignores the repair that retry bought.
+    """
+    return candidate.quality_post_repair >= best_quality - delta
 
 
 def rank(results: Sequence[MechanismCost], *, delta: float) -> list[MechanismCost]:
@@ -546,7 +656,7 @@ def rank(results: Sequence[MechanismCost], *, delta: float) -> list[MechanismCos
     """
     if not results:
         return []
-    best_quality = max(r.quality for r in results)
+    best_quality = max(r.quality_post_repair for r in results)
     eligible = [r for r in results if non_inferior(r, best_quality, delta)]
     return sorted(eligible, key=lambda r: r.total_usd)
 

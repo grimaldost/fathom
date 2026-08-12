@@ -132,7 +132,7 @@ class TestRetryEconomics:
         # weak leg: 0.10 + 0.5*0.28 = 0.24,  p = 0.5 + 0.5*1.0 = 1.0
         result = r.expected_task(_outcome(), "weak", max_escalations=2)
         assert result.expected_cost == pytest.approx(0.24)
-        assert result.p_correct == pytest.approx(1.0)
+        assert result.p_correct_post_repair == pytest.approx(1.0)
 
     def test_an_undetected_failure_is_an_escape_not_a_retry(self):
         """The clause that stops a cheap tier from looking free.
@@ -142,19 +142,19 @@ class TestRetryEconomics:
         """
         result = r.expected_task(_outcome(detect=0.0), "weak", max_escalations=2)
         assert result.expected_cost == pytest.approx(0.10)
-        assert result.p_correct == pytest.approx(0.5)
+        assert result.p_correct_post_repair == pytest.approx(0.5)
 
     def test_partial_detection_buys_a_partial_retry(self):
         result = r.expected_task(_outcome(detect=0.5), "weak", max_escalations=2)
         # mid leg with d=0.5: 0.20 + (0.2*0.5)*0.40 = 0.24, p = 0.8 + 0.1*1.0 = 0.9
         # weak leg:           0.10 + (0.5*0.5)*0.24 = 0.16, p = 0.5 + 0.25*0.9 = 0.725
         assert result.expected_cost == pytest.approx(0.16)
-        assert result.p_correct == pytest.approx(0.725)
+        assert result.p_correct_post_repair == pytest.approx(0.725)
 
     def test_no_escalation_budget_means_one_attempt(self):
         result = r.expected_task(_outcome(), "weak", max_escalations=0)
         assert result.expected_cost == pytest.approx(0.10)
-        assert result.p_correct == pytest.approx(0.5)
+        assert result.p_correct_post_repair == pytest.approx(0.5)
 
     def test_the_top_tier_has_nowhere_to_escalate(self):
         result = r.expected_task(_outcome(), "strong", max_escalations=2)
@@ -248,7 +248,7 @@ class TestEarlyStop:
         a = r.evaluate(rubric, substrate, mix, episode_size=1)
         b = r.evaluate(none, substrate, mix, episode_size=1)
         assert a.execution_usd == pytest.approx(b.execution_usd)
-        assert a.quality == pytest.approx(b.quality)
+        assert a.quality_post_repair == pytest.approx(b.quality_post_repair)
         assert a.total_usd - b.total_usd == pytest.approx(a.decision_usd - b.decision_usd)
 
 
@@ -283,6 +283,290 @@ class TestSubstrateRefusals:
         assert _outcome().adequate_tier(threshold=1.01) is None
 
 
+class TestSubstrateJoin:
+    """Consuming `calibration.routing_substrate`'s artifact — the coordination surface.
+
+    The two programmes meet at exactly one JSON document, so the translation between
+    their schema and this one is the highest-leverage place for a silent error: a
+    mis-mapped field would still produce a plausible C(m).
+    """
+
+    ARTIFACT = {
+        "schema_version": "1",
+        "tau": 0.7,
+        "non_inferiority_margin": 0.05,
+        "tasks": [
+            {
+                "task_id": "fix-clamp2",
+                "rubric_score": 20,
+                "genre": "fix",
+                "cheapest_adequate_tier": "weak",
+                "per_tier": {
+                    "weak": {
+                        "trials": 10,
+                        "passing": 9,
+                        "pass_rate": 0.9,
+                        "gate_caught_failures": 1,
+                        "silent_failures": 0,
+                        "mean_cost_usd": 0.08,
+                    },
+                    "mid": {
+                        "trials": 10,
+                        "passing": 10,
+                        "pass_rate": 1.0,
+                        "gate_caught_failures": 0,
+                        "silent_failures": 0,
+                        "mean_cost_usd": 0.22,
+                    },
+                    "strong": {
+                        "trials": 10,
+                        "passing": 10,
+                        "pass_rate": 1.0,
+                        "gate_caught_failures": 0,
+                        "silent_failures": 0,
+                        "mean_cost_usd": 0.34,
+                    },
+                },
+            },
+            {
+                "task_id": "fix-ledger-replay",
+                "rubric_score": 71,
+                "genre": "data",
+                "cheapest_adequate_tier": "strong",
+                "per_tier": {
+                    "weak": {
+                        "trials": 10,
+                        "passing": 2,
+                        "pass_rate": 0.2,
+                        "gate_caught_failures": 4,
+                        "silent_failures": 4,
+                        "mean_cost_usd": 0.08,
+                    },
+                    "mid": {
+                        "trials": 10,
+                        "passing": 5,
+                        "pass_rate": 0.5,
+                        "gate_caught_failures": 3,
+                        "silent_failures": 2,
+                        "mean_cost_usd": 0.22,
+                    },
+                    "strong": {
+                        "trials": 10,
+                        "passing": 9,
+                        "pass_rate": 0.9,
+                        "gate_caught_failures": 1,
+                        "silent_failures": 0,
+                        "mean_cost_usd": 0.34,
+                    },
+                },
+            },
+        ],
+        "mechanisms": [],
+    }
+
+    def test_loads_every_task_with_measured_cells(self):
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        assert set(substrate.tasks) == {"fix-clamp2", "fix-ledger-replay"}
+
+    def test_detect_rate_denominator_is_failures_not_trials(self):
+        """The one derived field, and the one most likely to be got wrong.
+
+        `fix-ledger-replay` at weak: 10 trials, 2 passing, so 8 failures, 4 caught.
+        detect_rate is 4/8 = 0.5. Dividing by trials would give 0.4, understating
+        detection and silently converting repairable failures into escapes.
+        """
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        assert substrate.require("fix-ledger-replay").detect_rate["weak"] == pytest.approx(0.5)
+
+    def test_a_cell_with_no_failures_makes_no_detection_claim(self):
+        """detect_rate there is inert, not evidence — the retry term multiplies by zero."""
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        outcome = substrate.require("fix-clamp2")
+        assert outcome.detect_rate["mid"] == 1.0
+        result = r.expected_task(outcome, "mid", max_escalations=2)
+        assert result.expected_cost == pytest.approx(0.22)
+
+    def test_pass_rate_and_cost_come_across_unchanged(self):
+        outcome = r.Substrate.from_artifact(self.ARTIFACT).require("fix-ledger-replay")
+        assert outcome.pass_rate == {"weak": 0.2, "mid": 0.5, "strong": 0.9}
+        assert outcome.exec_cost == {"weak": 0.08, "mid": 0.22, "strong": 0.34}
+
+    def test_the_published_verdict_is_used(self):
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        assert substrate.require("fix-clamp2").adequate_tier(threshold=0.7) == "weak"
+        assert substrate.require("fix-ledger-replay").adequate_tier(threshold=0.7) == "strong"
+
+    def test_indeterminate_is_not_coerced_into_a_tier(self):
+        """No tier cleared the bar. Reading that as `strong` would invent adequacy."""
+        artifact = {
+            "tasks": [dict(self.ARTIFACT["tasks"][0], cheapest_adequate_tier="indeterminate")]
+        }
+        outcome = r.Substrate.from_artifact(artifact).require("fix-clamp2")
+        assert outcome.cheapest_adequate_tier is None
+        # falls back to the local derivation rather than asserting a verdict
+        assert outcome.adequate_tier(threshold=1.01) is None
+
+    def test_a_task_with_no_measured_cells_is_absent_not_empty(self):
+        artifact = {"tasks": [{"task_id": "unrun", "rubric_score": 40, "per_tier": {}}]}
+        substrate = r.Substrate.from_artifact(artifact)
+        assert "unrun" not in substrate.tasks
+        with pytest.raises(r.MissingGroundTruth):
+            substrate.require("unrun")
+
+    def test_an_empty_artifact_yields_an_empty_substrate_not_a_crash(self):
+        assert r.Substrate.from_artifact({}).tasks == {}
+
+    def test_agrees_with_calibration_mechanism_costs_at_one_escalation(self):
+        """Cross-implementation check against the substrate owner's own C(m).
+
+        `calibration.mechanism_costs` computes execution+retry independently, with a
+        SINGLE escalation step. Constraining this module to `max_escalations=1` should
+        reproduce its per-task total exactly. Two implementations agreeing is worth more
+        than either one's tests, and a divergence here means the two programmes would
+        publish different C(m) for the same run.
+        """
+        from fathom import calibration as cal
+
+        rows = [
+            {
+                "task_id": t["task_id"],
+                "score": t["rubric_score"],
+                "predicted": "weak",
+                "needed": t["cheapest_adequate_tier"],
+                "per_tier": t["per_tier"],
+            }
+            for t in self.ARTIFACT["tasks"]
+        ]
+        theirs = next(m for m in cal.mechanism_costs(rows) if m["mechanism"] == "always-weak")
+
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        mine = r.evaluate(
+            r.always_weak_escalate(),
+            substrate,
+            r.uniform_mix(list(substrate.tasks)),
+            episode_size=1,
+            max_escalations=1,
+        )
+        assert mine.execution_usd == pytest.approx(theirs["total_cost_usd"])
+
+    def test_the_two_quality_quantities_are_related_by_exactly_the_repair_credit(self):
+        """THE CROSS-PROGRAMME CONTRACT, as an identity rather than a snapshot.
+
+        The two halves report different quantities, and that is settled and fine — the
+        substrate emits the raw first-attempt facts, this module derives the estimand.
+        What must never drift is the RELATION between them:
+
+            quality_post_repair = first_attempt_pass_rate + repair_credit
+
+        where the repair credit is, per task, P(fail) * P(gate detects) * P(the dearer
+        tier then succeeds). This test recomputes that credit from the raw per-tier
+        facts and asserts both sides land on it, so it fails if EITHER programme
+        silently changes what its number means — which a test that merely pinned
+        today's 0.55 and 0.70 would not catch.
+        """
+        from fathom import calibration as cal
+
+        rows = [
+            {
+                "task_id": t["task_id"],
+                "score": t["rubric_score"],
+                "predicted": "weak",
+                "needed": t["cheapest_adequate_tier"],
+                "per_tier": t["per_tier"],
+            }
+            for t in self.ARTIFACT["tasks"]
+        ]
+        theirs = next(m for m in cal.mechanism_costs(rows) if m["mechanism"] == "always-weak")
+
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        mine = r.evaluate(
+            r.always_weak_escalate(),
+            substrate,
+            r.uniform_mix(list(substrate.tasks)),
+            episode_size=1,
+            max_escalations=1,
+        )
+
+        # Recompute the credit straight from the artifact's raw facts.
+        expected_credit = 0.0
+        for task in self.ARTIFACT["tasks"]:
+            weak, mid = task["per_tier"]["weak"], task["per_tier"]["mid"]
+            failures = weak["trials"] - weak["passing"]
+            detect = (weak["gate_caught_failures"] / failures) if failures else 1.0
+            expected_credit += (1 - weak["pass_rate"]) * detect * mid["pass_rate"]
+        expected_credit /= len(self.ARTIFACT["tasks"])
+
+        # Their number IS the first-attempt leg of the identity, under either spelling.
+        theirs_first_attempt = theirs.get("first_attempt_pass_rate", theirs.get("quality"))
+        assert mine.first_attempt_pass_rate == pytest.approx(theirs_first_attempt)
+        # And the gap between the two is exactly the repair the cost side already paid for.
+        assert mine.repair_credit == pytest.approx(expected_credit)
+        assert mine.quality_post_repair == pytest.approx(
+            mine.first_attempt_pass_rate + expected_credit
+        )
+
+    def test_the_two_programmes_report_different_quantities_by_design(self):
+        """The resolution, and the shim that lets it land without breaking this.
+
+        Settled 2026-08-12: the substrate emits RAW FACTS and this module owns the
+        derived estimand. Their mechanism-level number is a FIRST-ATTEMPT pass rate;
+        `quality_post_repair` here is P(the task ends correct) after gate-detected
+        repair, which is what the non-inferiority constraint is written against.
+
+        The substrate owner is renaming their field `quality` -> `first_attempt_pass_rate`
+        precisely because one name meant two things for a week. This test reads whichever
+        name is present, so the rename STRENGTHENS it rather than breaking it, and the
+        assertion below is on the quantity, never on the spelling.
+        """
+        from fathom import calibration as cal
+
+        rows = [
+            {
+                "task_id": t["task_id"],
+                "score": t["rubric_score"],
+                "predicted": "weak",
+                "needed": t["cheapest_adequate_tier"],
+                "per_tier": t["per_tier"],
+            }
+            for t in self.ARTIFACT["tasks"]
+        ]
+        theirs = next(m for m in cal.mechanism_costs(rows) if m["mechanism"] == "always-weak")
+        # Accept either spelling: the rename is in flight and the quantity is the point.
+        assert ("first_attempt_pass_rate" in theirs) or ("quality" in theirs), (
+            "the substrate stopped reporting a first-attempt rate under any known name"
+        )
+        theirs_first_attempt = theirs.get("first_attempt_pass_rate", theirs.get("quality"))
+
+        substrate = r.Substrate.from_artifact(self.ARTIFACT)
+        mine = r.evaluate(
+            r.always_weak_escalate(),
+            substrate,
+            r.uniform_mix(list(substrate.tasks)),
+            episode_size=1,
+            max_escalations=1,
+        )
+        assert theirs_first_attempt == pytest.approx(0.55), "first-attempt pass rate"
+        assert mine.quality_post_repair == pytest.approx(0.70), "P(correct) after detected repair"
+        assert mine.quality_post_repair > theirs_first_attempt
+
+    def test_their_total_is_a_lower_bound_until_the_decision_term_lands(self):
+        """The contract that makes the two halves compose rather than compete."""
+        from fathom import calibration as cal
+
+        rows = [
+            {
+                "task_id": t["task_id"],
+                "score": t["rubric_score"],
+                "predicted": "weak",
+                "needed": t["cheapest_adequate_tier"],
+                "per_tier": t["per_tier"],
+            }
+            for t in self.ARTIFACT["tasks"]
+        ]
+        for mech in cal.mechanism_costs(rows):
+            assert mech["decision_cost_usd"] is None
+
+
 class TestEstimand:
     """C(m), its terms, and the constraint that quality is not tradeable."""
 
@@ -306,20 +590,56 @@ class TestEstimand:
     def test_a_cheaper_mechanism_that_loses_quality_is_dropped_not_ranked_last(self):
         """C(m) is only defined subject to the constraint, so a quality loser is out."""
         cheap_bad = r.MechanismCost(
-            "cheap", "x", 0.0, 0.05, 0.05, quality=0.50, n_tasks=1, n_missing=0, missing=()
+            "cheap",
+            "x",
+            0.0,
+            0.05,
+            0.05,
+            quality_post_repair=0.50,
+            first_attempt_pass_rate=0.50,
+            n_tasks=1,
+            n_missing=0,
+            missing=(),
         )
         dear_good = r.MechanismCost(
-            "dear", "x", 0.0, 0.40, 0.40, quality=1.00, n_tasks=1, n_missing=0, missing=()
+            "dear",
+            "x",
+            0.0,
+            0.40,
+            0.40,
+            quality_post_repair=1.00,
+            first_attempt_pass_rate=1.00,
+            n_tasks=1,
+            n_missing=0,
+            missing=(),
         )
         ranked = r.rank([cheap_bad, dear_good], delta=0.05)
         assert [m.mechanism for m in ranked] == ["dear"]
 
     def test_a_cheaper_mechanism_inside_the_margin_wins(self):
         cheap_ok = r.MechanismCost(
-            "cheap", "x", 0.0, 0.05, 0.05, quality=0.97, n_tasks=1, n_missing=0, missing=()
+            "cheap",
+            "x",
+            0.0,
+            0.05,
+            0.05,
+            quality_post_repair=0.97,
+            first_attempt_pass_rate=0.97,
+            n_tasks=1,
+            n_missing=0,
+            missing=(),
         )
         dear_good = r.MechanismCost(
-            "dear", "x", 0.0, 0.40, 0.40, quality=1.00, n_tasks=1, n_missing=0, missing=()
+            "dear",
+            "x",
+            0.0,
+            0.40,
+            0.40,
+            quality_post_repair=1.00,
+            first_attempt_pass_rate=1.00,
+            n_tasks=1,
+            n_missing=0,
+            missing=(),
         )
         ranked = r.rank([cheap_ok, dear_good], delta=0.05)
         assert [m.mechanism for m in ranked] == ["cheap", "dear"]
