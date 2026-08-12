@@ -1,0 +1,22 @@
+# Arm C — the floor. No `[context]` block: the brief and the staged tree, nothing else.
+#
+# Pre-registered: this arm fails Part A structurally on the authoring tasks. The nearest prior
+# (`premortem-ablation-v1`) had its bare arm fail 11 of 12 criteria. Reproducing that is not a
+# finding — it is the floor the other two arms are measured against, and it is the only arm that
+# answers "is the value in being ASKED at all, or in the prose that does the asking?".
+#
+# Deliberately NOT named "bare": the report treats the literal arm name `bare` as the pairwise
+# judge's anchor, and this bank scores verifier-first. The `a-`/`b-`/`c-` prefixes also fix glob
+# order so `--limit N` pilots the most expensive arm first.
+name = "c-bare"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[limits]
+trial_timeout_s = 900

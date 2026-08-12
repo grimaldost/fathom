@@ -1,0 +1,6 @@
+name = "model-tier-v2"
+# Bumped from 1 when the five shape-extension rungs landed. No ledger exists for
+# this bank, so the bump invalidates nothing: it is the honest record that the
+# dataset changed, per the resume-key contract.
+dataset_version = "2"
+holdout = ["fix-quota-rollup"]

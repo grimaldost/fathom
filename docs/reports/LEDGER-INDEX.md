@@ -25,13 +25,14 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `humble-vs-super-v3` | `efb00e24dc27973b1cd8bfff5b7f66eeeb030614cab737ca357299346179f823` | bare:45, stack-humble:45, stack-super:45, super-only:45 | 180 | 180 |
 | `humble-vs-super-v4` | `014bca37168b3c5bcd514820c1b3e9cd28d38e4331c9716391fdc966dafa7d48` | bare:8, stack-super:8 | 16 | 16 |
 | `inject-content-v1` | `ab76c68247c94e7be2fb7a5803f141102a35e221680840488f608a46ca21ca29` | bare:10, nudge:10, protocol:10 | 30 | 30 |
+| `keel-kit-ablation-v1` | `f67492505b6a8fbb36594fcd276249850925cc51ba5c181fe3bcef8bd2d4c2ee` | a-full-014:6, b-vnext-full:6, c-vnext-core:6, d-bare:6 | 24 | 24 |
 | `model-tier-effort` | `f76b52e777a473e7d1b041aa147c192b52ca585be33f3ca216715e7d0fd3f39b` | haiku-xhigh:5, sonnet-xhigh:5 | 10 | 10 |
 | `model-tier-v1` | `7cd5f4fcdb2b62da2e1b2c14decf86d87a7867c9491eea70ab0b81421c0198f5` | haiku:35, opus:35, opus5:35, sonnet:35, sonnet5:35 | 175 | 175 |
 | `premortem-ablation-v1` | `3dba0503c78f49ec8170e7b00b8dd3da013d69ba4cf2d333c3178435ec120d21` | arm-a-full:6, arm-b-core:6, bare:6 | 18 | 18 |
 | `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
 | `tu-grounding-v1` | `59ffe9c7330a44439653770c6e28155793dd0bca5712e5bc2796d72f3958c7b9` | armed-haiku:3, armed-opus:2, armed-sonnet:3, bare-haiku:3, bare-opus:3, bare-sonnet:3 | 27 | 27 |
-| `verif-lift-bug-v1` | `1494e8ebdc8f8e8bb112f3e8e8bc0f00117d0cb9434907a67eac2c4195b8123e` | bare:10, bare-gate:10, placebo-gate:10, skill:10, skill-gate:10, skill-vnext:10 | 61 | 61 |
-| `verif-lift-data-v1` | `53e3de1e8bae8cb77f0976a01a5de76dc9fce9da8820290d6cc3a0974ddfc007` | bare:10, skill:12, skill-vnext:10 | 33 | 33 |
-| `verif-lift-null-v1` | `f278f6cd7812bd9542da12814c1eb6830b5851ca8f3673019545837c5049cad4` | bare:6, skill:6 | 13 | 13 |
-| `verif-lift-trunc-v1` | `1ff674d237480ca579521063529d1b551b25fd83213910d566cba241926649ed` | bare:10, skill:10 | 20 | 20 |
+| `verif-lift-bug-v1` | `038fa86e598cc6dcb392c0744e74c71e00a4a1c9eab8686fa0421ef350347423` | bare:10, bare-gate:10, placebo-gate:10, skill:10, skill-gate:10, skill-vnext:10 | 61 | 61 |
+| `verif-lift-data-v1` | `b74dc10f647a38f7f71c06da789ab01df7f2c12d3c48cf037a8428424514dba0` | bare:10, skill:12, skill-vnext:10 | 33 | 33 |
+| `verif-lift-null-v1` | `6249a43bcca6462e817d7fda1154e3fd5e53f5883b117e0a4e8260dcf78fd548` | bare:6, skill:6 | 13 | 13 |
+| `verif-lift-trunc-v1` | `32ece351ccb9a50497ed59986f44a45bd01d5db83c7de1f896345e229439262a` | bare:10, skill:10 | 20 | 20 |

@@ -1,0 +1,31 @@
+id = "fix-tz-window"
+instruction = """
+Users of the `daycal` package report that `report.hours_in_day(date(2026, 3, 8))`
+returns `24.0`. Per the package README that local day is 23 hours long — the clock
+moves at local midnight on 2026-03-09. Find and fix the bug so the package behaves
+as documented for every day of the year. Preserve the existing public API, and keep
+the shipped test suite passing.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 100
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `hours_fall_back` is
+# dropped: the symptom patch already satisfies it. Last two are strong-level.
+hard_criteria = [
+    "slots_cover_transition_day",
+    "window_bounds_every_day",
+    "windows_tile_without_gap",
+]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

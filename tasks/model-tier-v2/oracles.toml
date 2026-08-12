@@ -1,0 +1,447 @@
+# Oracle levels for model-tier-v2 — the machine-readable half of the
+# model x oracle-quality crossing.
+#
+# Every task's verify.py emits ONE criterion dict covering all three levels. The
+# levels are strictly nested — thin subset of standard subset of strong — so a
+# criterion in `thin` also appears in `standard` and `strong`.
+#
+# HOW `hard_criteria` IS DERIVED (the decision statistic; repaired 2026-08-12).
+# calibration.py computes each (arm, task) cell from `hard_criteria` ALONE, and it
+# scores a trial as ONE Bernoulli draw: the trial passes iff EVERY hard criterion is
+# true (ADR-0009). So a criterion the plausible symptom patch already satisfies would
+# hand the counter a free component of the conjunction. The set is derived
+# mechanically, from measurement rather than from judgement:
+#
+#   ADMIT a criterion iff, through the real verifier, it is FALSE on the untouched
+#   fixture (so it is capability-gated, not a regression guard that is already true
+#   at the starting state), FALSE on `counter/` (so the symptom patch cannot bank
+#   it), and TRUE on `solution/` (so it is reachable). Hygiene criteria
+#   (`no_regression`, `regression_test_present`) and the thin anchor are excluded
+#   by construction.
+#
+#   ORDER standard-level admissible criteria first, then strong-level ones in the
+#   order they appear below, and stop at THREE (never fewer than two).
+#
+# WHY THREE — AND WHAT IT IS *NOT*. It is NOT a power target. The first repair
+# justified three as "six pooled Bernoulli draws at repeats=2", which was the pooled
+# estimator's arithmetic and is now known to be wrong: on the committed
+# ledger/model-tier-v1.jsonl a task's hard criteria came out all-true or all-false on
+# 175 of 175 multi-criterion trials, so those extra draws were copies of one draw and
+# bought no resolution at all. Under per-trial scoring k does not move the draw count;
+# it moves the DIFFICULTY of the conjunction. Three is kept for two reasons that
+# survive: (1) headroom — the bar that saturated model-tier-v1 is the standard oracle,
+# and a conjunction that also demands an independent check is the only lever authoring
+# has against the same ceiling; (2) a one-criterion hard set makes the entire tier
+# verdict rest on a single verifier assertion, which is a powerless read by
+# construction. Two is the floor, three the target, and the repeat count — not k — is
+# where power now comes from: see README.md § Power.
+# `tests/test_bank_model_tier_v2.py` asserts the derivation, so a hand edit that
+# re-dilutes a hard set fails the suite.
+#
+# CONSEQUENCE, RECORDED: on five tasks the third (and on two the second) admissible
+# criterion is a STRONG-level one, so `hard_criteria` is no longer a subset of
+# `standard` as it was in model-tier-v1. The pass bar on those tasks is "fixed the
+# root cause, checked independently" rather than "passes the standard oracle".
+# `bv.emit` still gates the EXIT CODE on `standard` only, so the two are decoupled:
+# raising the decision bar did not change any verifier's exit code, and the
+# thin/standard/strong slice below is unaffected.
+#
+# WHERE `counter-strong/` SITS. It is NOT a point on the decision statistic. Under the
+# pooled estimator it landed at 1/3-2/3 of the hard set on every rung — a middle value,
+# which is exactly the CI-overlapping region that reads indeterminate, and the reviewer
+# named it as such. Under per-trial scoring there is no middle: the overlay fails at
+# least one hard criterion on every rung and therefore scores 0, determinate. Its role
+# is unchanged and is the ORACLE axis, not the tier axis — it witnesses that the strong
+# oracle has headroom over the standard oracle. The three overlays the decision
+# statistic is contracted on are fixture (0), counter (0) and solution (1), and
+# tests/test_bank_model_tier_v2.py asserts all four positions per-trial.
+#
+# WHY THERE IS NO ORACLE ARM. The crossing is open-loop: the arm produces an
+# artifact, the verifier grades it afterwards, and nothing about the oracle reaches
+# the spawn (single-session arms run no gate, and verify.py never enters the
+# workspace). Three same-model arms differing only in verify.py would therefore
+# sample the SAME artifact distribution three times. Grading one artifact at all
+# three levels is the same experiment for a third of the spend, and it makes the
+# nesting exact per artifact instead of true only in expectation. The oracle axis is
+# a criterion slice over this file, not an arm dimension.
+#
+# WHAT STILL HAS TO BE BUILT: calibration.py has no oracle axis. Rendering the
+# model x oracle interaction (each tier's slope across thin -> standard -> strong)
+# needs a slicer that reads this file and re-computes the hard fraction per level.
+# That is analysis code over an existing ledger — it can be written after the run,
+# and it is gated behind ADR-0008 like the rest of the oracle dimension.
+#
+# ONE INSTRUCTION FOR WHOEVER BUILDS IT: compute the slope on the CAPABILITY subset,
+# excluding `no_regression` and `regression_test_present`. Both are test-writing
+# discipline, not oracle strength, and the committed record shows they swamp the
+# signal: `regression_test_present` is 0/5 for haiku/sonnet/sonnet5/opus on every
+# model-tier-v1 task and 0/15 for every `bare` arm in humble-vs-super-v3 against
+# 15/15 when a test-discipline skill is injected. Left in, the thin->standard slope
+# would be dominated by whether an arm writes tests, and the weak tier's slope would
+# look steeper than the strong tier's for entirely the wrong reason. They stay in the
+# `standard` level below because they are part of the v1 exit-code contract; they are
+# already excluded from `hard_criteria`, so the tier verdict is unaffected either way.
+
+schema_version = "1"
+
+[levels]
+thin = "The anchor plus the symptom site the instruction names. A patch at the reported failure passes."
+standard = "The model-tier-v1 contract: thin, plus the hard criteria at the displaced consumers, plus no_regression and regression_test_present. This level gates the verifier's exit code."
+strong = "Standard, plus an independent check the symptom patch cannot satisfy — a consumer the instruction never names, a property over the invariant, or an input shape the root cause alone handles."
+
+[tasks.fix-clamp2]
+thin = ["clamp_in_range", "clamp_below_reported"]
+standard = [
+    "clamp_in_range",
+    "clamp_below_reported",
+    "clamp_below_general",
+    "clamp_above_preserved",
+    "clamp_two_sided_general",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "clamp_in_range",
+    "clamp_below_reported",
+    "clamp_below_general",
+    "clamp_above_preserved",
+    "clamp_two_sided_general",
+    "no_regression",
+    "regression_test_present",
+    "clamp_float_exact",
+    "clamp_bounded_and_idempotent",
+]
+independent_check = "A property sweep over a value/bound grid the instruction never names: boundedness, idempotence, and value identity for a float already inside the range."
+
+[tasks.fix-strip-unicode]
+thin = ["ascii_unchanged", "accent_stripped_reported"]
+standard = [
+    "ascii_unchanged",
+    "accent_stripped_reported",
+    "non_latin_preserved",
+    "symbols_preserved",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "ascii_unchanged",
+    "accent_stripped_reported",
+    "non_latin_preserved",
+    "symbols_preserved",
+    "no_regression",
+    "regression_test_present",
+    "decomposed_input_equivalent",
+    "covers_unlisted_accents",
+    "idempotent_and_mark_free",
+]
+independent_check = "Decomposed (NFD) input and accents outside any hand-written fold table, plus a mark-free/idempotence property — reachable only by removing combining marks rather than listing characters."
+
+[tasks.feature-ndjson-merge]
+thin = ["merge_text_disjoint", "merge_text_dedupes"]
+standard = [
+    "merge_text_disjoint",
+    "merge_text_dedupes",
+    "merge_lines_dedupes",
+    "merge_lines_position_preserved",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "merge_text_disjoint",
+    "merge_text_dedupes",
+    "merge_lines_dedupes",
+    "merge_lines_position_preserved",
+    "no_regression",
+    "regression_test_present",
+    "merge_records_dedupes",
+    "merge_all_paths_agree",
+]
+independent_check = "merge_records, the shared entry point the instruction never names, plus a parity check that all three documented paths return the same result."
+
+[tasks.fix-tz-window]
+thin = ["hours_ordinary_day", "hours_spring_forward"]
+standard = [
+    "hours_ordinary_day",
+    "hours_spring_forward",
+    "hours_fall_back",
+    "slots_cover_transition_day",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "hours_ordinary_day",
+    "hours_spring_forward",
+    "hours_fall_back",
+    "slots_cover_transition_day",
+    "no_regression",
+    "regression_test_present",
+    "window_bounds_every_day",
+    "windows_tile_without_gap",
+]
+independent_check = "day_window itself, over all 365 days: each window must start and end at the documented local midnights and tile the year without a gap."
+
+[tasks.fix-decimal-round]
+thin = ["fast_no_tie", "fast_half_up_reported"]
+standard = [
+    "fast_no_tie",
+    "fast_half_up_reported",
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "fast_no_tie",
+    "fast_half_up_reported",
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "no_regression",
+    "regression_test_present",
+    "backend_parity_decimal_literals",
+    "parity_through_line_total",
+]
+independent_check = "Decimal literals a float cannot hold exactly (2.675, 1.005, 8.615), and the order-line consumer — both distinguish quantising the number the caller wrote from quantising the float's error."
+
+[tasks.fix-quota-rollup]
+thin = ["member_usage_recorded", "team_usage_reported"]
+standard = [
+    "member_usage_recorded",
+    "team_usage_reported",
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "member_usage_recorded",
+    "team_usage_reported",
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "no_regression",
+    "regression_test_present",
+    "rollup_invariant_at_source",
+    "rollup_invariant_with_late_member",
+]
+independent_check = "The rollup field itself against the members' own totals, checked after every step of an interleaving the instruction never describes — unreachable by patching readers one at a time."
+
+[tasks.fix-graph-cycle]
+thin = ["topo_order_plain", "topo_order_with_duplicate_edge"]
+standard = [
+    "topo_order_plain",
+    "topo_order_with_duplicate_edge",
+    "dependency_count_deduplicated",
+    "tree_lists_each_dependency_once",
+    "real_cycle_still_raises",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "topo_order_plain",
+    "topo_order_with_duplicate_edge",
+    "dependency_count_deduplicated",
+    "tree_lists_each_dependency_once",
+    "real_cycle_still_raises",
+    "no_regression",
+    "regression_test_present",
+    "neighbours_lists_each_dependency_once",
+    "add_edge_idempotent",
+]
+independent_check = "Graph.neighbours, the documented accessor every reader goes through, plus idempotence of the build itself — the invariant at the site the duplicate is created."
+
+[tasks.fix-merge-3way]
+thin = ["merge_one_sided_change", "merge_same_change_agrees"]
+standard = [
+    "merge_one_sided_change",
+    "merge_same_change_agrees",
+    "nested_same_change_agrees",
+    "true_conflict_still_reported",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "merge_one_sided_change",
+    "merge_same_change_agrees",
+    "nested_same_change_agrees",
+    "true_conflict_still_reported",
+    "no_regression",
+    "regression_test_present",
+    "deletion_applies_flat",
+    "deletion_applies_nested",
+]
+independent_check = "The deletion rule, in both entry points: documented in the README, named nowhere in the instruction, and reached only by a fix that replaces the duplicated rule table rather than adding one branch to it."
+
+[tasks.fix-ledger-replay]
+thin = ["parity_posts_only", "parity_single_void"]
+standard = [
+    "parity_posts_only",
+    "parity_single_void",
+    "parity_duplicate_void",
+    "fold_excludes_voided",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "parity_posts_only",
+    "parity_single_void",
+    "parity_duplicate_void",
+    "fold_excludes_voided",
+    "no_regression",
+    "regression_test_present",
+    "parity_void_before_post",
+    "parity_prefix_sweep",
+]
+independent_check = "A void arriving before the post it cancels, and fold-vs-replay parity at every prefix of a longer log — both need the incremental path to carry the voided set, which no patch to the reported case reaches."
+
+# The positive control carries NO oracle slice: thin = standard = strong. It is ported
+# verbatim from model-tier-v1 so its observed tier gradient transfers (see its
+# task.toml), and inventing oracle levels for it would change the task whose prior
+# reading is the whole point. It is likewise exempt from the `hard_criteria` derivation
+# rule above — its two hard criteria are v1's, unchanged.
+[tasks.control-nonlocal-parse]
+thin = ["messages_quoted", "codes_quoted_tagged", "no_regression", "regression_test_present"]
+standard = [
+    "messages_quoted",
+    "codes_quoted_tagged",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "messages_quoted",
+    "codes_quoted_tagged",
+    "no_regression",
+    "regression_test_present",
+]
+independent_check = "None — the control is ported verbatim from model-tier-v1 and deliberately carries no independent check beyond its two hard criteria."
+
+
+# ---------------------------------------------------------------------------------
+# THE SHAPE-EXTENSION RUNGS (added 2026-08-12).
+#
+# The nine rungs above are all bug fixes. Routing decisions are not: they span
+# authoring, refactoring, unlocalised debugging, data work, review and planning, and
+# the rubric scores those very differently. Five rungs below carry those genres, and
+# each was chosen to sit where the scored rubric and the reduced floor+shortcut model
+# DISAGREE — the only rungs on which a mechanism comparison can move (README §
+# *The two mechanisms this bank can separate*).
+#
+# TWO OF THEM PRODUCE A DOCUMENT, NOT A PATCH. `review-locate-defects` and
+# `plan-migration-order` forbid a code change, so `regression_test_present` — "did the
+# arm add a test covering what it fixed" — has no referent. They emit `code_unchanged`
+# in its place: the module must come back byte-identical to the stash. Both are hygiene
+# criteria and neither is ever admissible as a hard criterion (one is true at the
+# starting state, the other has nothing to test). The swap is asserted in
+# tests/test_bank_model_tier_v2.py, not left to this comment.
+
+[tasks.refactor-dedupe-validators]
+thin = ["forms_import", "all_three_accept_a_plain_address"]
+standard = [
+    "forms_import",
+    "all_three_accept_a_plain_address",
+    "converged_rules_all_three",
+    "all_three_delegate_to_common",
+    "invite_stays_case_insensitive",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "forms_import",
+    "all_three_accept_a_plain_address",
+    "converged_rules_all_three",
+    "all_three_delegate_to_common",
+    "invite_stays_case_insensitive",
+    "no_regression",
+    "regression_test_present",
+    "rules_match_the_document_exactly",
+    "delegation_survives_a_rule_change",
+]
+independent_check = "The whole grid RULES.md's four rules imply, including the POSITIVE cases the drifted copies all already accept. A refactor that converges the three copies and invents a rule besides (rejecting plus-addressing) satisfies every standard criterion and fails here."
+
+[tasks.debug-cache-staleness]
+thin = ["feedcache_imports", "summary_is_cached_within_one_day"]
+standard = [
+    "feedcache_imports",
+    "summary_is_cached_within_one_day",
+    "summary_fresh_across_midnight",
+    "report_fresh_across_midnight",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "feedcache_imports",
+    "summary_is_cached_within_one_day",
+    "summary_fresh_across_midnight",
+    "report_fresh_across_midnight",
+    "no_regression",
+    "regression_test_present",
+    "trend_fresh_across_midnight",
+    "every_view_is_day_and_tenant_scoped",
+]
+independent_check = "The third consumer of the same key builders, plus a sweep over BOTH scoping axes on all three views — the tenant axis already works and is never named in the instruction, so a patch that reaches two of the three builders passes standard and fails here."
+
+[tasks.data-reconcile-telemetry]
+thin = ["recon_imports", "matches_the_worked_example"]
+standard = [
+    "recon_imports",
+    "matches_the_worked_example",
+    "tolerance_bound_is_inclusive",
+    "tie_break_follows_the_rules",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "recon_imports",
+    "matches_the_worked_example",
+    "tolerance_bound_is_inclusive",
+    "tie_break_follows_the_rules",
+    "no_regression",
+    "regression_test_present",
+    "counts_reconcile_over_readings",
+    "gaps_are_exactly_the_unmatched",
+]
+independent_check = "The counts have to reconcile ACROSS all three modules on two unmatched readings that share a timestamp — a case no rule spells out and the conventions decide. A patch with both matching rules right and a gaps list that collapses a shared timestamp passes standard and fails here."
+
+[tasks.review-locate-defects]
+thin = ["review_file_present", "names_at_least_one_defect"]
+standard = [
+    "review_file_present",
+    "names_at_least_one_defect",
+    "names_every_defect",
+    "cites_a_rule_for_every_named_defect",
+    "no_regression",
+    "code_unchanged",
+]
+strong = [
+    "review_file_present",
+    "names_at_least_one_defect",
+    "names_every_defect",
+    "cites_a_rule_for_every_named_defect",
+    "no_regression",
+    "code_unchanged",
+    "precision_within_one_false_positive",
+    "names_no_clean_function",
+]
+independent_check = "Precision. The standard oracle measures recall over the planted defects; a review that names all six functions has perfect recall and has decided nothing. Nothing in standard can tell the two apart."
+
+[tasks.plan-migration-order]
+thin = ["plan_file_present", "every_migration_listed_once"]
+standard = [
+    "plan_file_present",
+    "every_migration_listed_once",
+    "dependencies_respected",
+    "backfills_after_every_add",
+    "same_table_contiguous",
+    "no_regression",
+    "code_unchanged",
+]
+strong = [
+    "plan_file_present",
+    "every_migration_listed_once",
+    "dependencies_respected",
+    "backfills_after_every_add",
+    "same_table_contiguous",
+    "no_regression",
+    "code_unchanged",
+    "rationale_cites_every_constraint",
+    "order_is_deterministic_and_bare",
+]
+independent_check = "The plan has to say WHY, constraint by constraint. An order that satisfies all three constraints and an order that satisfies them for stated reasons are the same artifact under the standard oracle and are not the same work."

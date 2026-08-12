@@ -1,0 +1,15 @@
+{
+  "_why": "R5 — the oracle is pinned, and the oracle is not the thing being changed. This bank scores specs with the SAME gate that the kit under measurement describes, so the ruler must be frozen before any predicate in that gate moves. The digests below are asserted at verifier start-up; a mismatch is a hard error, not a silent re-score.",
+  "source_repo": "keel",
+  "source_ref": "a local worktree of the keel repository, branch feat/gate-empiricism",
+  "source_commit": "2bfc91878c37ac3628cd7f7c23e411d276eb87bb",
+  "gate_semantics": "0.14.0",
+  "taken": "2026-08-11",
+  "note": "Part-A violation predicates (A0-A12, R1) are byte-identical to keel 0.14.0 on main at 49a11e2; the only delta on this commit is W1, a WARNING, which this bank never scores. Verified with `git diff main -- src/keel/check_ready.py`.",
+  "sha256": {
+    "keel/errors.py": "749976df46d9e02c0e5ea88ff4b660792ba07341b6476fd327236d15656ce473",
+    "keel/models.py": "30e78dc54c56d87343701f4ff571e7886d1664081c04376451a6bdf26f84616f",
+    "keel/__init__.py": "58badf1c3ec0ebd5f84600f044e4f7ff53e6170d0425637b2961ae0b961caae7",
+    "keel/check_ready.py": "75cd8c7a99691ce21add7acc69df44b4caab0b94f753f3b27e7883fed3baa469"
+  }
+}

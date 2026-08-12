@@ -1,0 +1,119 @@
+# Where every brief in this bank came from, and the rubric score it carries.
+#
+# WHY THIS FILE EXISTS. The briefs are copies. The study's whole value depends on the
+# join being exact: each brief's routing decision has to be scorable against the
+# OUTCOME of the same task run at each tier, and that outcome comes from a different
+# bank in a different worktree. If a brief here drifted from the task there, the join
+# would still succeed on the id and would silently be measuring two different tasks.
+# So the id, the score and the source are recorded, and
+# `tests/test_bank_routing_decision_v1.py` asserts every brief file present has an
+# entry, every entry has a brief, and the recorded score maps to the recorded
+# predicted tier under the pinned thresholds.
+#
+# THE COPY IS DELIBERATE, NOT LAZY. The alternative — reading the sibling bank's
+# task.toml at run time — would make this bank depend on a worktree that is another
+# agent's, uncommitted, and free to disappear. A committed copy plus recorded
+# provenance is auditable and self-contained; the drift risk it creates is what the
+# test above covers.
+
+schema_version = "1"
+
+[source]
+bank = "model-tier-v2"
+repo = "fathom"
+branch = "eval/tier-separating"
+commit = "65f8443"
+# HONEST STATE OF THE SOURCE, 2026-08-12. The five shape-extension rungs
+# (refactor / review / planning / debug / data) and their scores were in that
+# worktree's UNCOMMITTED working tree when these briefs were copied, not in commit
+# 65f8443. Their scores are recorded below as read on 2026-08-12; if the sibling
+# bank's PR (#27) lands them changed, the drift test in
+# `analysis/test_routing_mechanisms.py::TestGroundTruthJoin` is what catches it, and
+# the correct response is to re-copy the brief, not to edit the score here.
+sampled_on = "2026-08-12"
+sampled_from = "working tree at 65f8443 (five rungs uncommitted at the time)"
+
+# Thresholds this bank pins for `predicted_tier`, mirrored from the choosing-models
+# models.toml [thresholds] table as of 2026-08-11. Pinned rather than read so the
+# bank's recorded predictions cannot silently change under a threshold edit.
+[thresholds]
+weak = [0, 25]
+mid = [26, 55]
+strong = [56, 100]
+
+# ------------------------------------------------------------------ the briefs
+#
+# `shape` is the dispatch shape the brief covers, so the roster can be checked against
+# the design's shape-coverage requirement (authoring, refactor, debugging, data work,
+# review, planning) rather than asserted to meet it.
+#
+# `rubric_score` is the sibling bank's one-rater score. It is NOT an answer key: the
+# study is measuring whether routing by that score is worth what it costs, so treating
+# it as truth would assume the conclusion. It is here as the `rubric` mechanism's
+# INPUT and as a covariate for the analysis.
+
+[briefs.fix-clamp2]
+shape = "fix"
+rubric_score = 20
+predicted_tier = "weak"
+
+[briefs.plan-migration-order]
+shape = "planning"
+rubric_score = 37
+predicted_tier = "mid"
+
+[briefs.feature-ndjson-merge]
+shape = "authoring"
+rubric_score = 38
+predicted_tier = "mid"
+
+[briefs.refactor-dedupe-validators]
+shape = "refactor"
+rubric_score = 45
+predicted_tier = "mid"
+
+[briefs.review-locate-defects]
+shape = "review"
+rubric_score = 46
+predicted_tier = "mid"
+
+[briefs.fix-tz-window]
+shape = "debugging"
+rubric_score = 50
+predicted_tier = "mid"
+
+[briefs.fix-decimal-round]
+shape = "data"
+rubric_score = 54
+predicted_tier = "mid"
+
+[briefs.debug-cache-staleness]
+shape = "debugging"
+rubric_score = 60
+predicted_tier = "strong"
+
+[briefs.fix-ledger-replay]
+shape = "data"
+rubric_score = 71
+predicted_tier = "strong"
+
+# ------------------------------------------------------------------ known shortfall
+#
+# The score spread is 20..71 across nine briefs, and EIGHT of the nine sit in
+# 37..71. The weak band holds exactly one brief (fix-clamp2 at 20) and the strong
+# band two. That is inherited, not chosen: the sibling bank records the same
+# structural finding — once a task is substantial enough to plant a displaced cause
+# in, the rubric's cross-shape floor lifts it to at least 26 — so a weak-band rung is
+# hard to author at all.
+#
+# The consequence for THIS study is specific and is carried into the analysis:
+# `fixed-mid` routes every brief correctly-by-construction on any mix whose
+# cheapest-adequate tier is mid, so a bank concentrated in the mid band FLATTERS
+# `fixed-mid` and starves the mechanisms of anything to get right. That is why the
+# headline C(m) is reported per task mix and never on the bank's own uniform mix
+# alone: the bank's mix is not a session's mix and must not be read as one.
+[coverage]
+weak_band_briefs = 1
+mid_band_briefs = 6
+strong_band_briefs = 2
+shapes = ["fix", "planning", "authoring", "refactor", "review", "debugging", "data"]

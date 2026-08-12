@@ -1,0 +1,25 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "high"
+
+# Unarmed control: no plugins at all. Identical to the stacked arms in every field except
+# `[plugins]`.
+#
+# Its job in v5 is the ECONOMY CONTROL — the unarmed per-trial cost baseline the two
+# disciplined arms are priced against. It is NOT a calibration floor. An earlier version of
+# this comment said it was, on the expectation that `bare` lands near 0% on
+# `regression_test_present` as it did on `claude-opus-4-8`. This repo's own
+# `ledger/model-tier-v1.jsonl` contradicts that on the model this bank runs on: an unarmed
+# `claude-opus-5` arm scored 21/30 (70%) with a byte-identical verifier, against 0/30 for
+# the otherwise-identical 4.8 arm. `bare` is therefore EXPECTED to breach the retired
+# `<= 10%` line here, that breach licenses and blocks nothing, and no quality verdict —
+# non-inferiority included — may be read off this bank on `claude-opus-5`.
+# See tasks/humble-vs-super-v5/V5_NOTES.md, "What Stage A is for".
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 2400
