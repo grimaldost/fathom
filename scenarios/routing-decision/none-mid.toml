@@ -1,0 +1,28 @@
+name = "none-mid"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Mechanism: none. Deciding tier: mid (Sonnet 5).
+#
+# Control arm: NO routing mechanism. The dispatching session decides the tier on
+# its own judgment, which is exactly what happens today when no policy is loaded.
+# This is the true baseline and its decision cost is the floor any mechanism must
+# beat. If it wins, that is the finding.
+#
+# THE AXES ARE CROSSED ON PURPOSE. The routing decision is taken by whatever session
+# is dispatching the work, and that session is frequently an expensive one — so a
+# scored rubric can be paying strong-tier prices to decide that some downstream task
+# deserves a weak-tier model. Pricing the decision at one tier would hide that. Every
+# mechanism is therefore priced at all three deciding tiers, and arms differ ONLY by
+# `model` and by the injected policy.
+[tools]
+source = "none"
+# Read/Glob/Grep to reach the briefs, Write to emit routing.json. No Bash and no
+# Task: the job is a judgment, there is nothing to execute and nothing to delegate,
+# and a shell would let an arm burn tokens exploring instead of deciding.
+allowed = ["Read", "Write", "Glob", "Grep"]
+
+[limits]
+trial_timeout_s = 900
