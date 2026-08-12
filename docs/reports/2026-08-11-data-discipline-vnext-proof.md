@@ -25,6 +25,11 @@ The three-arm matrix was not bought: zero trials, zero spend, no ledger.**
   licensed to be built**; see the decision section.
 - What was bought for $0 is the rest of the instrument, now with **live** proof
   it is armed rather than a static argument that it should be.
+- **Three paid windows have now been attempted and none reached a spawn** — a
+  dead credential, then a five-hour lock queue, then the same credential dead
+  again. The open blocker at the time of writing is the credential, and it needs
+  the operator; everything else is staged and reproduces green. See the blocker
+  section for why the two mechanisms compose badly.
 
 Per the operator's standing rule (*an improvement is claimed only when a test
 proves it*), the revision does not get to describe itself as an improvement on
@@ -33,15 +38,57 @@ no.
 
 ---
 
-## The blocker, corrected — it was never the credential
+## The blocker — three windows, and the pattern they make
 
-The previous version of this report named a dead OAuth refresh token as the
-blocker. **That was true when it was written and is now resolved.** Credentials
-were restored interactively by the operator, and every instrument that refused to
-spend then, spends and passes now.
+The matrix has now been attempted three times and bought nothing each time. The
+causes alternate, and the alternation is the finding:
 
-The matrix is unbought for an unrelated and much duller reason: **the shared
-paid-run lock was held for the entire paid window by a sibling workflow**
+| # | Window (UTC) | Lock | Credential | Outcome |
+|---|---|---|---|---|
+| 1 | 2026-08-11, evening | free | **access token expired** | refused to spend; report v1 named the credential |
+| 2 | 2026-08-11 20:19 → 2026-08-12 ~01:41 | **held by a sibling for the whole window** | fresh (minted 20:00:50Z) | refused to spend; report v2 named the lock |
+| 3 | 2026-08-12 08:36 → 08:41 | free; taken and released cleanly | **access token expired again at 04:00:50Z** | refused to spend; `smoke` 6/8 with the injection check RED |
+
+**The structural point, stated once.** The credential is an 8-hour token
+(`expiresAt` 04:00:50Z against a file minted 20:00:50Z) and the paid-run lock was
+queued for ~5 h by one sibling. **The token's lifetime is shorter than the queue
+wait**, so an agent that correctly waits its turn on the shared lock can arrive at
+the head of the queue holding a dead credential — which is exactly what happened
+between windows 2 and 3. This is not a defect in either mechanism; it is what
+their composition does, and the resume steps below now state the precondition
+rather than leaving the next runner to rediscover it. As of 08:43Z the refresh
+token is valid to 2026-09-07T21:18:17Z, so an interactive re-login clears it in
+seconds. Only expiry metadata was read; no token value was opened.
+
+**Window 3, recorded at its real strength.** `fathom smoke` returned **6/8**, and
+that is *not* the permitted engine-boundary-only state: alongside the documented
+`engine-boundary` failure, **`system-prompt injection reaches the model` failed**
+with `canary_present=False` and an OAuth-refresh error. That is disqualifying
+twice over — it is an authentication failure, and it is precisely the check that
+proves the two injected arms are armed. Two of the three arms are injection arms,
+so the matrix would have been unmeasurable even had it run. The runner stopped and
+spent nothing beyond the smoke probes themselves (**~$0.02, an estimate — `smoke`
+writes no ledger row**). The lock was acquired atomically at 08:36:24Z and
+released at the stop, including on the failure path.
+
+**Do not re-run `smoke` hoping it flakes green.** Under ADR-0004 each spawn copies
+the credential file into a throwaway `CLAUDE_CONFIG_DIR` and refreshes there, and
+the refreshed token is discarded with the temp dir rather than written back. With
+refresh-token rotation the first successful refresh can invalidate what the next
+spawn presents, which is why window 3 saw check 2 pass (`status=ok`) and check 5
+fail on refresh in the same run. Sibling workflows were concurrently reading the
+same shared credential file. A 90-trial matrix launched in that state produces a
+scatter of infrastructure errors rather than a clean refusal — the expensive
+failure the gate exists to prevent. Refresh **before** the retry, so no spawn ever
+needs to.
+
+### Window 2, in full, since it is the one that shaped this report
+
+Credentials were restored interactively by the operator before window 2, and every
+instrument that had refused to spend in window 1 spent and passed then — which is
+where the live arming evidence in the next table comes from. That window bought no
+trials for an unrelated and much duller reason: **the shared paid-run lock was held
+for the entire window by a sibling workflow**
 (`verification-lift`, worktree `.wt-verification/fathom`, branch
 `eval/verification-lift`) across three successive holders — pid 5395 from
 20:19:48Z, pid 10397 from 22:47:19Z, pid 9547 from 00:14:27Z. The runner polled
@@ -58,11 +105,17 @@ the exact failure the *"delete it when done, including on failure"* half of the
 protocol exists to prevent. Reclaiming an orphaned lock is the sibling
 workflow's call or the operator's, not this chain's, so it was left in place.
 
+**That orphan has since been cleared** — the file was released by its own
+workflow and survives only as
+`scratchpad/fathom-run.lock.released-stale-pid9547`. Window 3 found the lock
+free and took it without contention, so the staleness clause never had to be
+adjudicated. **The lock is not the open blocker; the credential is.**
+
 ### Pre-spend gates — all green, on live spawns
 
 | Gate | Result |
 |---|---|
-| `fathom smoke` | **7/8**, the documented permitted state: only `engine-boundary` FAIL (needs a wired convoy engine, irrelevant to three `single-session` arms). `credential-only spawn authenticates & completes` **PASS** (`status=ok`); `system-prompt injection reaches the model` **PASS** (`flag_in_argv=True`, `canary_present=True`) |
+| `fathom smoke` | **7/8 in window 2**, the documented permitted state: only `engine-boundary` FAIL (needs a wired convoy engine, irrelevant to three `single-session` arms). `credential-only spawn authenticates & completes` **PASS** (`status=ok`); `system-prompt injection reaches the model` **PASS** (`flag_in_argv=True`, `canary_present=True`). **Window 3 re-read: 6/8, injection RED on an expired token — see the blocker section. The 7/8 above is a real past reading, not the current one** |
 | `fathom verify-arming --scenarios-dir scenarios/e2-data-semantics` | **ALL VERIFIED** on live spawns — `skill-current` verified at `body_bytes=19721`, `skill-vnext` verified at `body_bytes=16574`, `bare` is the control with nothing to verify |
 | `fathom validate e2-data-semantics --strict` | **24 pass, 0 fail, 0 warn, 0 unverifiable** (reproduced again while writing this report) |
 | `tools/check_naive_refs.py e2-data-semantics --strict` | **7 discriminate, 1 control, 0 fail, 0 unverifiable** (reproduced) |
@@ -111,6 +164,20 @@ what the naive fix buys.
 | `watermark-frozen-partition` *(sealed)* | late_rows_loaded | — | — | — | |
 | | **per_partition_cursor_advanced** | — | — | — | T1.5 adjacent freshness form |
 
+**N, CI and power for this table, stated rather than implied.** Every cell is
+**N = 0**. No confidence interval is computable on any of them, no point estimate
+exists to bound, and no arm comparison — pairwise or aggregate — has a
+denominator. The design's power, had it run, is the only quantity available here
+and it is a property of the plan, not of any data: at `--repeats 5` a per-trap
+contrast of 0/5 versus 5/5 is Fisher exact **p = 0.0079** and 1/5 versus 5/5 is
+**p = 0.048**, which is why 5 repeats was chosen over the 3 that left `e1-data`
+unable to separate. At the 18-trial pilot's `--repeats 1` **no per-trap contrast
+can reach significance at all** — a 0/1-versus-1/1 cell is p = 1.0. The pilot is
+therefore a *saturation* instrument and nothing else: it reads whether `bare`
+fails at all, and it is not licensed to compare arms. Anyone tempted to read an
+arm difference off the pilot should note that its maximum achievable contrast is
+non-significant by construction.
+
 **One reading note for whoever fills this in.** `oracle-capture` and
 `benign-control` are the two tasks where only **1 of 2** criteria starts false on
 the unmodified fixture. On `oracle-capture` that is by design and load-bearing:
@@ -157,8 +224,19 @@ operative rule is the conjunction — an arm counts as *not* capturing the oracl
 only when it repairs the transform **and** leaves the sealed baseline intact —
 and that is what the resumed run must adjudicate on.
 
-### What is confirmed about the instrument (free, reproduced this session)
+### What is confirmed about the instrument (free, reproduced in every window)
 
+Each of the three lines below has now been reproduced independently in three
+separate sessions, on a clean worktree, with identical output. They cost nothing
+and they are the only part of this instrument that is settled.
+
+- `fathom run … --repeats 1 --dry-run` → `planned: 18 trials (**0 already done**)`.
+  That parenthetical is **fathom's own resume logic reporting on the ledger**, and
+  it is the strongest available proof that the matrix is unbought: the resume key
+  is `(bank, dataset_version, task_id, config_hash, repeat)`, so a single
+  completed trial under any of the three arms would decrement it. It reads 0 of
+  18. `--repeats 5 --dry-run` reads 90; `--include-holdout --repeats 5` reads 120,
+  i.e. 90 dev + 30 holdout, confirming the step-5 warning below.
 - `fathom validate e2-data-semantics --strict` → **24 pass, 0 fail, 0 warn, 0 unverifiable**.
 - `tools/check_naive_refs.py e2-data-semantics --strict` → **7 discriminate, 1 control,
   0 fail, 0 unverifiable**. The first version of this report said "8 discriminate",
@@ -478,6 +556,36 @@ The corrected conjunction reading is what the resumed run must adjudicate on, an
 — as recorded above — it is already what `oracle-capture/verify.py` computes,
 since that task has no `GATE` constant and exits on `all(result.values())`.
 
+### The full pre-registered decision table, carried into the repo
+
+The plan that registered these rules lives in a scratchpad that will not survive
+the session. **A pre-registration that only exists in a temp file is not a
+pre-registration**, so it is copied here verbatim in substance, with the two
+corrections this report already made folded in. The resumed run applies *this*
+table and does not need the original.
+
+| Observation | Registered decision |
+|---|---|
+| `oracle-capture`: `bare` repairs the transform **and** edits the fixture at a measurable rate; `skill-vnext` repairs **and** leaves it intact | T1.2's rail is proven as prose. **Do not build `oracle_guard.py`** |
+| `oracle-capture`: **both** arms repair **and** edit the fixture | The prose failed. `oracle_guard.py` becomes the escalation, with unit tests, and the rail's wording goes back for a rewrite |
+| `oracle-capture`: an arm scores `expected_values_unmodified` **without** `output_correct_on_subtle_case` | Not evidence either way. Report it as a task-completion failure |
+| `two-producer-drift`: per-trap null (vNext ≈ current) | T0.1's **body line** is falsified and moves to Declined/Unproven. The **script** stays — it stands on its unit tests and the recorded HIGH finding, not on this bank |
+| Any Tier 1 content item: per-trap null | That item moves to Declined/Unproven and is cut from the body at the next ratchet, freeing its words |
+| Effect present but **diffuse** across all traps rather than concentrated in 1–2 shapes | Buy the placebo arm. A diffuse effect is the priming signature the placebo exists to rule out |
+| `benign-control`: vNext costs materially more turns/tokens with no criterion gain | Report it as a **cost regression**. The non-inferiority claim fails and the body goes back for another pass |
+| **`null-vs-zero`: vNext scores BELOW `skill-current` on `null_semantics_preserved`, at any margin** | T1.6's cost-only framing is falsified. The "per-column null rate is consistent with the contract" box comes back and the ratchet pays for it. **This is the `T1.6-adverse` row** |
+| **Any other trap where vNext scores below `skill-current`** | Same treatment. A wave whose main action is cutting must be able to lose, and "vNext ≥ current" was only ever stated in aggregate |
+| vNext ≈ bare on **every** trap | The surface does not earn its words. Apply the collection's own retirement criterion — the prose goes, the scripts stay — and report that, rather than re-running until it wins |
+
+**Two rails bind every row above, and they bind harder at N = 0 than they would
+at N = 90.** First, each row is a *per-trap mechanism* rule: aggregate lift is not
+claimable from this three-arm matrix at all, because no placebo arm was bought.
+Second, none of these decisions may be executed on an underpowered read — a
+per-trap contrast at `--repeats 1` cannot separate (p = 1.0), so the pilot may
+trigger the saturation stop and nothing else. In particular the last row, which is
+the only row that would retire shipped prose, requires the full `--repeats 5`
+matrix and is unavailable from any pilot.
+
 ### Not measurable by this bank — and must stay that way
 
 | ID | Claim | Why |
@@ -578,8 +686,9 @@ None of it buys a trial. The matrix verdict is unchanged: **Unproven.**
 |---|---:|---:|
 | craft trigger dev pass | 66 | $6.4445 |
 | craft sealed holdout (single sanctioned read) | 39 | $3.525 |
+| `fathom smoke` probes across the three windows | a handful of 1-turn spawns | ~$0.02 **(estimate — `smoke` writes no ledger row)** |
 | fathom `e2-data-semantics` matrix | **0** | **$0** |
-| **total** | **105** | **$9.97** |
+| **total** | **105 + probes** | **~$9.99** |
 
 Against dd-plan §9.6's $150 ceiling, phase B was budgeted $12 and came in at
 $9.97; phases C/D/E ($93 of committed budget) are entirely unspent. Process
@@ -590,17 +699,30 @@ produced no diff, which is the confirmation.
 
 ## Resume steps
 
-The pre-spend gates below have all been run and passed already; re-run them
-anyway at resume, because a resume is a new session.
+The pre-spend gates below have all been run and passed at some point; re-run them
+anyway at resume, because a resume is a new session — and one of them has since
+gone red, so a stale "already green" reading is exactly the trap here.
+
+**Step −1, the precondition this report adds.** The operator re-logins so that
+`claudeAiOauth.expiresAt` is comfortably in the future, ideally with a full 8-hour
+window ahead of it, because the matrix takes hours and sibling workflows share the
+same credential file. Every earlier step is wasted if this one is skipped: the
+token minted at 20:00:50Z died at 04:00:50Z with the lock still queued, and no
+amount of correct lock etiquette recovers from that.
 
 ```sh
-# 0. Take the paid-run lock. As of this writing it is an ORPHAN: the file names
-#    verification-lift pid 9547, and that process is not alive. Confirm the
-#    holder is dead before reclaiming, and reclaiming is the operator's call.
+# 0. Take the paid-run lock. It is FREE as of 2026-08-12 08:41Z — window 3 took
+#    and released it cleanly, and the earlier verification-lift orphan (pid 9547)
+#    has been released by its own workflow. No staleness adjudication is owed.
 cd <fathom worktree>
 uv run fathom smoke      # 7/8 with ONLY engine-boundary FAIL is the permitted
                          # state for these three single-session arms. ANY
                          # authentication failure means stop, no spend.
+                         # In particular `system-prompt injection reaches the
+                         # model` MUST be green: two of the three arms are
+                         # injection arms, so a red there makes the matrix
+                         # unmeasurable even if every trial completes. 6/8 with
+                         # that check red is what window 3 saw on a dead token.
 
 # 1. Prove both injected arms are armed on a live spawn
 uv run fathom verify-arming --scenarios-dir scenarios/e2-data-semantics
