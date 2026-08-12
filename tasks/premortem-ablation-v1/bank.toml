@@ -1,0 +1,16 @@
+name = "premortem-ablation-v1"
+dataset_version = "1"
+# The pre-mortem directive ablation (keel's KEEL-B09), built to the skeleton in
+# docs/specs/2026-08-11-cross-project-gate-banks.md Gate A.
+#
+# One task per historical design spec, reviewed adversarially before any code. The
+# three arms differ only in the injected directive: the full ~2,300-word body, a
+# ~500-word core, and nothing at all. The verifier scores the STRUCTURAL contract
+# only — see premortem_verify.py for what that deliberately excludes.
+#
+# Circular-eval discipline: not one task is built from the material under
+# measurement. The directive lives in keel; every spec staged here comes from a
+# SIBLING repo, so no fixture is a document the directive was authored against or
+# tuned on. Two specs are sealed as holdout (ADR-0005) because this bank feeds a
+# retirement decision.
+holdout = ["fathom-v1-design", "tier-separating-bank"]

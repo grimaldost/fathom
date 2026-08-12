@@ -1,0 +1,1 @@
+For new interfaces in a Python codebase in 2026, should typing.Protocol structural typing be the default seam over abstract base classes, or are ABCs still the better default? Give the trade-offs and a recommendation.

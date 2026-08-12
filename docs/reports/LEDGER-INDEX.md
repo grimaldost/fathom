@@ -26,7 +26,8 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `humble-vs-super-v4` | `014bca37168b3c5bcd514820c1b3e9cd28d38e4331c9716391fdc966dafa7d48` | bare:8, stack-super:8 | 16 | 16 |
 | `inject-content-v1` | `ab76c68247c94e7be2fb7a5803f141102a35e221680840488f608a46ca21ca29` | bare:10, nudge:10, protocol:10 | 30 | 30 |
 | `model-tier-effort` | `f76b52e777a473e7d1b041aa147c192b52ca585be33f3ca216715e7d0fd3f39b` | haiku-xhigh:5, sonnet-xhigh:5 | 10 | 10 |
-| `model-tier-v1` | `631dd39e74745d0afdb036032e316029ac1975da87542a50f80e0581552bea9d` | haiku:35, opus:35, sonnet:35, sonnet5:35 | 140 | 140 |
-| `skill-pyeng-v1` | `c455b004e852122bbf98a2fd3b5466e3f1e5995240dde4d549a821b5d8082066` | bare:4, generic-nudge:4, pyeng-skill:3 | 14 | 14 |
+| `model-tier-v1` | `7cd5f4fcdb2b62da2e1b2c14decf86d87a7867c9491eea70ab0b81421c0198f5` | haiku:35, opus:35, opus5:35, sonnet:35, sonnet5:35 | 175 | 175 |
+| `premortem-ablation-v1` | `3dba0503c78f49ec8170e7b00b8dd3da013d69ba4cf2d333c3178435ec120d21` | arm-a-full:6, arm-b-core:6, bare:6 | 18 | 18 |
+| `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
 | `tu-grounding-v1` | `59ffe9c7330a44439653770c6e28155793dd0bca5712e5bc2796d72f3958c7b9` | armed-haiku:3, armed-opus:2, armed-sonnet:3, bare-haiku:3, bare-opus:3, bare-sonnet:3 | 27 | 27 |

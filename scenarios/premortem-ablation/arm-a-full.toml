@@ -1,0 +1,17 @@
+name = "arm-a-full"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+# Read-only, matching the bundled reviewer agent's declared tool set (Read/Grep/Glob)
+# plus Write, which the task needs to emit findings.md and the agent's caller supplies.
+allowed = ["Read", "Grep", "Glob", "Write"]
+
+[context]
+inject = "assets/directive-full.md"
+
+[limits]
+trial_timeout_s = 900
