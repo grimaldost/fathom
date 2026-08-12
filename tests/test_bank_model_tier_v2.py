@@ -56,8 +56,8 @@ ARMS = REPO / "scenarios" / "model-tier-v2"
 SCREEN_ARMS = REPO / "scenarios" / "model-tier-v2-screen"
 sys.path.insert(0, str(REPO / "src"))
 
-# The nine displaced-cause rungs: the ladder whose tier boundaries are under test.
-LADDER_TASKS = {
+# The nine displaced-cause rungs the bank opened with: all of them bug fixes.
+BUGFIX_TASKS = {
     "fix-clamp2",
     "fix-strip-unicode",
     "feature-ndjson-merge",
@@ -68,6 +68,25 @@ LADDER_TASKS = {
     "fix-merge-3way",
     "fix-ledger-replay",
 }
+# The shape-extension rungs. Real routing decisions span authoring, refactoring,
+# unlocalised debugging, data work, review and planning, and the rubric scores those
+# very differently; a ladder made only of bug fixes cannot say whether the mapping
+# transfers off that one distribution. Each of these also sits where the scored rubric
+# and the reduced floor+shortcut mechanism route differently, which is the only place
+# a mechanism comparison can move.
+SHAPE_TASKS = {
+    "refactor-dedupe-validators",
+    "review-locate-defects",
+    "plan-migration-order",
+    "debug-cache-staleness",
+    "data-reconcile-telemetry",
+}
+# Two of them produce a DOCUMENT, not a patch, so `regression_test_present` has no
+# referent: there is no fix for an added test to cover. They emit `code_unchanged`
+# instead — the module must come back byte-identical. The exemption is asserted below
+# (TestArtifactTasks), never assumed.
+ARTIFACT_TASKS = {"review-locate-defects", "plan-migration-order"}
+LADDER_TASKS = BUGFIX_TASKS | SHAPE_TASKS
 # The positive control, ported verbatim from model-tier-v1 (see its task.toml). It is
 # NOT a ladder rung and is deliberately exempt from three of this bank's shape rules —
 # the oracle slice, the counter-strong overlay, and the hard_criteria derivation — all
@@ -81,7 +100,7 @@ OVERLAYS = ("solution", "counter", "counter-strong")
 
 # Criteria that are part of the standard oracle but are not capability-gated: the
 # anchor lives in `thin`, and these two are the v1 contract's hygiene checks.
-NON_HARD = {"no_regression", "regression_test_present"}
+NON_HARD = {"no_regression", "regression_test_present", "code_unchanged"}
 
 # The derivation rule's stop-at count (oracles.toml § HOW hard_criteria IS DERIVED).
 # NOT a power target: under per-trial scoring (ADR-0009) a cell is one draw whatever k
@@ -167,10 +186,13 @@ def admissible(task_id: str) -> tuple[list[str], list[str]]:
 
 
 class TestBankIntegrity(unittest.TestCase):
-    def test_loads_ten_tasks_with_a_resolvable_holdout(self):
+    def test_loads_every_task_with_a_resolvable_holdout(self):
         bank = load_bank()
         self.assertEqual(bank.name, "model-tier-v2")
-        self.assertEqual(bank.dataset_version, "1")
+        # Bumped when the shape-extension rungs landed. No ledger exists for this bank,
+        # so the bump invalidates nothing — it is the honest record that the dataset
+        # changed, which the resume key requires.
+        self.assertEqual(bank.dataset_version, "2")
         self.assertEqual(sorted(t.id for t in bank.tasks), sorted(EXPECTED_TASKS))
         self.assertEqual(bank.holdout, HOLDOUT)
 
@@ -195,6 +217,62 @@ class TestBankIntegrity(unittest.TestCase):
                 hard = task.verify.get("hard_criteria")
                 self.assertIsInstance(hard, list, f"{task.id}: missing hard_criteria")
                 self.assertGreaterEqual(len(hard), 2, f"{task.id}: needs >=2 hard criteria")
+
+    def test_every_task_declares_a_genre_and_a_reduced_prediction(self):
+        """The mechanism comparison is a function of these two fields, so they bind.
+
+        `genre` is what makes "does the mapping transfer off bug fixes" answerable at
+        all; `reduced` is the second mechanism's routing, authored and frozen before
+        any spend so it cannot be fitted to the result afterwards.
+        """
+        data = load_toml(BANK / "scores.toml")
+        genre, reduced = data["genre"], data["reduced"]
+        self.assertEqual(sorted(genre), sorted(EXPECTED_TASKS))
+        self.assertEqual(sorted(reduced), sorted(LADDER_TASKS))
+        for task_id, spec in reduced.items():
+            with self.subTest(task=task_id):
+                self.assertIn(spec["prediction"], ("weak", "mid", "strong"))
+                # The reduced mechanism IS floor-plus-shortcuts: a floored task is mid
+                # unless a shortcut lifts it, and an unfloored task with no shortcut is
+                # weak. Anything else would be a third mechanism wearing its name.
+                if spec["shortcut"]:
+                    self.assertEqual(spec["prediction"], "strong")
+                elif spec["floor_fires"]:
+                    self.assertEqual(spec["prediction"], "mid")
+                else:
+                    self.assertEqual(spec["prediction"], "weak")
+
+    def test_the_bank_covers_more_than_one_task_shape(self):
+        """A ladder of one genre cannot say whether the mapping transfers off it."""
+        genre = load_toml(BANK / "scores.toml")["genre"]
+        rungs = {t: g for t, g in genre.items() if t in LADDER_TASKS}
+        self.assertGreaterEqual(len(set(rungs.values())), 5, f"genres present: {rungs}")
+
+    def test_enough_rungs_discord_for_the_sign_test_to_be_able_to_fire(self):
+        """The arithmetic that sank the first bank, asserted so it cannot recur.
+
+        On the rungs where the two mechanisms agree, no mechanism comparison can move:
+        both route the task the same way and buy the same thing. Only DISCORDANT rungs
+        carry the contrast, and an exact one-sided sign test over K of them has a
+        smallest attainable p of 2**-K. At K=4 that is 0.0625 — above 0.05, so the test
+        could not reach significance however the trials fell. The bank shipped with
+        three buyable discordant rungs before the shape extension.
+        """
+        data = load_toml(BANK / "scores.toml")
+        scores, reduced = data["scores"], data["reduced"]
+
+        def points(score: float) -> str:
+            return "weak" if score <= 25 else ("mid" if score <= 55 else "strong")
+
+        buyable = LADDER_TASKS - set(HOLDOUT)
+        discordant = [t for t in buyable if reduced[t]["prediction"] != points(scores[t])]
+        self.assertGreaterEqual(
+            len(discordant),
+            8,
+            f"only {len(discordant)} buyable discordant rungs {sorted(discordant)}; the "
+            "sign test tolerates no misses below 8 and cannot reach 0.05 below 5",
+        )
+        self.assertLessEqual(2 ** -len(discordant), 0.05)
 
     def test_the_stash_is_byte_identical_to_the_fixture(self):
         """The regression swap only reintroduces the bug if the stash never drifted."""
@@ -234,6 +312,44 @@ class TestBankIntegrity(unittest.TestCase):
                     self.assertFalse(
                         list(fixtures.rglob(name)), f"{task_id}: {name}/ leaked into fixtures/"
                     )
+
+
+class TestArtifactTasks(unittest.TestCase):
+    """The document-producing rungs, and the one criterion they swap.
+
+    `review-locate-defects` and `plan-migration-order` forbid a code change, so
+    "did the arm add a test covering what it fixed" has no referent. Asserting the
+    swap here is what keeps it an exemption on the record rather than a gap: each of
+    them must emit `code_unchanged` and must NOT emit `regression_test_present`, and
+    every other task must do the opposite.
+    """
+
+    def test_only_the_document_tasks_swap_the_hygiene_criterion(self):
+        for task_id in sorted(EXPECTED_TASKS):
+            with self.subTest(task=task_id):
+                criteria, _ = graded(task_id, None)
+                if task_id in ARTIFACT_TASKS:
+                    self.assertIn("code_unchanged", criteria)
+                    self.assertNotIn("regression_test_present", criteria)
+                else:
+                    self.assertIn("regression_test_present", criteria)
+                    self.assertNotIn("code_unchanged", criteria)
+
+    def test_a_document_task_detects_a_code_change(self):
+        """A preservation criterion nobody can trip proves nothing."""
+        for task_id in sorted(ARTIFACT_TASKS):
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = Path(td) / "view"
+                shutil.copytree(BANK / task_id / "fixtures", view)
+                shutil.copytree(BANK / task_id / "solution", view, dirs_exist_ok=True)
+                stashed = next((BANK / task_id / "original").glob("*.py"))
+                target = next(p for p in view.rglob(stashed.name) if "tests" not in p.parts)
+                target.write_text(
+                    target.read_text(encoding="utf-8") + "\n# touched\n", encoding="utf-8"
+                )
+                criteria, code = run_verify(task_id, view)
+                self.assertFalse(criteria["code_unchanged"], f"{task_id}: edit undetected")
+                self.assertNotEqual(code, 0)
 
 
 class TestOracleLevels(unittest.TestCase):
@@ -451,7 +567,12 @@ class TestFixtureLeavesWorkToDo(unittest.TestCase):
                     all(not criteria[c] for c in task.verify["hard_criteria"]),
                     f"{task.id}: a hard criterion is already true on the buggy fixture",
                 )
-                self.assertFalse(criteria["regression_test_present"])
+                if task.id in ARTIFACT_TASKS:
+                    # No code changes on this task, so the hygiene criterion is the
+                    # preservation one and it is TRUE at the starting state.
+                    self.assertTrue(criteria["code_unchanged"])
+                else:
+                    self.assertFalse(criteria["regression_test_present"])
                 self.assertNotEqual(code, 0)
 
 
@@ -602,7 +723,7 @@ class TestGateCommandHygiene(unittest.TestCase):
 
 
 class TestScreenArms(unittest.TestCase):
-    """The stage-0 screen must reuse the matrix's ledger buckets, not fork them.
+    """The two-arm directory must reuse the census's ledger buckets, not fork them.
 
     The resume key is (bank, dataset_version, task_id, config_hash, repeat), and
     ``config_hash`` covers name, model, strategy, effort, tools and limits. If a
@@ -616,10 +737,10 @@ class TestScreenArms(unittest.TestCase):
 
         return {sc.name: sc for sc in _load_resolved_scenarios(directory)}
 
-    def test_screen_arms_resolve_to_the_same_config_hash_as_the_matrix_arms(self):
+    def test_the_pair_arms_resolve_to_the_same_config_hash_as_the_census_arms(self):
         matrix, screen = self._resolved(ARMS), self._resolved(SCREEN_ARMS)
-        self.assertEqual(sorted(screen), ["haiku", "opus5"], "screen is the weak-vs-strong pair")
-        self.assertTrue(set(screen) <= set(matrix), "a screen arm is not in the matrix")
+        self.assertEqual(sorted(screen), ["haiku", "opus5"], "the pair is weak-vs-strong")
+        self.assertTrue(set(screen) <= set(matrix), "a pair arm is not in the census")
         for name in sorted(screen):
             with self.subTest(arm=name):
                 self.assertEqual(
@@ -629,12 +750,12 @@ class TestScreenArms(unittest.TestCase):
                     "invisible to the matrix and paid for twice",
                 )
 
-    def test_the_screen_omits_the_arm_it_defers_buying(self):
-        """The whole point: decide whether a rung has headroom before paying for it."""
+    def test_the_pair_omits_the_arm_the_control_rule_does_not_use(self):
+        """The control's Fisher rule reads two arms; buying a third would buy nothing."""
         self.assertNotIn("sonnet5", self._resolved(SCREEN_ARMS))
 
-    def test_the_screen_arms_are_the_control_rule_arms(self):
-        """One pair of arms serves both jobs, so neither is bought twice."""
+    def test_the_pair_arms_are_the_control_rule_arms(self):
+        """The two-arm directory exists to serve the control rule, and only that."""
         control = load_toml(BANK / "scores.toml")["control"]
         self.assertEqual(
             sorted(self._resolved(SCREEN_ARMS)),
@@ -643,45 +764,108 @@ class TestScreenArms(unittest.TestCase):
 
 
 class TestPreRegistration(unittest.TestCase):
-    """The plan the README commits to, asserted against the bank rather than read.
+    """The buy plan the README commits to, asserted against the bank rather than read.
 
-    The reviewer's third blocking finding was that the admission gate covered 4 of 9
-    rungs while the other 5 went straight into the matrix — and their hard criteria are
-    verbatim bullets in the fixture README the model is pointed at. The fix is a scope
-    rule, so it is a test: EVERY rung that can enter the matrix must be named in the
-    screen plan, and a rung that is not screened must not be buyable.
+    `tranche-plan.toml` supersedes `screen-plan.toml`. The screen admitted a rung only
+    if it was neither saturated nor floored, and SATURATED was a drop conditioned on
+    the outcome under test: a rung the weak tier aces while the rubric routed it dear
+    is the clearest evidence a mechanism over-provisions, and the screen deleted it
+    before the analysis could see it. Saturation is now a reading, not a drop.
     """
 
-    def _screen_plan(self) -> dict:
-        return load_toml(BANK / "screen-plan.toml")
+    def _plan(self) -> dict:
+        return load_toml(BANK / "tranche-plan.toml")
 
-    def test_every_buyable_rung_is_in_the_screen_plan(self):
-        plan = self._screen_plan()
-        screened = set()
-        for block in plan["blocks"].values():
-            screened |= set(block["tasks"])
-        buyable = LADDER_TASKS - set(HOLDOUT)
+    def test_the_superseded_screen_plan_is_gone(self):
+        """One buy plan, or the run follows whichever file the operator opened."""
+        self.assertFalse((BANK / "screen-plan.toml").exists())
+        self.assertEqual(self._plan()["supersedes"], "screen-plan.toml")
+
+    def test_every_buyable_rung_is_bought_by_exactly_one_tranche(self):
+        plan = self._plan()
+        bought: list[str] = []
+        for name, tranche in plan["tranches"].items():
+            with self.subTest(tranche=name):
+                self.assertNotIn(
+                    "control-nonlocal-parse" if name != "t0-instrument" else "",
+                    tranche["tasks"],
+                    "the control is not a ladder rung",
+                )
+            bought.extend(t for t in tranche["tasks"] if t not in CONTROL_TASKS)
+        self.assertEqual(len(bought), len(set(bought)), f"a rung is bought twice: {bought}")
         self.assertEqual(
-            sorted(screened),
-            sorted(buyable),
-            "a rung the matrix can buy is not covered by any screen block",
+            sorted(bought),
+            sorted(LADDER_TASKS - set(HOLDOUT)),
+            "a buyable rung is in no tranche, or a tranche buys something unbuyable",
         )
-        self.assertFalse(
-            screened & set(HOLDOUT), "the sealed holdout may not be screened or bought"
-        )
-        self.assertFalse(screened & CONTROL_TASKS, "the control is not a rung to screen")
+        self.assertFalse(set(bought) & set(HOLDOUT), "the sealed holdout may not be bought")
 
-    def test_the_screen_plan_uses_the_preregistered_repeats_and_arms(self):
-        plan = self._screen_plan()
-        self.assertEqual(plan["repeats"], SCREEN_REPEATS)
-        self.assertEqual(sorted(plan["arms"]), ["haiku", "opus5"])
-        for name, block in plan["blocks"].items():
-            with self.subTest(block=name):
+    def test_the_discordant_core_is_exactly_the_rungs_the_mechanisms_split_on(self):
+        """Tranche 1 buys the contrast and nothing else, and that is checkable.
+
+        A rung where both mechanisms route the same way cannot move C(points) against
+        C(reduced): both buy the same tier and pay the same bill. Spending tranche 1 on
+        one would be spending on a cell whose answer is known to be a tie.
+        """
+        data = load_toml(BANK / "scores.toml")
+        scores, reduced = data["scores"], data["reduced"]
+
+        def points(score: float) -> str:
+            return "weak" if score <= 25 else ("mid" if score <= 55 else "strong")
+
+        buyable = LADDER_TASKS - set(HOLDOUT)
+        discordant = {t for t in buyable if reduced[t]["prediction"] != points(scores[t])}
+        core = set(self._plan()["tranches"]["t1-discordant-core"]["tasks"])
+        self.assertEqual(sorted(core), sorted(discordant))
+
+    def test_each_tranche_trial_count_matches_its_arms_times_tasks_times_repeats(self):
+        plan = self._plan()
+        for name, tranche in plan["tranches"].items():
+            if not tranche["tasks"]:
+                continue  # t3 is filled from the earlier tranches' readings
+            with self.subTest(tranche=name):
+                arms = tranche.get("arms", plan["arms"])
                 self.assertEqual(
-                    block["trials"],
-                    len(plan["arms"]) * len(block["tasks"]) * plan["repeats"],
+                    tranche["trials"],
+                    len(arms) * len(tranche["tasks"]) * tranche["repeats"],
                     f"{name}: the trial count does not match arms x tasks x repeats",
                 )
+
+    def test_every_tranche_says_what_it_decides_and_when_to_stop(self):
+        """A tranche with no stop rule is a tranche that always buys the next one."""
+        for name, tranche in self._plan()["tranches"].items():
+            with self.subTest(tranche=name):
+                self.assertTrue(tranche["decides"].strip())
+                self.assertTrue(tranche["stop_rule"].strip())
+
+    def test_no_reading_is_robust_at_the_census_repeat_count(self):
+        """The arithmetic behind tranche 3, recomputed rather than quoted.
+
+        A robust reading needs the chosen tier's Wilson lower bound to clear tau. At
+        five repeats a PERFECT record does not: 5/5 bounds at 0.566 against tau=0.70.
+        Ten does, at 0.722. That is the whole justification for a deepening tranche and
+        it is arithmetic, not preference.
+        """
+        from fathom import calibration as cal
+
+        plan = self._plan()
+        tau = plan["rule"]["tau"]
+        census, deepen = plan["census_repeats"], plan["deepen_repeats"]
+        self.assertLess(cal._wilson(census, census)[0], tau)
+        self.assertGreaterEqual(cal._wilson(deepen, deepen)[0], tau)
+
+    def test_a_chunk_is_small_enough_to_outlive_an_access_token(self):
+        """Interruption is designed for, not hoped about.
+
+        The host's OAuth token lives about eight hours. A chunk is `chunk_tasks` rungs
+        at three arms and `census_repeats` repeats; at the v1 observed ~4 minutes of
+        wall-clock per trial it must finish inside that window with room to spare, or a
+        chunk that starts on a fresh token dies on it and the operator learns about
+        resumability the expensive way.
+        """
+        plan = self._plan()
+        trials = plan["chunk_tasks"] * len(plan["arms"]) * plan["census_repeats"]
+        self.assertLessEqual(trials * 4 / 60, 8 / 2, f"{trials} trials is over half a token")
 
     def test_the_control_is_declared_with_a_rule_that_clears_its_power_bar(self):
         control = load_toml(BANK / "scores.toml")["control"]

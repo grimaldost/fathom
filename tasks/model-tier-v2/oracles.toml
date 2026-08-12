@@ -312,3 +312,136 @@ strong = [
     "regression_test_present",
 ]
 independent_check = "None — the control is ported verbatim from model-tier-v1 and deliberately carries no independent check beyond its two hard criteria."
+
+
+# ---------------------------------------------------------------------------------
+# THE SHAPE-EXTENSION RUNGS (added 2026-08-12).
+#
+# The nine rungs above are all bug fixes. Routing decisions are not: they span
+# authoring, refactoring, unlocalised debugging, data work, review and planning, and
+# the rubric scores those very differently. Five rungs below carry those genres, and
+# each was chosen to sit where the scored rubric and the reduced floor+shortcut model
+# DISAGREE — the only rungs on which a mechanism comparison can move (README §
+# *The two mechanisms this bank can separate*).
+#
+# TWO OF THEM PRODUCE A DOCUMENT, NOT A PATCH. `review-locate-defects` and
+# `plan-migration-order` forbid a code change, so `regression_test_present` — "did the
+# arm add a test covering what it fixed" — has no referent. They emit `code_unchanged`
+# in its place: the module must come back byte-identical to the stash. Both are hygiene
+# criteria and neither is ever admissible as a hard criterion (one is true at the
+# starting state, the other has nothing to test). The swap is asserted in
+# tests/test_bank_model_tier_v2.py, not left to this comment.
+
+[tasks.refactor-dedupe-validators]
+thin = ["forms_import", "all_three_accept_a_plain_address"]
+standard = [
+    "forms_import",
+    "all_three_accept_a_plain_address",
+    "converged_rules_all_three",
+    "all_three_delegate_to_common",
+    "invite_stays_case_insensitive",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "forms_import",
+    "all_three_accept_a_plain_address",
+    "converged_rules_all_three",
+    "all_three_delegate_to_common",
+    "invite_stays_case_insensitive",
+    "no_regression",
+    "regression_test_present",
+    "rules_match_the_document_exactly",
+    "delegation_survives_a_rule_change",
+]
+independent_check = "The whole grid RULES.md's four rules imply, including the POSITIVE cases the drifted copies all already accept. A refactor that converges the three copies and invents a rule besides (rejecting plus-addressing) satisfies every standard criterion and fails here."
+
+[tasks.debug-cache-staleness]
+thin = ["feedcache_imports", "summary_is_cached_within_one_day"]
+standard = [
+    "feedcache_imports",
+    "summary_is_cached_within_one_day",
+    "summary_fresh_across_midnight",
+    "report_fresh_across_midnight",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "feedcache_imports",
+    "summary_is_cached_within_one_day",
+    "summary_fresh_across_midnight",
+    "report_fresh_across_midnight",
+    "no_regression",
+    "regression_test_present",
+    "trend_fresh_across_midnight",
+    "every_view_is_day_and_tenant_scoped",
+]
+independent_check = "The third consumer of the same key builders, plus a sweep over BOTH scoping axes on all three views — the tenant axis already works and is never named in the instruction, so a patch that reaches two of the three builders passes standard and fails here."
+
+[tasks.data-reconcile-telemetry]
+thin = ["recon_imports", "matches_the_worked_example"]
+standard = [
+    "recon_imports",
+    "matches_the_worked_example",
+    "tolerance_bound_is_inclusive",
+    "tie_break_follows_the_rules",
+    "no_regression",
+    "regression_test_present",
+]
+strong = [
+    "recon_imports",
+    "matches_the_worked_example",
+    "tolerance_bound_is_inclusive",
+    "tie_break_follows_the_rules",
+    "no_regression",
+    "regression_test_present",
+    "counts_reconcile_over_readings",
+    "gaps_are_exactly_the_unmatched",
+]
+independent_check = "The counts have to reconcile ACROSS all three modules on two unmatched readings that share a timestamp — a case no rule spells out and the conventions decide. A patch with both matching rules right and a gaps list that collapses a shared timestamp passes standard and fails here."
+
+[tasks.review-locate-defects]
+thin = ["review_file_present", "names_at_least_one_defect"]
+standard = [
+    "review_file_present",
+    "names_at_least_one_defect",
+    "names_every_defect",
+    "cites_a_rule_for_every_named_defect",
+    "no_regression",
+    "code_unchanged",
+]
+strong = [
+    "review_file_present",
+    "names_at_least_one_defect",
+    "names_every_defect",
+    "cites_a_rule_for_every_named_defect",
+    "no_regression",
+    "code_unchanged",
+    "precision_within_one_false_positive",
+    "names_no_clean_function",
+]
+independent_check = "Precision. The standard oracle measures recall over the planted defects; a review that names all six functions has perfect recall and has decided nothing. Nothing in standard can tell the two apart."
+
+[tasks.plan-migration-order]
+thin = ["plan_file_present", "every_migration_listed_once"]
+standard = [
+    "plan_file_present",
+    "every_migration_listed_once",
+    "dependencies_respected",
+    "backfills_after_every_add",
+    "same_table_contiguous",
+    "no_regression",
+    "code_unchanged",
+]
+strong = [
+    "plan_file_present",
+    "every_migration_listed_once",
+    "dependencies_respected",
+    "backfills_after_every_add",
+    "same_table_contiguous",
+    "no_regression",
+    "code_unchanged",
+    "rationale_cites_every_constraint",
+    "order_is_deterministic_and_bare",
+]
+independent_check = "The plan has to say WHY, constraint by constraint. An order that satisfies all three constraints and an order that satisfies them for stated reasons are the same artifact under the standard oracle and are not the same work."

@@ -34,6 +34,17 @@ fix-graph-cycle = 62
 fix-merge-3way = 67
 fix-ledger-replay = 71
 
+# The shape-extension rungs (added 2026-08-12). The nine above are all bug fixes;
+# routing decisions are not. Each of these five carries a genre the bank had no rung
+# for AND sits where the scored rubric and the reduced floor+shortcut mechanism route
+# differently — see [reduced] below and README § *The two mechanisms this bank can
+# separate*. Their per-axis breakdowns are at the foot of this file.
+refactor-dedupe-validators = 45
+review-locate-defects = 46
+plan-migration-order = 37
+debug-cache-staleness = 60
+data-reconcile-telemetry = 66
+
 # Per-axis breakdown, for the second rater. Keys are the rubric's own axes:
 # base + structure + reasoning + domain + context + output + adjustments.
 # `cross_shape` records whether the cross-shape floor fired (it never lowers a score).
@@ -136,6 +147,208 @@ output = 2
 adjustments = -10
 cross_shape = true
 note = "incremental fold must equal a whole-log replay under out-of-order and repeated events; ledger reconciliation scored regulatory"
+
+# =================================================================================
+# THE SHAPE-EXTENSION RUNGS (added 2026-08-12), one rater, same pinned rubric.
+#
+# All five sit where the scored rubric and the reduced floor+shortcut model disagree,
+# which is the only place a mechanism comparison can move. Every one of them is scored
+# by the rubric as written, NOT tuned to produce a disagreement — the disagreement is
+# read off afterwards, from `[reduced]` below, and the enrichment is declared in
+# README.md as a limit on what the bank can estimate (it can say which mechanism wins
+# WHERE THEY DIFFER; it cannot say how often they differ on a real workload).
+
+[breakdown.refactor-dedupe-validators]
+base = 30
+structure = 10
+reasoning = 10
+domain = 0
+context = 3
+output = 2
+adjustments = -10
+cross_shape = false
+note = "four named files; reconciling three drifted copies against a rules document is conditional logic, not copy/paste. The floor does NOT fire: the prompt enumerates every caller, which is breadth and not cross-shape (rubric Example 5)"
+
+[breakdown.debug-cache-staleness]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "no file is named at all: the symptom is a stale view, the cause is the key builder, and three views share it. Reasoning scored trade-off (+15) because the fix has to choose between scoping the key, expiring the entry and invalidating on write"
+
+[breakdown.data-reconcile-telemetry]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 10
+output = 3
+adjustments = -10
+cross_shape = false
+note = "the strong band reached WITHOUT any shortcut signal and without the floor: every edit site is named, and the points come from breadth, domain rules, and a brief that requires both the rules document and the package conventions. This is the cell the bank had no rung in"
+
+[breakdown.review-locate-defects]
+base = 30
+structure = 0
+reasoning = 10
+domain = 8
+context = 3
+output = 0
+adjustments = -5
+cross_shape = false
+note = "one module read, one file written, both named. Adjustments are -5 and not -10: the acceptance criteria are specific, but there is no mechanical verification the arm can run against its own review — the shipped suite says nothing about it"
+
+[breakdown.plan-migration-order]
+base = 30
+structure = 5
+reasoning = 10
+domain = 0
+context = 0
+output = 2
+adjustments = -10
+cross_shape = false
+note = "constraint satisfaction over a declared set: conditional, not proof-like. Everything is given, so context scores 0. The most contestable declaration in [reduced] is this one — a rater who reads C3 as `multi-stage migration with rollback` fires the strong shortcut and the rung stops being discordant"
+
+# =================================================================================
+# THE REDUCED MECHANISM, DECLARED PER TASK AND FROZEN BEFORE ANY SPEND.
+#
+# The decision this bank feeds is not "is the rubric accurate" but "which routing
+# MECHANISM costs least at equal quality". Two of the candidate mechanisms are
+# authored here because they are properties of the TASK, not of a run:
+#
+#   points  — tier_for_score(score), the scored rubric as it ships.
+#   reduced — the floor plus a few shape shortcuts: the cross-shape floor fires -> mid;
+#             else a shortcut from the rubric's OWN published "Likely strong" list
+#             fires -> strong; else weak.
+#
+# `shortcut` names the entry from that list, verbatim, or is empty. Taking the list
+# from the rubric rather than inventing one is what keeps the reduced mechanism from
+# being a straw man: it is the rubric's own advice with the arithmetic removed.
+#
+# A rung is DISCORDANT when the two mechanisms route it differently. Those rungs, and
+# only those, are where C(points) and C(reduced) can differ, so they are what tranche 1
+# buys. The other mechanisms under test (always-weak-with-escalation, a fixed single
+# tier, no mechanism) differ from both on EVERY rung and need the full census.
+
+[reduced.fix-clamp2]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.fix-strip-unicode]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.feature-ndjson-merge]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-tz-window]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-decimal-round]
+floor_fires = true
+shortcut = "regulatory / compliance"
+prediction = "strong"
+
+[reduced.fix-quota-rollup]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-graph-cycle]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-merge-3way]
+floor_fires = true
+shortcut = "novel algorithm"
+prediction = "strong"
+
+[reduced.fix-ledger-replay]
+floor_fires = true
+shortcut = "regulatory / compliance"
+prediction = "strong"
+
+[reduced.refactor-dedupe-validators]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.debug-cache-staleness]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.data-reconcile-telemetry]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.review-locate-defects]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.plan-migration-order]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+# The control is not a rung and takes no mechanism prediction.
+
+# =================================================================================
+# TASK GENRE, so the substrate table can be read by shape as well as by score.
+
+[genre]
+fix-clamp2 = "bugfix"
+fix-strip-unicode = "bugfix"
+feature-ndjson-merge = "bugfix"
+fix-tz-window = "bugfix"
+fix-decimal-round = "bugfix"
+fix-quota-rollup = "bugfix"
+fix-graph-cycle = "bugfix"
+fix-merge-3way = "bugfix"
+fix-ledger-replay = "bugfix"
+control-nonlocal-parse = "bugfix"
+refactor-dedupe-validators = "refactor"
+debug-cache-staleness = "debugging"
+data-reconcile-telemetry = "data"
+review-locate-defects = "review"
+plan-migration-order = "planning"
+
+# =================================================================================
+# THE ANALYSIS PARAMETERS, FIXED BEFORE THE SPEND.
+#
+# `tau` is the adequacy bar: a tier is adequate for a task when its per-trial pass
+# rate is at least tau. 0.7 is chosen against measured accuracy, not taste — see
+# README § *Why the rung statistic changed*: over six realistic rungs, the absolute
+# bar at 0.7 reads the right tier 88% of the time at repeats=5 and 96% at repeats=10,
+# where the as-built relative statistic reads it 33% and 63%. At repeats=5 the bar is
+# "4 of 5 or better".
+#
+# `non_inferiority_margin` is the quality side of the constraint: a cheaper mechanism
+# wins only if its mean quality is within this of the best mechanism's.
+#
+# `escalation_cost_multiplier` prices the retry term: a gate-caught failure is assumed
+# to buy the failing tier's spend AND the next tier up. A silent failure buys the
+# failing tier's spend and an escape, which the quality constraint handles rather than
+# the cost model — the two are reported separately and never summed.
+[analysis]
+tau = 0.7
+tau_sensitivity = [0.6, 0.7, 0.8]
+non_inferiority_margin = 0.05
+alpha = 0.05
+escalation_cost_multiplier = 1.0
 
 # The positive control, declared machine-readably so calibration.py reads it by its own
 # rule and keeps it out of the confusion matrix. The rule is a one-sided Fisher exact

@@ -42,6 +42,7 @@ The cost axis is the token×price estimate (``cost_usd_est``; subscription auth 
 from __future__ import annotations
 
 import math
+import random
 import warnings
 from collections import defaultdict
 from math import comb
@@ -210,7 +211,7 @@ def arm_task_stats(trials: dict, task_id: str, arm: str, hard: list[str]) -> dic
     ``draws`` is the ``(passing, n_trials)`` integer pair the CI rests on. It replaces
     the old ``pooled`` key, which named the very inflation this estimator removes.
     """
-    passing = n_trials = mixed = 0
+    passing = n_trials = mixed = gate_caught = silent = 0
     for (sc, tid, _rep), vr in trials.items():
         if sc != arm or tid != task_id:
             continue
@@ -220,7 +221,15 @@ def arm_task_stats(trials: dict, task_id: str, arm: str, hard: list[str]) -> dic
         n_trials += 1
         if s == t:
             passing += 1
-        elif s > 0:
+        else:
+            # The failure's MODE, not just its count: a gate-caught failure buys a
+            # repair loop (a cost term) and a silent one buys an escape (a quality
+            # term). See the routing section — they are never summed.
+            if trial_outcome(vr, hard) == "gate_caught":
+                gate_caught += 1
+            else:
+                silent += 1
+        if 0 < s < t:
             mixed += 1
     if n_trials == 0:
         return None
@@ -230,6 +239,8 @@ def arm_task_stats(trials: dict, task_id: str, arm: str, hard: list[str]) -> dic
         "n_trials": n_trials,
         "draws": (passing, n_trials),
         "mixed_trials": mixed,
+        "gate_caught": gate_caught,
+        "silent": silent,
     }
 
 
@@ -432,6 +443,12 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
             continue
         predicted = tier_for_score(meta["score"])
         empirical, indet = empirical_right_tier(stats_by_arm)
+        # The routing layer: the cheapest tier that clears the bar (ground truth), the
+        # reduced mechanism's routing, and the per-tier cost/quality/failure-mode cells
+        # every C(m) term is computed from.
+        tau = float((meta.get("analysis") or {}).get("tau", TAU))
+        need, need_robust = needed_tier(stats_by_arm, tau)
+        reduced = (meta.get("reduced") or {}).get("prediction")
         rows.append(
             {
                 "task_id": tid,
@@ -439,6 +456,11 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
                 "predicted": predicted,
                 "empirical": empirical,
                 "indeterminate": indet,
+                "needed": need,
+                "needed_robust": need_robust,
+                "reduced": reduced,
+                "discordant": bool(reduced) and reduced != predicted,
+                "per_tier": _tier_costs(stats_by_arm, runs, tid),
                 "means": {a: stats_by_arm[a]["mean"] for a in stats_by_arm},
                 "n": {a: stats_by_arm[a]["n_trials"] for a in stats_by_arm},
                 "mixed": sum(stats_by_arm[a]["mixed_trials"] for a in stats_by_arm),
@@ -465,6 +487,16 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
         col = "indeterminate" if r["indeterminate"] else r["empirical"]
         confusion[r["predicted"]][col] += 1
 
+    params = next((m["analysis"] for m in task_meta.values() if m.get("analysis")), {})
+    hashes = arm_config_hashes(raw)
+    for arm, hs in hashes.items():
+        if len(hs) > 1:
+            warnings.warn(
+                f"arm {arm!r} appears under {len(hs)} config hashes {hs}: its per-arm "
+                "cost and pass rate would average two different configurations under "
+                "one label. Aggregate on config_hash, or archive and re-run.",
+                stacklevel=2,
+            )
     return {
         "rows": rows,
         "confusion": confusion,
@@ -473,6 +505,11 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
         "pareto": _pareto(trials, runs, task_meta),
         # Context-size view (§7): empty list for banks with no `[context]` tags.
         "pairs": _context_pairs(trials, task_meta),
+        # Routing layer — the substrate the mechanism comparison is scored against.
+        "arm_config_hashes": hashes,
+        "analysis_params": params,
+        "discordance": discordance_analysis(rows, params),
+        "mechanisms": mechanism_costs(rows, params),
     }
 
 
@@ -554,6 +591,351 @@ def _pareto(trials: dict, runs: dict, task_meta: dict) -> list[dict]:
     return points
 
 
+# =========================================================================== routing
+#
+# THE ROUTING SUBSTRATE — what a mechanism comparison is scored against.
+#
+# The question this analysis serves is not "is the complexity score accurate". It is
+# the owner's: **the lowest spend per session without losing quality**, and explicitly
+# "if we are spending MORE by choosing the tier with a rubric calculation, then change
+# it". So a routing MECHANISM m is judged on
+#
+#     C(m) = decision_cost(m) + execution_cost(tier m picks) + retry_cost(m)
+#
+# minimised subject to quality >= (best mechanism's quality - a pre-registered
+# non-inferiority margin). Quality is a CONSTRAINT; cost is the objective.
+#
+# This module owns the middle two terms and the constraint, per task, from the ledger:
+#
+#   * ``needed_tier``  — the cheapest tier that clears the adequacy bar. The ground
+#     truth every mechanism is scored against, and the floor no mechanism can beat.
+#   * ``arm_task_stats`` — per (task, arm): pass rate, mean USD, and the failure
+#     BREAKDOWN, because a failure's mode is what prices the retry term.
+#   * ``mechanism_costs`` — C(m) for the mechanisms that are properties of the TASK
+#     (the scored rubric, the floor+shortcut lookup, a fixed tier, the oracle).
+#
+# It does NOT own ``decision_cost(m)``, and it cannot: what it costs to RUN a
+# mechanism is measured by running it, which is a separate program with its own arms.
+# ``routing_substrate`` emits the table that program consumes.
+#
+# WHY A FAILURE'S MODE IS A COST TERM. A red gate the cheap model cannot diagnose buys
+# a repair loop, not a saving: the session pays for the weak tier AND the tier it
+# escalates to. A failure the gate never sees buys neither — it buys an escape, which
+# is a quality loss and not a cost, and summing the two would hide the worse one inside
+# the cheaper one. So they are counted separately and never added:
+#
+#   pass         every hard criterion true
+#   gate_caught  a hard criterion false AND the shipped suite went red — a gated
+#                strategy would see this and could escalate
+#   silent       a hard criterion false AND the shipped suite stayed green — the
+#                expensive failure, invisible to any gate the session runs
+#
+# The gate signal is ``no_regression``: the bank's own ``[gate] run`` IS the shipped
+# suite, and ``no_regression`` runs a harness-side copy of it that a candidate cannot
+# weaken by editing the workspace. That makes it the conservative reading of "would the
+# gate have caught this" — a candidate who deletes a test cannot turn a gate_caught
+# failure into a silent one.
+
+TAU = 0.70  # default adequacy bar; banks override via scores.toml's [analysis].tau
+GATE_CRITERION = "no_regression"
+
+# The mechanisms that are properties of a TASK and therefore computable here. Any
+# mechanism whose choice depends on the run (escalate-on-red, a model that reads the
+# repo) is NOT here — it needs arms, and it belongs to the mechanism-comparison
+# program this table feeds.
+TASK_LEVEL_MECHANISMS = ("points", "reduced", "always-weak", "always-mid", "always-strong")
+
+
+def trial_outcome(vr: Any, hard: list[str]) -> str:
+    """``pass`` | ``gate_caught`` | ``silent`` | ``unscored`` for one trial."""
+    s, t = hard_fraction(vr, hard)
+    if t == 0:
+        return "unscored"
+    if s == t:
+        return "pass"
+    if isinstance(vr, dict) and vr.get(GATE_CRITERION) is False:
+        return "gate_caught"
+    return "silent"
+
+
+def needed_tier(stats_by_arm: dict[str, dict], tau: float = TAU) -> tuple[str, bool]:
+    """(tier, robust) — the CHEAPEST TIER THAT CLEARS THE BAR. The ground truth.
+
+    A tier is adequate for a task when its per-trial pass rate is at least *tau*; the
+    needed tier is the cheapest adequate one, and ``indeterminate`` when none clears
+    (a floored task — the instrument had no purchase on it).
+
+    WHY THIS AND NOT ``empirical_right_tier``. That statistic asks a RELATIVE question
+    — which tier is statistically indistinguishable from the best arm — and it answers
+    it conservatively enough to be unusable at buyable repeat counts: over six
+    realistic rung shapes it returns the right tier 33% of the time at repeats=5 and
+    63% at repeats=10, printing ``indeterminate`` the rest of the time, and it is not
+    even monotone in n (the CI-overlap leg tightens in steps, so 12 repeats can read
+    worse than 10). A confusion matrix built on it is mostly a machine for printing
+    ``indeterminate``.
+
+    It is also the wrong question. Routing asks an ABSOLUTE one: is this tier good
+    enough to send the work to? An adequacy bar answers exactly that, reads the right
+    tier 88% of the time at repeats=5 and 96% at repeats=10 on the same six shapes, and
+    is the quantity the cost model needs. ``empirical_right_tier`` is kept and still
+    rendered — no committed reading moves — but it is no longer the primary.
+
+    ``robust`` is the honest qualifier rather than a second verdict: the chosen tier's
+    lower confidence bound clears the bar AND every cheaper tier's upper bound misses
+    it. A non-robust reading is a point estimate, and the scorecard says so.
+    """
+    tiered = {a: s for a, s in stats_by_arm.items() if arm_tier(a)}
+    adequate = [a for a, s in tiered.items() if s["mean"] >= tau]
+    if not adequate:
+        return ("indeterminate", False)
+    pick = min(adequate, key=_ladder_key)
+    cheaper = [a for a in tiered if _ladder_key(a) < _ladder_key(pick)]
+    robust = tiered[pick]["ci"][0] >= tau and all(tiered[a]["ci"][1] < tau for a in cheaper)
+    return (arm_tier(pick) or "indeterminate", robust)
+
+
+def arm_config_hashes(raw: list[dict]) -> dict[str, list[str]]:
+    """{arm name: every config_hash it was recorded under}, from the trial lines.
+
+    Cost and outcome are aggregated per (task, arm) for readability, but the resume
+    key — and therefore the identity of what was actually run — is the config_hash. An
+    arm name that maps to more than one hash means the arm was edited mid-programme and
+    two different configurations are being averaged under one label. This exposes that
+    rather than hiding it; ``routing_substrate`` warns on it and records the hashes
+    beside every row.
+    """
+    out: defaultdict[str, set[str]] = defaultdict(set)
+    for rec in raw:
+        if rec.get("kind") == "trial" and rec.get("scenario"):
+            out[rec["scenario"]].add(rec.get("config_hash", ""))
+    return {arm: sorted(h for h in hashes if h) for arm, hashes in out.items()}
+
+
+def _tier_costs(stats: dict[str, dict], runs: dict, task_id: str) -> dict[str, dict]:
+    """{tier: {arm, trials, pass_rate, ci, gate_caught, silent, mean_cost_usd}}."""
+    out: dict[str, dict] = {}
+    for arm, s in stats.items():
+        tier = arm_tier(arm)
+        if not tier or tier in out:
+            continue
+        passing, n = s["draws"]
+        out[tier] = {
+            "arm": arm,
+            "trials": n,
+            "passing": passing,
+            "pass_rate": s["mean"],
+            "ci": list(s["ci"]),
+            "gate_caught_failures": s.get("gate_caught", 0),
+            "silent_failures": s.get("silent", 0),
+            "mean_cost_usd": _arm_cost(runs, arm, [task_id]),
+        }
+    return out
+
+
+def _next_tier_up(tier: str, present: dict[str, dict]) -> str | None:
+    dearer = [t for t in present if TIER_ORDER.get(t, 0) > TIER_ORDER.get(tier, 0)]
+    return min(dearer, key=lambda t: TIER_ORDER[t]) if dearer else None
+
+
+def mechanism_costs(rows: list[dict], params: dict | None = None) -> list[dict]:
+    """Execution + retry cost per task for each task-level mechanism, plus quality.
+
+    For mechanism *m* routing task *t* to tier ``T``:
+
+        execution(t)  = mean USD per trial at T
+        retry(t)      = P(gate_caught at T) * multiplier * mean USD at the next tier up
+        quality(t)    = pass rate at T
+        escape(t)     = P(silent at T)
+
+    ``retry`` uses the gate-caught share ONLY. A silent failure buys no retry because
+    nothing in the session knows to retry; it lands in ``escape_rate``, which the
+    non-inferiority constraint governs. Adding the two would let a mechanism that fails
+    invisibly look cheaper than one that fails loudly, which is backwards.
+
+    ``decision_cost`` is deliberately absent and reported as ``null`` rather than 0 —
+    it is measured by running each mechanism, which is a different programme. A
+    mechanism total here is therefore a LOWER BOUND on its true cost, and the ordering
+    it implies is only decisive when the gap between two mechanisms exceeds the
+    difference in what they cost to run.
+    """
+    params = params or {}
+    mult = float(params.get("escalation_cost_multiplier", 1.0))
+    usable = [r for r in rows if not r.get("control") and r.get("per_tier")]
+    out: list[dict] = []
+    for name in (*TASK_LEVEL_MECHANISMS, "oracle"):
+        exec_total = retry_total = quality_total = escape_total = 0.0
+        counted = 0
+        unroutable: list[str] = []
+        for r in usable:
+            tier = _mechanism_tier(name, r)
+            per = r["per_tier"]
+            if tier not in per:
+                unroutable.append(r["task_id"])
+                continue
+            cell = per[tier]
+            n = cell["trials"] or 1
+            gate_rate = cell["gate_caught_failures"] / n
+            nxt = _next_tier_up(tier, per)
+            exec_total += cell["mean_cost_usd"]
+            retry_total += gate_rate * mult * (per[nxt]["mean_cost_usd"] if nxt else 0.0)
+            quality_total += cell["pass_rate"]
+            escape_total += cell["silent_failures"] / n
+            counted += 1
+        if not counted:
+            continue
+        out.append(
+            {
+                "mechanism": name,
+                "n_tasks": counted,
+                "unroutable": sorted(unroutable),
+                "decision_cost_usd": None,  # not measured here — see the docstring
+                "execution_cost_usd": exec_total / counted,
+                "retry_cost_usd": retry_total / counted,
+                "total_cost_usd": (exec_total + retry_total) / counted,
+                "quality": quality_total / counted,
+                "escape_rate": escape_total / counted,
+            }
+        )
+    return out
+
+
+def _mechanism_tier(name: str, row: dict) -> str:
+    if name == "points":
+        return row["predicted"]
+    if name == "reduced":
+        return row.get("reduced") or "indeterminate"
+    if name == "oracle":
+        return row.get("needed") or "indeterminate"
+    return name.replace("always-", "")
+
+
+def routing_substrate(cal: dict, task_meta: dict[str, dict], params: dict | None = None) -> dict:
+    """The machine-readable artifact the mechanism-comparison programme consumes.
+
+    One row per non-control task: its rubric score, its genre, what each candidate
+    task-level mechanism would route it to, what each TIER actually cost and achieved,
+    how its failures split between gate-caught and silent, and the cheapest tier that
+    cleared the bar. Everything downstream — C(m), the non-inferiority check, the
+    discordance analysis — is a function of this table and nothing else, which is what
+    makes it a coordination surface rather than a report.
+
+    Stable enough to diff across runs: schema_version is bumped when a field changes
+    meaning, never when a value moves.
+    """
+    params = params or {}
+    rows = [r for r in cal["rows"] if not r.get("control")]
+    return {
+        "schema_version": "1",
+        "tau": float(params.get("tau", TAU)),
+        "non_inferiority_margin": float(params.get("non_inferiority_margin", 0.05)),
+        "arm_config_hashes": cal.get("arm_config_hashes", {}),
+        "tasks": [
+            {
+                "task_id": r["task_id"],
+                "rubric_score": r["score"],
+                "genre": task_meta.get(r["task_id"], {}).get("genre"),
+                "tier_points": r["predicted"],
+                "tier_reduced": r.get("reduced"),
+                "discordant": r.get("discordant"),
+                "cheapest_adequate_tier": r.get("needed"),
+                "cheapest_adequate_robust": r.get("needed_robust"),
+                "relative_right_tier": ("indeterminate" if r["indeterminate"] else r["empirical"]),
+                "per_tier": r.get("per_tier", {}),
+            }
+            for r in sorted(rows, key=lambda x: x["score"])
+        ],
+        "mechanisms": mechanism_costs(rows, params),
+    }
+
+
+def _paired_permutation_p(deltas: list[float]) -> float:
+    """Exact two-sided sign-flip p for a paired difference, when it is enumerable.
+
+    K <= 20 pairs enumerates all 2**K sign flips exactly; above that it is a uniform
+    subsample with a fixed seed, which is deterministic and reported as approximate.
+    The statistic is the mean, so the test asks: how often does a random re-signing of
+    these paired differences reach a mean at least this extreme?
+    """
+    k = len(deltas)
+    if k == 0:
+        return 1.0
+    observed = abs(sum(deltas) / k)
+    if k <= 20:
+        total = 1 << k
+        hits = 0
+        for mask in range(total):
+            acc = 0.0
+            for i, d in enumerate(deltas):
+                acc += -d if (mask >> i) & 1 else d
+            if abs(acc / k) >= observed - 1e-12:
+                hits += 1
+        return hits / total
+    rng = random.Random(20260812)
+    iters, hits = 20000, 0
+    for _ in range(iters):
+        acc = sum(-d if rng.getrandbits(1) else d for d in deltas)
+        if abs(acc / k) >= observed - 1e-12:
+            hits += 1
+    return (hits + 1) / (iters + 1)
+
+
+def discordance_analysis(rows: list[dict], params: dict | None = None) -> dict:
+    """The two mechanisms, compared where and only where they route differently.
+
+    Two readings of the same discordant set, reported together because they answer
+    different halves of the decision:
+
+    * **which routed right** — an exact one-sided sign test over the discordant rungs
+      whose needed tier is determinate. This is the accuracy question, and it is hard
+      K-limited: with fewer than 5 informative rungs the smallest attainable p is above
+      0.05, so no result of any kind is available and the test is not run.
+    * **which cost less** — the paired per-task cost difference on the same rungs, with
+      a sign-flip permutation p. This is the question the owner actually asked, it is
+      in dollars rather than in labels, and being continuous it carries more
+      information per rung than the sign test does.
+
+    A mechanism can route wrong and still cost less (it over-provisions rarely and
+    cheaply), or route right and cost more (its wins are on tasks where the tiers cost
+    nearly the same). Reporting only one of the two would hide exactly that case.
+    """
+    params = params or {}
+    alpha = float(params.get("alpha", 0.05))
+    disc = [r for r in rows if r.get("discordant") and not r.get("control")]
+    informative = [r for r in disc if r.get("needed") and r["needed"] != "indeterminate"]
+
+    points_right = sum(1 for r in informative if r["needed"] == r["predicted"])
+    reduced_right = sum(1 for r in informative if r["needed"] == r.get("reduced"))
+    agreeing = points_right + reduced_right
+    p_sign = None
+    if agreeing:
+        p_sign = (
+            sum(comb(agreeing, i) for i in range(max(points_right, reduced_right), agreeing + 1))
+            / 2**agreeing
+        )
+
+    deltas: list[float] = []
+    for r in disc:
+        per = r.get("per_tier") or {}
+        tp, tr = r["predicted"], r.get("reduced")
+        if tp in per and tr in per:
+            deltas.append(per[tp]["mean_cost_usd"] - per[tr]["mean_cost_usd"])
+
+    return {
+        "discordant_tasks": [r["task_id"] for r in disc],
+        "n_discordant": len(disc),
+        "n_informative": len(informative),
+        "min_informative_for_a_verdict": 5,
+        "underpowered": len(informative) < 5,
+        "points_right": points_right,
+        "reduced_right": reduced_right,
+        "sign_p": p_sign,
+        "alpha": alpha,
+        "cost_delta_points_minus_reduced": (sum(deltas) / len(deltas)) if deltas else None,
+        "cost_delta_n": len(deltas),
+        "cost_delta_p": _paired_permutation_p(deltas) if deltas else None,
+    }
+
+
 # --------------------------------------------------------------------------- render
 
 
@@ -599,6 +981,124 @@ def _render_control(control: dict | None) -> list[str]:
             " against the complexity score.",
             "",
         ]
+    return lines
+
+
+def _render_routing(cal: dict) -> list[str]:
+    """The routing substrate, rendered: ground truth, per-tier economy, C(m).
+
+    Empty for a bank that declares no reduced mechanism (every bank but this one), so
+    other scorecards are byte-unchanged.
+    """
+    rows = [r for r in cal["rows"] if not r.get("control") and r.get("per_tier")]
+    if not rows or not any(r.get("reduced") for r in rows):
+        return []
+    tau = float((cal.get("analysis_params") or {}).get("tau", TAU))
+    tiers = ["weak", "mid", "strong"]
+    lines = [
+        "### Routing substrate (the table the mechanism comparison is scored against)",
+        "",
+        f"Adequacy bar τ = {tau:.2f}: a tier is adequate for a task when its per-trial"
+        " pass rate reaches it. **cheapest adequate** is the ground truth — the tier a"
+        " perfect router would pick. `~` marks a reading that is a point estimate"
+        " rather than a robust one (the bound is not cleared by the confidence"
+        " interval, or a cheaper tier's interval still reaches it).",
+        "",
+    ]
+    header = "| task | genre | score | points | reduced | cheapest adequate |"
+    header += "".join(f" {t} pass |" for t in tiers) + "".join(f" {t} $ |" for t in tiers)
+    lines.append(header)
+    lines.append("|" + "---|" * (6 + 2 * len(tiers)))
+    for r in rows:
+        per = r["per_tier"]
+        need = r.get("needed") or "—"
+        if need != "indeterminate" and not r.get("needed_robust"):
+            need = f"~{need}"
+        mark = " ⚠" if r.get("discordant") else ""
+        cells = "".join(f" {_pct(per[t]['pass_rate'])} |" if t in per else " — |" for t in tiers)
+        costs = "".join(f" ${per[t]['mean_cost_usd']:.3f} |" if t in per else " — |" for t in tiers)
+        lines.append(
+            f"| {r['task_id']} | {r.get('genre') or '—'} | {r['score']:.0f} |"
+            f" {r['predicted']} | {r.get('reduced') or '—'}{mark} | **{need}** |" + cells + costs
+        )
+    lines += ["", "⚠ = the two mechanisms route this task differently.", ""]
+
+    # Failure mode. The retry term is priced off the gate-caught share alone.
+    lines += ["### Failure mode by tier (what prices the retry term)", ""]
+    lines.append("| tier | trials | passed | gate-caught failures | silent failures |")
+    lines.append("|---|---|---|---|---|")
+    for t in tiers:
+        cells = [r["per_tier"][t] for r in rows if t in r["per_tier"]]
+        if not cells:
+            continue
+        n = sum(c["trials"] for c in cells)
+        lines.append(
+            f"| {t} | {n} | {sum(c['passing'] for c in cells)} |"
+            f" {sum(c['gate_caught_failures'] for c in cells)} |"
+            f" {sum(c['silent_failures'] for c in cells)} |"
+        )
+    lines += [
+        "",
+        "A **gate-caught** failure buys a repair loop: the session pays for this tier"
+        " and the one it escalates to. A **silent** failure buys neither — it buys an"
+        " escape, which the quality constraint governs. They are never summed.",
+        "",
+    ]
+
+    mechs = cal.get("mechanisms") or []
+    if mechs:
+        lines += ["### C(m): execution + retry per task, by routing mechanism", ""]
+        lines.append(
+            "| mechanism | tasks | execution $ | retry $ | **total $** | quality"
+            " | escape rate | decision $ |"
+        )
+        lines.append("|---|---|---|---|---|---|---|---|")
+        for m in sorted(mechs, key=lambda x: x["total_cost_usd"]):
+            lines.append(
+                f"| {m['mechanism']} | {m['n_tasks']} | ${m['execution_cost_usd']:.3f} |"
+                f" ${m['retry_cost_usd']:.3f} | **${m['total_cost_usd']:.3f}** |"
+                f" {_pct(m['quality'])} | {_pct(m['escape_rate'])} | not measured |"
+            )
+        lines += [
+            "",
+            "**`decision $` is not measured here and is not zero.** What it costs to RUN"
+            " a mechanism — to score a task on a rubric before dispatching it — is"
+            " measured by running it, which needs its own arms. Every total above is"
+            " therefore a LOWER BOUND, and the ordering is decisive only where the gap"
+            " between two mechanisms exceeds the difference in what they cost to run."
+            " `oracle` is the cheapest-adequate router and is unbeatable by"
+            " construction: it is the floor, not a candidate.",
+            "",
+        ]
+
+    d = cal.get("discordance") or {}
+    if d:
+        lines += ["### Where the two mechanisms disagree", ""]
+        if d.get("underpowered"):
+            lines += [
+                f"**Underpowered: {d['n_informative']} informative discordant rungs, and"
+                f" {d['min_informative_for_a_verdict']} is the minimum at which an exact"
+                " one-sided sign test can reach α at all.** No verdict on which"
+                " mechanism routes better is available — not 'no difference', but no"
+                " test. The cost comparison below still reads.",
+                "",
+            ]
+        else:
+            lines += [
+                f"Points right on {d['points_right']}, reduced right on"
+                f" {d['reduced_right']}, of {d['n_informative']} informative discordant"
+                f" rungs (one-sided exact p = {d['sign_p']:.4f}, α = {d['alpha']:.2f}).",
+                "",
+            ]
+        if d.get("cost_delta_points_minus_reduced") is not None:
+            delta = d["cost_delta_points_minus_reduced"]
+            lines += [
+                f"Paired cost difference on {d['cost_delta_n']} discordant rungs:"
+                f" **${delta:+.3f} per task** (points minus reduced; positive means the"
+                f" scored rubric routes DEARER), sign-flip permutation"
+                f" p = {d['cost_delta_p']:.4f}.",
+                "",
+            ]
     return lines
 
 
@@ -758,5 +1258,8 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
 
     # Context-size: per-pair small→large shift (§7) — only for context banks.
     lines += _render_context_pairs(cal.get("pairs") or [])
+
+    # Routing substrate — only for banks that declare a reduced mechanism.
+    lines += _render_routing(cal)
 
     return lines
