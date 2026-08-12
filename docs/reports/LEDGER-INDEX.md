@@ -28,6 +28,7 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `keel-kit-ablation-v1` | `f67492505b6a8fbb36594fcd276249850925cc51ba5c181fe3bcef8bd2d4c2ee` | a-full-014:6, b-vnext-full:6, c-vnext-core:6, d-bare:6 | 24 | 24 |
 | `model-tier-effort` | `f76b52e777a473e7d1b041aa147c192b52ca585be33f3ca216715e7d0fd3f39b` | haiku-xhigh:5, sonnet-xhigh:5 | 10 | 10 |
 | `model-tier-v1` | `7cd5f4fcdb2b62da2e1b2c14decf86d87a7867c9491eea70ab0b81421c0198f5` | haiku:35, opus:35, opus5:35, sonnet:35, sonnet5:35 | 175 | 175 |
+| `model-tier-v2` | `d7e51c39c3200cdf42ccd776445105a80d7509cf593b0cf31c1f6998d1f77d20` | haiku:30, opus5:30, sonnet5:20 | 80 | 80 |
 | `premortem-ablation-v1` | `3dba0503c78f49ec8170e7b00b8dd3da013d69ba4cf2d333c3178435ec120d21` | arm-a-full:6, arm-b-core:6, bare:6 | 18 | 18 |
 | `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
