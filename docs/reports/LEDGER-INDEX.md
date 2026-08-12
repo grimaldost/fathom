@@ -31,3 +31,7 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
 | `tu-grounding-v1` | `59ffe9c7330a44439653770c6e28155793dd0bca5712e5bc2796d72f3958c7b9` | armed-haiku:3, armed-opus:2, armed-sonnet:3, bare-haiku:3, bare-opus:3, bare-sonnet:3 | 27 | 27 |
+| `verif-lift-bug-v1` | `1494e8ebdc8f8e8bb112f3e8e8bc0f00117d0cb9434907a67eac2c4195b8123e` | bare:10, bare-gate:10, placebo-gate:10, skill:10, skill-gate:10, skill-vnext:10 | 61 | 61 |
+| `verif-lift-data-v1` | `53e3de1e8bae8cb77f0976a01a5de76dc9fce9da8820290d6cc3a0974ddfc007` | bare:10, skill:12, skill-vnext:10 | 33 | 33 |
+| `verif-lift-null-v1` | `f278f6cd7812bd9542da12814c1eb6830b5851ca8f3673019545837c5049cad4` | bare:6, skill:6 | 13 | 13 |
+| `verif-lift-trunc-v1` | `1ff674d237480ca579521063529d1b551b25fd83213910d566cba241926649ed` | bare:10, skill:10 | 20 | 20 |
