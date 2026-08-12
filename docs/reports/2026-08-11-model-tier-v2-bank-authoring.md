@@ -42,7 +42,9 @@ real verifier:
 `tests/test_bank_model_tier_v2.py` is that evidence as a gate: 17 tests, 117 subtests,
 36 verifier passes, ~2 minutes, stdlib-runnable.
 
-`fathom validate model-tier-v2 --strict`: **27 pass, 0 fail, 0 warn, 0 unverifiable**.
+`fathom validate model-tier-v2 --strict`: **30 pass, 0 fail, 0 warn, 0 unverifiable**
+(27 over the nine rungs; the repair pass below adds `control-nonlocal-parse`, which
+contributes the other three).
 `fathom verify-arming --scenarios-dir scenarios/model-tier-v2`: 3 arms, 0 declaring a
 treatment axis — model-only controls, so arming is structurally satisfied with zero
 spawns and nothing is deferred.
