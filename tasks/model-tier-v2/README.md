@@ -12,8 +12,11 @@ offline evidence the verifiers produce at zero spend, arithmetic a test recomput
 > The ladder **separates** (`haiku` 1/10 vs `opus5` 10/10, one-sided Fisher p = 5.95e-05 at the
 > pre-registered n=10), so readings from this bank are interpretable. Four discordant briefs
 > measured at 3 arms x 5 repeats: the weak↔mid pair says the rubric was **right** to escalate,
-> the mid↔strong pair says it was **wrong** — a 2–2 split falling cleanly by pair, deliberately
-> not pooled. **23 of 23 failures were silent** (zero gate-caught), which is the binding
+> the mid↔strong pair says the escalation was **unnecessary** — a 2–2 split falling cleanly by
+> pair, deliberately not pooled. **"Unnecessary" is not "the formula was wrong":** on
+> `refactor-dedupe-validators` (score 45) the formula says `mid`, and the `strong` came from a
+> weak model *applying* the rubric and overshooting it, so the arithmetic is implicated on
+> **1 of 2** mid↔strong briefs, not 2 of 2. **23 of 23 failures were silent** (zero gate-caught), which is the binding
 > constraint on every mechanism here. T2 and T3 were **not** bought. Full reading, the cost
 > inversion, and the priced next buy:
 > [`docs/reports/2026-08-12-model-tier-v2-control-and-discordant-slice.md`](../../docs/reports/2026-08-12-model-tier-v2-control-and-discordant-slice.md).

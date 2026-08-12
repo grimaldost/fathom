@@ -1,8 +1,8 @@
 # model-tier-v2 — the control, and the four briefs where the mechanisms disagree
 
-**Date:** 2026-08-12 · **Bank:** `model-tier-v2` (dataset_version 2) · **Spend:** $25.12 over
-80 trials · **Ledger:** `ledger/model-tier-v2.jsonl` (160 rows, sha256
-`d7e51c39c3200cdf42ccd776445105a80d7509cf593b0cf31c1f6998d1f77d20` after LF normalisation)
+**Date:** 2026-08-12 · **Bank:** `model-tier-v2` (dataset_version 2) · **Spend:** $27.60 over
+89 trials · **Ledger:** `ledger/model-tier-v2.jsonl` (160 rows, sha256
+`040a9f8a1b9a218cf107dd1b140dc9923318787ef3ef10f2c0d892067febba33` after LF normalisation)
 
 Buys: **T0** the positive control (20 trials) and a **targeted slice** of the discordant core
 (60 trials) — the four briefs where the routing programme measured `rubric` and `none`
@@ -62,19 +62,31 @@ weak deciding tier. Adequacy bar **τ = 0.70**. `~` marks a non-robust point est
 
 | brief | weak | mid | strong | cheapest adequate | `none` | verdict |
 |---|--:|--:|--:|---|---|---|
-| `feature-ndjson-merge` (38) | 2/5 | 5/5 | 5/5 | **mid** `~` | weak | weak insufficient — escalation **correct** |
+| `feature-ndjson-merge` (38) | **5/8** ‡ | 8/8 | 8/8 | **mid** `~` | weak | weak insufficient — escalation **correct** |
 | `fix-decimal-round` (54) | **0/5** | **0/5** | 5/5 | **strong** `~` | weak | weak insufficient — **and so was the rubric's own choice** |
 
 ### mid ↔ strong pair
 
-| brief | weak | mid | strong | cheapest adequate | `none` | verdict |
-|---|--:|--:|--:|---|---|---|
-| `fix-ledger-replay` (71) | **5/5** | 4/5 | 5/5 | **weak** `~` | mid | mid sufficed — escalation **unnecessary** |
-| `refactor-dedupe-validators` (45) | **5/5** | 5/5 | 5/5 | **weak** `~` | mid | mid sufficed — escalation **unnecessary** |
+| brief | weak | mid | strong | cheapest adequate | `none` | rubric chose | **whose error** | verdict |
+|---|--:|--:|--:|---|---|---|---|---|
+| `fix-ledger-replay` (71) | **5/5** | 4/5 | 5/5 | **weak** `~` | mid | `strong` (formula: **strong**) | **the formula** | mid sufficed — escalation **unnecessary** |
+| `refactor-dedupe-validators` (45) | **5/5** | 5/5 | 5/5 | **weak** `~` | mid | `strong` (formula: **mid**) | **the decider, not the formula** † | mid sufficed — escalation unnecessary, **but see †** |
+
+> **† This row does not indict the points system.** `refactor-dedupe-validators` scores 45 and
+> the rubric's formula maps that to **`mid`** — the same tier that turned out adequate. The
+> `strong` came from a *weak model applying* the rubric and overshooting its own arithmetic
+> (§1). Read in isolation this row looks like evidence that the scoring over-provisions; it is
+> evidence that a cheap decider misapplies it. Of the two mid↔strong data points, **only
+> `fix-ledger-replay` is an error of the formula** — there the formula itself says `strong`
+> (score 71) and `weak` sufficed.
 
 **The two pairs answer in opposite directions, and the split falls cleanly by pair.** The
-rubric was right to escalate off `weak` on both weak↔mid briefs, and wrong to escalate off
-`mid` on both mid↔strong briefs — where `weak` would in fact have sufficed. **Nothing is
+rubric was right to escalate off `weak` on both weak↔mid briefs, and the escalation off `mid`
+was unnecessary on both mid↔strong briefs — where `weak` would in fact have sufficed. **But
+"unnecessary escalation" and "the formula was wrong" are not the same claim, and only one of
+the two mid↔strong briefs supports the second**: on `refactor-dedupe-validators` the formula
+said `mid` and a weak decider overrode it (see †). So the count against the points system's
+*arithmetic* on this pair is **1 of 2**, not 2 of 2. **Nothing is
 pooled.** Four briefs, 2–2, and a single verdict over them would average away the structure
 that is the actual result.
 
@@ -84,9 +96,44 @@ Held at measured strength:
   and `mid`, which are **robust** (Wilson upper bound 0.43 < τ).
 - `refactor-dedupe-validators` is **fully saturated** (5/5/5) and carries no boundary
   information beyond "weak suffices".
-- `feature-ndjson-merge`'s deciding reading is **soft**: `weak` at 2/5 has an interval reaching
-  **0.77**, so adequacy of `weak` there **cannot be ruled out**. This is the one reading that
-  could flip a verdict, and it is priced in §6.
+- `feature-ndjson-merge`'s deciding reading is **soft and stays soft** — see ‡ below. It was
+  bought to 8 repeats specifically to settle it, and did not settle.
+
+### ‡ The one reading bought to settle, which did not settle
+
+`feature-ndjson-merge`'s `weak` arm was the only reading that could flip a verdict, so it was
+extended from 5 to 8 repeats (9 new trials, $2.48). Result:
+
+| | passes | rate | 95% CI | robust against τ=0.70? |
+|---|--:|--:|---|---|
+| first 5 repeats | 2/5 | 0.40 | [0.12, 0.77] | no |
+| all 8 repeats | **5/8** | **0.62** | [0.31, 0.86] | **still no** |
+
+**The verdict does not flip** — 0.62 is below τ, so `weak` remains inadequate and the rubric's
+escalation on this brief stands. **But the reading did not become robust**, and the reason
+matters more than the result: the extension was priced on the assumption that the observed 0.40
+would hold, at which 3/8 would have bounded at [0.14, 0.69] and cleared. The rate came back
+**0.62** instead — the three new trials passed 3/3.
+
+At a true rate near 0.62, this reading **cannot be made robust at any affordable n**: the bound
+crosses below 0.70 only around **n ≈ 200** on that single arm. The tier sits too close to the
+bar. This is the pre-registered "marginal tier" limitation arriving in practice, and it is not
+a funding problem — it is a statement that `weak` on this brief is genuinely borderline rather
+than clearly inadequate.
+
+**Method finding, and this is the second instance in one wave.** An observed pass rate was used
+to size a block, and failed to reproduce — twice:
+
+| | rate used for sizing | rate observed | direction |
+|---|--:|--:|---|
+| `control-nonlocal-parse` (ported verbatim from v1) | 0.40 | **0.10** | more separation than sized for |
+| `feature-ndjson-merge` `weak` (own first 5 repeats) | 0.40 | **0.62** | less separation than sized for |
+
+Once is a fluke; twice, in opposite directions, is a property of small-n rates. **A pass rate
+measured at n≤10 is not a usable prior for sizing the next block** — not from a sibling bank,
+and not from the same arm on the same task. Power calculations resting on one are resting on an
+assumption. The first instance erred safe; the second bought 9 trials that did not deliver the
+robustness they were bought for.
 
 ### `fix-decimal-round` is where the third arm paid for itself
 
@@ -123,7 +170,7 @@ then the cost.
 
 ## 5. Every failure was invisible
 
-**80 trials · 57 passes · 23 failures · 0 gate-caught · 23 silent.**
+**89 trials · 63 passes · 26 failures · 0 gate-caught · 26 silent.**
 
 Not one failure at any tier on any task was visible to the shipped test suite. Consequences:
 
@@ -152,12 +199,12 @@ the stated remedy for the n=5 limit:
 | option | new trials | ceiling @ $2/spawn | expected @ $0.314/trial | what it settles |
 |---|--:|--:|--:|---|
 | **A — four briefs to 10 repeats** | 60 | $120 | ≈$19 | makes every "adequate" reading robust (n=10 with a perfect record clears τ at lower bound 0.722) |
-| **B — `feature-ndjson-merge` to 8 repeats** | **9** | **$18** | **≈$3** | the one reading that can flip a verdict |
+| ~~B — `feature-ndjson-merge` to 8 repeats~~ | ~~9~~ | ~~$18~~ | **BOUGHT, $2.48** | did not settle — see ‡ |
 
-Option B is the leveraged one. `feature-ndjson-merge`'s `weak` arm is robustly inadequate at
-**n=8** if the rate holds (3/8 → interval [0.14, 0.69], upper bound below τ). **If `weak` turns
-out adequate there, the rubric was wrong on the weak↔mid pair too and the picture stops being
-mixed** — the 2–2 split would become a uniform "the rubric over-escalates".
+**Option B was bought and is now closed out (‡).** It did not flip the verdict and did not
+achieve robustness, because the rate moved from 0.40 to 0.62. Extending it further is **not**
+recommended: robustness there needs n ≈ 200 on one arm. Option A remains available but buys
+robustness only on readings that are already unambiguous.
 
 Beyond either: the decider-capability experiment §1 argues for, which this bank cannot run.
 
@@ -180,3 +227,28 @@ Paid-run lock taken and released per block (T0 22 min, chunk 1 45 min, chunk 2 3
 before analysis each time. Ledger normalised LF and verified row-identical after each block —
 **60 CR characters appeared on every block despite `*.jsonl text eol=lf`**, the trap that
 produced a fake digest earlier in the wave; digests in the header are post-normalisation.
+
+---
+
+## Corrections
+
+**2026-08-12, after first publication.** The §3 mid↔strong table originally carried a single
+`verdict` column reading "escalation unnecessary" on both rows. That was accurate about the
+*outcome* and misleading about the *cause*: on `refactor-dedupe-validators` the rubric's own
+formula says `mid` (score 45), and the `strong` came from a weak model applying the policy and
+overshooting it. §1 said so; the table did not — and the table is what gets read, quoted, and
+carried into a backlog row.
+
+Added: a `rubric chose` column showing the formula's answer beside the observed choice, a
+`whose error` column, the † note, and the qualification that the arithmetic is implicated on
+**1 of 2** mid↔strong briefs rather than 2 of 2.
+
+Recorded rather than silently edited, because the failure being corrected is precisely a number
+crossing a boundary with its meaning stripped off — the same shape as the `quality` /
+`first_attempt_pass_rate` divergence earlier in this wave. A correction that hides itself
+teaches the next reader nothing.
+
+**2026-08-12, second correction.** Option B (§6) was bought after first publication: 9 trials,
+$2.48, `feature-ndjson-merge` to 8 repeats. It did not flip the verdict and did not achieve the
+robustness it was bought for. Added as ‡, together with the second instance of the
+small-n-prior method finding. Totals updated to $27.60 / 89 trials; ledger digest re-stamped.
