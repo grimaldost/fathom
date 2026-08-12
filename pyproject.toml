@@ -27,6 +27,15 @@ exclude = [
     "tasks/*/plugins",
     "scenarios/*/assets",
     "scenarios/*-assets",
+    # Generated task fixtures are the MATERIAL of an experiment, not source: the
+    # buggy sources are shaped deliberately and the stashed originals must stay
+    # byte-identical to them for the inverse-edit proxy to work. A reformat would
+    # mutate the dataset without a dataset_version bump. The generator and its spec
+    # tables (tasks/verif-lift-authoring/) are source and stay linted.
+    "tasks/verif-lift-*-v1",
+    # A sha256-pinned copy of the gate a bank scores with. Reformatting it would move the
+    # ruler the run is measured against, and the pin assertion would (correctly) refuse to run.
+    "tasks/*/_oracle",
 ]
 
 [tool.ruff.format]

@@ -1,0 +1,36 @@
+id = "debug-cache-staleness"
+instruction = """
+Operators report that the `feedcache` summary view sometimes serves yesterday's
+numbers: a tenant whose data changed overnight keeps seeing the previous day's total
+until the process restarts. The data itself is correct — the view is wrong.
+
+No shipped test fails, and no file is named here on purpose: find the cause yourself
+and fix it so every cached view in the package answers the question it was actually
+asked. `README.md` states the freshness contract the package is meant to hold.
+
+Keep the public function names and signatures of the views, keep the shipped test
+suite passing, and add a test that covers what you fixed.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 90
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived, not chosen — see ../oracles.toml § HOW `hard_criteria` IS DERIVED: false on
+# the untouched fixture, false on counter/, true on solution/. `summary_fresh_across_
+# midnight` is NOT here: the symptom patch bolts a day check onto the one view the
+# report names, so it banks that criterion for free. The unnamed second and third
+# consumers are what remains.
+hard_criteria = [
+    "report_fresh_across_midnight",
+    "trend_fresh_across_midnight",
+    "every_view_is_day_and_tenant_scoped",
+]
+
+[gate]
+# The shipped suite, green on the untouched fixture: every case it covers stays inside
+# a single day, which is the axis the current keys happen to get right.
+run = "python -m unittest discover -s tests -t ."

@@ -1,0 +1,52 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "quality.nulls",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "a": ""
+          },
+          {
+            "a": 2
+          }
+        ],
+        "a"
+      ],
+      0.5
+    ],
+    [
+      [
+        [
+          {
+            "a": "   "
+          },
+          {
+            "a": null
+          }
+        ],
+        "a"
+      ],
+      1.0
+    ]
+  ],
+  "func": "null_rate",
+  "module_filename": "nulls.py",
+  "package": "quality",
+  "subtle_cases": [
+    [
+      [
+        [],
+        "a"
+      ],
+      null
+    ]
+  ]
+}

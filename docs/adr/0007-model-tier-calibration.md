@@ -1,6 +1,6 @@
 # ADR-0007 — Model-tier calibration study design
 
-- **Status:** Accepted
+- **Status:** Accepted (**D3 superseded by ADR-0009**; D1, D2, D4, D5, D6 stand)
 - **Date:** 2026-06-16
 
 ## Context
@@ -42,6 +42,14 @@ move the headline confusion matrix; (c) the ordinal judge — it has no cardinal
 for ε (see D6).
 
 ### D3 — "Right tier" = cheapest model within ε of the best, with a pooled-CI overlap guard
+
+> **Superseded by ADR-0009 (2026-08-12).** The pooling caveat recorded below was
+> measured and turned out to be total: on `ledger/model-tier-v1.jsonl` a task's hard
+> criteria came out all-true or all-false on 175 of 175 multi-criterion trials, so `k`
+> pooled draws carried the information of one. The cell is now ONE Bernoulli draw per
+> trial (`every hard criterion true`), with the Wilson CI on `(passing trials, trials)`.
+> The cheapest-within-ε rule and the indeterminate label are unchanged; only the
+> estimator under them is. The rest of this decision is kept for the record.
 
 For a task, the empirically-right tier is the cheapest model whose mean HARD-criteria
 quality fraction is within **ε = 0.10** (fraction units) of the best model's, AND

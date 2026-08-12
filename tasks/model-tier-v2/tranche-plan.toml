@@ -1,0 +1,128 @@
+# The buy plan for model-tier-v2, pre-registered before any spend.
+#
+# ---------------------------------------------------------------------------------
+# WHY THIS REPLACES `screen-plan.toml`, AND WHY THAT IS NOT A LOOSENING.
+#
+# The admission screen this supersedes admitted a rung to the matrix only if it was
+# neither SATURATED (the weak arm passes every repeat) nor FLOORED (the strong arm
+# passes none). FLOORED is a sound drop: a task no tier can do measures the
+# instrument's ceiling, not the ladder.
+#
+# SATURATED is not, and it was the defect. The question this bank exists to settle is
+# which routing mechanism spends least at held quality — and a rung the WEAK tier aces
+# while the rubric routed it to mid or strong is the single most informative
+# observation available: it is a mechanism paying for capacity it did not need, which
+# is exactly the over-spend the owner asked about. Dropping it removes the evidence
+# against the dearer mechanism before the analysis sees it. The drop is also
+# probabilistic in the wrong direction: a rung whose weak arm truly passes 90% of the
+# time is dropped 59% of the time at repeats=5, so the surviving set is filtered on a
+# quantity correlated with the outcome and every mechanism that routes dear is
+# flattered.
+#
+# So saturation is no longer a drop. It is a READING — the cheapest adequate tier is
+# weak — and it goes into the substrate table like any other. The only remaining drop
+# is FLOORED, and even that is recorded rather than deleted.
+#
+# The economy the screen was reaching for survives, inverted: instead of spending less
+# on rungs whose answer is inconvenient, tranche 3 spends MORE on rungs whose answer is
+# uncertain. Repeats go where the reading is not yet robust, never where it is not yet
+# liked.
+#
+# ---------------------------------------------------------------------------------
+# WHAT EACH TRANCHE DECIDES.
+#
+# The estimand is C(m) = decision_cost(m) + execution_cost(m) + retry_cost(m),
+# minimised subject to quality >= best - non_inferiority_margin. This bank measures the
+# middle two terms and the constraint. `decision_cost` belongs to a separate programme
+# and is NOT measured here, so every C(m) this bank prints is a lower bound.
+#
+# Two of the candidate mechanisms are properties of the TASK and are decided by rungs
+# where they route differently (tranche 1). The rest route by a fixed rule and differ
+# from everything on every rung, so they need the whole census (tranche 2).
+#
+# ---------------------------------------------------------------------------------
+# INTERRUPTION. The host's OAuth access token lives about eight hours and a long matrix
+# must survive its expiry. Every tranche is therefore expressed as chunks that each
+# fit well inside that window, and every chunk is a plain re-invocation: the resume key
+# is (bank, dataset_version, task_id, config_hash, repeat), so a completed trial is
+# never re-bought and an interrupted chunk resumes by running the same command again.
+# `chunk_tasks` is the number of task ids to pass to `--tasks` at a time. At the v1
+# observed rate (~4 min/trial wall-clock, 3 arms x 5 repeats = 15 trials per rung) a
+# 4-rung chunk is about 4 hours — half the token's life, so a chunk that starts on a
+# fresh token finishes on it.
+
+schema_version = "2"
+supersedes = "screen-plan.toml"
+
+arms = ["haiku", "sonnet5", "opus5"]
+scenarios_dir = "scenarios/model-tier-v2"
+control_scenarios_dir = "scenarios/model-tier-v2-screen"
+max_budget_usd = 2      # PER-SPAWN cap, never a run total; the run total is watched cumulatively
+census_repeats = 5
+deepen_repeats = 10
+chunk_tasks = 4
+
+# ---------------------------------------------------------------- the only drop rule
+
+[rule]
+floored_when = "no arm reaches the adequacy bar tau on any repeat"
+floored_consequence = "recorded as `indeterminate` ground truth and excluded from C(m); NOT deleted"
+saturated_consequence = "recorded as ground truth `weak`; it is evidence, not a reason to drop"
+tau = 0.7
+robust_reading_requires = "the chosen tier's Wilson lower bound clears tau AND every cheaper tier's upper bound misses it"
+
+# ---------------------------------------------------------------- tranches
+
+[tranches.t0-instrument]
+order = 0
+tasks = ["control-nonlocal-parse"]
+arms = ["haiku", "opus5"]
+repeats = 10
+trials = 20
+scenarios_dir = "scenarios/model-tier-v2-screen"
+decides = "whether the ladder separates AT ALL, on a task with a recorded v1 gradient (haiku 2/5 -> opus5 5/5). Read by the Fisher rule in scores.toml's [control]."
+stop_rule = "if the control does not separate, no mechanism comparison is interpretable — a flat ladder makes every mechanism look equal — and nothing further is bought."
+
+[tranches.t1-discordant-core]
+order = 1
+tasks = [
+    "plan-migration-order",
+    "fix-strip-unicode",
+    "refactor-dedupe-validators",
+    "review-locate-defects",
+    "fix-decimal-round",
+    "debug-cache-staleness",
+    "fix-graph-cycle",
+    "data-reconcile-telemetry",
+]
+repeats = 5
+trials = 120
+decides = "the scored rubric against the floor+shortcut lookup, on both readings: which routes to the cheaper adequate tier (exact one-sided sign test) and what the difference costs per task (paired sign-flip permutation). These eight rungs are the ONLY ones where those two mechanisms route differently, so they are the only ones where C(points) and C(reduced) can differ at all."
+stop_rule = "if fewer than five rungs come back with a determinate ground truth, the sign test cannot reach alpha and is not run; the paired cost difference still reads and is reported alone."
+
+[tranches.t2-census-complement]
+order = 2
+tasks = [
+    "fix-clamp2",
+    "feature-ndjson-merge",
+    "fix-tz-window",
+    "fix-merge-3way",
+    "fix-ledger-replay",
+]
+repeats = 5
+trials = 75
+decides = "the fixed-tier mechanisms (always-weak, always-mid, always-strong) and the oracle floor, which differ from every other mechanism on EVERY rung and therefore need the whole census rather than the discordant subset. Also completes the ground-truth table and makes the genre question answerable: does the mapping hold off the bug-fix distribution."
+stop_rule = "none — this tranche completes a table rather than testing a hypothesis. It may be skipped if tranche 1 already decides the mechanism the owner cares about."
+
+[tranches.t3-robustness]
+order = 3
+tasks = []      # filled from tranche 1 and 2: the rungs whose reading is not robust
+repeats = 10
+trials = 120    # worst case: all eight discordant rungs deepened, 8 x 3 x 5 NEW trials
+decides = "whether each ground-truth reading is a point estimate or a robust one. At repeats=5 NO reading can be robust: a perfect 5/5 has a Wilson lower bound of 0.566, below tau. Ten repeats with a perfect record is the cheapest robust reading (lower bound 0.722). A threshold move requires robust readings; a mechanism comparison does not."
+stop_rule = "bought rung by rung, cheapest first, and stopped as soon as the mechanism ordering is stable — the ordering, not the individual readings, is the decision."
+
+# ---------------------------------------------------------------- exclusions
+
+[exclusions]
+"fix-quota-rollup" = "sealed holdout (ADR-0005): not bought, and `--include-holdout` is out of bounds for this bank"

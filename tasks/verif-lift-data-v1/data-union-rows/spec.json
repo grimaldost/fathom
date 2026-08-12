@@ -1,0 +1,84 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "setops.union",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "id": 1,
+            "v": "a"
+          }
+        ],
+        [
+          {
+            "id": 1,
+            "v": "b"
+          }
+        ],
+        "id"
+      ],
+      [
+        {
+          "id": 1,
+          "v": "a"
+        }
+      ]
+    ]
+  ],
+  "func": "union_rows",
+  "module_filename": "union.py",
+  "package": "setops",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "id": 1,
+            "v": "a"
+          },
+          {
+            "id": 1,
+            "v": "b"
+          }
+        ],
+        [],
+        "id"
+      ],
+      [
+        {
+          "id": 1,
+          "v": "a"
+        }
+      ]
+    ],
+    [
+      [
+        [],
+        [
+          {
+            "id": 2,
+            "v": "x"
+          },
+          {
+            "id": 2,
+            "v": "y"
+          }
+        ],
+        "id"
+      ],
+      [
+        {
+          "id": 2,
+          "v": "x"
+        }
+      ]
+    ]
+  ]
+}

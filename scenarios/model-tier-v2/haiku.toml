@@ -1,0 +1,24 @@
+name = "haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# Weak tier. The three arms of this bank differ ONLY by `model` — identical tools,
+# strategy, effort and limits — so the contrast is the model and nothing else. No
+# `Task` tool: each arm is a clean single-session solve, with no subagent
+# orchestration to confound the capacity axis. Limits are sized for the WEAKEST
+# model's longer, more iterative runs, so a weak-tier attempt at a high-band task is
+# not truncated into ERRORED and dropped as a false ceiling.
+#
+# Model id: the undated alias, per the choosing-models lineup. Never a dated
+# snapshot — a snapshot pins this bank to a model that will stop being served.
+#
+# There is no oracle arm. Oracle quality is a criterion slice over
+# `tasks/model-tier-v2/oracles.toml`, not an arm dimension; see that file's header.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

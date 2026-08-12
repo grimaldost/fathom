@@ -80,6 +80,41 @@ class TestConfusionMatrix(unittest.TestCase):
         self.assertEqual(by_task["overp"]["empirical"], "weak")
         self.assertFalse(by_task["overp"]["indeterminate"])
 
+    def test_a_task_no_arm_can_do_reads_indeterminate_not_weak(self):
+        """The floor guard. "Cheapest tier that does the job" needs a tier to do it.
+
+        Without it, a task every arm fails scores 0.0 everywhere, the cheapest arm is
+        trivially within eps of the best, and the row reads `weak` — a floored task
+        becomes indistinguishable from one the weak tier genuinely suffices for, and it
+        reads in the direction that would license retiring the dear tiers. Whether the
+        floor is the task's difficulty or a broken fixture, the instrument had no
+        purchase on it and the row must say so.
+        """
+        meta = {"floored": {"score": 70, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            for arm in ("haiku", "sonnet", "opus"):
+                raw.append(_trial(arm, "floored", rep, 0))
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        self.assertTrue(row["indeterminate"], f"a floored task must not read as a tier: {row}")
+        self.assertEqual(row["empirical"], "indeterminate")
+        self.assertEqual(out["confusion"]["strong"]["indeterminate"], 1)
+        self.assertEqual(out["confusion"]["strong"]["weak"], 0)
+
+    def test_a_partial_pass_is_still_a_real_reading(self):
+        """The guard fires only at a true floor, not at "hard but sometimes done"."""
+        meta = {"hard-task": {"score": 70, "hard_criteria": HARD}}
+        raw = []
+        for rep in range(5):
+            raw.append(_trial("haiku", "hard-task", rep, 0))
+            raw.append(_trial("sonnet", "hard-task", rep, 0))
+            raw.append(_trial("opus", "hard-task", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        row = out["rows"][0]
+        self.assertFalse(row["indeterminate"])
+        self.assertEqual(row["empirical"], "strong")
+
     def test_indeterminate_when_cis_overlap(self):
         # haiku 1/2 each trial (mean .5, wide CI), opus 2/2 (mean 1.0). Point says
         # strong (only opus within eps); CI overlap says haiku might suffice -> ?.
@@ -298,6 +333,489 @@ class TestParseAnomalyWarnings(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("error")  # any warning becomes an error
             cal.parse_ledger(raw)  # must not raise
+
+
+class TestPerTrialScoring(unittest.TestCase):
+    """ADR-0009: a trial is ONE Bernoulli draw, not one per hard criterion.
+
+    The estimator this replaces pooled criteria across trials, which multiplies the
+    CI's ``n`` by k. On the committed ``ledger/model-tier-v1.jsonl`` the hard set came
+    out all-true or all-false on 175 of 175 multi-criterion trials, so those extra
+    draws were copies — the interval was narrowed by ~sqrt(k) for free, and repeat
+    counts were sized against a resolution the run could not buy.
+    """
+
+    def test_a_k_criterion_cell_is_n_draws_not_k_times_n(self):
+        raw = [_trial("opus", "t", rep, 2) for rep in range(3)]  # 3 trials x 2 criteria
+        trials, _ = cal.parse_ledger(raw)
+        stats = cal.arm_task_stats(trials, "t", "opus", HARD)
+        self.assertEqual(stats["draws"], (3, 3), "the cell must be 3 draws, not 6")
+        self.assertEqual(stats["n_trials"], 3)
+        self.assertEqual(stats["ci"], cal._wilson(3, 3))
+        self.assertNotEqual(stats["ci"], cal._wilson(6, 6), "the CI still pools criteria")
+
+    def test_a_mixed_trial_scores_zero_and_is_counted(self):
+        # 1-of-2 hard criteria true is not half a pass: the conjunction is the draw, and
+        # the count is recorded so the correlation assumption stays checkable.
+        raw = [_trial("opus", "t", 0, 1), _trial("opus", "t", 1, 2)]
+        trials, _ = cal.parse_ledger(raw)
+        stats = cal.arm_task_stats(trials, "t", "opus", HARD)
+        self.assertEqual(stats["draws"], (1, 2))
+        self.assertEqual(stats["mean"], 0.5)
+        self.assertEqual(stats["mixed_trials"], 1)
+
+    def test_repeats_two_and_three_cannot_resolve_even_a_noiseless_rung(self):
+        """The repeat count the design actually needs, re-derived at 1 draw/trial.
+
+        Under the noiseless alternative (the weak arm fails every trial, the mid and
+        strong arms pass every trial) a mid-band rung must read ``mid``, determinate.
+        Pooled scoring said repeats=2 sufficed. At one draw per trial it does not: 2/2
+        and 0/2 have overlapping Wilson intervals, and so do 3/3 and 0/3. Four is the
+        first repeat count where a perfect contrast separates at all — which is why the
+        pre-registered matrix is bought at 5, not 2.
+        """
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        seen = {}
+        for repeats in (2, 3, 4, 5):
+            raw = []
+            for rep in range(repeats):
+                raw.append(_trial("haiku", "t", rep, 0))
+                raw.append(_trial("sonnet5", "t", rep, 2))
+                raw.append(_trial("opus5", "t", rep, 2))
+            row = cal.build_calibration(raw, meta)["rows"][0]
+            seen[repeats] = (row["empirical"], row["indeterminate"])
+        self.assertTrue(seen[2][1], "repeats=2 must read indeterminate")
+        self.assertTrue(seen[3][1], "repeats=3 must read indeterminate")
+        self.assertEqual(seen[4], ("mid", False))
+        self.assertEqual(seen[5], ("mid", False))
+
+    def test_the_committed_model_tier_v1_reading_is_unchanged(self):
+        """A new estimator may not rewrite a reading the record already carries.
+
+        model-tier-v1 was read three times at 1/7 on-diagonal with fix-nonlocal-parse
+        indeterminate. Because its hard criteria are perfectly correlated, the per-trial
+        point estimates are identical to the pooled ones and only the intervals widen —
+        so the committed verdict must reproduce exactly. If this fails, the change is
+        not a re-estimation, it is a revision of history.
+        """
+        import json
+        import tomllib
+
+        ledger = REPO / "ledger" / "model-tier-v1.jsonl"
+        bank_dir = REPO / "tasks" / "model-tier-v1"
+        if not ledger.is_file():
+            self.skipTest("model-tier-v1 ledger absent")
+        raw = [
+            json.loads(line)
+            for line in ledger.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        with (bank_dir / "scores.toml").open("rb") as fh:
+            scores = tomllib.load(fh)["scores"]
+        meta = {}
+        for task_dir in sorted(bank_dir.iterdir()):
+            path = task_dir / "task.toml"
+            if not path.is_file():
+                continue
+            with path.open("rb") as fh:
+                doc = tomllib.load(fh)
+            if doc["id"] in scores:
+                meta[doc["id"]] = {
+                    "score": float(scores[doc["id"]]),
+                    "hard_criteria": doc["verify"]["hard_criteria"],
+                }
+        out = cal.build_calibration(raw, meta)
+        on_diag = sum(out["confusion"][t][t] for t in ("weak", "mid", "strong"))
+        self.assertEqual(on_diag, 1, "the committed 1/7 on-diagonal reading moved")
+        rows = {r["task_id"]: r for r in out["rows"]}
+        self.assertTrue(rows["fix-nonlocal-parse"]["indeterminate"])
+        self.assertEqual(
+            {a: round(m, 2) for a, m in rows["fix-nonlocal-parse"]["means"].items()},
+            {"haiku": 0.40, "sonnet": 0.60, "sonnet5": 0.80, "opus": 1.00, "opus5": 1.00},
+        )
+        self.assertEqual(sum(r["mixed"] for r in out["rows"]), 0, "v1 had no mixed trials")
+
+
+class TestFisherExact(unittest.TestCase):
+    def test_known_left_tail_values(self):
+        # 2x2 with both arms at n=5. Hypergeometric left tail, computed by hand.
+        self.assertAlmostEqual(cal.fisher_one_sided(0, 5, 5, 5), 1 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(1, 5, 5, 5), 6 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(2, 5, 5, 5), 21 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(5, 5, 5, 5), 1.0, places=6)
+
+    def test_the_shipped_control_rate_is_significant_only_from_ten_repeats(self):
+        """Why the control's repeat count is 10 and not 5 (issue: coin-flip control).
+
+        At model-tier-v1's own observed rates for the control task the weak arm passes
+        ~0.4 of trials and the strong arm ~1.0. The modal draw at repeats=5 is 2/5 vs
+        5/5, which the rule does NOT call significant; the modal draw at repeats=10 is
+        4/10 vs 10/10, which it does.
+        """
+        self.assertGreater(cal.fisher_one_sided(2, 5, 5, 5), 0.05)
+        self.assertLessEqual(cal.fisher_one_sided(4, 10, 10, 10), 0.05)
+
+
+class TestPositiveControl(unittest.TestCase):
+    CONTROL = {
+        "task": "ctl",
+        "weak_arm": "haiku",
+        "strong_arm": "opus5",
+        "alpha": 0.05,
+        "min_repeats": 10,
+    }
+
+    def _meta(self, **over):
+        control = {**self.CONTROL, **over}
+        return {"ctl": {"score": 65, "hard_criteria": HARD, "control": control}}
+
+    def _ledger(self, weak_pass: int, strong_pass: int, repeats: int) -> list[dict]:
+        raw = []
+        for rep in range(repeats):
+            raw.append(_trial("haiku", "ctl", rep, 2 if rep < weak_pass else 0))
+            raw.append(_trial("opus5", "ctl", rep, 2 if rep < strong_pass else 0))
+        return raw
+
+    def test_it_separates_at_the_preregistered_repeats(self):
+        out = cal.build_calibration(self._ledger(4, 10, 10), self._meta())
+        control = out["control"]
+        self.assertTrue(control["separates"])
+        self.assertEqual(control["weak_draws"], (4, 10))
+        self.assertIn("SEPARATES", "\n".join(cal.render_calibration(out)))
+
+    def test_a_short_run_is_underpowered_not_a_null(self):
+        # 2/5 vs 5/5 is the modal v1 draw at repeats=5. Reading it as "does not
+        # separate" would license the very conclusion the control exists to block, so
+        # the verdict names the missing repeats instead.
+        out = cal.build_calibration(self._ledger(2, 5, 5), self._meta())
+        self.assertFalse(out["control"]["separates"])
+        self.assertTrue(out["control"]["underpowered"])
+        self.assertIn("Underpowered", "\n".join(cal.render_calibration(out)))
+
+    def test_a_genuine_null_blocks_every_tier_conclusion(self):
+        out = cal.build_calibration(self._ledger(10, 10, 10), self._meta())
+        self.assertFalse(out["control"]["separates"])
+        self.assertFalse(out["control"]["underpowered"])
+        self.assertIn("did not separate", "\n".join(cal.render_calibration(out)))
+
+    def test_the_control_is_kept_out_of_the_confusion_matrix(self):
+        """It is read by its own rule, so it may not also move the on-diagonal count."""
+        meta = self._meta()
+        meta["rung"] = {"score": 45, "hard_criteria": HARD}
+        raw = self._ledger(4, 10, 10)
+        for rep in range(5):
+            raw.append(_trial("haiku", "rung", rep, 0))
+            raw.append(_trial("sonnet5", "rung", rep, 2))
+            raw.append(_trial("opus5", "rung", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        total = sum(sum(row.values()) for row in out["confusion"].values())
+        self.assertEqual(total, 1, "only the rung may be counted")
+        self.assertEqual(out["confusion"]["mid"]["mid"], 1)
+        self.assertIn("ctl", {r["task_id"] for r in out["rows"]})
+        self.assertNotIn("ctl", out["dose_response"].get("strong", {}))
+        self.assertIn("positive control", "\n".join(cal.render_calibration(out)))
+
+    def test_a_control_that_never_ran_is_reported_as_absent(self):
+        out = cal.build_calibration([_trial("haiku", "ctl", 0, 0)], self._meta())
+        self.assertFalse(out["control"]["ran"])
+        self.assertIn("did not run", "\n".join(cal.render_calibration(out)))
+
+    def test_a_bank_without_a_control_declares_none(self):
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = [_trial("opus", "t", rep, 2) for rep in range(3)]
+        out = cal.build_calibration(raw, meta)
+        self.assertIsNone(out["control"])
+        self.assertNotIn("Positive control", "\n".join(cal.render_calibration(out)))
+
+
+# ------------------------------------------------------------------------- routing
+
+
+def _routing_trial(arm: str, task: str, rep: int, *, passes: bool, gate_red: bool) -> dict:
+    """A trial that also carries the gate signal, so failures can be classified."""
+    rec = _trial(arm, task, rep, 2 if passes else 0)
+    rec["verifier_results"]["no_regression"] = not gate_red
+    return rec
+
+
+def _rung(task: str, score: float, reduced: str, passes: dict, costs: dict, *, gate_split=2):
+    """(raw records, meta entry) for one rung at five repeats per arm.
+
+    `passes[arm]` is how many of the five repeats pass; of the failures, every
+    `gate_split`-th one is made visible to the gate so both failure modes occur.
+    """
+    raw = []
+    for arm, k in passes.items():
+        for rep in range(5):
+            ok = rep < k
+            raw.append(_run(arm, task, rep, costs[arm]))
+            raw.append(
+                _routing_trial(
+                    arm, task, rep, passes=ok, gate_red=(not ok) and rep % gate_split == 0
+                )
+            )
+    meta = {
+        "score": score,
+        "hard_criteria": HARD,
+        "reduced": {"prediction": reduced},
+        "genre": "bugfix",
+        "analysis": {"tau": 0.7, "alpha": 0.05, "escalation_cost_multiplier": 1.0},
+    }
+    return raw, meta
+
+
+COSTS = {"haiku": 0.02, "sonnet": 0.12, "opus": 0.40}
+
+
+class TestNeededTier(unittest.TestCase):
+    """The ground truth: the cheapest tier that clears the adequacy bar."""
+
+    @staticmethod
+    def _stats(rates: dict, n: int = 5) -> dict:
+        return {
+            arm: {"mean": k / n, "ci": cal._wilson(k, n), "draws": (k, n), "n_trials": n}
+            for arm, k in rates.items()
+        }
+
+    def test_the_cheapest_tier_that_clears_the_bar_is_the_one_returned(self):
+        tier, _ = cal.needed_tier(self._stats({"haiku": 1, "sonnet": 4, "opus": 5}))
+        self.assertEqual(tier, "mid")
+
+    def test_a_task_the_weak_tier_aces_reads_weak_rather_than_being_dropped(self):
+        """The screen's defect, inverted into a test.
+
+        A rung the weak tier passes every time used to be DROPPED as saturated. It is
+        the single most informative observation for the cost question — a mechanism
+        that routed it dear paid for capacity it did not need — so it must survive as a
+        reading.
+        """
+        tier, robust = cal.needed_tier(self._stats({"haiku": 5, "sonnet": 5, "opus": 5}))
+        self.assertEqual(tier, "weak")
+        self.assertFalse(robust, "five perfect repeats is still not a robust reading")
+
+    def test_a_task_no_tier_clears_is_indeterminate_not_weak(self):
+        tier, _ = cal.needed_tier(self._stats({"haiku": 0, "sonnet": 1, "opus": 2}))
+        self.assertEqual(tier, "indeterminate")
+
+    def test_robustness_needs_ten_repeats_and_says_so(self):
+        """At five repeats nothing is robust; at ten a perfect record is."""
+        _, at_five = cal.needed_tier(self._stats({"haiku": 5, "sonnet": 5, "opus": 5}, 5))
+        _, at_ten = cal.needed_tier(
+            {
+                "haiku": {"mean": 1.0, "ci": cal._wilson(10, 10), "draws": (10, 10)},
+                "opus": {"mean": 1.0, "ci": cal._wilson(10, 10), "draws": (10, 10)},
+            }
+        )
+        self.assertFalse(at_five)
+        self.assertTrue(at_ten)
+
+    def test_it_beats_the_relative_statistic_on_a_realistic_rung(self):
+        """Why the primary changed, demonstrated rather than asserted.
+
+        The relative statistic asks which tier is indistinguishable from the best and
+        answers `indeterminate` on an ordinary noisy rung at buyable repeat counts. The
+        absolute bar answers the routing question and reads a tier.
+        """
+        stats = self._stats({"haiku": 1, "sonnet": 4, "opus": 5})
+        _, indeterminate = cal.empirical_right_tier(stats)
+        tier, _ = cal.needed_tier(stats)
+        self.assertTrue(indeterminate, "the relative statistic used to be determinate here")
+        self.assertEqual(tier, "mid")
+
+
+class TestFailureMode(unittest.TestCase):
+    """A failure's mode is a cost term, so it is counted and not just totalled."""
+
+    def test_gate_caught_and_silent_failures_are_counted_separately(self):
+        raw, meta = _rung("t", 45, "weak", {"haiku": 1}, COSTS)
+        trials, _ = cal.parse_ledger(raw)
+        stats = cal.arm_task_stats(trials, "t", "haiku", HARD)
+        self.assertEqual(stats["draws"], (1, 5))
+        self.assertEqual(stats["gate_caught"] + stats["silent"], 4)
+        self.assertEqual(stats["gate_caught"], 2)
+        self.assertEqual(stats["silent"], 2)
+
+    def test_a_failure_the_shipped_suite_never_sees_is_silent(self):
+        vr = {"h1": False, "h2": False, "no_regression": True}
+        self.assertEqual(cal.trial_outcome(vr, HARD), "silent")
+
+    def test_a_failure_the_shipped_suite_catches_is_gate_caught(self):
+        vr = {"h1": False, "h2": False, "no_regression": False}
+        self.assertEqual(cal.trial_outcome(vr, HARD), "gate_caught")
+
+
+class TestMechanismCosts(unittest.TestCase):
+    """C(m) = execution + retry, with the retry term priced off gate-caught failures."""
+
+    def _bank(self):
+        raw, meta = [], {}
+        rungs = [
+            # cheap task the weak tier aces; the rubric routes it dear
+            ("cheap", 70.0, "weak", {"haiku": 5, "sonnet": 5, "opus": 5}),
+            # hard task only the strong tier does; the reduced model routes it cheap
+            ("hard", 40.0, "weak", {"haiku": 0, "sonnet": 1, "opus": 5}),
+        ]
+        for task, score, reduced, passes in rungs:
+            r, m = _rung(task, score, reduced, passes, COSTS)
+            raw.extend(r)
+            meta[task] = m
+        return raw, meta
+
+    def test_the_oracle_floor_is_never_beaten_on_quality(self):
+        out = cal.build_calibration(*self._bank())
+        by = {m["mechanism"]: m for m in out["mechanisms"]}
+        best = max(m["quality"] for m in out["mechanisms"])
+        self.assertAlmostEqual(by["oracle"]["quality"], best, places=6)
+
+    def test_a_mechanism_that_over_provisions_costs_more(self):
+        out = cal.build_calibration(*self._bank())
+        by = {m["mechanism"]: m for m in out["mechanisms"]}
+        self.assertGreater(
+            by["always-strong"]["total_cost_usd"], by["always-weak"]["total_cost_usd"]
+        )
+
+    def test_the_retry_term_uses_gate_caught_failures_only(self):
+        """A silent failure buys an escape, not a repair loop.
+
+        Summing the two would let a mechanism that fails invisibly look cheaper than
+        one that fails loudly, which is the wrong way round: the invisible failure is
+        the worse outcome.
+        """
+        out = cal.build_calibration(*self._bank())
+        by = {m["mechanism"]: m for m in out["mechanisms"]}
+        self.assertGreater(by["always-weak"]["escape_rate"], 0.0)
+        self.assertGreater(by["always-weak"]["retry_cost_usd"], 0.0)
+        # The dearest tier passes everything here, so it has neither term.
+        self.assertEqual(by["always-strong"]["retry_cost_usd"], 0.0)
+        self.assertEqual(by["always-strong"]["escape_rate"], 0.0)
+
+    def test_decision_cost_is_null_and_not_zero(self):
+        """`unmeasured` is never written as `0` — it would make the totals look final."""
+        out = cal.build_calibration(*self._bank())
+        for m in out["mechanisms"]:
+            self.assertIsNone(m["decision_cost_usd"], m["mechanism"])
+        self.assertIn("not measured", "\n".join(cal.render_calibration(out)))
+
+
+class TestDiscordanceAnalysis(unittest.TestCase):
+    """The two task-level mechanisms, compared only where they route differently."""
+
+    def _bank(self, n_discordant: int):
+        raw, meta = [], {}
+        for i in range(n_discordant):
+            # points says strong (score 70), reduced says weak; the truth is weak, so
+            # the reduced mechanism routes right and cheaper on every one of them.
+            r, m = _rung(f"d{i}", 70.0, "weak", {"haiku": 5, "sonnet": 5, "opus": 5}, COSTS)
+            raw.extend(r)
+            meta[f"d{i}"] = m
+        r, m = _rung("c0", 40.0, "mid", {"haiku": 0, "sonnet": 5, "opus": 5}, COSTS)
+        raw.extend(r)
+        meta["c0"] = m
+        return raw, meta
+
+    def test_only_discordant_rungs_enter_the_comparison(self):
+        out = cal.build_calibration(*self._bank(3))
+        d = out["discordance"]
+        self.assertEqual(sorted(d["discordant_tasks"]), ["d0", "d1", "d2"])
+        self.assertNotIn("c0", d["discordant_tasks"])
+
+    def test_too_few_discordant_rungs_reports_underpowered_not_a_null(self):
+        """The arithmetic that sank the first bank.
+
+        With K discordant rungs the smallest attainable one-sided p is 2**-K. At K=4
+        that is 0.0625, above alpha, so NO result is reachable however the trials fall.
+        That must read as "no test", never as "no difference".
+        """
+        out = cal.build_calibration(*self._bank(4))
+        d = out["discordance"]
+        self.assertTrue(d["underpowered"])
+        self.assertLess(0.05, 2 ** -d["n_informative"])
+        rendered = "\n".join(cal.render_calibration(out))
+        self.assertIn("Underpowered", rendered)
+        # No verdict line is emitted at all — the reader is told a test was not run,
+        # rather than being handed a number that looks like a null result.
+        self.assertNotIn("Points right on", rendered)
+        # And the cost comparison, which does not depend on the sign test, still reads.
+        self.assertIn("Paired cost difference", rendered)
+
+    def test_enough_discordant_rungs_produce_a_verdict(self):
+        out = cal.build_calibration(*self._bank(8))
+        d = out["discordance"]
+        self.assertFalse(d["underpowered"])
+        self.assertEqual(d["reduced_right"], 8)
+        self.assertEqual(d["points_right"], 0)
+        self.assertLessEqual(d["sign_p"], 0.05)
+
+    def test_the_cost_delta_is_reported_in_dollars_and_signed_toward_the_dearer(self):
+        out = cal.build_calibration(*self._bank(8))
+        d = out["discordance"]
+        # points routes these to strong ($0.40), reduced to weak ($0.02).
+        self.assertAlmostEqual(d["cost_delta_points_minus_reduced"], 0.38, places=6)
+        self.assertLessEqual(d["cost_delta_p"], 0.05)
+
+
+class TestRoutingSubstrate(unittest.TestCase):
+    """The artifact a separate programme consumes; its schema is the coordination surface."""
+
+    def _bank(self):
+        raw, meta = [], {}
+        for task, score, reduced, passes in (
+            ("a", 20.0, "weak", {"haiku": 5, "sonnet": 5, "opus": 5}),
+            ("b", 60.0, "mid", {"haiku": 0, "sonnet": 4, "opus": 5}),
+        ):
+            r, m = _rung(task, score, reduced, passes, COSTS)
+            raw.extend(r)
+            meta[task] = m
+        return raw, meta
+
+    def test_every_row_carries_what_a_mechanism_comparison_needs(self):
+        raw, meta = self._bank()
+        out = cal.build_calibration(raw, meta)
+        sub = cal.routing_substrate(out, meta, out["analysis_params"])
+        self.assertEqual(len(sub["tasks"]), 2)
+        for row in sub["tasks"]:
+            with self.subTest(task=row["task_id"]):
+                for field in (
+                    "rubric_score",
+                    "genre",
+                    "tier_points",
+                    "tier_reduced",
+                    "discordant",
+                    "cheapest_adequate_tier",
+                    "cheapest_adequate_robust",
+                    "per_tier",
+                ):
+                    self.assertIn(field, row)
+                for tier in ("weak", "mid", "strong"):
+                    cell = row["per_tier"][tier]
+                    for field in (
+                        "trials",
+                        "pass_rate",
+                        "ci",
+                        "gate_caught_failures",
+                        "silent_failures",
+                        "mean_cost_usd",
+                    ):
+                        self.assertIn(field, cell)
+
+    def test_it_records_the_config_hash_behind_every_arm(self):
+        """Cost is aggregated per arm for reading, but identity is the config hash."""
+        raw, meta = self._bank()
+        out = cal.build_calibration(raw, meta)
+        sub = cal.routing_substrate(out, meta, out["analysis_params"])
+        self.assertEqual(sub["arm_config_hashes"]["haiku"], ["ch-haiku"])
+
+    def test_an_arm_under_two_config_hashes_warns_rather_than_averaging_silently(self):
+        """Two configurations under one label is the failure the owner named."""
+        raw, meta = self._bank()
+        forked = dict(raw[1])
+        forked["config_hash"] = "ch-haiku-v2"
+        forked["repeat"] = 99
+        raw.append(forked)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            cal.build_calibration(raw, meta)
+        self.assertTrue(any("config hashes" in str(w.message) for w in caught))
 
 
 if __name__ == "__main__":

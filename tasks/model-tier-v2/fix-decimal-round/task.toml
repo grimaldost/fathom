@@ -1,0 +1,30 @@
+id = "fix-decimal-round"
+instruction = """
+Users of the `money` package report that `fast.round_half_up(0.5)` returns `0.0`
+and `fast.round_half_up(0.125, 2)` returns `0.12`. Per the package README those
+should be `1.0` and `0.13` — half rounds away from zero — and the `exact` backend
+already returns them. Find and fix the bug so the package behaves as documented.
+Preserve the existing public API, and keep the shipped test suite passing.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 100
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. Third is strong-level.
+hard_criteria = [
+    "fast_half_up_negative",
+    "backend_parity_binary_grid",
+    "backend_parity_decimal_literals",
+]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

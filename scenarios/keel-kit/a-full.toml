@@ -1,0 +1,35 @@
+# Arm A — the kit as it ships today.
+#
+# The injected body is `spec-template.md` + `definition-of-ready.md`, verbatim from the
+# spec-first method kit (3,789 words including a two-line framing preamble that BOTH armed
+# arms carry identically). This is the treatment the ablation is asking about: is the prose
+# necessary to produce a spec the method's own readiness gate accepts?
+#
+# The three arms differ in ONE thing: the `[context] inject` body. Same model, same effort,
+# same strategy, same tools, same limits, same task instruction — the axis `verify-arming`
+# can prove on a real spawn.
+#
+# Model choice, argued: this bank feeds a CUT decision, so the failure that matters is a
+# false null — the core arm matching only because the tier is strong enough to reconstruct
+# the kit's conventions unaided. A tier with headroom is the conservative choice against
+# cutting, and it is ~4x cheaper than opus, which buys distinct briefs (K). Haiku would fail
+# Part A structurally in every arm and measure nothing. The result transfers to the tier it
+# was measured at, and the report says so.
+name = "a-full"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+# Read/Grep/Glob so the arm can ground its claims in the staged tree; Write/Edit so it can
+# emit or repair the spec. No Bash: nothing in this bank asks the arm to run anything, and a
+# shell is the cheapest side channel into the oracle.
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[context]
+inject = "assets/kit-full.md"
+
+[limits]
+trial_timeout_s = 900

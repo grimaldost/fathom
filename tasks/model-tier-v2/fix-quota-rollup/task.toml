@@ -1,0 +1,29 @@
+id = "fix-quota-rollup"
+instruction = """
+Users of the `quota` package report that `report.team_usage(team)` still returns
+`0` after `usage.record(member, 5)` — it should return `5`. Find and fix the bug so
+the package behaves as documented in the package README. Preserve the existing
+public API, and keep the shipped test suite passing.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. Third is strong-level.
+hard_criteria = [
+    "remaining_reflects_usage",
+    "over_quota_detected",
+    "rollup_invariant_at_source",
+]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

@@ -452,8 +452,26 @@ def _classify(outcome: EngineOutcome, events: list[dict]) -> tuple[TrialStatus, 
         # un-integrated (§7). Not a task result — recorded ERRORED (excluded from the
         # pass rate) with a clear detail, and re-runnable after raising --max-budget-usd.
         return TrialStatus.ERRORED, "engine budget cap hit (partial work not integrated)"
+    if outcome.returncode == ENGINE_EXIT_BLOCKED or run_outcome == "blocked":
+        # A blocking gate stayed red after the bounded fix loop: the engine's own TASK
+        # failure, and §7 says it is SCORED. It must therefore be COMPLETED, not ERRORED
+        # — since FATH-B03 a non-completed trial has its verifier_results dropped and
+        # `valid=false` written, and report.py counts only `completed`, so ERRORED here
+        # silently means "not measured". That biased the arm in exactly one direction:
+        # every trial the engine refused to integrate vanished from the denominator,
+        # leaving a pass rate conditioned on the engine having succeeded.
+        #
+        # The result view is real and gradeable, which is what COMPLETED asserts: the
+        # engine halts with the failing PR's branch checked out, carrying every
+        # previously integrated PR plus this PR's implementation and fix commits. That
+        # is the same treatment the single-spawn gated arms get, where a gate still red
+        # after `max_fix_attempts` is scored as the failure it is rather than discarded.
+        # Contrast the budget halt above: there the engine deliberately leaves the work
+        # un-integrated mid-flight, so there is no result to score.
+        return TrialStatus.COMPLETED, "engine blocked (blocking gate stayed red); result scored"
     if outcome.returncode != 0:
-        # Includes exit 1 (a blocking gate stayed red) — a scored task failure.
+        # An exit outside the engine's documented taxonomy (a crash, a wrapper error):
+        # no verdict was stated, so the trial is errored rather than silently scored.
         return TrialStatus.ERRORED, f"engine exit {outcome.returncode}"
     return TrialStatus.COMPLETED, ""
 

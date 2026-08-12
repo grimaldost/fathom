@@ -45,6 +45,21 @@ class TestBudgetCapThreading(unittest.TestCase):
         runner = _default_runner_factory(_scenario())
         self.assertEqual(runner.default_max_budget_usd, 5.0)
 
+    def test_the_planned_ceiling_is_computed_from_the_cap_that_will_bind(self):
+        """The plan's ceiling must move when the cap moves, or it is not a ceiling.
+
+        `--max-budget-usd` is per-spawn, so a value above the default LOOSENS the only
+        runaway guard. While the ceiling was a hardcoded $2/trial it printed the same
+        total either way, and a 20x loosening read in the plan as a rail.
+        """
+        from fathom.cli import _DEFAULT_SPAWN_BUDGET_USD
+
+        self.assertEqual(
+            _DEFAULT_SPAWN_BUDGET_USD,
+            _default_runner_factory(_scenario()).default_max_budget_usd,
+            "the mirrored default drifted from the adapter's real cap",
+        )
+
 
 if __name__ == "__main__":
     loader = unittest.TestLoader()

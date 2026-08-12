@@ -1,0 +1,17 @@
+id = "data-topk"
+instruction = """
+`rollup.topk.top_k` leaves rows with equal scores in whatever order they
+arrived, so the output is not stable. Break ties by `name` ascending as the
+README states; the ordering by score is already right.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

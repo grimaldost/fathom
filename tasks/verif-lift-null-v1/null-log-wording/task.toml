@@ -1,0 +1,16 @@
+id = "null-log-wording"
+instruction = """
+The `FINISHED` status string in `jobkit/runner.py` misspells 'successfully'.
+Correct the spelling in that string. Change nothing else.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

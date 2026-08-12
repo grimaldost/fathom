@@ -1,0 +1,30 @@
+id = "watermark-frozen-partition"
+instruction = """
+The regional daily marts have gone wrong twice. Rows from one region turn up in
+the source table but never make it into the mart, and separately the freshness
+monitor has been reading green for a region whose mart has not moved in days
+while `run_load` kept reporting `success`.
+
+Fix `incremental_load.run_load()` so it satisfies the contract in
+`contracts/incremental_load.md`. Preserve the public API
+(`run_load(source_rows, state)` returning the report dict), and keep the shipped
+suite passing.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["per_partition_cursor_advanced"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# The naive overlay gives each partition its own cursor, so every row loads
+# exactly once. The run still declares success while a partition is frozen.
+[naive]
+must_pass = ["late_rows_loaded"]
+must_fail = ["per_partition_cursor_advanced"]

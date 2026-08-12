@@ -4,3 +4,7 @@
 *.json text eol=lf
 *.jsonl text eol=lf
 *.toml text eol=lf
+
+# A bank's sha256-pinned oracle is bytes, not source: line-ending normalization would move the
+# digests its verifier asserts at start-up, and a fresh checkout would refuse to score.
+tasks/*/_oracle/** -text

@@ -1,6 +1,6 @@
 ---
 description: Run the paid fathom scenario matrix against a bank (real spend; resumable)
-argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--ledger-dir DIR] [--limit N] [--max-budget-usd USD] [--include-holdout]"
+argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--ledger-dir DIR] [--limit N] [--tasks ID,ID] [--max-budget-usd USD] [--include-holdout]"
 allowed-tools: Bash
 ---
 
@@ -22,8 +22,12 @@ Then:
 
 Tell the user before/while running:
 - It is resumable — re-invoking skips completed trials; interrupt and resume freely.
-- `--limit N` caps fresh trials; `--max-budget-usd USD` is the real per-**spawn**
-  cap (a `series` trial spawns several subagents and can spend several times it).
+- `--limit N` caps fresh trials; `--tasks ID[,ID...]` restricts the run to named
+  task ids (what `--limit` cannot do — the plan is scenario-major, so `--limit`
+  cuts whole arms off the end); `--max-budget-usd USD` is the real per-**spawn**
+  cap (a `series` trial spawns several subagents and can spend several times it),
+  **not a run total** — raising it above the $5 default loosens the runaway guard
+  and raises the printed ceiling to match.
 - `--tasks-dir` / `--ledger-dir` relocate the bank source and the ledger
   destination (defaults `tasks/`, `ledger/`); `--ledger-dir` writes the
   append-only record somewhere other than the committed `ledger/`, so use it

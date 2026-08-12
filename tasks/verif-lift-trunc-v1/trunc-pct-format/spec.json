@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 29,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "reportkit.summary",
+  "edge_cases": [
+    [
+      [
+        0.1235
+      ],
+      "12.4%"
+    ],
+    [
+      [
+        0.4445
+      ],
+      "44.5%"
+    ]
+  ],
+  "func": "format_share",
+  "func_past_slice": "format_delta",
+  "module_filename": "summary.py",
+  "package": "reportkit",
+  "past_slice_cases": [
+    [
+      [
+        0.1235
+      ],
+      "+12.4%"
+    ],
+    [
+      [
+        -0.4445
+      ],
+      "-44.5%"
+    ]
+  ],
+  "twin_def_line": 35
+}
