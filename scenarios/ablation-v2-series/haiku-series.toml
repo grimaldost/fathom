@@ -1,0 +1,43 @@
+name = "haiku-series"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "series"
+effort = "high"
+
+# The series-engine arm at the WEAK tier — the cell the whole ablation-v2 bank was
+# built to reach. Its comparators are already in ledger/ablation-v2.jsonl at the same
+# model and effort: `haiku` (bare, one spawn, 3/8) and `haiku-gate` (one spawn + the
+# project's visible suite as a gate + a bounded fix loop, 3/8). Against `haiku-gate`
+# this arm changes exactly one thing — the task arrives as five dependency-ordered
+# PR-sized briefs, each gated on the level it delivers, instead of one brief gated
+# once at the end. The decomposition is committed at
+# tasks/ablation-v2/exprlang/series.toml + prompts/.
+#
+# NO harness-side oracle. Every check the engine runs is a subset of the project's
+# OWN visible suite, which `haiku-gate` is gated on in full; the type-contract probe
+# that distinguishes `haiku-gate-sg2` is deliberately absent, so the contrast stays
+# single-factor. The blind acceptance verifier is the same superset for every arm.
+#
+# WHY ITS OWN SCENARIOS DIR: `fathom run` globs a directory, not a named arm, and a
+# series trial is ~20x the wall clock of a single-spawn one. Living in
+# scenarios/ablation-v2/ would mean any re-run of that group silently dragged this arm
+# along; a sibling directory keeps `--scenarios-dir scenarios/ablation-v2-series` the
+# only way to spend on it. The ledger is unaffected — trials land in
+# ledger/ablation-v2.jsonl either way, since the bank, not the directory, names it.
+#
+# RUN PRECONDITION: `[tools].repo` is resolved against fathom's CWD (not against this
+# file), so the matrix must be invoked from a checkout whose sibling `../convoy` IS
+# the convoy checkout — that is the canonical Documents/fathom checkout, not a
+# worktree. The resolved absolute invocation enters config_hash, so running from a
+# different directory forks the resume key rather than resuming.
+[tools]
+source = "repo"
+repo = "../convoy"
+
+[limits]
+# 90 minutes. A trial is five sequential PRs, each up to one implementation spawn
+# plus two fix spawns, against a per-spawn ceiling of 900s set in the series
+# template. Observed weak-tier spawns on this task run ~130s, so the expected trial
+# is ~10-15 minutes; the headroom exists so a slow trial is measured rather than
+# killed and lost (a timeout is ERRORED, hence excluded from the pass rate).
+trial_timeout_s = 5400

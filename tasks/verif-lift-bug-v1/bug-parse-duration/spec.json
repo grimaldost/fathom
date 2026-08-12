@@ -1,0 +1,28 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "durationkit.parse",
+  "edge_cases": [
+    [
+      [
+        "0h5m"
+      ],
+      300
+    ],
+    [
+      [
+        ""
+      ],
+      {
+        "raises": "ValueError"
+      }
+    ]
+  ],
+  "func": "parse_duration",
+  "module_filename": "parse.py",
+  "package": "durationkit"
+}

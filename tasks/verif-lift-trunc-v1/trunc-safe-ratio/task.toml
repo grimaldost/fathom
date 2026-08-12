@@ -1,0 +1,17 @@
+id = "trunc-safe-ratio"
+instruction = """
+A defect in `ratios/ratio.py` shows up as an undefined ratio is reported as 0.0; the reported
+symptom points at `ratios/ratio.py:1-21`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,101 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "joinkit.left",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "id": 1
+          }
+        ],
+        [
+          {
+            "id": 1,
+            "tag": "x"
+          },
+          {
+            "id": 1,
+            "tag": "y"
+          }
+        ],
+        "id"
+      ],
+      [
+        {
+          "id": 1,
+          "tag": "x"
+        },
+        {
+          "id": 1,
+          "tag": "y"
+        }
+      ]
+    ]
+  ],
+  "func": "left_join",
+  "module_filename": "left.py",
+  "package": "joinkit",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "id": 1,
+            "tag": "L"
+          }
+        ],
+        [
+          {
+            "id": 1,
+            "tag": "x"
+          }
+        ],
+        "id"
+      ],
+      [
+        {
+          "id": 1,
+          "tag": "L"
+        }
+      ]
+    ],
+    [
+      [
+        [
+          {
+            "id": 1,
+            "tag": "L"
+          }
+        ],
+        [
+          {
+            "id": 1,
+            "tag": "x"
+          },
+          {
+            "id": 1,
+            "tag": "y"
+          }
+        ],
+        "id"
+      ],
+      [
+        {
+          "id": 1,
+          "tag": "L"
+        },
+        {
+          "id": 1,
+          "tag": "L"
+        }
+      ]
+    ]
+  ]
+}

@@ -1,0 +1,20 @@
+name = "placebo-gate"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[plugins]
+mount = [
+    "C:/Users/grima/Documents/.wt-verification/fathom/scenarios/verif-lift-assets/gate-placebo",
+]
+
+[context]
+inject = "../verif-lift-assets/arm-skill.md"
+
+[limits]
+trial_timeout_s = 900

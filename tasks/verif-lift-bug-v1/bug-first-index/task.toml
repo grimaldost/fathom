@@ -1,0 +1,17 @@
+id = "bug-first-index"
+instruction = """
+`searchkit.bisect.first_index` returns whichever duplicate the search happens
+to land on rather than the first one. Return the first occurrence as the
+README specifies; the absent-target and unique-target cases already behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

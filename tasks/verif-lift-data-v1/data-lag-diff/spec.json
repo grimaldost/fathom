@@ -1,0 +1,73 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "series2.lag",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "t": 2,
+            "value": 13
+          },
+          {
+            "t": 1,
+            "value": 10
+          }
+        ]
+      ],
+      [
+        {
+          "diff": null,
+          "t": 1
+        },
+        {
+          "diff": 3,
+          "t": 2
+        }
+      ]
+    ]
+  ],
+  "func": "lag_diff",
+  "module_filename": "lag.py",
+  "package": "series2",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "t": 3,
+            "value": 6
+          },
+          {
+            "t": 1,
+            "value": 1
+          },
+          {
+            "t": 2,
+            "value": 4
+          }
+        ]
+      ],
+      [
+        {
+          "diff": null,
+          "t": 1
+        },
+        {
+          "diff": 3,
+          "t": 2
+        },
+        {
+          "diff": 2,
+          "t": 3
+        }
+      ]
+    ]
+  ]
+}

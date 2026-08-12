@@ -1,0 +1,17 @@
+id = "null-return-hint"
+instruction = """
+`is_short_id` in `idkit/short.py` has no return type annotation while every
+other function in the module does. Add `-> bool` to its signature. Change
+nothing else.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,28 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "numerals.base",
+  "edge_cases": [
+    [
+      [
+        0,
+        2
+      ],
+      "0"
+    ],
+    [
+      [
+        0,
+        16
+      ],
+      "0"
+    ]
+  ],
+  "func": "to_base",
+  "module_filename": "base.py",
+  "package": "numerals"
+}

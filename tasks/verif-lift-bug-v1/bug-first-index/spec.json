@@ -1,0 +1,38 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "searchkit.bisect",
+  "edge_cases": [
+    [
+      [
+        [
+          1,
+          2,
+          2,
+          2,
+          3
+        ],
+        2
+      ],
+      1
+    ],
+    [
+      [
+        [
+          5,
+          5,
+          5
+        ],
+        5
+      ],
+      0
+    ]
+  ],
+  "func": "first_index",
+  "module_filename": "bisect.py",
+  "package": "searchkit"
+}

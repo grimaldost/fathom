@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_lru.py": "ea8a9fcb3e683121ca82be50867e6e0c76d5bd34d4a8a4606e4cacd9e1c00643"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "cachekit/lru.py",
+  "must_contain": "least recently used entry when full",
+  "must_not_contain": "most recently used entry when full",
+  "package": "cachekit"
+}

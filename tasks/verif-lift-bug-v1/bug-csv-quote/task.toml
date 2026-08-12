@@ -1,0 +1,17 @@
+id = "bug-csv-quote"
+instruction = """
+`csvlite.quote.quote_field` neither quotes nor escapes a field containing a
+double quote, so the emitted line cannot be parsed back. Follow the README's
+escaping rule; the comma and newline cases already behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

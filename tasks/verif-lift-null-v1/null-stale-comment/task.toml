@@ -1,0 +1,17 @@
+id = "null-stale-comment"
+instruction = """
+The comment inside `BoundedCache.put` in `cachekit/lru.py` says the cache
+evicts the most recently used entry; the code and the class docstring both say
+least recently used. Correct the comment. Change no code.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,45 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "treekit.flatten",
+  "edge_cases": [
+    [
+      [
+        [
+          1,
+          [],
+          2
+        ]
+      ],
+      [
+        1,
+        2
+      ]
+    ],
+    [
+      [
+        [
+          1,
+          [
+            2,
+            3
+          ],
+          4
+        ]
+      ],
+      [
+        1,
+        2,
+        3,
+        4
+      ]
+    ]
+  ],
+  "func": "flatten",
+  "module_filename": "flatten.py",
+  "package": "treekit"
+}

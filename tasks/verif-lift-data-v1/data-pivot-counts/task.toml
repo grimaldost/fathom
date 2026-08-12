@@ -1,0 +1,17 @@
+id = "data-pivot-counts"
+instruction = """
+`reshape.pivot.pivot_counts` leaves a column out of a row's dict when that cell
+has no rows, so the returned dicts have inconsistent keys and a consumer cannot
+line them up. Emit every requested column, with 0 where empty, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
