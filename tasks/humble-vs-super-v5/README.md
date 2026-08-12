@@ -43,9 +43,11 @@ incomplete fix and fail `fix_correct`.
 | cache | `get` does not refresh recency, so eviction degrades to FIFO | wrong `popitem`/insertion order (breaks the shipped overflow test) |
 
 **Known and priced:** on **these exact tasks**, correctness has already ceilinged. Pooled
-over v1 and v2 — which ran this same task content — `fix_correct` and `no_regression` are
-**50/50 in every arm on both `fix-*` tasks**, and every criterion of both feature tasks is
-**40/40**, the unarmed `bare` arm included. v3 replicated the pattern on a different task
+over v1 and v2 — which ran this same task content **on `claude-opus-4-8`** — `fix_correct`
+and `no_regression` are **50/50 in every arm on both `fix-*` tasks**, and every criterion of
+both feature tasks is **40/40**, the unarmed `bare` arm included. (Ceilings measured on the
+older model carry forward as upper bounds; **floors do not** — see `regression_test_present`
+below.) v3 replicated the pattern on a different task
 set (0/180 at n=45,
 `docs/reports/2026-06-16-humble-vs-super-powered-confirmatory.md`). v5 therefore does
 **not** expect the correctness criteria to discriminate, and no verdict about correctness
@@ -92,16 +94,28 @@ v2's byte-for-byte).
   construction, so a red can only come from a candidate-added, bug-covering test. This is
   the test-discipline signal; the instructions deliberately do **not** ask for a
   regression test, so the criterion varies across arms. **It is the only criterion that
-  has ever discriminated on this bank family**, and it separates `bare` (0%) from every
-  disciplined arm (~100%) rather than separating the disciplined arms from each other.
-  Per task, pooled over v1+v2, even that is narrow: on `fix-tz-dst-normalize` the armed
-  arms are 44/45 (97.8% — a ceiling with one stray failure), and **`fix-offbyone-paginator`
-  at 32/45 (71%) is the only criterion-slot in the whole bank with material headroom** —
-  see `V5_NOTES.md`.
+  has ever discriminated on this bank family.**
+
+  **On `claude-opus-4-8` — the model v1–v4 measured, and no longer the model this bank runs
+  on — it separated `bare` (0%) from every disciplined arm (~100%).** Per task, pooled over
+  v1+v2, even that was narrow: on `fix-tz-dst-normalize` the armed arms are 44/45 (97.8% —
+  a ceiling with one stray failure), and `fix-offbyone-paginator` at 32/45 (71%) was the
+  only criterion-slot in the bank with material headroom.
+
+  > **That separation is not expected to hold on `claude-opus-5`, the model v5 runs on.**
+  > This repo's `ledger/model-tier-v1.jsonl` scored an **unarmed** arm on `claude-opus-5`
+  > at **21/30 (70%)** on this same criterion with a **byte-identical** `bugfix_verify.py`,
+  > against **0/30** for the otherwise-identical `claude-opus-4-8` arm — per task 5/5, 4/5,
+  > 1/5, 4/5, 5/5, 2/5. Those are different tasks (none of them in this bank), so the number
+  > does not transfer, but the mechanism does: **on the current model an unarmed run writes
+  > bug-covering regression tests unprompted at a substantial rate.** The `bare` (0%) floor
+  > above is an artefact of the withdrawn model. See `V5_NOTES.md` § "What Stage A is for",
+  > which re-registers this bank as an **economy** measurement for exactly this reason.
 
 The two **feature** tasks score a different set — `behavior_correct`, `tests_present`, and
-three per-task edge criteria. All ten are **40/40 in every arm** across v1+v2, `bare`
-included, because those instructions enumerate the exact edges the verifier checks: their
+three per-task edge criteria. All ten are **40/40 in every arm** across v1+v2 (on
+`claude-opus-4-8`), `bare` included, because those instructions enumerate the exact edges
+the verifier checks: their
 `tests_present` is *prompted*, not elicited. **The feature tasks cannot produce quality
 signal on this bank**; they are retained as economy samples only (`V5_NOTES.md`).
 

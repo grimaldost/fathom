@@ -290,5 +290,109 @@ class PublishedCeilingTests(unittest.TestCase):
         self.assertGreaterEqual(tz_pass / tz_total, 0.95, "the fix-tz slot is quoted as ceilinged")
 
 
+class TestUnarmedFloorMovedOnOpus5(unittest.TestCase):
+    """The opus-5 prior that re-registered Stage A as an economy measurement.
+
+    V5_NOTES, the bank README and `scenarios/humble-vs-super-v5/bare.toml` all now publish
+    the same claim: on `claude-opus-5` an UNARMED arm writes bug-covering regression tests
+    unprompted at a substantial rate, where on `claude-opus-4-8` it never did. That claim is
+    why the retired `bare <= 10%` gate is documented as expected-to-fail and why no quality
+    verdict may be read off this bank on the current model.
+
+    It is load-bearing in the same way the v1/v2 ceilings are — it decides what $38 buys —
+    so it is recomputed from `ledger/model-tier-v1.jsonl` rather than trusted as prose. The
+    arms differ only in their `model` line, and `bugfix_verify.py` is byte-identical across
+    `model-tier-v1`, `humble-vs-super-v1` and `humble-vs-super-v5`, both asserted below.
+    """
+
+    CRIT = "regression_test_present"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.by_arm: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+        cls.by_arm_task: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0])
+        for r in _rows("model-tier-v1"):
+            if r.get("kind") != "trial" or r.get("status") != "completed":
+                continue
+            val = (r.get("verifier_results") or {}).get(cls.CRIT)
+            if val is None:
+                continue
+            for key, bucket in (
+                (r["scenario"], cls.by_arm),
+                ((r["scenario"], r["task_id"]), cls.by_arm_task),
+            ):
+                bucket[key][1] += 1
+                if val:
+                    bucket[key][0] += 1
+
+    def test_unarmed_opus5_breaches_the_retired_ten_percent_floor(self) -> None:
+        self.assertEqual(
+            self.by_arm["opus5"],
+            [21, 30],
+            "the opus-5 unarmed rate is published as 21/30 (70%) in V5_NOTES, the bank "
+            "README and bare.toml",
+        )
+        self.assertEqual(
+            self.by_arm["opus"],
+            [0, 30],
+            "the claude-opus-4-8 contrast is published as 0/30",
+        )
+
+    def test_every_opus5_task_is_above_the_retired_line(self) -> None:
+        """Gate 1 was per-task, so the prediction that it fails must hold per-task."""
+        per_task = {t: v for (arm, t), v in self.by_arm_task.items() if arm == "opus5"}
+        self.assertEqual(len(per_task), 6, "model-tier-v1 has six fix-* tasks")
+        self.assertEqual(
+            sorted(f"{p}/{t}" for p, t in per_task.values()),
+            ["1/5", "2/5", "4/5", "4/5", "5/5", "5/5"],
+            "the per-task spread is published verbatim in V5_NOTES",
+        )
+        for task, (passed, total) in sorted(per_task.items()):
+            self.assertGreater(
+                passed / total,
+                0.10,
+                f"{task}: V5_NOTES predicts EVERY task above the retired 10% line",
+            )
+
+    def test_none_of_those_tasks_is_in_this_bank(self) -> None:
+        """The prior transfers as a mechanism, not as a number — the docs say so."""
+        tasks = {t for (arm, t) in self.by_arm_task if arm == "opus5"}
+        self.assertTrue(tasks.isdisjoint(V5_TASKS), "overlap would make this a direct prior")
+
+    def test_the_verifier_is_byte_identical_across_the_three_banks(self) -> None:
+        import hashlib
+
+        digests = {}
+        for bank in ("model-tier-v1", "humble-vs-super-v1", "humble-vs-super-v5"):
+            path = REPO / "tasks" / bank / "bugfix_verify.py"
+            self.assertTrue(path.is_file(), f"missing {path}")
+            digests[bank] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.assertEqual(
+            len(set(digests.values())),
+            1,
+            f"the byte-identical-verifier claim no longer holds: {digests}",
+        )
+
+    def test_the_two_opus_arms_differ_only_in_model(self) -> None:
+        """A 0/30 -> 21/30 jump is only attributable to the model if nothing else moved."""
+        import re
+
+        def fields(name: str) -> list[str]:
+            """Every pin except the two identifiers: `model` (the axis) and `name`."""
+            text = (REPO / "scenarios" / "model-tier" / f"{name}.toml").read_text(encoding="utf-8")
+            stripped = [re.sub(r"#.*$", "", ln).strip() for ln in text.splitlines()]
+            return [
+                ln
+                for ln in stripped
+                if ln and not ln.startswith("model =") and not ln.startswith("name =")
+            ]
+
+        self.assertEqual(fields("opus"), fields("opus5"))
+        self.assertNotEqual(
+            (REPO / "scenarios" / "model-tier" / "opus.toml").read_text(encoding="utf-8"),
+            (REPO / "scenarios" / "model-tier" / "opus5.toml").read_text(encoding="utf-8"),
+        )
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

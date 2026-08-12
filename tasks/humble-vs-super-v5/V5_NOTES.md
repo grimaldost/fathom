@@ -39,10 +39,38 @@ library is mounted*. The honest cost of that choice: **v5 measures humblepowers 
 inside a 2026-06-era stack, not inside the full merged toolkit.** A merged-stack variant
 is a different, larger question and belongs in its own bank.
 
-**`bare` is back.** v2 dropped it because v1 had established the floor. v5 restores it
-because the base model changed: the instrument's ability to discriminate at all was
-established on `claude-opus-4-8` and has never been shown on `claude-opus-5`. `bare` is
-a calibration arm here, not a comparison — see the gate below.
+**`bare` is back — and the floor it was meant to establish has already moved.** v2 dropped
+`bare` because v1 had established the floor. v5 restores it because the base model changed.
+But the claim this section carried until 2026-08-12 — that the instrument's discrimination
+"has never been shown on `claude-opus-5`" — was **false, and contradicted by this repo's own
+committed ledger**. `ledger/model-tier-v1.jsonl` measured an unarmed arm on `claude-opus-5`
+four weeks before this bank was authored:
+
+| arm | model | plugins | `regression_test_present` |
+|---|---|---|---|
+| `opus` | `claude-opus-4-8` | none | **0/30 (0%)** |
+| `sonnet5` | `claude-sonnet-5` | none | 1/30 (3.3%) |
+| `opus5` | **`claude-opus-5`** | none | **21/30 (70%)** |
+
+Per task, `opus5` reads 5/5, 4/5, 1/5, 4/5, 5/5, 2/5 — **every task above 10%**. Reproduce
+with `uv run python scripts-humble-v5/analysis.py criteria ledger/model-tier-v1.jsonl`.
+
+Three things make this a real prior rather than a curiosity. The verifier is **byte-identical**
+— `bugfix_verify.py` is sha256 `0b2453c4…` in `model-tier-v1`, `humble-vs-super-v1` and this
+bank alike, so the same swap mechanism scored all three. The `opus`/`opus5` scenario files are
+identical **except the `model` line**, so the 0% → 70% jump is attributable to the model and
+nothing else. And the arm is unarmed in the same sense v5's `bare` is: `source = "none"`, no
+plugins, with `Write` and `Bash` available (v5's `bare` additionally allows `Task`).
+
+**What it is not:** a prediction on v5's own tasks. `model-tier-v1`'s six `fix-*` tasks
+(`fix-clamp`, `fix-interval-merge`, `fix-money-split`, `fix-nonlocal-parse`,
+`fix-nonlocal-urlkey`, `fix-titlecase`) are **none of them in this bank**, and the rate plainly
+varies by task (1/5 to 5/5). What transfers is the mechanism, not the number: on
+`claude-opus-5`, an unarmed model writes bug-covering regression tests unprompted at a
+substantial rate, where on `claude-opus-4-8` it never did in 30 trials. v5's `bare` is
+therefore expected to land **far above** the old floor — see "What Stage A is for", which is
+re-registered around that expectation rather than against it. `bare`'s job in v5 is now the
+**economy control**, not the calibration floor.
 
 ## What v5 can and cannot answer
 
@@ -58,7 +86,16 @@ instrument, and it is reproducible from the committed ledgers with
 `python scripts-humble-v5/analysis.py criteria ledger/humble-vs-super-v1.jsonl
 ledger/humble-vs-super-v2.jsonl`:
 
-| task | criterion | pooled v1+v2 | headroom? |
+> **Every figure in the table below was measured on `claude-opus-4-8`.** v1 and v2 ran on
+> the withdrawn model; v5 runs on `claude-opus-5`. The **ceilings** (the 100% rows) carry
+> over as upper bounds with little risk — a criterion saturated by every arm on the older
+> model is not going to develop headroom on a stronger one. The **floor does not carry
+> over at all**: the `bare` column of `regression_test_present` is the one number the model
+> move is known to have broken (0/30 → 21/30 on the unarmed `claude-opus-5` arm of
+> `model-tier-v1`, above). Read the `headroom?` column as "headroom *between the armed
+> arms*", which is what it was computed from.
+
+| task | criterion | pooled v1+v2 (`claude-opus-4-8`) | headroom? |
 |---|---|---|---|
 | `feature-csv-coalesce` | `behavior_correct`, `empty_input`, `ragged_rows`, `type_coercion`, **`tests_present`** | **40/40 each** | none |
 | `feature-retry-backoff` | `behavior_correct`, `zero_retry`, `jitter_bounds`, `error_propagation`, **`tests_present`** | **40/40 each** | none |
@@ -73,8 +110,9 @@ ledger/humble-vs-super-v2.jsonl`:
   enumerate the exact edges the verifier checks ("covering the happy path and each edge
   case SPEC.md names: empty input, ragged rows, and empty-cell / type coercion"), so
   `tests_present` is **prompted rather than elicited** — which is precisely why `bare`
-  scores 100% on it while scoring 0% on `regression_test_present` in the `fix-*` tasks,
-  whose instructions mention no tests at all. **The two feature tasks cannot produce
+  scored 100% on it while scoring 0% on `regression_test_present` in the `fix-*` tasks,
+  whose instructions mention no tests at all (**both figures on `claude-opus-4-8`**; the
+  0% half of that contrast is the one the model move broke). **The two feature tasks cannot produce
   quality signal in v5, and they are the dearest tasks in the bank** (≈$0.54–0.65/trial
   against ≈$0.34–0.39 for the paginator). They are retained **only as economy samples** —
   they carry two of the four task-pairs the pre-registered cost test needs (below) — and
@@ -92,8 +130,10 @@ ledger/humble-vs-super-v2.jsonl`:
   first reaches significance only at 100%, i.e. it resolves a gap of about **30
   percentage points**; against a 100% reference it resolves down to 75%, a 25pp gap. The
   effect in evidence is single-digit and unstable in sign. **v5 has no power to resolve
-  the humble-vs-super quality question**, and buying n=20 does not change that. Treat the
-  axis as a **non-inferiority check** only.
+  the humble-vs-super quality question**, and buying n=20 does not change that. This
+  paragraph once ended "treat the axis as a non-inferiority check only" — **withdrawn**: a
+  non-inferiority reading needs a floor, and on `claude-opus-5` there is none (see "What
+  Stage A is for"). The quality axis is **not measured** by this bank on this model.
 - **The economy axis is the one that buys something.** Per-trial USD, total tokens, turns
   and wall-clock are continuous, and on v5's own task mix v2 separated `stack-humble` from
   `stack-super` by +13.1% / +21.2% / +14.3% / +15.6% — **the same sign on all four
@@ -164,24 +204,26 @@ uv run fathom run humble-vs-super-v5 --scenarios-dir scenarios/humble-vs-super-v
     --repeats 5 --dry-run                                                 # plan before spending
 
 # STAGE A - the whole pre-registered commitment: 60 trials, forecast ~$38.
+# It buys ONE number: the paired-by-task cost gap on claude-opus-5. Not a quality run.
 uv run fathom run humble-vs-super-v5 --scenarios-dir scenarios/humble-vs-super-v5 \
     --repeats 5 --limit 60 --max-budget-usd 1.75
 
 # MANDATORY between every chunk: actual cumulative spend, from the ledger.
 uv run python scripts-humble-v5/analysis.py spend ledger/humble-vs-super-v5.jsonl
-uv run python scripts-humble-v5/analysis.py criteria ledger/humble-vs-super-v5.jsonl
-uv run python scripts-humble-v5/analysis.py cost ledger/humble-vs-super-v5.jsonl
+uv run python scripts-humble-v5/analysis.py cost ledger/humble-vs-super-v5.jsonl     # THE result
+uv run python scripts-humble-v5/analysis.py criteria ledger/humble-vs-super-v5.jsonl # recorded, not a verdict
 ```
 
 `--scenarios-dir` is load-bearing: the glob is non-recursive and omitting the flag would
 silently run the repo's top-level arms against this bank.
 
-Stage B (the fill to n=20) is **not** the plan — it is an escape hatch, bought only if
-gate 3 below fails to resolve. If it is bought, it is bought in `--limit 60` chunks with
-a `spend` check between each:
+Stage B (the fill to n=20) is **not** the plan — it is an escape hatch, bought only if the
+cost test below fails to resolve. If it is bought, it is bought in `--limit 60` chunks with
+a `spend` check between each. **Stage B buys no quality information either** — it fills n on
+the same ceilinged criteria:
 
 ```sh
-# STAGE B - ONLY if gate 3 does not resolve, and ONLY with an explicit rail decision.
+# STAGE B - ONLY if the cost test does not resolve, and ONLY with an explicit rail decision.
 # 180 further trials, forecast ~$115. Re-invoke until "planned: 0 trials".
 uv run fathom run humble-vs-super-v5 --scenarios-dir scenarios/humble-vs-super-v5 \
     --repeats 20 --limit 60 --max-budget-usd 1.75
@@ -254,33 +296,81 @@ cheapest possible cut and costs **no quality information whatsoever**.
 > and is pre-registered as the whole plan. Stage B takes the bank to ≈$154, above the
 > $150 rail, and must not be started without an explicit owner decision.
 
-### The calibration gate (spend-protecting, pre-registered)
+### What Stage A is for (re-registered 2026-08-12, before any spend)
 
-Run Stage A (`--repeats 5`, 60 trials) and stop. **These are bright lines with decision
-rules, evaluated per-task from the ledger — not read off the scorecard.**
+**Stage A is an ECONOMY measurement.** It is not a quality measurement, and it is not a
+calibration run. This replaces the earlier registration, which put a discrimination check
+(gate 1) at the front and read Stage A as a quality instrument. That registration was
+built on a floor — unarmed `bare` at 0% on `regression_test_present` — that this repo's own
+`model-tier-v1` ledger had **already broken on `claude-opus-5`** before v5 was authored. The
+old text is not softened here; it was wrong on the published evidence, and a pre-registration
+that predicts a floor the evidence contradicts is worse than none.
 
-1. **Does the instrument still discriminate on `claude-opus-5`?**
-   *Rule:* `bare` must score **≤ 10%** on `regression_test_present`, computed separately
-   on each `fix-*` task (v1: 0/5 and 0/5). If `bare` writes regression tests unprompted on
-   the new model, the bank no longer measures test discipline, **the fill must not be
-   bought**, and the finding — that the model moved — is itself the report.
-2. **Do the correctness criteria ceiling as predicted?**
-   *Rule:* every `fix_correct` / `no_regression` / feature-task criterion at **100% in all
-   three arms**, as in v1+v2. If one has come off the ceiling, that is a substantive change
-   on the new model; **stop and reopen the design** before more spend.
-3. **Has the economy question already been answered?**
-   *Rule:* compute the **paired-by-task** cost difference between `stack-humble` and
-   `stack-super` across the four tasks (four pairs, one per task) and run a paired t-test.
-   **If it separates the arms at p < 0.05, publish the verdict and DO NOT buy the fill.**
-   Only a non-significant result licenses Stage B, and then only with the rail decision
-   above.
+**The predicted state of the quality axis at Stage A, stated in advance:**
 
-   Gate 3 is expected to *pass at Stage A*, which is why n=20 is an escape hatch rather
-   than the plan. **v2 already resolved this gap at n=5/cell:** the four task-pairs were
-   +13.1%, +21.2%, +14.3%, +15.6% — same sign on all four — giving mean **+16.1%**,
-   sd 3.6, **t = 8.95 on df = 3, p = 0.0029**. Median within-cell CV is 14.5%. Buying
-   n=20 would narrow the confidence interval on a magnitude that **no pre-registered
-   decision depends on**.
+| criterion class | slots | predicted at Stage A |
+|---|---|---|
+| feature-task criteria (all 10) | 10 | 100% in all three arms — `bare` included, because prompted |
+| `fix_correct`, `no_regression` | 4 | 100% in all three arms |
+| `regression_test_present` × 2 `fix-*` tasks | 2 | **all three arms in a ~70–100% band** |
+
+Every criterion in this bank is therefore predicted to land at or near ceiling **in every
+arm**, `bare` included. That leaves the quality axis with **no floor, no discrimination
+check, and no non-inferiority reading**: three arms crowded into a 70–100% band at n=5/cell
+cannot be ordered, and "the armed arms are not worse" is unfalsifiable when the control is
+not meaningfully below them. **No quality claim — including a non-inferiority claim — may be
+read off Stage A.** The earlier note calling the quality axis "a non-inferiority check" is
+withdrawn: that reading required a floor, and there isn't one.
+
+What remains is the axis the bank is genuinely powered for. **Stage A buys one number:**
+whether the ~2× growth of the humblepowers corpus between 0.4.0 and 0.9.1 has eaten the
+per-trial cost advantage `stack-humble` held over `stack-super`, measured on `claude-opus-5`.
+That question is untouched by the ceiling problem — cost is continuous, paired by task, and
+the same four task-pairs carry it whether or not any criterion discriminates.
+
+**The pre-registered test (the old gate 3, now the whole gate).** Evaluated per-task from the
+ledger, not read off the scorecard:
+
+> Compute the **paired-by-task** per-trial cost difference between `stack-humble` and
+> `stack-super` across the four live tasks (four pairs, one per task) and run a paired
+> t-test. **If it separates the arms at p < 0.05, publish the verdict and DO NOT buy the
+> fill.** Only a non-significant result licenses Stage B, and then only with the rail
+> decision above.
+
+Prior: v2 resolved this gap at n=5/cell on `claude-opus-4-8` — pairs +13.1%, +21.2%, +14.3%,
++15.6%, same sign on all four, mean **+16.1%**, sd 3.6, **t = 8.95 on df = 3, p = 0.0029**;
+median within-cell CV 14.5%, which is what makes a paired test resolve at n=5. Stage A
+re-measures that gap's *sign and rough size* on the new model and the shipped corpus. Buying
+n=20 would narrow a confidence interval that **no pre-registered decision depends on**.
+
+**The two former gates, demoted to observations.** Both are still computed and recorded,
+because an unmeasured criterion is not a null and the ledger is the record. Neither gates
+spend any longer:
+
+1. **Unarmed `regression_test_present` — expected to FAIL the old bright line, and that is
+   not news.** The retired rule was `bare ≤ 10%` per `fix-*` task. On `claude-opus-5` the
+   unarmed `model-tier-v1` arm scored 21/30 (70%) with a byte-identical verifier, per-task
+   5/5, 4/5, 1/5, 4/5, 5/5, 2/5 — **every task above the line**. `bare` is therefore
+   **expected to breach 10% on both `fix-*` tasks**, this is a prediction registered before
+   the spend, and a breach **licenses nothing and blocks nothing**. Recording it costs
+   nothing extra: `bare`'s trials are already bought as the economy control.
+2. **Correctness ceilings.** Still expected at 100% in all three arms on all four tasks.
+   Retained as a **fork/regression detector**: it would catch a broken fork or a model that
+   got worse, and it is the one result that still stops the run.
+
+**What a surprise would mean, and what it would license.** Registered in advance so a
+surprise cannot be reinterpreted after the fact:
+
+| observation at Stage A | reading | licenses |
+|---|---|---|
+| `bare` **breaches** 10% on the `fix-*` tasks (predicted) | the `model-tier-v1` opus-5 prior replicates on this bank's tasks | nothing — the expected case; proceed to the cost test |
+| `bare` lands **≤ 10%** on both `fix-*` tasks (surprise) | the opus-5 prior does **not** transfer to these tasks; the floor still exists here and the task set, not the model, drives it | **no quality verdict.** At n=5/cell a floor is a *precondition*, not a result. It licenses only reopening the design — the quality axis would become worth powering, which is a **new bank sized for it**, not the Stage B fill (which buys n=20 on a question needing ~30pp of resolution) |
+| a correctness criterion comes **off** the ceiling | substantive change on the new model, or a broken fork | **stop.** Do not buy the fill; reopen the design |
+| the cost test does **not** separate at p < 0.05 | the 0.9.1 corpus may have eaten the advantage | Stage B, and only with the explicit rail decision above |
+
+Note the asymmetry in row 2 on purpose: the *predicted* outcome licenses nothing, and the
+*surprising* outcome licenses nothing either — only a differently-sized instrument. Stage A
+cannot be turned into a quality measurement by a favourable result.
 
 ### The analysis is per-task, and the scorecard's Per-Criterion table is not it
 

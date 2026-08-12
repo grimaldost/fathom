@@ -80,7 +80,17 @@ the relevant prior. (v3's rates are not used: none of v3's three tasks is in thi
 Pooling them over v5's four live tasks gives 16 criterion-slots. **Fifteen are at 100% in
 every arm.**
 
-| task | criterion | pooled v1+v2 | headroom |
+> **Correction, 2026-08-12.** Every figure in this section was measured on
+> **`claude-opus-4-8`**; v5 runs on `claude-opus-5`. The **ceilings** carry forward as upper
+> bounds. The **floor does not**: `ledger/model-tier-v1.jsonl` scored an unarmed
+> `claude-opus-5` arm at **21/30 (70%)** on `regression_test_present` with a byte-identical
+> `bugfix_verify.py`, against **0/30** for the otherwise-identical `claude-opus-4-8` arm.
+> The "`bare` at 0/5 and 0/5" fact below is therefore an artefact of the withdrawn model, and
+> Stage A has been **re-registered as an economy measurement** — see `V5_NOTES.md` § "What
+> Stage A is for". This strengthens rather than weakens the decision recorded here: with the
+> floor gone, a run buys even less on quality than this note originally claimed.
+
+| task | criterion | pooled v1+v2 (`claude-opus-4-8`) | headroom |
 |---|---|---|---|
 | `feature-csv-coalesce` | all five, incl. `tests_present` | **40/40 each** | none |
 | `feature-retry-backoff` | all five, incl. `tests_present` | **40/40 each** | none |
@@ -94,8 +104,10 @@ Three consequences, in order of how much they cost:
 1. **Both feature tasks are fully saturated, `bare` included — and they are the dearest
    tasks in the bank.** This is structural, not luck: their instructions enumerate the exact
    edges the verifier checks, so `tests_present` is *prompted rather than elicited*, which is
-   why `bare` scores 100% on it while scoring **0/5 and 0/5** on `regression_test_present` in
-   the two `fix-*` tasks, whose instructions mention no tests at all. Over a full n=20 matrix
+   why `bare` scored 100% on it while scoring **0/5 and 0/5** on `regression_test_present` in
+   the two `fix-*` tasks, whose instructions mention no tests at all (**both on
+   `claude-opus-4-8`** — see the correction above; the 0/5 half is not expected to reproduce
+   on `claude-opus-5`). Over a full n=20 matrix
    those two tasks are **$86.39 of $153.76 — 56% of the spend buying the provably saturated
    half.** They are retained only as economy samples (they carry two of the four task-pairs
    the cost test needs); no quality claim may be read off them.
@@ -108,7 +120,8 @@ Three consequences, in order of how much they cost:
    single-digit and unstable in sign. **v5 has no power to resolve the humble-vs-super
    quality question, and buying n=20 does not change that.**
 3. **The economy axis is the one with signal, and it is already resolved.** The
-   pre-registered gate 3 says: run `--repeats 5`, compute the paired-by-task cost difference
+   pre-registered cost test (the former gate 3, and since 2026-08-12 the **whole** gate)
+   says: run `--repeats 5`, compute the paired-by-task cost difference
    across the four tasks, and if it separates at p < 0.05, publish and do **not** buy the
    fill. On v2's data that gate is already met at n=5/cell — `stack-humble` → `stack-super`
    +16.1% mean, sd 3.6, **t = 8.95 on df = 3, p = 0.0029** — and pooling v1+v2 gives
