@@ -1034,6 +1034,14 @@ def _render_routing(cal: dict) -> list[str]:
         " rather than a robust one (the bound is not cleared by the confidence"
         " interval, or a cheaper tier's interval still reaches it).",
         "",
+        "Every pass rate on this page — here, in the dose-response table and on the"
+        " Pareto frontier — is a **first-attempt** rate. The quality estimand for a"
+        " routing decision is **post-repair** quality, which this bank deliberately"
+        " does not compute: it exports the facts that bound it"
+        " (`first_attempt_pass_rate` ≤ post-repair ≤ `1 - escape_rate`) and the"
+        " analysis that owns the estimand picks the repair-success assumption between"
+        " them.",
+        "",
     ]
     header = "| task | genre | score | points | reduced | cheapest adequate |"
     header += "".join(f" {t} pass |" for t in tiers) + "".join(f" {t} $ |" for t in tiers)
