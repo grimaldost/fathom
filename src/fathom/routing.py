@@ -326,6 +326,39 @@ def routes_from_criteria(criteria: Mapping[str, bool]) -> dict[str, str]:
     return routes
 
 
+def modal_route(per_repeat: Sequence[str]) -> str | None:
+    """The tier an arm chose most often for one brief across repeats.
+
+    Ties return None rather than picking one. An arm that split 2-2 between `weak` and
+    `mid` did not have a settled answer, and recording either as *the* answer would
+    invent a determinism the arm did not show.
+    """
+    if not per_repeat:
+        return None
+    counts = {tier: per_repeat.count(tier) for tier in set(per_repeat)}
+    best = max(counts.values())
+    winners = [tier for tier, count in counts.items() if count == best]
+    return winners[0] if len(winners) == 1 else None
+
+
+def agreement(a: Mapping[str, str], b: Mapping[str, str]) -> tuple[int, int]:
+    """(agreeing briefs, comparable briefs) between two mechanisms' routings.
+
+    THE PRE-REGISTERED EARLY STOP RUNS ON THIS. If two mechanisms emit the same tier on
+    nearly every brief, then C(a) - C(b) collapses to decision_cost(a) - decision_cost(b)
+    — the execution and retry terms are identical because the tiers are identical — and
+    the cheaper decision wins outright. That comparison needs NO outcome table and no
+    ground truth, which is why it can settle the question while the substrate is still
+    unrun.
+
+    Only briefs where BOTH sides have a settled modal route are comparable; a brief
+    either side was unsettled on is excluded from both numerator and denominator and
+    shows up as a shortfall in the denominator rather than as a silent agreement.
+    """
+    comparable = [task for task in a if task in b]
+    return sum(1 for task in comparable if a[task] == b[task]), len(comparable)
+
+
 def fixed_tier_mechanism(tier: str, task_ids: Sequence[str]) -> Mechanism:
     """`fixed-<tier>` — one tier for everything, zero decision cost."""
     return Mechanism(f"fixed-{tier}", {t: tier for t in task_ids}, ZERO_DECISION_COST)

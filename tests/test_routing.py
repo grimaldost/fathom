@@ -200,6 +200,58 @@ class TestRouteReconstruction:
             mech.tier_for("b")
 
 
+class TestEarlyStop:
+    """The pre-registered T1 stop rule, pinned before the data exists.
+
+    If two mechanisms route identically, the execution and retry terms of C(m) are
+    identical too, so the comparison reduces to decision cost alone — decidable with
+    no outcome table. These tests fix what "agree" means before any trial is bought,
+    so the rule cannot be reinterpreted once the counts are visible.
+    """
+
+    def test_modal_route_picks_the_majority(self):
+        assert r.modal_route(["weak", "weak", "mid"]) == "weak"
+
+    def test_a_tie_is_unsettled_not_a_coin_flip(self):
+        assert r.modal_route(["weak", "mid"]) is None
+
+    def test_no_repeats_is_unsettled(self):
+        assert r.modal_route([]) is None
+
+    def test_unanimous_is_settled(self):
+        assert r.modal_route(["strong"] * 3) == "strong"
+
+    def test_agreement_counts_matching_briefs(self):
+        a = {"t1": "weak", "t2": "mid", "t3": "strong"}
+        b = {"t1": "weak", "t2": "mid", "t3": "mid"}
+        assert r.agreement(a, b) == (2, 3)
+
+    def test_an_unsettled_brief_shrinks_the_denominator_not_the_agreement(self):
+        """A brief one side could not settle must not be scored as agreement."""
+        a = {"t1": "weak", "t2": "mid"}
+        b = {"t1": "weak"}  # t2 was a tie and was dropped upstream
+        agree, comparable = r.agreement(a, b)
+        assert (agree, comparable) == (1, 1)
+
+    def test_identical_routings_agree_completely(self):
+        routes = {"t1": "weak", "t2": "strong"}
+        assert r.agreement(routes, dict(routes)) == (2, 2)
+
+    def test_identical_routing_collapses_c_to_the_decision_cost_difference(self):
+        """The claim the stop rule rests on, asserted rather than assumed."""
+        substrate = r.Substrate({"t": _outcome("t")})
+        mix = r.Mix("m", {"t": 1.0})
+        rubric = r.Mechanism(
+            "rubric", {"t": "weak"}, r.DecisionCost("rubric", "strong", 0.05, 0.01)
+        )
+        none = r.Mechanism("none", {"t": "weak"}, r.DecisionCost("none", "strong", 0.0, 0.005))
+        a = r.evaluate(rubric, substrate, mix, episode_size=1)
+        b = r.evaluate(none, substrate, mix, episode_size=1)
+        assert a.execution_usd == pytest.approx(b.execution_usd)
+        assert a.quality == pytest.approx(b.quality)
+        assert a.total_usd - b.total_usd == pytest.approx(a.decision_usd - b.decision_usd)
+
+
 class TestSubstrateRefusals:
     """ "Unmeasured" is never written as a number."""
 
