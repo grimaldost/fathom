@@ -1,0 +1,89 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "series2.resample",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "amount": 2,
+            "week": "w1"
+          }
+        ],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      [
+        {
+          "amount": 2,
+          "week": "w1"
+        },
+        {
+          "amount": 0,
+          "week": "w2"
+        }
+      ]
+    ]
+  ],
+  "func": "to_weekly",
+  "module_filename": "resample.py",
+  "package": "series2",
+  "subtle_cases": [
+    [
+      [
+        [],
+        [
+          "w1",
+          "w2"
+        ]
+      ],
+      [
+        {
+          "amount": 0,
+          "week": "w1"
+        },
+        {
+          "amount": 0,
+          "week": "w2"
+        }
+      ]
+    ],
+    [
+      [
+        [
+          {
+            "amount": 5,
+            "week": "w3"
+          }
+        ],
+        [
+          "w1",
+          "w2",
+          "w3"
+        ]
+      ],
+      [
+        {
+          "amount": 0,
+          "week": "w1"
+        },
+        {
+          "amount": 0,
+          "week": "w2"
+        },
+        {
+          "amount": 5,
+          "week": "w3"
+        }
+      ]
+    ]
+  ]
+}

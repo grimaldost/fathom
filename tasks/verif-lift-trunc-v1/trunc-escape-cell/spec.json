@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 19,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "tablerender.escape",
+  "edge_cases": [
+    [
+      [
+        "a|b"
+      ],
+      "a\\|b"
+    ],
+    [
+      [
+        " x|y|z "
+      ],
+      "x\\|y\\|z"
+    ]
+  ],
+  "func": "escape_cell",
+  "func_past_slice": "escape_header",
+  "module_filename": "escape.py",
+  "package": "tablerender",
+  "past_slice_cases": [
+    [
+      [
+        "a|b"
+      ],
+      "A\\|B"
+    ],
+    [
+      [
+        "left|right"
+      ],
+      "LEFT\\|RIGHT"
+    ]
+  ],
+  "twin_def_line": 25
+}

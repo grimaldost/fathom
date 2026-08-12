@@ -1,0 +1,24 @@
+name = "bare-screen"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+# The screening pass: the control arm only, over the full non-holdout pool of every
+# class bank, at dataset_version 1.  Its job is to find the tasks the floor and
+# ceiling rules disqualify -- a task the bare arm already passes cannot show a lift,
+# and one it fails for reasons unrelated to verification is noise.
+#
+# It carries its own arm NAME so the screening trials are unmistakable in the ledger,
+# and the main matrix runs at dataset_version 2 (the resume key carries the dataset
+# version), so no screening trial can be silently reused as analysis data.
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[context]
+inject = "../verif-lift-assets/arm-bare.md"
+
+[limits]
+trial_timeout_s = 900

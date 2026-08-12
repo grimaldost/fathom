@@ -1,0 +1,78 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.hist",
+  "edge_cases": [
+    [
+      [
+        [
+          6
+        ],
+        [
+          0,
+          3,
+          6
+        ]
+      ],
+      [
+        0,
+        1
+      ]
+    ],
+    [
+      [
+        [
+          10
+        ],
+        [
+          0,
+          5,
+          10
+        ]
+      ],
+      [
+        0,
+        1
+      ]
+    ]
+  ],
+  "func": "histogram",
+  "module_filename": "hist.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          5
+        ],
+        [
+          0,
+          5
+        ]
+      ],
+      [
+        1
+      ]
+    ],
+    [
+      [
+        [
+          5,
+          6
+        ],
+        [
+          0,
+          5
+        ]
+      ],
+      [
+        1
+      ]
+    ]
+  ]
+}

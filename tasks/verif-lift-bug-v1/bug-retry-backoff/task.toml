@@ -1,0 +1,18 @@
+id = "bug-retry-backoff"
+instruction = """
+`retrykit.backoff.delays` lets the doubling run unbounded, so a long retry
+schedule asks the caller to wait minutes between attempts. Apply the
+`MAX_DELAY_S` ceiling the README states, keeping the number of waits and the
+doubling below the ceiling unchanged.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

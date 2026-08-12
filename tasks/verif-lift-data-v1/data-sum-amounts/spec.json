@@ -1,0 +1,42 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "moneykit.totals",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "currency": "AAA",
+            "minor": 100
+          },
+          {
+            "currency": "BBB",
+            "minor": 250
+          }
+        ]
+      ],
+      {
+        "raises": "ValueError"
+      }
+    ]
+  ],
+  "func": "sum_amounts",
+  "module_filename": "totals.py",
+  "package": "moneykit",
+  "subtle_cases": [
+    [
+      [
+        []
+      ],
+      {
+        "raises": "ValueError"
+      }
+    ]
+  ]
+}

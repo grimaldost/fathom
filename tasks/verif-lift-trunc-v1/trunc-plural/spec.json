@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 24,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "phrasing.plural",
+  "edge_cases": [
+    [
+      [
+        0
+      ],
+      "0 items"
+    ],
+    [
+      [
+        -2
+      ],
+      "-2 items"
+    ]
+  ],
+  "func": "plural_items",
+  "func_past_slice": "plural_errors",
+  "module_filename": "plural.py",
+  "package": "phrasing",
+  "past_slice_cases": [
+    [
+      [
+        0
+      ],
+      "0 errors"
+    ],
+    [
+      [
+        -1
+      ],
+      "-1 errors"
+    ]
+  ],
+  "twin_def_line": 30
+}

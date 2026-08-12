@@ -1,0 +1,17 @@
+id = "null-rename-constant"
+instruction = """
+In `httpkit/retries.py` the constant `MAX_TRYS` is misspelled. Rename it to
+`MAX_ATTEMPTS` and update its use inside that module. The shipped tests refer
+to the module, not the constant, so they need no change. Change nothing else.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

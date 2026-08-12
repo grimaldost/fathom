@@ -1,0 +1,17 @@
+id = "bug-column-width"
+instruction = """
+`tablekit.width.column_widths` ignores the header row, so a column whose header
+is wider than every value comes back too narrow and the rendered table breaks.
+Count the header cell as the README requires.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

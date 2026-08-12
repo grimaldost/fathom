@@ -155,6 +155,15 @@ engine surfaces the difference explicitly, so a bare nonzero exit is never blind
   single-spawn adapter's `_spawn_is_infrastructure`).
 - **Task failure** — exit `1` (a blocking gate stayed red) is scored; exit `3` (a malformed
   series.toml) is fathom's own bug, surfaced loudly, never scored as the task.
+  *Consumer mapping, stated because it drifted once:* "scored" means the trial is recorded
+  `TrialStatus.COMPLETED` with the block in `detail` — **not** `ERRORED`. Since FATH-B03 a
+  non-completed trial has its `verifier_results` dropped and `valid=false` written, and the
+  report counts only `completed`, so `ERRORED` is indistinguishable from "not measured": a
+  series arm classified that way loses every trial the engine refused to integrate from its
+  denominator and reports a pass rate conditioned on the engine having succeeded. The result
+  view is real — the engine halts with the failing PR's branch checked out, carrying every
+  merged predecessor plus that PR's work — and the single-spawn gated arms already score a
+  gate that stayed red after `max_fix_attempts` rather than discarding it.
 - **Budget truncation** — exit `4` and a `run_complete` `outcome = "budget"`: a spawn hit its
   per-spawn budget cap and the engine left the partial work **un-integrated**. This is a
   governance halt, not a task result, so fathom records the trial `errored` (excluded from the

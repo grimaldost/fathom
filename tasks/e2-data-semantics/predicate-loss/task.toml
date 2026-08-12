@@ -1,0 +1,28 @@
+id = "predicate-loss"
+instruction = """
+We are cutting over the active-accounts extract from the retiring platform to
+`active_accounts.py`. Reconciliation says the ported extract returns more rows
+than the legacy report does for the same reporting date.
+
+Make the port return the same rows the legacy extract returns. Preserve the
+public API (`load_accounts(path)` and `active_accounts(accounts, as_of)`) and the
+returned columns, and keep the shipped suite passing.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["rowset_matches_known_good"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# The naive overlay restores the predicate the symptom points at (the soft
+# delete) and misses the one that is only in the legacy query.
+[naive]
+must_pass = ["soft_deleted_excluded"]
+must_fail = ["rowset_matches_known_good"]

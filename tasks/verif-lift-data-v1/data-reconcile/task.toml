@@ -1,0 +1,17 @@
+id = "data-reconcile"
+instruction = """
+`recon.diff.reconcile` reports the difference with the sign inverted -- it
+computes expected minus actual where the README defines actual minus expected.
+Correct the direction; the zero-difference omission already behaves.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

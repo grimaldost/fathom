@@ -1,0 +1,17 @@
+id = "trunc-clamp-score"
+instruction = """
+A defect in `scoring/clamp.py` shows up as a score of 140 is reported unclamped; the reported
+symptom points at `scoring/clamp.py:1-28`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

@@ -1,0 +1,18 @@
+id = "bug-even-split"
+instruction = """
+`allocate.split.split_amount` drops the leftover units when `total` does not
+divide evenly by `parts`, so the shares add up to less than `total`. Hand the
+remainder out the way the package README describes, leaving the evenly
+divisible cases as they are and keeping the public API unchanged.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

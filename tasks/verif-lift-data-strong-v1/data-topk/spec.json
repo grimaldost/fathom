@@ -1,0 +1,75 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.topk",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "name": "z",
+            "score": 5
+          },
+          {
+            "name": "a",
+            "score": 5
+          }
+        ],
+        2
+      ],
+      [
+        {
+          "name": "a",
+          "score": 5
+        },
+        {
+          "name": "z",
+          "score": 5
+        }
+      ]
+    ]
+  ],
+  "func": "top_k",
+  "module_filename": "topk.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "name": "m",
+            "score": 4
+          },
+          {
+            "name": "b",
+            "score": 7
+          },
+          {
+            "name": "a",
+            "score": 4
+          }
+        ],
+        3
+      ],
+      [
+        {
+          "name": "b",
+          "score": 7
+        },
+        {
+          "name": "a",
+          "score": 4
+        },
+        {
+          "name": "m",
+          "score": 4
+        }
+      ]
+    ]
+  ]
+}
