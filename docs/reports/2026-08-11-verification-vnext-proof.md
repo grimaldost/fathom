@@ -19,6 +19,17 @@
   bound every number here were absent and are now stated: the body is **not mounted in the
   subagent**, and the `skill` arm is **not the skill as installed** (§8). The shipped
   `SubagentStop` gate's own proof obligation is **undischarged**, and this report now says so (§5).
+- **Revised again 2026-08-11 after a second locked-out window.** A closing pass re-ran
+  `analyse_vnext.py` against the ledgers and **bought nothing**: the serialization lock was held for
+  that window too, so the per-cell table in §3 is byte-unchanged and every verdict in §4 stands
+  exactly as written. Two things did change, both from free measurement. First, the full
+  pre-registered decision tree is now walked branch by branch, **Branch G included** (§5) — and no
+  branch fires, because every branch's precondition is an unbought cell. Second, and the reason
+  this revision exists at all: the strong-tier gate arm behind the inherited **+0.44** was mounted
+  and **never delivered its treatment** (§5a). That is a fact about delivery, not about effect, and
+  it re-scopes what is worth buying rather than deciding anything. §7's stated mechanism for the
+  ×3.81 economy bias is also **refuted as stated**, while the undercount itself survives by a
+  different route.
 
 ---
 
@@ -83,6 +94,13 @@ scenario directories are new and **no other existing scenario file was touched.*
 
 Arms run the same tasks, so every contrast is paired and read with exact McNemar. `n` is tasks
 scored in every arm present. The `skill-vnext` column is empty in every row for the reason in §1.
+
+> **Re-run at the close of the second window and unchanged.** `analyse_vnext.py` was executed again
+> against the ledgers after the second locked-out window. The ledgers still hold **37 runs, all
+> `bare` or `skill`** — 4 in weak/BUG, 20 in weak/TRUNC, 13 in weak/NULL — so every figure below is
+> the same figure, and the analyzer still reports weak/DATA, strong/BUG and strong/DATA as **NO
+> TRIALS IN LEDGER** rather than as nulls. Nothing was appended by that pass; the distinction
+> between *unmeasured* and *measured null* is preserved in the instrument, not just in the prose.
 
 > **Instrument correction.** The intervals in the table below were computed with the Newcombe
 > *hybrid* interval for two **independent** proportions — printed beside an exact McNemar p, on
@@ -237,6 +255,104 @@ neither alone. Recorded here because it is a property of the bank, not of this r
 
 ## 5. The DECISION-TREE outcome
 
+### The pre-registered tree, walked branch by branch
+
+The plan's tree is read **Gate 0 first, then the branch that matches**. Walked in full, so that the
+absence of a firing branch is on the record as a reasoned outcome rather than an omission:
+
+| step | precondition | fires? | why |
+|---|---|---|---|
+| **Gate 0** | is the cell interpretable? | **partly** | weak/TRUNC `skill` 10/10 and weak/NULL `skill` 6/6 are ceilinged ⇒ no lift claimed from either, in either direction. weak/BUG has headroom (`bare` 0/4) but no comparator. Every other cell is unbought. |
+| **A** | H2 holds: strong-tier `skill+gate` − `skill` ≥ +0.15, FP clean, beats placebo | **no** | no strong-tier trial exists; no gate trial exists; no placebo trial exists. |
+| **B** | H2 fails **and** strong-tier bare is genuinely failing (A0 fail ≥ 0.25) | **no** | H2 unmeasured, and the strong-tier bare arm was never run, so its fail rate is unknown. |
+| **C** | H2 fails **and** strong-tier bare is ceilinged | **no** | same — neither conjunct is measured. |
+| **D** | H4 ~0 (body does nothing) **and** H1/H2 hold (gate does) | **no** | H4's decisive cells (BUG, DATA) are unbought; H1/H2 have no gate trials. |
+| **E** | H4 ≥ +0.15 (the body itself moves the footprint) | **no** | the two bought cells are ceilinged in `skill`; the one cell with headroom has no `skill` arm. |
+| **F** | H6 fails: FP > +0.15 on the null bank | **no** | NULL is 6/6 vs 6/6 — no false-positive signal — but at n=6 the minimum detectable difference is 100 pp, so this is *not* a pass either. Undetectable, not clean. |
+| **G** | **H3 fails: the gate ties the placebo** | **no** | **zero gate trials and zero placebo trials have ever been bought.** See below. |
+| **H** | per-obligation nulls (D2, P1, N1, X1) | **partly** | **X1 fails** — the displacement is refuted by direct measurement (−3 words, not −70). D2 and P1 are unbought; N1 is untested. |
+| **I** | nothing beats bare anywhere, with failing bare arms throughout | **no** | requires measured nulls across the grid; this grid is 4 cells short of one arm and 2 classes short of any arm. |
+
+**The tree returns UNRESOLVED.** Exactly one pre-registered consequence fires anywhere in it — the
+X1 leg of Branch H — and its repair is textual, not structural (§5, *Instruction to the repair pass*).
+
+### Branch G, stated precisely, because it is the one most likely to be misread
+
+Branch G's consequence is severe and worth quoting: *if the gate ties the placebo, the lift is an
+extra turn and not a mechanism; V2 does not ship as a discipline gate, and what ships instead is
+nothing.* It is the branch that would retire the mechanism.
+
+**It does not fire, and it does not fail to fire because the gate won.** It does not fire because
+**H3 was never measured**: the verif-lift ledgers contain `bare` and `skill` scenarios only — not one
+`skill-gate` trial, not one `placebo-gate` trial, not one `bare-gate` trial. A tie is a *measured
+equality*; what exists here is an *absent comparison*. Reading Branch G as satisfied would convert
+an unrun experiment into a refutation, which is the same error in the opposite direction from
+reading a ceiling as a null.
+
+So the disposition for the `SubagentStop` gate is unchanged and is **not** Branch G's disposition:
+the gate stays **default-off and opt-in**, as it already ships, and the reason on the record is that
+**G1 is undischarged in all three conjuncts** — not that it tied a placebo. Nothing ships it on.
+Nothing deletes it either. Both halves are load-bearing.
+
+### 5a. The strong-tier gate arm was mounted and never delivered its treatment
+
+This is the one new measurement in this revision. It is free — it reads 250 saved streams from the
+prior program plus their scenario definitions, and spawns nothing — and it was re-derived
+independently for this report rather than carried over.
+
+The prior program's gate is a `SubagentStop` hook that blocks a subagent once and injects a fixed
+reconsideration sentence. Its **only** delivery route is that injected text; when it fires, the
+stream carries the verbatim marker `Stop hook feedback:` and the sentence itself. Counting that
+marker across every gate-mounted arm, split by the plugin that was mounted so that a plugin
+difference cannot be mistaken for a tier difference:
+
+| plugin | haiku | sonnet | opus |
+|---|---|---|---|
+| `subagent-verify-gate` | 19/21 (90%) | 14/21 (67%) | — |
+| `subagent-gate-multi` | 67/76 (88%) | 38/75 (51%) | — |
+| **`subagent-generic-gate`** | **16/21 (76%)** | **10/21 (48%)** | **0/15 (0%)** |
+
+The bottom row is a **within-plugin** contrast: the same hook, the same wording, the same repo.
+Firing collapses to zero at opus — Fisher exact, opus 0/15 against haiku+sonnet 26/42 on that
+plugin, **p = 0.000014**; the 95% Wilson interval on the opus rate is **[0.0%, 20.4%]**.
+
+Three alternative explanations were checked and each is excluded by the streams themselves:
+
+- **"The subagent never ran."** It ran. All **15/15** opus streams contain an `Agent` tool call and
+  13–55 subsequent messages of subagent activity.
+- **"The plugin was not mounted."** It was. The string `subagent-generic-gate` appears in **15/15**
+  opus streams; the mount is visible in every one.
+- **"The marker is just formatted differently at opus."** It is not there in any form. The gate's own
+  sentence — *"are you actually confident this is correct"* — appears in **0/15** opus streams and in
+  **16/21** haiku streams on the same plugin, alongside the marker in every haiku case.
+
+**What this licenses, and what it does not.** It is a measurement of whether a treatment *arrived*,
+not of whether it *works*. It says nothing about the gate's effect in either direction, and it is
+not evidence for Branch G. Two consequences follow, and both are about design rather than verdict:
+
+1. **A strong-tier gate cell cannot deliver its treatment on this mechanism, so buying one buys
+   nothing.** The plan funds strong-tier gate arms; on this evidence that spend would purchase a
+   contrast in which the treated arm is untreated. The gate trio is worth buying at **weak** tier,
+   where delivery runs 76–90%, and must not be bought at strong tier as designed. Whether the
+   zero-delivery is a harness property, a permission interaction, or something in how that CLI
+   handled `SubagentStop` is itself unmeasured and is the precondition for any strong-tier gate work.
+2. **The inherited +0.44 can no longer be cited as the gate's effect at strong tier.** That figure is
+   `phase4-e1-verif-disc-sub-opus` at 9/9 on `regression_check_present` minus
+   `phase4-e1-verif-bare-sub-opus` at 5/9 — two arms whose *only* declared difference is the gate
+   mount, in trials where the gate never activated. The difference is real in the ledger and its
+   **cause is now unexplained**; it is not refuted, and it is not the gate firing. Two further
+   properties of that number belong beside it whenever it is quoted: at n=9 the exact McNemar
+   floor is **p = 0.125 two-sided even in the best case** of four discordant pairs all one way, so
+   it never reached significance on its own bank; and the arm mounts no skill body, so it was
+   already a different contrast from the one this program measures.
+
+**No craft edit is taken from this.** The pre-registered tree licenses changes on branch outcomes,
+and no branch fired; a delivery measurement is not a branch outcome. It is recorded here, and the
+citation question it raises for the published `+0.22 / +0.56 / +0.44` ladder is flagged in §9 as an
+operator decision rather than settled by this pass.
+
+### The strong-tier branch as originally asked
+
 The instruction's branch was: *if strong-tier lift is ~0 with power, state what the skill's
 trigger/guidance must say.*
 
@@ -329,6 +445,22 @@ lock; a subagent inferring staleness from process tables should not.
 `…/scratchpad/fathom-run.lock` names a holder whose run has exited. It needs an operator decision
 — release it and re-run this arm, or confirm the MAP is resuming.
 
+**A second window closed the same way, and the lock is now the binding constraint on the whole
+programme rather than an inconvenience.** The closing pass polled from 22:58Z to 00:52Z (~115
+minutes) and never acquired: the lock was held from 22:47Z, released somewhere in a
+three-minute gap after 00:11Z, and re-taken at 00:14Z under the same holder string. A third
+agent queued on the same lock since ~20:20Z had also never acquired. No ledger line has been
+written since 17:56Z, and **37 runs is the whole programme's spend to date.**
+
+Two mechanical notes, because the polling discipline itself is part of the failure. A holder's
+recorded `pid` is the shell subprocess that *wrote* the file and exits immediately, so a dead pid
+in the lock is expected and is **not** evidence of staleness — the earlier revision's inference from
+the process table was reading the wrong signal. And a 5–10 minute poll cadence is precisely the
+cadence that loses a three-minute release-to-relock gap, so the politest poller starves. The
+cheapest fixes, in order: a **heartbeat** (touch the lock each block) so staleness becomes decidable
+rather than guessed; a **FIFO ticket directory** instead of one file, so the gap stops being a race;
+and failing both, an atomic `noclobber` acquire loop at ~30 s.
+
 ## 7. What is banked, and what it costs to finish
 
 Banked, free, and reusable the moment the lock clears:
@@ -352,15 +484,50 @@ direction: the uncorrected column is the one that makes finishing look affordabl
 | weak NULL + TRUNC (vNext) | 16 | ~$1.5 | **~$6** | downside checks; TRUNC's ceiling is repairable (§3) |
 | strong BUG + DATA (vNext) | 24 | ~$18 | **~$69** | needs the MAP's strong arms, which do not exist |
 
-Why the floors are floors: every arm delegates through the `Task` tool, so each trial's stream
-carries two `result` events — parent and subagent sidechain — and `parse_stream` keeps the last; a
-saved stream measured the undercount at **3.81×**. The bias is not guaranteed common-mode across
-arms, so no arm-to-arm economy claim is made from these figures at all — but a *budget* must use
-the corrected column, because the bias is one-directional and large.
+Why the floors are floors — **and the stated mechanism is now refuted, while the undercount
+survives.** This report previously explained the ×3.81 bias as: every arm delegates, so each stream
+carries two `result` events (parent and subagent sidechain), and `parse_stream` keeps the last.
+Measured against the **1,072** saved streams, that mechanism does not hold:
+
+- **Delegation alone does not produce a second `result` event.** All 15 opus streams delegate
+  (`Agent` tool, 15/15) and every one carries **exactly one** `result` event.
+- **The second event tracks the stop hook, not the subagent.** Across the 959 plugin-mounted
+  streams the coupling is near-perfect: hook fired **and** a second `result` event, 164; hook silent
+  **and** a single event, 794; hook silent with a second event, 1; hook fired with a single
+  event, **0**.
+- **Where two events do exist, the ratio never approaches 3.81.** Across the whole corpus, 232
+  streams carry more than one `result` event and all 232 carry costs on both; `sum ÷ last` runs
+  **1.16 to 2.02, median 1.49** — **0 of 232 reach 3.81**.
+
+So ×3.81 cannot have come from this mechanism on any stream in the corpus. **The undercount is
+nonetheless real, by a different and probably larger route:** the ledger's per-run usage on the
+delegated path records the parent's final iteration and omits the subagent's consumption outright.
+The weak/TRUNC `bare` runs average **1.0 turns, 331 output tokens and 5.7 s** while scoring 10/10 on
+`spec_met` for a code-fix task — work that cannot have been done in 331 parent tokens.
+
+The practical disposition: **keep ×3.81 as the budgeting unit**, because it is conservative in the
+safe direction (it over-reserves rather than overspends), and **stop publishing it as a measured
+multiplier** until it is re-derived from the true mechanism. The bias is not guaranteed common-mode
+across arms, so no arm-to-arm economy claim is made from these figures at all.
 
 Recorded spend across the verif-lift ledgers stands at **37 paid runs, a $3.34 ledger floor,
 ≈$12.74 corrected** — $0.344/trial true against the plan's assumed $0.145. All of it is the MAP's;
-this run added $0 of matrix spend and three sub-cent arming probes.
+this run added $0 of matrix spend and three sub-cent arming probes, and the closing pass added
+**$0.00 with no paid spawn of any kind.** Per-arm floors, by `config_hash`: `bare`-NULL
+`4aa4b7da5965` 7 runs / $0.443; `skill`-NULL `5fe55a4e55d6` 6 / $0.360; `bare`-TRUNC `3214c0e6bbbb`
+14 / $1.341; `skill`-TRUNC `52ffcd608665` 10 / $1.200; `bare`-BUG `3214c0e6bbbb` 4 / $0.417.
+
+**The next block is staged and its reuse of the longitudinal hashes is proven, not asserted.**
+Single-arm scenario directories with absolute inject paths reproduce the existing `config_hash`
+values exactly — only the injected file's sha256 enters the hash, never its path — confirmed
+end-to-end by `fathom run verif-lift-bug-v1 --dry-run` reporting *"16 trials (4 already done)"*
+against the staged `bare` directory. Resolved: `bare` `3214c0e6bbbb`, `skill` `52ffcd608665`,
+`skill-vnext` `046e6deada19`, `skill-gate` `609dea0d69b1`, `placebo-gate` `3a665058f27a`, and a new
+`bare-gate` `c6c95f7080e8` — the `bare+gate` replication arm §8 records as missing. Single-arm
+directories are **required**, not tidiness: `fathom run` plans scenario-major and `--limit` slices
+that flat list, so a multi-arm directory with `--limit` buys one arm's entire sweep before touching
+the next. The buy order is itself the buy rule — comparators land before the vNext arm, so an
+interrupted block never leaves an orphan vNext cell with nothing to contrast against.
 
 **The program's budget is denominated in a unit its own ledger understates ~3.8× on the only path
 it uses.** In corrected units the plan's 368-trial grid is ≈$99 weak + ≈$124 strong ≈ **$223
@@ -405,3 +572,33 @@ the next block, not a footnote to it.
   exist.
 - **n=1 repeat.** Nothing here separates a real effect from a single lucky trial below the
   minimum detectable differences tabulated in §3.
+- **A strong-tier gate arm does not deliver its treatment** (§5a), so the `bare-gate` arm that would
+  make `skill-gate` a replication is only meaningful at weak tier until that is understood. The
+  arm is now staged (`c6c95f7080e8`) but its strong-tier cell should not be bought.
+
+## 9. Open decisions this report hands to the operator
+
+None of these is settled by the evidence above; each is recorded because the evidence changed what
+the decision costs.
+
+1. **The lock.** Two agents have now been starved across two windows and the programme has spent
+   nothing since 17:56Z. Heartbeat, FIFO tickets, or a 30 s atomic acquire — §6. This is the
+   precondition for every other item.
+2. **Re-scope the grid before the next block.** In corrected units the plan's 368-trial grid is
+   ≈$223 against a $120 ceiling, and `--max-budget-usd` is per-spawn so nothing rails the total
+   (§7). The strong block alone exceeds the ceiling — and §5a now removes part of its motivation.
+3. **The gate trio moves to weak tier.** Delivery is 76–90% at haiku and 0/15 at opus on the same
+   plugin (§5a). Buying the strong-tier gate cells as designed purchases an untreated treatment arm.
+4. **The published `+0.22 / +0.56 / +0.44` ladder needs a decision, not a silent edit.** The opus
+   figure's arm shows zero gate activations, and at n=9 that contrast could not have reached
+   significance in any case (best-case exact McNemar p = 0.125). The plugin's README and CHANGELOG
+   currently present it as the gate's measured effect at that tier. **This pass deliberately made no
+   craft edit** — no pre-registered branch licensed one, and a delivery measurement is not a branch
+   outcome — but the citation is now known to attribute an effect to a mechanism that left no trace
+   in the trials producing it.
+5. **Re-derive or retire the ×3.81 multiplier.** Its stated mechanism is refuted (§7); the
+   undercount it stands for is real and probably larger. Keep it as a conservative budget unit,
+   stop quoting it as measured.
+6. **The non-inferiority margin cannot pass at any funded n** (§3). Re-register the margin,
+   re-register n, or withdraw the displacement — an operator decision, and explicitly *not* one to
+   be fixed by dropping the margin after seeing data.
