@@ -1,0 +1,17 @@
+id = "bug-version-compare"
+instruction = """
+`semver2.compare.compare_versions` compares version segments as strings, so
+1.10.0 sorts before 1.9.0. Compare them numerically as the README specifies,
+keeping the -1/0/1 return contract.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

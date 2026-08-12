@@ -1,0 +1,85 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.group",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "n": 0,
+            "r": "a"
+          }
+        ],
+        "r",
+        "n"
+      ],
+      {
+        "a": 0
+      }
+    ],
+    [
+      [
+        [
+          {
+            "n": 3,
+            "r": "a"
+          },
+          {
+            "n": 0,
+            "r": "b"
+          }
+        ],
+        "r",
+        "n"
+      ],
+      {
+        "a": 3,
+        "b": 0
+      }
+    ]
+  ],
+  "func": "total_by",
+  "module_filename": "group.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "m": 1,
+            "r": "a"
+          }
+        ],
+        "r",
+        "n"
+      ],
+      {
+        "raises": "KeyError"
+      }
+    ],
+    [
+      [
+        [
+          {
+            "n": 2,
+            "r": "a"
+          },
+          {
+            "r": "b"
+          }
+        ],
+        "r",
+        "n"
+      ],
+      {
+        "raises": "KeyError"
+      }
+    ]
+  ]
+}

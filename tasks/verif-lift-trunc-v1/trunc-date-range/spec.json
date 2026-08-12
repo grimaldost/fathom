@@ -1,0 +1,64 @@
+{
+  "cited_slice_end": 19,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "calendars.dates",
+  "edge_cases": [
+    [
+      [
+        2026,
+        1,
+        5
+      ],
+      "2026-01-05"
+    ],
+    [
+      [
+        2026,
+        9,
+        9
+      ],
+      "2026-09-09"
+    ]
+  ],
+  "func": "fmt_day",
+  "func_past_slice": "fmt_range",
+  "module_filename": "dates.py",
+  "package": "calendars",
+  "past_slice_cases": [
+    [
+      [
+        [
+          2026,
+          1,
+          5
+        ],
+        [
+          2026,
+          2,
+          9
+        ]
+      ],
+      "2026-01-05 to 2026-02-09"
+    ],
+    [
+      [
+        [
+          2026,
+          3,
+          1
+        ],
+        [
+          2026,
+          3,
+          9
+        ]
+      ],
+      "2026-03-01 to 2026-03-09"
+    ]
+  ],
+  "twin_def_line": 25
+}

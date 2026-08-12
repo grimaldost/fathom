@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_runner.py": "0c3f526b8cf92683fc3f1f597568590ac005b5fd03948125f6c2a26d109d30eb"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "jobkit/runner.py",
+  "must_contain": "job finished successfully",
+  "must_not_contain": "sucessfully",
+  "package": "jobkit"
+}

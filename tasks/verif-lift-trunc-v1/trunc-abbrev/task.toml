@@ -1,0 +1,17 @@
+id = "trunc-abbrev"
+instruction = """
+A defect in `units/abbrev.py` shows up as a count of 1000 renders as '1.0k'; the reported
+symptom points at `units/abbrev.py:1-23`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

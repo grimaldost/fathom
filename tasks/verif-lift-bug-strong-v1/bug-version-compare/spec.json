@@ -1,0 +1,28 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "semver2.compare",
+  "edge_cases": [
+    [
+      [
+        "1.10.0",
+        "1.9.0"
+      ],
+      1
+    ],
+    [
+      [
+        "2.0.0",
+        "10.0.0"
+      ],
+      -1
+    ]
+  ],
+  "func": "compare_versions",
+  "module_filename": "compare.py",
+  "package": "semver2"
+}

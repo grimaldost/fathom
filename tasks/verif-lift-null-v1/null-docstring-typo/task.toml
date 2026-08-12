@@ -1,0 +1,16 @@
+id = "null-docstring-typo"
+instruction = """
+The module docstring of `mathkit/rounding.py` misspells 'which' as 'wich'.
+Correct the spelling. Change nothing else.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

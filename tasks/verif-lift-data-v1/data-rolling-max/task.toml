@@ -1,0 +1,17 @@
+id = "data-rolling-max"
+instruction = """
+`series2.window.rolling_max` stops one window early, so the last full window is
+missing and the result is shorter than `n - size + 1`. Emit every full window
+per the README; an over-long window still yields an empty list.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

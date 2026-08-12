@@ -1,0 +1,32 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "numerals.roman",
+  "edge_cases": [
+    [
+      [
+        4
+      ],
+      "IV"
+    ],
+    [
+      [
+        9
+      ],
+      "IX"
+    ],
+    [
+      [
+        1944
+      ],
+      "MCMXLIV"
+    ]
+  ],
+  "func": "to_roman",
+  "module_filename": "roman.py",
+  "package": "numerals"
+}

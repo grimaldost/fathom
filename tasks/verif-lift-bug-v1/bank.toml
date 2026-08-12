@@ -1,0 +1,6 @@
+name = "verif-lift-bug-v1"
+dataset_version = "1"
+holdout = [
+    "bug-ordinal",
+    "bug-column-width",
+]

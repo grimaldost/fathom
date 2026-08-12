@@ -1,0 +1,17 @@
+id = "data-union-rows"
+instruction = """
+`setops.union.union_rows` de-duplicates by comparing whole rows instead of the
+`key`, so two rows with the same key but different other fields both survive.
+De-duplicate on `key` with first-wins, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

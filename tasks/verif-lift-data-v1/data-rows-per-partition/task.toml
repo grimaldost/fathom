@@ -1,0 +1,17 @@
+id = "data-rows-per-partition"
+instruction = """
+`rollup.parts.rows_per_partition` silently discards a row whose partition is
+`None`, so the counts do not add up to the number of input rows. Count those
+rows under the `__unpartitioned__` key the README defines.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

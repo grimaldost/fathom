@@ -1,0 +1,23 @@
+name = "skill-vnext"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# The revised surface. Differs from `skill-current` in exactly one thing: which
+# body is appended to the spawn's system prompt. Model, effort, strategy, tool
+# allow-list and limits are copied from the other two arms verbatim, so nothing
+# but the body can explain a difference. Provenance and the pinning rule are in
+# README.md beside this file; the asset's content sha256 enters config_hash, so
+# editing it forks the resume key rather than silently changing what was
+# measured.
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[context]
+inject = "assets/skill-vnext.md"
+
+[limits]
+trial_timeout_s = 900

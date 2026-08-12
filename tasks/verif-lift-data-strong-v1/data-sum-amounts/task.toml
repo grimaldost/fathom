@@ -1,0 +1,17 @@
+id = "data-sum-amounts"
+instruction = """
+`moneykit.totals.sum_amounts` adds minor units across currencies and labels the
+result with whichever currency happened to come last, silently producing a
+meaningless total. Raise `ValueError` on mixed currencies, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

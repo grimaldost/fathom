@@ -1,0 +1,17 @@
+id = "bug-checksum-mod"
+instruction = """
+`validate2.luhn.is_valid` anchors the doubling at the left end of the string,
+so odd-length inputs double the wrong digits and valid numbers are rejected.
+Anchor at the right end as the README states; keep the signature.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

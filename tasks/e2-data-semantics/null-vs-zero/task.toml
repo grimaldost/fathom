@@ -1,0 +1,30 @@
+id = "null-vs-zero"
+instruction = """
+The regional scorecard is dropping regions. `refund_report.build_report()` is
+supposed to return one row per region with its net refunds and row count, but for
+some regions the scorecard shows a blank instead of a number, and those regions
+fall out of the regional average entirely.
+
+Fix `build_report()` so the report matches the contract in
+`contracts/refund_report.md`. Preserve the public API
+(`build_report(regions, refunds)` returning a list of row dicts), and keep the
+shipped suite passing.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["null_semantics_preserved"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# The naive overlay gives regions with no refund rows their own branch. Regions
+# whose refunds net to zero still fall through the truthiness test.
+[naive]
+must_pass = ["absent_regions_report_zero"]
+must_fail = ["null_semantics_preserved"]

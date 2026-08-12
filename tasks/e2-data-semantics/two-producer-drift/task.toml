@@ -1,0 +1,31 @@
+id = "two-producer-drift"
+instruction = """
+The regional settlement report is coming up short. `reconcile.reconcile()` is
+supposed to assemble one `region_daily` row per (region, day) that both
+producers wrote, but for several days it returns nothing at all — even though
+both producers clearly emitted that region and day, and both producers' own test
+suites are green.
+
+Get the reconciliation to assemble every (region, day) both producers actually
+produced, with the right amounts. Preserve the public API: `emit(raw_rows)` on
+each producer module and `reconcile(order_rows, settlement_rows)`.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["both_producers_reconciled"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# Discrimination contract, checked offline by tools/check_naive_refs.py: the
+# naive overlay in refs/naive/ must pass the easy criterion and fail the subtle
+# one, or this task cannot tell the arms apart.
+[naive]
+must_pass = ["reconciliation_covers_all_periods"]
+must_fail = ["both_producers_reconciled"]

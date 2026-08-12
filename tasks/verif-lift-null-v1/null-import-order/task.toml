@@ -1,0 +1,17 @@
+id = "null-import-order"
+instruction = """
+The three standard-library imports at the top of `logkit/fields.py` are not in
+alphabetical order, unlike every other module in this package. Reorder them
+alphabetically. Change nothing else.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

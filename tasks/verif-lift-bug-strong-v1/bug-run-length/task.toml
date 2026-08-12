@@ -1,0 +1,17 @@
+id = "bug-run-length"
+instruction = """
+`rlekit.encode.encode_runs` never flushes the run it is accumulating when the
+input ends, so the last run is missing from the result. Emit every run per the
+README, leaving the empty-input behaviour as it is.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

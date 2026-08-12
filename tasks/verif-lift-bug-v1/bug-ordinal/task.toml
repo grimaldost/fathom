@@ -1,0 +1,17 @@
+id = "bug-ordinal"
+instruction = """
+`textkit.ordinal.ordinal` gives the teens the wrong suffix, so 11 renders as
+`11st`. Apply the teens exception the README states; the other cases already
+behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

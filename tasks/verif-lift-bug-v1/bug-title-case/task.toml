@@ -1,0 +1,17 @@
+id = "bug-title-case"
+instruction = """
+`textkit.title.title_case` capitalises only the first fragment of a hyphenated
+word, so `well-known` becomes `Well-known`. Treat the hyphen as a word
+separator per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

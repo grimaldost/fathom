@@ -1,0 +1,17 @@
+id = "bug-time-window"
+instruction = """
+`sched.window.slots` drops the last slot whenever the window divides exactly by
+`step`, so a 30-minute window in 10-minute steps yields two slots instead of
+three. Include the final whole slot per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

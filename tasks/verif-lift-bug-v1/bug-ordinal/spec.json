@@ -1,0 +1,32 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "textkit.ordinal",
+  "edge_cases": [
+    [
+      [
+        11
+      ],
+      "11th"
+    ],
+    [
+      [
+        12
+      ],
+      "12th"
+    ],
+    [
+      [
+        113
+      ],
+      "113th"
+    ]
+  ],
+  "func": "ordinal",
+  "module_filename": "ordinal.py",
+  "package": "textkit"
+}

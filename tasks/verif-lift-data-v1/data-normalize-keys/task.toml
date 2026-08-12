@@ -1,0 +1,16 @@
+id = "data-normalize-keys"
+instruction = """
+`cleanse.keys.normalize_keys` strips but never lower-cases, so `ABC` and `abc`
+stay distinct keys downstream. Fold the case as the README requires.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
