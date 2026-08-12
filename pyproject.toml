@@ -1,6 +1,6 @@
 [project]
 name = "fathom"
-version = "0.2.0"
+version = "0.3.0"
 description = "Scenario-blind tool-effectiveness evals"
 license = "MIT"
 license-files = ["LICENSE"]
