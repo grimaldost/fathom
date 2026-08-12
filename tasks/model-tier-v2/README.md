@@ -385,6 +385,12 @@ Three contracts worth stating explicitly, because the whole comparison rests on 
 - **`decision_cost_usd` is `null`, never `0`.** Unmeasured is not zero, and writing zero
   would make every total look final when each is a lower bound. A test pins it through a
   JSON round-trip, so it cannot become `0` by serialisation either.
+- **Every count is stated, never left derivable.** `failures` is published alongside
+  `passing`, `gate_caught_failures` and `silent_failures` even though it is their sum,
+  because this table crosses a programme boundary and *a consumer that has to derive a
+  count is a consumer that can derive it differently*. The same rule is why
+  `schema_version` bumps on a rename: a consumer pinned to the old version fails on the
+  version rather than reading a missing key as absent data.
 - **`first_attempt_pass_rate` is not the quality estimand** — the estimand is post-repair
   quality, and this artifact deliberately does not compute it. It exports the facts that
   bound it; the consuming analysis picks the repair-success assumption. The old name

@@ -15,7 +15,7 @@ Pure functions over ledger records + per-task metadata. Computes, for the
   rule and excluded from the confusion matrix;
 * the **calibration confusion matrix** (predicted vs empirical tier) + the crossover
   score where the empirically-right model steps up, vs the 25/55 thresholds;
-* the **per-band dose-response** (Δquality × Δcost per upgrade) and the
+* the **per-band dose-response** (Δ first-attempt pass rate × Δcost per upgrade) and the
   **(model×effort) cost-quality Pareto frontier** (strict non-domination — fixes the
   prior efficiency view's "not-the-worst" flag).
 
@@ -32,7 +32,7 @@ reachable *empirically* (a ``fable`` arm cheapest-adequate), so it appears as a 
 COLUMN with no predicted ROW. Caveat: the ladder is tier-ordered, not observed-cost
 ordered — on the committed ledger ``sonnet5`` costs more than ``opus``; this is harmless
 to every tier verdict (a comparison feeds a tier, and both sonnets share the ``mid`` tier),
-and the dose-response column reads ``Δquality vs prev arm`` rather than ``vs cheaper`` so
+and the dose-response column reads ``Δ first-attempt vs prev arm`` rather than ``vs cheaper`` so
 the rendered scorecard never asserts a dollar order the ladder does not promise.
 
 The cost axis is the token×price estimate (``cost_usd_est``; subscription auth reports
@@ -1262,14 +1262,16 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     dr = cal["dose_response"]
     if dr:
         lines += [
-            "### Dose-response (per-trial pass rate × cost per upgrade, by band)",
+            "### Dose-response (first-attempt pass rate × cost per upgrade, by band)",
             "",
         ]
         # Δ is against the arm one step DOWN the ladder (the row above). The rows are
         # tier-ordered, not dollar-ordered, so the column reads "vs prev arm" not "vs
         # cheaper" — on the committed ledger sonnet5 (mid) sorts above opus (strong) yet
         # costs more, and "vs cheaper" would misstate a dollar order the ladder never promises.
-        lines.append("| band | arm | mean quality | mean $/trial | Δquality vs prev arm |")
+        lines.append(
+            "| band | arm | mean first-attempt pass | mean $/trial | Δ first-attempt vs prev arm |"
+        )
         lines.append("|---|---|---|---|---|")
         for band in tiers:
             if band not in dr:
@@ -1285,8 +1287,8 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     # Pareto
     pareto = cal["pareto"]
     if pareto:
-        lines += ["### Cost-quality Pareto frontier (★ = non-dominated)", ""]
-        lines.append("| arm | mean quality | mean $/trial | frontier |")
+        lines += ["### Cost vs first-attempt pass: Pareto frontier (★ = non-dominated)", ""]
+        lines.append("| arm | mean first-attempt pass | mean $/trial | frontier |")
         lines.append("|---|---|---|---|")
         for p in sorted(pareto, key=lambda x: x["cost"]):
             lines.append(

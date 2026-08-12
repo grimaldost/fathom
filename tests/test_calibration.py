@@ -171,8 +171,29 @@ class TestParetoFrontier(unittest.TestCase):
         self.assertIn("| task | score | predicted | empirical | haiku | sonnet | opus | note |", md)
         # The dose-response Δ column names the arm one step down the ladder, not a dollar
         # order — the ladder is tier-ordered and can list a dearer arm above a cheaper one.
-        self.assertIn("| band | arm | mean quality | mean $/trial | Δquality vs prev arm |", md)
+        self.assertIn(
+            "| band | arm | mean first-attempt pass | mean $/trial | Δ first-attempt vs prev arm |",
+            md,
+        )
         self.assertNotIn("vs cheaper", md)
+
+    def test_no_rendered_column_calls_a_first_attempt_rate_quality(self):
+        """`quality` is the estimand's name, and none of these rates is the estimand.
+
+        The scorecard shows pass rates in three places — the routing table, the
+        dose-response and the Pareto frontier — and every one of them is a FIRST-ATTEMPT
+        rate. The estimand for a routing decision is post-repair quality, which this bank
+        does not compute. Leaving `quality` on any of these columns preserves the exact
+        ambiguity that had this module reporting 0.55 against a sibling programme's 0.70
+        on one fixture, in the most-read surface the project has.
+        """
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = [_trial("haiku", "t", 0, 0), _trial("sonnet", "t", 0, 2), _trial("opus", "t", 0, 2)]
+        md = "\n".join(cal.render_calibration(cal.build_calibration(raw, meta)))
+        self.assertIn("mean first-attempt pass", md)
+        self.assertNotIn("mean quality", md)
+        self.assertNotIn("Δquality", md)
+        self.assertNotIn("Cost-quality", md)
 
 
 class TestArmResolution(unittest.TestCase):
