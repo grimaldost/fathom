@@ -159,12 +159,95 @@ this bank's power, not about the tool.
 None. No fathom trials were run; `ledger/research-fusion-v1.jsonl` does not exist. What this
 commits is the vendored mount tree and this report.
 
+## 2026-08-12: attempted again, blocked on credentials before any spend
+
+The lock that starved the previous attempt was free at the start of this one. The matrix still
+did not run, for an unrelated reason, and **nothing was spent on it**.
+
+`fathom smoke --no-engine-boundary` — the gate that runs before the lock is taken, precisely so a
+dead credential is discovered for free — returned **5/7**. Both failures carry the same cause:
+
+```
+[FAIL] credential-only spawn authenticates & completes
+       status=infrastructure turns=1
+       result='Failed to authenticate: OAuth session expired and could not be refreshed'
+[FAIL] system-prompt injection reaches the model (treatment armed)
+       flag_in_argv=True status=infrastructure canary_present=False
+```
+
+The second failure is downstream of the first: injection cannot be observed in a spawn that never
+authenticates. `~/.claude/.credentials.json` was last written 2026-08-11 17:00; the previous
+attempt's spawns authenticated from it at 22:47, so the token expired overnight and its refresh
+is failing. Only an interactive `claude login` clears this — no in-run workaround exists, and
+none should be attempted.
+
+**This is the second occurrence of the same incident on this branch**, which makes it an
+operating characteristic rather than a one-off: every spawn authenticates from a copy of a
+single OAuth credential with a lifetime shorter than this matrix's expected wall-clock. A matrix
+that needs more than a day of wall-clock can therefore expire mid-run. The consequence for the
+run plan is concrete — chunked invocation is not merely a convenience against harness limits, it
+is the only shape that survives a token expiry, because a chunk that dies on `infrastructure`
+leaves the ledger's completed trials intact and the next chunk resumes after a re-login.
+
+Everything that does not need credentials was re-checked and still holds:
+
+| gate | result |
+|---|---|
+| mount restore | **MATCH** — `f33ae12f…`, 50 files, 0 untracked removed |
+| `fathom validate research-fusion-v1` | **8 pass, 0 fail, 0 warn, 4 unverifiable** |
+| `--dry-run` (repeats 3) | `scenarios=2  tasks=3  repeats=3` → **18 trials, ceiling $36.00** |
+| paid-run lock | free; **not taken** — no paid segment began |
+
+Budget position unchanged: `$36.00` planned against a `$90` rail and a `$350` remaining ceiling.
+The stop rule was never in play. **Spend this attempt: $0.00.**
+
+### A pilot trial is now required before the matrix, and the mechanism is proven
+
+A confirmed mantis-research 0.2.0 defect, found in field use on 2026-08-12, changes the run plan:
+the synthesis stage spawns a `claude` CLI that **exits 1 when it detects a parent Claude Code
+session**, and the MCP path then returns briefs with **no sidecar and no synthesis**. Every
+criterion this bank exists to measure lives in that sidecar, so under the defect the armed arm
+degenerates to the control and the matrix would manufacture exactly the null the downstream
+decision is already leaning toward — the FATH-B01 failure shape again, arriving through the
+tool instead of through the mount.
+
+Whether it reproduces here is genuinely open: a fathom spawn scrubs the environment, so the
+parent-session detection may not fire. That is an empirical question worth **one trial**, not
+eighteen.
+
+Buying one *fusion* trial is not as simple as `--limit 1`. The plan order is
+scenario → task → repeat over a sorted glob, so `bare` sorts first and `--limit 1` buys a
+**control** trial, which cannot see the sidecar at all. The fix is a scenarios dir holding only
+`fusion.toml` — sound only if the copy resolves to the same `config_hash`, or the pilot lands
+under a different resume key, does not count toward the matrix, and forks the record.
+
+It does resolve identically, and this is asserted rather than assumed: `resolve_scenario` hashes
+mounted plugins as `{name, tree_sha, version}`, so neither the mount path nor the scenario file's
+own path enters `config_hash`. A copy carrying an **absolute** mount pointing at the same tree
+hashes to the same value — verified, both arms at
+`55d9dacfc0b85f003ddf2de791688e5d447abfc96833ed2a893f4fd9f9c0cede`, and the pilot plan prints
+`scenarios=1 … planned: 1 trials  ceiling: $2.00`.
+
+So the defect can be caught for **~$2 instead of ~$70**, and if it does not reproduce the pilot
+trial is not wasted — it is trial 1 of 18.
+
+**If the pilot's sidecar is absent or empty, that is a bug reproduction, not a result.** It says
+nothing about the moat claim in either direction, and the matrix must not be bought until the
+mantis fix lands.
+
 ## To run it (state is ready; nothing needs re-deriving)
 
 ```sh
 cd C:/Users/grima/Documents/.wt-closeout/fathom-fusion
-uv run fathom smoke --no-engine-boundary          # expect ALL PASS (7/7)
+uv run fathom smoke --no-engine-boundary          # expect ALL PASS (7/7) — AUTH GATE, before the lock
 python <scratch>/restore_mount.py                 # MUST print MATCH before spending
+python <scratch>/pilot_hash_guard.py              # MUST print MATCH — pilot shares the resume key
+
+# 1. PILOT — one fusion trial (~$2). Inspect the sidecar before buying anything else.
+uv run fathom run research-fusion-v1 --scenarios-dir <scratch>/pilot-scenarios \
+    --repeats 3 --limit 1 --max-budget-usd 5 --skip-arming-check
+
+# 2. Only if the pilot's sidecar is well-formed — the remaining 17 trials.
 uv run fathom run research-fusion-v1 --scenarios-dir scenarios/research-fusion \
     --repeats 3 --max-budget-usd 5 --skip-arming-check
 ```
