@@ -1,0 +1,28 @@
+# Arm A — the kit as keel 0.14.0 shipped it (3,789 w).
+#
+# Byte-identical to `scenarios/keel-kit/a-full.toml`'s treatment: `inject` points at the SAME
+# asset file, so the content-sha provenance pin is preserved (5685cfac7f3c…). Nothing in
+# `scenarios/keel-kit/` is edited by this proof run; this directory is additive.
+#
+# Why this arm is still here after the kit moved on: keel's `feat/gate-empiricism` branch
+# relocated ~1,120 words out of the two injected files (T0.5) on the argument that the moves were
+# information-preserving and therefore owed no measurement. That argument shipped unmeasured. This
+# arm is the only thing in the matrix that can put a number on it, and it costs one arm to do so.
+name = "a-full-014"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+# Read/Grep/Glob so the arm can ground its claims in the staged tree; Write/Edit so it can
+# emit or repair the spec. No Bash: nothing in this bank asks the arm to run anything, and a
+# shell is the cheapest side channel into the oracle.
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[context]
+inject = "../keel-kit/assets/kit-full.md"
+
+[limits]
+trial_timeout_s = 900

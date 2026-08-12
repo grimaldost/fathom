@@ -1,0 +1,29 @@
+id = "author-two-consumer"
+instruction = """
+This repository is `tinyetl`, a small batch loader for order records. `brief.md` at the root of
+the workspace describes a change that has been asked for; it has not been designed or implemented
+yet.
+
+Write the design spec for that change to a file named `spec.md` at the root of this workspace.
+Whatever the spec asserts about the code must be true of the files staged here.
+
+Do not implement the change, and do not modify any staged file — `spec.md` is the only file you
+create or edit.
+"""
+
+[limits]
+# Writing or repairing a design spec is a read-and-reason pass over a small staged tree, not a
+# build. 900 s / 40 turns is set from the full-kit arm's shape (it has the most to read and the
+# most to emit); the bare arm finishes well inside it.
+trial_timeout_s = 900
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+# The verifier imports a pinned copy of the readiness gate and runs it over the produced spec.
+timeout_s = 120
+
+[gate]
+# The staged tree's own suite. Green on the untouched fixture, and it must stay green: no task in
+# this bank asks any arm to touch the code, so a red gate means an arm edited the tree.
+run = "python -m unittest discover -s tests -t ."

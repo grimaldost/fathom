@@ -1,0 +1,15 @@
+name = "opus5"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "high"
+
+# Strong tier. Identical to haiku/sonnet5 except `model`. Effort stays `high` across
+# all three arms: on Opus 5 thinking is on by default and disabling it is rejected
+# above `high`, so `high` is the setting that keeps the three arms comparable.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

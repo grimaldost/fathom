@@ -1,0 +1,39 @@
+id = "data-reconcile-telemetry"
+instruction = """
+The `recon` package reconciles a device telemetry feed against the device registry.
+The worked example at the bottom of `RULES.md` currently comes out wrong.
+
+Three functions are wrong and they are the only ones to change:
+
+  * `recon/match.py` — `match(readings, devices)`, rules M1 to M3
+  * `recon/gaps.py`  — `gaps(readings, pairs)`, rule G1
+  * `recon/report.py` — `summarise(readings, pairs, gap_ids)`, rule S1
+
+`RULES.md` states every rule they must implement and `CONVENTIONS.md` states the
+package conventions all three must follow. `recon/model.py` defines the two record
+types and does not change.
+
+Keep the public function names and signatures, keep the shipped test suite passing,
+and add tests for what you changed.
+"""
+
+[limits]
+trial_timeout_s = 1800
+max_turns = 110
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived, not chosen — see ../oracles.toml § HOW `hard_criteria` IS DERIVED: false on
+# the untouched fixture, false on counter/, true on solution/. `matches_the_worked_
+# example` is the thin anchor (the reported symptom) and is excluded by construction.
+hard_criteria = [
+    "tolerance_bound_is_inclusive",
+    "tie_break_follows_the_rules",
+    "counts_reconcile_over_readings",
+]
+
+[gate]
+# The shipped suite, green on the untouched fixture: it covers only the far-apart
+# cases every candidate implementation already agrees on.
+run = "python -m unittest discover -s tests -t ."

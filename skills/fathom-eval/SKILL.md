@@ -68,7 +68,7 @@ uv run python -m fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 
 # 3. Run — the real, paid matrix. Resumable: re-invoking skips completed trials.
 uv run python -m fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] \
-    [--ledger-dir DIR] [--limit N] [--max-budget-usd USD] [--include-holdout]
+    [--ledger-dir DIR] [--limit N] [--tasks ID,ID] [--max-budget-usd USD] [--include-holdout]
 
 # 4. Report — render the scorecard from the ledger. Idempotent; regenerate any time.
 uv run python -m fathom report <bank>
@@ -88,11 +88,18 @@ is **`skill-pyeng-v1`** — one task (`modernize-timeflow`) against **three arms
 
 ## Cost, and when not to run
 
-- **~$2/trial** advisory ceiling, printed upfront; a full v1 matrix is **~$20-40**.
-- **`--max-budget-usd`** is the real per-**spawn** hard cap (adapter default 5.0).
-  A `series` trial spawns several subagents, so it can spend several times the cap.
+- The upfront ceiling is **planned trials × the per-spawn cap in force** (`--max-budget-usd`
+  if given, else the adapter's 5.0). It is a worst case, not an expectation — observed
+  actuals run ~$0.08–0.59/trial and a full v1 matrix is **~$20-40**.
+- **`--max-budget-usd`** is the real per-**spawn** hard cap (adapter default 5.0), **not a
+  run total** — passing a number above 5 LOOSENS the only runaway guard, which is why the
+  printed ceiling tracks it. A `series` trial spawns several subagents, so it can spend
+  several times the cap. fathom has **no total-run cap**: stage the matrix and read summed
+  `cost_usd_est` out of `ledger/<bank>.jsonl` between stages for a cumulative guard.
 - **`--limit N`** caps fresh trials (applied after resume filtering) — a partial-
-  matrix spend rail.
+  matrix spend rail. **`--tasks ID[,ID...]`** restricts the run to named task ids, which
+  `--limit` cannot do (the plan is scenario-major, so `--limit` cuts whole arms off the
+  end) — the way to buy a screen, or a control at higher repeats, before a full matrix.
 - **`--tasks-dir` / `--ledger-dir`** relocate the bank source and the ledger
   destination (defaults `tasks/`, `ledger/`). `--ledger-dir` writes the
   append-only record somewhere other than the committed `ledger/`, so use it

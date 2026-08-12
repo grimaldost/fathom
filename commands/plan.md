@@ -10,8 +10,9 @@ Plan a fathom eval matrix without spawning or spending anything.
    else ask). Never run from a plugin cache-clone.
 2. From that directory, run: `uv run python -m fathom run $ARGUMENTS --dry-run`
    (append `--dry-run` if the user did not).
-3. Report the trial count, the advisory USD ceiling (~$2/trial), and the resume
-   state (how many trials are already done vs fresh).
+3. Report the trial count, the arm names the plan printed, the USD ceiling
+   (`trials × the per-spawn cap in force` — `--max-budget-usd` if given, else $5),
+   and the resume state (how many trials are already done vs fresh).
 
 Guardrails to surface:
 - If the bank ships its own arms in a subdir (e.g. `skill-pyeng-v1` →

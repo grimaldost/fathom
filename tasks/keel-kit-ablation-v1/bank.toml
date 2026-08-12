@@ -1,0 +1,32 @@
+name = "keel-kit-ablation-v1"
+dataset_version = "2"  # 2026-08-11: verifier + discrimination-gate corrections, before any trial
+# The spec-kit ablation. What is bought: whether the kit's PROSE is necessary to produce a design
+# spec that the method's own readiness gate accepts — the full kit (3,789 w) versus a candidate
+# core (2,109 w, a strict deletion of the full body) versus nothing at all, on realistic briefs.
+#
+# What is NOT bought: whether any CHECK is worth keeping, and whether a spec produced under any arm
+# leads to a better project. A null here licenses cutting prose and nothing else; the checks'
+# dispositions are answered by a free fixture corpus and a forward gate ledger, not by this bank.
+#
+# Circularity, stated up front rather than in a footnote: the oracle IS a component of the artifact
+# under study, so the armed arms are handed a description of the ruler — literally, in the fenced
+# reference block every armed body ends with. The verifier splits its criteria into four classes to
+# narrow that, and the split does narrow it, but it does not remove it: the fence states four of the
+# six BEHAVIOUR predicates (A6, A5, A8, A12/R1) in the oracle's own words, so only
+# criteria_name_runnable_command and brief_requirements_covered are unstated by every arm. An
+# armed-vs-bare gap on the other four measures possession of the answer key; an armed-vs-armed
+# comparison holds the fence constant and is readable, but for that reason cannot show a
+# full-vs-core difference arising from it. A full-arm win confined to the shared class measures
+# instruction-following, not value. See keelgate_verify.py — the earlier wording of this comment
+# claimed the behaviour class was stated by neither body, and that was false on inspection.
+#
+# Circular-eval discipline on the fixtures: no fixture is a method document and no brief is about
+# specs, gates or method. Every task is staged against one invented package (`tinyetl`, order
+# records over invented `orders`/`regions` domains), so no arm can read the material under
+# measurement. Nothing in this bank names any environment-scoped internal tool.
+#
+# Two tasks are sealed as holdout (ADR-0005) because this bank feeds a retirement decision: one
+# authoring task whose sections relocate files (the pre-move anchor trap) and one repair task whose
+# planted defect is an enforcement over-claim in the forms the gate's own window heuristic is known
+# to miss. Neither was opened while the core arm's body was being worded.
+holdout = ["author-refactor-move", "repair-enforcement-overclaim"]
