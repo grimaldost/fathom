@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_rounding.py": "747496039374a704f44dec772cec28c7f04e475adde33441dbcc35b26fa1ee35"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "mathkit/rounding.py",
+  "must_contain": "which is what the ledger expects",
+  "must_not_contain": "wich",
+  "package": "mathkit"
+}

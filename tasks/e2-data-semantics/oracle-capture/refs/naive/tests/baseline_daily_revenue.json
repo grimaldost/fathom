@@ -1,0 +1,10 @@
+{
+  "_captured_from": "daily_revenue.main() output, release 3.2",
+  "_sealed": "Frozen baseline. Do not regenerate. See contracts/README.md.",
+  "totals": {
+    "2026-04-01": "350.00",
+    "2026-04-02": "100.00",
+    "2026-04-03": "90.00",
+    "2026-04-04": "240.00"
+  }
+}

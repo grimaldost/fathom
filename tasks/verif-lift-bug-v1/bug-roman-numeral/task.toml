@@ -1,0 +1,19 @@
+id = "bug-roman-numeral"
+instruction = """
+`numerals.roman.to_roman` writes four repeats where the standard subtractive
+form belongs, so 4 comes out as IIII and 900 as DCCCC. Produce the standard
+forms the README lists, for every value in the supported range. As the README
+says, `BASE_VALUES` is shared with other modules and keeps its seven entries;
+derive the subtractive forms inside `to_roman`.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

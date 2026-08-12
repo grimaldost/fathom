@@ -1,0 +1,26 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "pathkit.norm",
+  "edge_cases": [
+    [
+      [
+        "a/b/.."
+      ],
+      "a"
+    ],
+    [
+      [
+        "a/b/c/../.."
+      ],
+      "a"
+    ]
+  ],
+  "func": "normalize",
+  "module_filename": "norm.py",
+  "package": "pathkit"
+}

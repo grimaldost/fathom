@@ -1,0 +1,37 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "sched.window",
+  "edge_cases": [
+    [
+      [
+        0,
+        30,
+        10
+      ],
+      [
+        0,
+        10,
+        20
+      ]
+    ],
+    [
+      [
+        60,
+        120,
+        30
+      ],
+      [
+        60,
+        90
+      ]
+    ]
+  ],
+  "func": "slots",
+  "module_filename": "window.py",
+  "package": "sched"
+}

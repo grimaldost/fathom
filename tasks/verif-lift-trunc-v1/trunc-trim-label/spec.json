@@ -1,0 +1,46 @@
+{
+  "cited_slice_end": 20,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "labels.trim",
+  "edge_cases": [
+    [
+      [
+        "abcdefghij",
+        6
+      ],
+      "abc..."
+    ],
+    [
+      [
+        "longer text",
+        5
+      ],
+      "lo..."
+    ]
+  ],
+  "func": "trim_label",
+  "func_past_slice": "trim_note",
+  "module_filename": "trim.py",
+  "package": "labels",
+  "past_slice_cases": [
+    [
+      [
+        "abcdefghij",
+        6
+      ],
+      "abc..."
+    ],
+    [
+      [
+        "a note here",
+        8
+      ],
+      "a not..."
+    ]
+  ],
+  "twin_def_line": 26
+}

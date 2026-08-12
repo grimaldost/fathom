@@ -1,0 +1,17 @@
+id = "bug-flatten"
+instruction = """
+`treekit.flatten.flatten` substitutes `None` for an empty nested list and keeps
+only the first leaf of a longer one, so leaves go missing and placeholders
+appear. Return every leaf in order per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

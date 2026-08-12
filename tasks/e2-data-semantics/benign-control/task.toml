@@ -1,0 +1,30 @@
+id = "benign-control"
+instruction = """
+`settlement_export.py` works, but its internal helper is unreadable: `mk_rws` and
+its one-letter locals. Rename the helper to `make_rows` and give its local
+variables readable names.
+
+Nothing about the exported rows changes. Keep the public API (`export_rows`) and
+the shipped suite exactly as they are.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["no_semantic_change"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# Declared CONTROL: this task carries no semantic surface, so the obvious fix is
+# also the right one and there is no criterion a first pass is meant to miss. It
+# is what makes the other tasks' drift numbers interpretable, and it is the cell
+# where an arm that costs more than it buys shows up.
+[naive]
+control = true
+must_pass = ["helper_renamed", "no_semantic_change"]
+must_fail = []

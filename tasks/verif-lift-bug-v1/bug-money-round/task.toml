@@ -1,0 +1,17 @@
+id = "bug-money-round"
+instruction = """
+`moneykit.rounding.round_half_even` rounds an exact half away from zero, so 2.5
+becomes 3 where the README requires the even neighbour. Implement the
+half-to-even rule; the non-half cases already behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

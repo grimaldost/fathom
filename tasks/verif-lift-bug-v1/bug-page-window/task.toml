@@ -1,0 +1,18 @@
+id = "bug-page-window"
+instruction = """
+`paging.window.page_bounds` loses the final partial page: when `total` is not a
+multiple of `per_page` the trailing items are never covered by any returned
+range. Cover every item exactly once per the README contract, without changing
+the shape of the return value.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

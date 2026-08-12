@@ -1,0 +1,26 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "csvlite.quote",
+  "edge_cases": [
+    [
+      [
+        "say \"hi\""
+      ],
+      "\"say \"\"hi\"\"\""
+    ],
+    [
+      [
+        "a,\"b\""
+      ],
+      "\"a,\"\"b\"\"\""
+    ]
+  ],
+  "func": "quote_field",
+  "module_filename": "quote.py",
+  "package": "csvlite"
+}

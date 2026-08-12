@@ -1,0 +1,9 @@
+def lag_diff(rows: list[dict], *, strict: bool = False) -> list[dict]:
+    """Change in *value* against the previous point, ordered by *t*."""
+    out = []
+    previous = None
+    for row in sorted(rows, key=lambda item: item["t"]):
+        diff = None if previous is None else row["value"] - previous
+        out.append({"t": row["t"], "diff": diff})
+        previous = row["value"]
+    return out

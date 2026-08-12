@@ -1,0 +1,28 @@
+id = "distinct-as-fanout-repair"
+instruction = """
+The category revenue report is overstating things: the categories add up to more
+than the orders in `orders.csv` actually total, and merchandising says at least
+one category is nothing like what they expect.
+
+Fix `category_report.revenue_by_category()` so the report matches the order
+ledger. Preserve the public API (`load_csv(path)` and
+`revenue_by_category(orders, lookup)`), and keep the shipped suite passing.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["measure_correct_after_fix"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# The naive overlay counts each order once. Row count and grand total come back;
+# the recategorised product's revenue lands in the retired category.
+[naive]
+must_pass = ["total_revenue_correct"]
+must_fail = ["measure_correct_after_fix"]

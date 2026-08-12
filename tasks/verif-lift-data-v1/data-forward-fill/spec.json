@@ -1,0 +1,65 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "series2.fill",
+  "edge_cases": [
+    [
+      [
+        [
+          null,
+          3
+        ]
+      ],
+      [
+        null,
+        3
+      ]
+    ],
+    [
+      [
+        [
+          null,
+          null,
+          7
+        ]
+      ],
+      [
+        null,
+        null,
+        7
+      ]
+    ]
+  ],
+  "func": "forward_fill",
+  "module_filename": "fill.py",
+  "package": "series2",
+  "subtle_cases": [
+    [
+      [
+        [
+          null
+        ]
+      ],
+      [
+        null
+      ]
+    ],
+    [
+      [
+        [
+          null,
+          null
+        ]
+      ],
+      [
+        null,
+        null
+      ]
+    ]
+  ]
+}

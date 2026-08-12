@@ -1,0 +1,17 @@
+id = "bug-median"
+instruction = """
+`statkit.center.median` returns the upper middle value for an even-length
+input instead of averaging the two middle values. Follow the README; the
+odd-length behaviour is already right.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

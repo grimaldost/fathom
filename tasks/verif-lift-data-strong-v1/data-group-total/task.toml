@@ -1,0 +1,18 @@
+id = "data-group-total"
+instruction = """
+`rollup.group.total_by` skips every row whose `field` is zero, so a key whose
+rows are all zero vanishes from the result entirely and a consumer cannot tell
+it apart from a key that had no rows. Keep zero-valued rows in the sums, per
+the package README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
