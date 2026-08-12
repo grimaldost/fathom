@@ -160,6 +160,31 @@ a mid-run token expiry costs nothing but a re-invocation.
 
 **Full Program 1 at repeats=5: 180 trials, expected $14.03.**
 
+### How a tranche is actually invoked
+
+`fathom run` has no `--tasks` filter, and `--limit` truncates a **scenario-major**
+comprehension (`for scenario, for task, for repeat`), so it cannot select two of four
+blocks without skewing the arms. A tranche is therefore staged: copy `bank.toml`,
+`routingverify.py`, `provenance.toml` and only that tranche's block directories into a
+scratch `<dir>/routing-decision-v1/`, and point `--tasks-dir` at `<dir>`.
+
+This is safe against the resume key, which is
+`(bank, dataset_version, task_id, config_hash, repeat)` — **the task set does not enter
+it**. A staged subset therefore appends to the same ledger and resumes correctly against
+a later full-bank invocation.
+
+```sh
+uv run fathom run routing-decision-v1 \
+    --scenarios-dir scenarios/routing-decision \
+    --tasks-dir <staged-dir> \
+    --repeats N --max-budget-usd 2
+```
+
+Chunk by **raising `--repeats` one at a time** (1, then 2, then 3) rather than by
+splitting arms: each invocation adds one complete repeat layer across every arm, so an
+interruption always leaves a balanced design rather than a matrix with some arms deeper
+than others. Every chunk re-runs the free bank validation and the arming pre-flight.
+
 ## The projection from existing numbers
 
 **Labelled as a projection, not a result.** Decision costs come from the forward token
