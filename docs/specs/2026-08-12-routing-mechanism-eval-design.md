@@ -308,29 +308,46 @@ model; execution costs are `model-tier-v1` ledger medians (35 trials/arm) mapped
 current lineup by ascending cost — a *different, saturated* bank, so they carry the
 shape of real agentic coding work but not this bank's difficulty.
 
-Observed per-task execution cost: weak $0.076, mid $0.225, strong $0.337. One
-strong-to-weak correction therefore saves $0.261; one mid-to-weak saves $0.150.
+Observed per-task execution cost: weak $0.076, mid $0.225, strong $0.337.
 
-The rubric's decision-cost premium over `none`, and the correction rate it must achieve
-to pay for itself:
+**Re-derived at the pre-registered primary depth of 1.** An earlier version of this
+table quoted a single break-even of 30.6%. That number silently assumed a *perfect*
+weak tier — that a correctly downgraded task always passes first time, so the saving is
+the full $0.261. It is not: the adequacy bar is `tau = 0.70`, so a tier counts as
+adequate while still failing up to 30% of the time, and each of those failures buys a
+retry that eats the saving. The correction rate the rubric must hit therefore depends on
+how good the weak tier actually is, which is a substrate quantity nobody has measured
+yet. So it is reported as a range over that unknown rather than as one number:
 
-| deciding tier | K | premium/task | break-even, strong->weak | break-even, mid->weak |
-|---|--:|--:|--:|--:|
-| weak | 1 | $0.0160 | 6.1% | 10.7% |
-| weak | 9 | $0.0030 | 1.2% | 2.0% |
-| mid | 1 | $0.0480 | 18.4% | 32.1% |
-| mid | 9 | $0.0091 | 3.5% | 6.1% |
-| **strong** | **1** | **$0.0800** | **30.6%** | **53.4%** |
-| strong | 9 | $0.0152 | 5.8% | 10.1% |
+| deciding tier | K | premium/task | p_weak=1.0 | p_weak=0.8 | p_weak=0.7 |
+|---|--:|--:|--:|--:|--:|
+| weak | 1 | $0.0160 | 6.1% | 7.4% | 8.3% |
+| weak | 9 | $0.0030 | 1.2% | 1.4% | 1.6% |
+| mid | 1 | $0.0480 | 18.4% | 22.2% | 24.8% |
+| mid | 9 | $0.0091 | 3.5% | 4.2% | 4.7% |
+| **strong** | **1** | **$0.0800** | **30.6%** | **37.0%** | **41.3%** |
+| strong | 9 | $0.0152 | 5.8% | 7.0% | 7.8% |
 
-**The reading.** In the worst and entirely ordinary case — one spawn decision at a
-time, taken by an Opus session — the rubric must improve on unaided judgment for
-roughly **one decision in three** (if every correction is a full strong-to-weak move) or
-**one in two** (for mid-to-weak). That is a demanding bar, and the existing calibration
-evidence does not suggest the rubric clears it: three model-tier calibration runs put
-the on-diagonal count at 1/7, and while the honest reading there was "the bank had no
-headroom" rather than "the rubric is wrong", nothing on record shows the rubric
-correcting a third of decisions.
+(strong-to-weak corrections. The mid-to-weak column is far harsher — 53.4% at
+`p_weak=1.0` and **97.3%** at `p_weak=0.7`, i.e. the rubric would have to be right
+essentially every time for a mid-to-weak correction to pay at the strong deciding tier.)
+
+**Depth turned out not to be the lever.** At `p_weak=0.8` the headline is 37.0% at depth
+1 and 37.6% at depth 2 — a 0.6-point difference. Deeper ladders make a wrong cheap route
+dearer to fix, which makes correct routing worth slightly *more*, so the direction
+favours the rubric marginally; the magnitude is negligible. **The adequacy bar's
+tolerance moves this number roughly ten times as much as the escalation depth does**,
+which was not visible until the depth ruling forced the re-derivation.
+
+**The reading.** In the ordinary case — one spawn decision at a time, taken by an Opus
+session — the rubric must improve on unaided judgment on **one decision in three to one
+in two-and-a-half**. That is a demanding bar, and the existing calibration evidence does
+not suggest it clears it: three model-tier calibration runs put the on-diagonal count at
+1/7, and while the honest reading there was "the bank had no headroom" rather than "the
+rubric is wrong", nothing on record shows the rubric correcting a third of decisions.
+
+All of this is superseded the moment T1 lands: the premium column is *measured* there,
+directly, at all three deciding tiers.
 
 The same table carries the constructive half, and it is the more useful finding: the
 premium is driven by **where the decision is taken and how many tasks it covers**, not
