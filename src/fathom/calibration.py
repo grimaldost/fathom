@@ -719,14 +719,20 @@ def _tier_costs(stats: dict[str, dict], runs: dict, task_id: str) -> dict[str, d
         if not tier or tier in out:
             continue
         passing, n = s["draws"]
+        gate_caught = s.get("gate_caught", 0)
+        silent = s.get("silent", 0)
         out[tier] = {
             "arm": arm,
             "trials": n,
             "passing": passing,
+            # Stated explicitly rather than left as trials - passing. This cell crosses
+            # a programme boundary, and a consumer that has to derive a count is a
+            # consumer that can derive it differently.
+            "failures": gate_caught + silent,
             "pass_rate": s["mean"],
             "ci": list(s["ci"]),
-            "gate_caught_failures": s.get("gate_caught", 0),
-            "silent_failures": s.get("silent", 0),
+            "gate_caught_failures": gate_caught,
+            "silent_failures": silent,
             "mean_cost_usd": _arm_cost(runs, arm, [task_id]),
         }
     return out
@@ -757,13 +763,28 @@ def mechanism_costs(rows: list[dict], params: dict | None = None) -> list[dict]:
     mechanism total here is therefore a LOWER BOUND on its true cost, and the ordering
     it implies is only decisive when the gap between two mechanisms exceeds the
     difference in what they cost to run.
+
+    **``first_attempt_pass_rate`` is NOT the quality estimand.** It is the rate at
+    which the chosen tier gets the task right on its first attempt, and it was called
+    ``quality`` until a cross-implementation check found this module reporting 0.55
+    where the routing programme reported 0.70 on the same fixture. Both were right and
+    they were different quantities: the non-inferiority estimand is **post-repair**
+    quality — what the session ultimately delivers — because ``C(m)`` already charges
+    the retry cost, and charging for an escalation while crediting none of its benefit
+    penalises a cheap-start mechanism twice.
+
+    This module therefore exports the FACTS and computes no post-repair figure: per
+    tier, ``passing``, ``failures``, and how many of those failures the gate detects.
+    Those bound the estimand from both sides — post-repair quality cannot fall below
+    ``first_attempt_pass_rate`` and cannot exceed ``1 - escape_rate`` — and the
+    analysis that owns the estimand picks the repair-success assumption between them.
     """
     params = params or {}
     mult = float(params.get("escalation_cost_multiplier", 1.0))
     usable = [r for r in rows if not r.get("control") and r.get("per_tier")]
     out: list[dict] = []
     for name in (*TASK_LEVEL_MECHANISMS, "oracle"):
-        exec_total = retry_total = quality_total = escape_total = 0.0
+        exec_total = retry_total = first_pass_total = escape_total = 0.0
         counted = 0
         unroutable: list[str] = []
         for r in usable:
@@ -778,7 +799,7 @@ def mechanism_costs(rows: list[dict], params: dict | None = None) -> list[dict]:
             nxt = _next_tier_up(tier, per)
             exec_total += cell["mean_cost_usd"]
             retry_total += gate_rate * mult * (per[nxt]["mean_cost_usd"] if nxt else 0.0)
-            quality_total += cell["pass_rate"]
+            first_pass_total += cell["pass_rate"]
             escape_total += cell["silent_failures"] / n
             counted += 1
         if not counted:
@@ -792,7 +813,10 @@ def mechanism_costs(rows: list[dict], params: dict | None = None) -> list[dict]:
                 "execution_cost_usd": exec_total / counted,
                 "retry_cost_usd": retry_total / counted,
                 "total_cost_usd": (exec_total + retry_total) / counted,
-                "quality": quality_total / counted,
+                # NOT the quality estimand — see the docstring. The estimand is
+                # post-repair quality and it is the consuming analysis's to compute;
+                # these two bound it (first attempt <= estimand <= 1 - escapes).
+                "first_attempt_pass_rate": first_pass_total / counted,
                 "escape_rate": escape_total / counted,
             }
         )
@@ -821,11 +845,17 @@ def routing_substrate(cal: dict, task_meta: dict[str, dict], params: dict | None
 
     Stable enough to diff across runs: schema_version is bumped when a field changes
     meaning, never when a value moves.
+
+    **Schema 2** renamed ``mechanisms[].quality`` to ``first_attempt_pass_rate``. The
+    old name meant two different things in one week — this module's first-attempt rate
+    and the consuming programme's post-repair rate — which is exactly a number crossing
+    a boundary with its meaning stripped off. A consumer pinned to schema 1 now fails on
+    the version rather than reading a missing key as absent data.
     """
     params = params or {}
     rows = [r for r in cal["rows"] if not r.get("control")]
     return {
-        "schema_version": "1",
+        "schema_version": "2",
         "tau": float(params.get("tau", TAU)),
         "non_inferiority_margin": float(params.get("non_inferiority_margin", 0.05)),
         "arm_config_hashes": cal.get("arm_config_hashes", {}),
@@ -1049,15 +1079,16 @@ def _render_routing(cal: dict) -> list[str]:
     if mechs:
         lines += ["### C(m): execution + retry per task, by routing mechanism", ""]
         lines.append(
-            "| mechanism | tasks | execution $ | retry $ | **total $** | quality"
-            " | escape rate | decision $ |"
+            "| mechanism | tasks | execution $ | retry $ | **total $** |"
+            " first-attempt pass | escape rate | decision $ |"
         )
         lines.append("|---|---|---|---|---|---|---|---|")
         for m in sorted(mechs, key=lambda x: x["total_cost_usd"]):
             lines.append(
                 f"| {m['mechanism']} | {m['n_tasks']} | ${m['execution_cost_usd']:.3f} |"
                 f" ${m['retry_cost_usd']:.3f} | **${m['total_cost_usd']:.3f}** |"
-                f" {_pct(m['quality'])} | {_pct(m['escape_rate'])} | not measured |"
+                f" {_pct(m['first_attempt_pass_rate'])} | {_pct(m['escape_rate'])}"
+                " | not measured |"
             )
         lines += [
             "",

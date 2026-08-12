@@ -661,11 +661,41 @@ class TestMechanismCosts(unittest.TestCase):
             meta[task] = m
         return raw, meta
 
-    def test_the_oracle_floor_is_never_beaten_on_quality(self):
+    def test_the_oracle_floor_is_never_beaten_on_first_attempt_pass_rate(self):
         out = cal.build_calibration(*self._bank())
         by = {m["mechanism"]: m for m in out["mechanisms"]}
-        best = max(m["quality"] for m in out["mechanisms"])
-        self.assertAlmostEqual(by["oracle"]["quality"], best, places=6)
+        best = max(m["first_attempt_pass_rate"] for m in out["mechanisms"])
+        self.assertAlmostEqual(by["oracle"]["first_attempt_pass_rate"], best, places=6)
+
+    def test_no_mechanism_reports_a_field_called_quality(self):
+        """The rename is a contract, not a preference.
+
+        `quality` meant two things in one week — this module's first-attempt rate and
+        the routing programme's post-repair rate — and the two were found disagreeing
+        (0.55 against 0.70) on the same fixture. Both were right. A field name that can
+        carry either meaning across a programme boundary is the defect; this test keeps
+        it from coming back under the old name.
+        """
+        out = cal.build_calibration(*self._bank())
+        for m in out["mechanisms"]:
+            with self.subTest(mechanism=m["mechanism"]):
+                self.assertNotIn("quality", m)
+                self.assertIn("first_attempt_pass_rate", m)
+
+    def test_the_exported_facts_bound_the_post_repair_estimand(self):
+        """This module exports facts; the consuming analysis owns the estimand.
+
+        Post-repair quality cannot be below the first-attempt rate (repair only ever
+        adds) and cannot exceed `1 - escape_rate` (a silent failure is never repaired,
+        because nothing knows to try). Both bounds must be computable from what the
+        artifact exports, or the consumer has to guess.
+        """
+        out = cal.build_calibration(*self._bank())
+        for m in out["mechanisms"]:
+            with self.subTest(mechanism=m["mechanism"]):
+                lower = m["first_attempt_pass_rate"]
+                upper = 1.0 - m["escape_rate"]
+                self.assertLessEqual(lower, upper + 1e-9)
 
     def test_a_mechanism_that_over_provisions_costs_more(self):
         out = cal.build_calibration(*self._bank())
@@ -788,8 +818,13 @@ class TestRoutingSubstrate(unittest.TestCase):
                     self.assertIn(field, row)
                 for tier in ("weak", "mid", "strong"):
                     cell = row["per_tier"][tier]
+                    # The RAW facts, per tier. The consuming analysis derives the
+                    # post-repair estimand from these; it must never have to derive a
+                    # count, so `failures` is stated as well as its two components.
                     for field in (
                         "trials",
+                        "passing",
+                        "failures",
                         "pass_rate",
                         "ci",
                         "gate_caught_failures",
@@ -797,6 +832,36 @@ class TestRoutingSubstrate(unittest.TestCase):
                         "mean_cost_usd",
                     ):
                         self.assertIn(field, cell)
+                    self.assertEqual(
+                        cell["failures"],
+                        cell["gate_caught_failures"] + cell["silent_failures"],
+                    )
+                    self.assertEqual(cell["passing"] + cell["failures"], cell["trials"])
+
+    def test_a_renamed_field_bumps_the_schema_version(self):
+        """A consumer pinned to schema 1 must fail loudly, not read a missing key.
+
+        `mechanisms[].quality` became `first_attempt_pass_rate` in schema 2. Silently
+        keeping the version would let a pinned consumer see the key as absent and treat
+        it as absent DATA, which is the same class of error as the rename itself.
+        """
+        raw, meta = self._bank()
+        out = cal.build_calibration(raw, meta)
+        sub = cal.routing_substrate(out, meta, out["analysis_params"])
+        self.assertEqual(sub["schema_version"], "2")
+
+    def test_decision_cost_survives_serialisation_as_null(self):
+        """The contract the routing programme pinned: null, never 0, through JSON."""
+        import json
+
+        raw, meta = self._bank()
+        out = cal.build_calibration(raw, meta)
+        sub = cal.routing_substrate(out, meta, out["analysis_params"])
+        round_tripped = json.loads(json.dumps(sub))
+        for m in round_tripped["mechanisms"]:
+            with self.subTest(mechanism=m["mechanism"]):
+                self.assertIsNone(m["decision_cost_usd"])
+                self.assertNotEqual(m["decision_cost_usd"], 0)
 
     def test_it_records_the_config_hash_behind_every_arm(self):
         """Cost is aggregated per arm for reading, but identity is the config hash."""

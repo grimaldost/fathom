@@ -35,6 +35,11 @@ minimise C(m)  subject to  quality(m) >= best quality - non_inferiority_margin
 Quality is a **constraint**, not the objective. A mechanism that saves money by shipping
 worse work has not won; a mechanism that matches the best quality for less has.
 
+**`quality` here means post-repair quality** — what the session ultimately delivers, after
+a gate-detected failure has been repaired. Not the first-attempt pass rate. See
+[the estimand section](#the-quality-estimand-is-post-repair-and-this-bank-does-not-compute-it)
+for why, and for the bounds this bank exports instead of computing it.
+
 **This bank owns the middle two terms and the constraint.** It measures, per task and per
 tier: what the tier costs, how often it succeeds, and how its failures split. It does
 **not** measure `decision_cost(m)` — what it costs to *run* a mechanism, to score a task
@@ -267,7 +272,60 @@ suite that a candidate cannot weaken by editing the workspace — the conservati
 The two are counted separately and **never summed**. Summing them would let a mechanism
 that fails invisibly look cheaper than one that fails loudly, which is backwards: the
 invisible failure is the worse outcome. `retry_cost` uses the gate-caught share alone;
-silent failures land in `escape_rate`, which the non-inferiority constraint governs.
+silent failures land in `escape_rate`.
+
+### The quality estimand is post-repair, and this bank does not compute it
+
+A cross-implementation check against the routing programme found this bank reporting
+**0.55** where that programme reported **0.70** on the same fixture. Both were right, and
+they were **different quantities**: the first-attempt pass rate at the chosen tier, and the
+probability the work is ultimately correct after a gate-detected repair.
+
+**The estimand is post-repair quality.** `C(m)` already charges the retry cost, so
+charging for an escalation while crediting none of its benefit penalises every cheap-start
+mechanism twice — once in cost, and again in an unearned quality penalty. It is also what
+the objective means: quality is what the session ultimately *delivers*, and a failure the
+gate catches and a repair fixes is delivered correct, at a price the cost model has
+already paid.
+
+**This bank exports the facts; the consuming analysis owns the estimand.** Per tier it
+publishes `passing`, `failures`, `gate_caught_failures` and `silent_failures`, which bound
+post-repair quality from both sides:
+
+```
+first_attempt_pass_rate  <=  post-repair quality  <=  1 - escape_rate
+```
+
+Repair only ever adds (the lower bound), and a silent failure is never repaired because
+nothing knows to try (the upper bound). The repair-success assumption between them is the
+analysis's to make, not this bank's — the arms here are open-loop and never observe a
+repair.
+
+The field formerly called `quality` is now **`first_attempt_pass_rate`**, and the artifact
+schema is bumped to **2** so a consumer pinned to schema 1 fails on the version rather than
+reading a missing key as absent data. A test asserts no mechanism row carries a field named
+`quality` at all. The name had meant two things in one week, which is exactly a number
+crossing a boundary with its meaning stripped off.
+
+### A pattern worth naming: two elements, one direction
+
+This is the **second** element of the design found to bias the same way.
+
+| element | how it leaned |
+|---|---|
+| the admission screen dropping `SATURATED` rungs | deleted the evidence of over-provisioning before the analysis saw it |
+| charging retry cost while crediting no repair benefit | penalised cheap-start mechanisms in cost *and* again in quality |
+
+Both were defensible in isolation and both were found by someone else. Two independent
+elements leaning toward the dearer mechanism is a pattern, not a coincidence — the plausible
+cause is that this bank was built to test a rubric that routes *up*, so every modelling
+choice inherited that frame's defaults.
+
+**The standing check this leaves behind, for any element added later:** *does this element
+charge a cheap-start mechanism for something without crediting it?* If the answer is not
+obviously no, the element needs an explicit argument before it ships. Asymmetry that
+survives review twice is unlikely to be the last of it, and a third instance should be
+looked for rather than waited for.
 
 This is the retry-economics interaction the skill already names — a red gate the cheaper
 model cannot diagnose buys a repair loop rather than a saving — made measurable. Note the
@@ -286,7 +344,7 @@ one schema, one place the numbers come from.
 
 ```jsonc
 {
-  "schema_version": "1",
+  "schema_version": "2",               // 2 renamed mechanisms[].quality -> first_attempt_pass_rate
   "bank": "model-tier-v2",
   "tau": 0.7,                          // the adequacy bar the ground truth is read at
   "non_inferiority_margin": 0.05,
@@ -301,10 +359,14 @@ one schema, one place the numbers come from.
     "cheapest_adequate_tier": "mid",   // GROUND TRUTH
     "cheapest_adequate_robust": false, // false = a point estimate, not a robust reading
     "relative_right_tier": "indeterminate",   // the old statistic, kept for continuity
+    // The RAW facts per tier. `failures` is stated as well as its two components, so a
+    // consumer never has to derive a count (and never derives it differently).
     "per_tier": {
-      "weak":   {"arm": "haiku", "trials": 5, "passing": 1, "pass_rate": 0.2,
-                 "ci": [0.036, 0.624], "gate_caught_failures": 2,
-                 "silent_failures": 2, "mean_cost_usd": 0.02},
+      "weak":   {"arm": "haiku", "trials": 5, "passing": 1, "failures": 4,
+                 "pass_rate": 0.2, "ci": [0.036, 0.624],
+                 "gate_caught_failures": 2,   // a repair loop is available for these
+                 "silent_failures": 2,        // these escape; no gate sees them
+                 "mean_cost_usd": 0.02},
       "mid":    {…}, "strong": {…}
     }
   }],
@@ -312,15 +374,21 @@ one schema, one place the numbers come from.
     "mechanism": "points", "n_tasks": 13,
     "decision_cost_usd": null,         // NOT measured here — never written as 0
     "execution_cost_usd": 0.213, "retry_cost_usd": 0.020, "total_cost_usd": 0.233,
-    "quality": 0.92, "escape_rate": 0.00
+    "first_attempt_pass_rate": 0.92,   // NOT the estimand — it is the estimand's LOWER bound
+    "escape_rate": 0.00                // 1 - this is the estimand's UPPER bound
   }]
 }
 ```
 
-Two contracts worth stating explicitly, because the whole comparison rests on them:
+Three contracts worth stating explicitly, because the whole comparison rests on them:
 
 - **`decision_cost_usd` is `null`, never `0`.** Unmeasured is not zero, and writing zero
-  would make every total look final when each is a lower bound.
+  would make every total look final when each is a lower bound. A test pins it through a
+  JSON round-trip, so it cannot become `0` by serialisation either.
+- **`first_attempt_pass_rate` is not the quality estimand** — the estimand is post-repair
+  quality, and this artifact deliberately does not compute it. It exports the facts that
+  bound it; the consuming analysis picks the repair-success assumption. The old name
+  `quality` is gone and a test asserts it stays gone.
 - **Cost is aggregated per arm for readability, but identity is the `config_hash`.**
   `arm_config_hashes` records every hash each arm name was seen under, and
   `build_calibration` **warns** when an arm maps to more than one — that is two different
@@ -423,13 +491,18 @@ repeats=10, by exact enumeration a test recomputes.
 Read on the discordant set only, and only when it is informative. Both readings are
 reported; the decision needs the **cost** reading, and the accuracy reading qualifies it.
 
+Every "quality" below is **post-repair quality**, computed by the consuming analysis from
+the per-tier facts this bank exports — never the first-attempt pass rate. Reading these
+rules on the first-attempt rate would reinstate the double penalty on cheap-start
+mechanisms that the estimand correction removed.
+
 | result | what it licenses |
 |---|---|
-| `reduced` costs **less** per disagreeing task at permutation p ≤ 0.05, **and** its quality is within the 0.05 non-inferiority margin of `points` | **Replace the scored rubric with the floor plus shortcuts.** Delete the points arithmetic. The saving is real and paid for at equal quality — and this is before `decision_cost` is counted, which can only widen the gap in `reduced`'s favour, since a lookup costs less to run than a scored rubric. |
+| `reduced` costs **less** per disagreeing task at permutation p ≤ 0.05, **and** its post-repair quality is within the 0.05 non-inferiority margin of `points` | **Replace the scored rubric with the floor plus shortcuts.** Delete the points arithmetic. The saving is real and paid for at equal quality — and this is before `decision_cost` is counted, which can only widen the gap in `reduced`'s favour, since a lookup costs less to run than a scored rubric. |
 | `points` costs **less** at p ≤ 0.05 and is non-inferior | **Keep the scored rubric, and the second dimension is worth adding.** The arithmetic is earning its complexity: it is routing to cheaper adequate tiers than the shortcuts do. |
 | the cost difference is **not significant** (p > 0.05) | **Replace the scored rubric with the floor plus shortcuts anyway** — on the tie-break, not on the evidence. Two mechanisms that cost the same at equal quality are not equal: one costs more to *run*, and `decision_cost(points) > decision_cost(reduced)` is true by inspection (a rubric pass is work a lookup does not do). A tie on the measured terms is a loss on the unmeasured one. **This is the rule that most needs stating in advance**, because after the fact a tie is the easiest result to read as "change nothing". |
 | fewer than **5** informative discordant rungs | **No verdict. Nothing changes.** The sign test cannot reach α at all below 5, and the scorecard says `underpowered` rather than reporting a null. The cost reading is still printed and is still directional evidence, but it does not license a change on its own. |
-| `points` quality exceeds `reduced` by **more** than the 0.05 margin | **Keep the scored rubric regardless of cost.** Quality is the constraint; a cheaper mechanism that breaches it has not won. |
+| `points` post-repair quality exceeds `reduced`'s by **more** than the 0.05 margin | **Keep the scored rubric regardless of cost.** Quality is the constraint; a cheaper mechanism that breaches it has not won. Note this must be checked on the post-repair figure: on first-attempt rates a cheap-start mechanism can breach the margin and still deliver the same work once its gate-caught failures are repaired. |
 
 ### R3 — a threshold move (25 or 55)
 
