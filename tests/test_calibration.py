@@ -335,6 +335,199 @@ class TestParseAnomalyWarnings(unittest.TestCase):
             cal.parse_ledger(raw)  # must not raise
 
 
+class TestPerTrialScoring(unittest.TestCase):
+    """ADR-0009: a trial is ONE Bernoulli draw, not one per hard criterion.
+
+    The estimator this replaces pooled criteria across trials, which multiplies the
+    CI's ``n`` by k. On the committed ``ledger/model-tier-v1.jsonl`` the hard set came
+    out all-true or all-false on 175 of 175 multi-criterion trials, so those extra
+    draws were copies — the interval was narrowed by ~sqrt(k) for free, and repeat
+    counts were sized against a resolution the run could not buy.
+    """
+
+    def test_a_k_criterion_cell_is_n_draws_not_k_times_n(self):
+        raw = [_trial("opus", "t", rep, 2) for rep in range(3)]  # 3 trials x 2 criteria
+        trials, _ = cal.parse_ledger(raw)
+        stats = cal.arm_task_stats(trials, "t", "opus", HARD)
+        self.assertEqual(stats["draws"], (3, 3), "the cell must be 3 draws, not 6")
+        self.assertEqual(stats["n_trials"], 3)
+        self.assertEqual(stats["ci"], cal._wilson(3, 3))
+        self.assertNotEqual(stats["ci"], cal._wilson(6, 6), "the CI still pools criteria")
+
+    def test_a_mixed_trial_scores_zero_and_is_counted(self):
+        # 1-of-2 hard criteria true is not half a pass: the conjunction is the draw, and
+        # the count is recorded so the correlation assumption stays checkable.
+        raw = [_trial("opus", "t", 0, 1), _trial("opus", "t", 1, 2)]
+        trials, _ = cal.parse_ledger(raw)
+        stats = cal.arm_task_stats(trials, "t", "opus", HARD)
+        self.assertEqual(stats["draws"], (1, 2))
+        self.assertEqual(stats["mean"], 0.5)
+        self.assertEqual(stats["mixed_trials"], 1)
+
+    def test_repeats_two_and_three_cannot_resolve_even_a_noiseless_rung(self):
+        """The repeat count the design actually needs, re-derived at 1 draw/trial.
+
+        Under the noiseless alternative (the weak arm fails every trial, the mid and
+        strong arms pass every trial) a mid-band rung must read ``mid``, determinate.
+        Pooled scoring said repeats=2 sufficed. At one draw per trial it does not: 2/2
+        and 0/2 have overlapping Wilson intervals, and so do 3/3 and 0/3. Four is the
+        first repeat count where a perfect contrast separates at all — which is why the
+        pre-registered matrix is bought at 5, not 2.
+        """
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        seen = {}
+        for repeats in (2, 3, 4, 5):
+            raw = []
+            for rep in range(repeats):
+                raw.append(_trial("haiku", "t", rep, 0))
+                raw.append(_trial("sonnet5", "t", rep, 2))
+                raw.append(_trial("opus5", "t", rep, 2))
+            row = cal.build_calibration(raw, meta)["rows"][0]
+            seen[repeats] = (row["empirical"], row["indeterminate"])
+        self.assertTrue(seen[2][1], "repeats=2 must read indeterminate")
+        self.assertTrue(seen[3][1], "repeats=3 must read indeterminate")
+        self.assertEqual(seen[4], ("mid", False))
+        self.assertEqual(seen[5], ("mid", False))
+
+    def test_the_committed_model_tier_v1_reading_is_unchanged(self):
+        """A new estimator may not rewrite a reading the record already carries.
+
+        model-tier-v1 was read three times at 1/7 on-diagonal with fix-nonlocal-parse
+        indeterminate. Because its hard criteria are perfectly correlated, the per-trial
+        point estimates are identical to the pooled ones and only the intervals widen —
+        so the committed verdict must reproduce exactly. If this fails, the change is
+        not a re-estimation, it is a revision of history.
+        """
+        import json
+        import tomllib
+
+        ledger = REPO / "ledger" / "model-tier-v1.jsonl"
+        bank_dir = REPO / "tasks" / "model-tier-v1"
+        if not ledger.is_file():
+            self.skipTest("model-tier-v1 ledger absent")
+        raw = [
+            json.loads(line)
+            for line in ledger.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        with (bank_dir / "scores.toml").open("rb") as fh:
+            scores = tomllib.load(fh)["scores"]
+        meta = {}
+        for task_dir in sorted(bank_dir.iterdir()):
+            path = task_dir / "task.toml"
+            if not path.is_file():
+                continue
+            with path.open("rb") as fh:
+                doc = tomllib.load(fh)
+            if doc["id"] in scores:
+                meta[doc["id"]] = {
+                    "score": float(scores[doc["id"]]),
+                    "hard_criteria": doc["verify"]["hard_criteria"],
+                }
+        out = cal.build_calibration(raw, meta)
+        on_diag = sum(out["confusion"][t][t] for t in ("weak", "mid", "strong"))
+        self.assertEqual(on_diag, 1, "the committed 1/7 on-diagonal reading moved")
+        rows = {r["task_id"]: r for r in out["rows"]}
+        self.assertTrue(rows["fix-nonlocal-parse"]["indeterminate"])
+        self.assertEqual(
+            {a: round(m, 2) for a, m in rows["fix-nonlocal-parse"]["means"].items()},
+            {"haiku": 0.40, "sonnet": 0.60, "sonnet5": 0.80, "opus": 1.00, "opus5": 1.00},
+        )
+        self.assertEqual(sum(r["mixed"] for r in out["rows"]), 0, "v1 had no mixed trials")
+
+
+class TestFisherExact(unittest.TestCase):
+    def test_known_left_tail_values(self):
+        # 2x2 with both arms at n=5. Hypergeometric left tail, computed by hand.
+        self.assertAlmostEqual(cal.fisher_one_sided(0, 5, 5, 5), 1 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(1, 5, 5, 5), 6 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(2, 5, 5, 5), 21 / 252, places=6)
+        self.assertAlmostEqual(cal.fisher_one_sided(5, 5, 5, 5), 1.0, places=6)
+
+    def test_the_shipped_control_rate_is_significant_only_from_ten_repeats(self):
+        """Why the control's repeat count is 10 and not 5 (issue: coin-flip control).
+
+        At model-tier-v1's own observed rates for the control task the weak arm passes
+        ~0.4 of trials and the strong arm ~1.0. The modal draw at repeats=5 is 2/5 vs
+        5/5, which the rule does NOT call significant; the modal draw at repeats=10 is
+        4/10 vs 10/10, which it does.
+        """
+        self.assertGreater(cal.fisher_one_sided(2, 5, 5, 5), 0.05)
+        self.assertLessEqual(cal.fisher_one_sided(4, 10, 10, 10), 0.05)
+
+
+class TestPositiveControl(unittest.TestCase):
+    CONTROL = {
+        "task": "ctl",
+        "weak_arm": "haiku",
+        "strong_arm": "opus5",
+        "alpha": 0.05,
+        "min_repeats": 10,
+    }
+
+    def _meta(self, **over):
+        control = {**self.CONTROL, **over}
+        return {"ctl": {"score": 65, "hard_criteria": HARD, "control": control}}
+
+    def _ledger(self, weak_pass: int, strong_pass: int, repeats: int) -> list[dict]:
+        raw = []
+        for rep in range(repeats):
+            raw.append(_trial("haiku", "ctl", rep, 2 if rep < weak_pass else 0))
+            raw.append(_trial("opus5", "ctl", rep, 2 if rep < strong_pass else 0))
+        return raw
+
+    def test_it_separates_at_the_preregistered_repeats(self):
+        out = cal.build_calibration(self._ledger(4, 10, 10), self._meta())
+        control = out["control"]
+        self.assertTrue(control["separates"])
+        self.assertEqual(control["weak_draws"], (4, 10))
+        self.assertIn("SEPARATES", "\n".join(cal.render_calibration(out)))
+
+    def test_a_short_run_is_underpowered_not_a_null(self):
+        # 2/5 vs 5/5 is the modal v1 draw at repeats=5. Reading it as "does not
+        # separate" would license the very conclusion the control exists to block, so
+        # the verdict names the missing repeats instead.
+        out = cal.build_calibration(self._ledger(2, 5, 5), self._meta())
+        self.assertFalse(out["control"]["separates"])
+        self.assertTrue(out["control"]["underpowered"])
+        self.assertIn("Underpowered", "\n".join(cal.render_calibration(out)))
+
+    def test_a_genuine_null_blocks_every_tier_conclusion(self):
+        out = cal.build_calibration(self._ledger(10, 10, 10), self._meta())
+        self.assertFalse(out["control"]["separates"])
+        self.assertFalse(out["control"]["underpowered"])
+        self.assertIn("did not separate", "\n".join(cal.render_calibration(out)))
+
+    def test_the_control_is_kept_out_of_the_confusion_matrix(self):
+        """It is read by its own rule, so it may not also move the on-diagonal count."""
+        meta = self._meta()
+        meta["rung"] = {"score": 45, "hard_criteria": HARD}
+        raw = self._ledger(4, 10, 10)
+        for rep in range(5):
+            raw.append(_trial("haiku", "rung", rep, 0))
+            raw.append(_trial("sonnet5", "rung", rep, 2))
+            raw.append(_trial("opus5", "rung", rep, 2))
+        out = cal.build_calibration(raw, meta)
+        total = sum(sum(row.values()) for row in out["confusion"].values())
+        self.assertEqual(total, 1, "only the rung may be counted")
+        self.assertEqual(out["confusion"]["mid"]["mid"], 1)
+        self.assertIn("ctl", {r["task_id"] for r in out["rows"]})
+        self.assertNotIn("ctl", out["dose_response"].get("strong", {}))
+        self.assertIn("positive control", "\n".join(cal.render_calibration(out)))
+
+    def test_a_control_that_never_ran_is_reported_as_absent(self):
+        out = cal.build_calibration([_trial("haiku", "ctl", 0, 0)], self._meta())
+        self.assertFalse(out["control"]["ran"])
+        self.assertIn("did not run", "\n".join(cal.render_calibration(out)))
+
+    def test_a_bank_without_a_control_declares_none(self):
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = [_trial("opus", "t", rep, 2) for rep in range(3)]
+        out = cal.build_calibration(raw, meta)
+        self.assertIsNone(out["control"])
+        self.assertNotIn("Positive control", "\n".join(cal.render_calibration(out)))
+
+
 if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromModule(sys.modules[__name__])

@@ -1,15 +1,18 @@
 """Model-tier calibration analysis (spec §7/§8).
 
 Pure functions over ledger records + per-task metadata. Computes, for the
-``model-tier-v1`` study:
+``model-tier-*`` studies:
 
-* the **hard-criteria quality fraction** per (task, arm) — ``(#true hard) / (#hard)``
-  per trial, mean across repeats as the point estimate, with a Wilson CI on criteria
-  **pooled across trials** (``successes = Σ true hard``, ``n = Σ total hard``), per
-  ADR-0007 / FM-N1;
+* the **per-trial pass rate** per (task, arm) — ONE Bernoulli draw per trial, the
+  draw being ``every hard criterion true`` (ADR-0009, superseding ADR-0007 D3). The
+  point estimate is ``passing trials / trials`` and the Wilson CI is computed on that
+  same integer pair, so the interval's ``n`` is the number of trials actually bought;
 * the **empirically-right tier** — the cheapest model whose mean is within ε of the
-  best AND whose pooled CI overlaps the best's; ``indeterminate`` when the point and
+  best AND whose CI overlaps the best's; ``indeterminate`` when the point and
   interval criteria disagree on the cheapest adequate tier (FM-10);
+* the **positive-control separation** — a one-sided Fisher exact test between a
+  bank-declared weak and strong arm on a bank-declared control task, read by its own
+  rule and excluded from the confusion matrix;
 * the **calibration confusion matrix** (predicted vs empirical tier) + the crossover
   score where the empirically-right model steps up, vs the 25/55 thresholds;
 * the **per-band dose-response** (Δquality × Δcost per upgrade) and the
@@ -41,9 +44,10 @@ from __future__ import annotations
 import math
 import warnings
 from collections import defaultdict
+from math import comb
 from typing import Any
 
-EPS = 0.10  # ε in hard-criteria fraction units (ADR-0007 D3)
+EPS = 0.10  # ε in per-trial pass-rate units (ADR-0007 D3 as amended by ADR-0009)
 
 # The capacity ladder: tier → cheapness rank (weak cheapest, frontier dearest). The one
 # place rank and tier come from, replacing a per-arm-name (rank, tier) table.
@@ -181,27 +185,68 @@ def hard_fraction(vr: Any, hard: list[str]) -> tuple[int, int]:
 
 
 def arm_task_stats(trials: dict, task_id: str, arm: str, hard: list[str]) -> dict | None:
-    """Pooled hard-criteria stats for one (arm, task): mean, CI, n_trials."""
-    succ = tot = n_trials = 0
-    per_trial: list[float] = []
+    """PER-TRIAL stats for one (arm, task): one Bernoulli draw per trial.
+
+    A trial scores 1 iff EVERY hard criterion present is true, 0 otherwise. The point
+    estimate is ``passing / n_trials`` and the Wilson CI is computed on that same
+    integer pair — so the interval's ``n`` is the number of trials actually bought.
+
+    WHY, MEASURED (ADR-0009, superseding ADR-0007 D3). The prior estimator pooled
+    criteria across trials (``successes = Σ true hard``, ``n = Σ total hard``), which
+    treats a task's k hard criteria as k independent draws. On this bank family they
+    are not independent — they are perfectly correlated. Over every completed
+    multi-criterion trial on the committed ``ledger/model-tier-v1.jsonl`` (175 trials,
+    7 tasks, 5 arms) the hard set came out **all-true or all-false, 175 times out of
+    175**: zero mixed trials. Pooling therefore multiplied the CI's ``n`` by k while
+    buying no information, narrowing every interval by roughly ``sqrt(k)`` and
+    licensing repeat counts that cannot in fact resolve the cells they were sized for.
+
+    The conjunction is the honest single draw whether or not the correlation holds: if
+    criteria ever do come apart, an all-pass draw is a conservative statistic rather
+    than an inflated one. ``mixed_trials`` records how often they came apart, so the
+    assumption is checkable from the ledger instead of asserted — a nonzero count is
+    the signal to re-open ADR-0009, not a silent estimator error.
+
+    ``draws`` is the ``(passing, n_trials)`` integer pair the CI rests on. It replaces
+    the old ``pooled`` key, which named the very inflation this estimator removes.
+    """
+    passing = n_trials = mixed = 0
     for (sc, tid, _rep), vr in trials.items():
         if sc != arm or tid != task_id:
             continue
         s, t = hard_fraction(vr, hard)
         if t == 0:
             continue
-        succ += s
-        tot += t
         n_trials += 1
-        per_trial.append(s / t)
+        if s == t:
+            passing += 1
+        elif s > 0:
+            mixed += 1
     if n_trials == 0:
         return None
     return {
-        "mean": sum(per_trial) / len(per_trial),
-        "ci": _wilson(succ, tot),
+        "mean": passing / n_trials,
+        "ci": _wilson(passing, n_trials),
         "n_trials": n_trials,
-        "pooled": (succ, tot),
+        "draws": (passing, n_trials),
+        "mixed_trials": mixed,
     }
+
+
+def fisher_one_sided(a: int, n_a: int, b: int, n_b: int) -> float:
+    """One-sided Fisher exact p: P(arm A scores ≤ ``a``) given the observed margins.
+
+    The left tail of the hypergeometric under H0 (both arms share one pass rate), which
+    is the exact test for "the weak arm did WORSE than the strong arm" on two columns of
+    per-trial pass counts. Exact, integer-only, and defined at the trial counts this
+    program can afford — where a normal approximation is not.
+    """
+    total, succ = n_a + n_b, a + b
+    denom = comb(total, n_a)
+    if denom == 0:
+        return 1.0
+    lo = max(0, succ - n_b)
+    return sum(comb(succ, k) * comb(total - succ, n_a - k) for k in range(lo, a + 1)) / denom
 
 
 def empirical_right_tier(stats_by_arm: dict[str, dict], eps: float = EPS) -> tuple[str, bool]:
@@ -256,7 +301,7 @@ def _context_pairs(trials: dict, task_meta: dict[str, dict]) -> list[dict]:
 
     Groups tasks by their ``[context] pair`` slug (the machine-readable pair key, FM-N3)
     and reports, for each pair, the small→large right-tier shift and the weak-tier
-    hard-fraction delta with pooled-Wilson CIs. Empty list for banks with no context
+    per-trial pass-rate delta with Wilson CIs. Empty list for banks with no context
     tags (every model-tier bank), so their scorecard is unaffected.
     """
     by_pair: defaultdict[str, dict[str, str]] = defaultdict(dict)
@@ -282,7 +327,7 @@ def _context_pairs(trials: dict, task_meta: dict[str, dict]) -> list[dict]:
             "means": {a: stats[a]["mean"] for a in stats},
             "weak_mean": weak["mean"] if weak else None,
             "weak_ci": weak["ci"] if weak else None,
-            "weak_pooled": weak["pooled"] if weak else None,
+            "weak_draws": weak["draws"] if weak else None,
         }
 
     out: list[dict] = []
@@ -298,11 +343,76 @@ def _context_pairs(trials: dict, task_meta: dict[str, dict]) -> list[dict]:
     return sorted(out, key=lambda e: (e["score"] if e["score"] is not None else 0.0, e["pair"]))
 
 
-def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
-    """Top-level: confusion matrix + per-task rows + dose-response + Pareto.
+def control_separation(trials: dict, task_meta: dict[str, dict]) -> dict | None:
+    """Read a bank-declared positive control BY ITS OWN RULE, not off the diagonal.
 
-    task_meta[task_id] = {"score": float, "hard_criteria": [...]}. Only non-holdout
-    tasks that actually ran are included.
+    A bank declares its control in ``scores.toml``'s ``[control]`` table, which
+    ``report.py`` attaches to that task's meta as ``{"control": {...}}`` with the arm
+    names, α, and the pre-registered repeat count. The rule is a one-sided Fisher exact
+    test on the two arms' PER-TRIAL pass counts: the control separates iff the weak arm
+    scored strictly worse than the strong arm at ``p ≤ α``.
+
+    WHY NOT THE CONFUSION MATRIX. The control's job is to distinguish "the score does
+    not predict the tier" from "the bank had no headroom for a tier to matter". The
+    cheapest-adequate statistic cannot do that job — at the control's own recorded v1
+    rates it reads ``indeterminate``, which is a correct answer to a different question.
+    So the control is scored by this rule and is EXCLUDED from the confusion matrix; it
+    would otherwise contribute an off-diagonal cell to a count it is not evidence about.
+
+    WHY FISHER AND NOT DISJOINT CIs. Both were costed by exact enumeration at the
+    control's own v1 rates (haiku 2/5, opus5 5/5) under per-trial scoring. Disjoint
+    Wilson CIs reproduce with probability 0.078 at repeats=5 and need repeats=15 to
+    clear 0.9; the Fisher rule reaches 0.945 at repeats=10. A control that fires less
+    than half the time when the ladder really does separate is not a control.
+    """
+    for tid, meta in task_meta.items():
+        spec = meta.get("control")
+        if not spec:
+            continue
+        hard = meta["hard_criteria"]
+        weak_arm, strong_arm = spec["weak_arm"], spec["strong_arm"]
+        weak = arm_task_stats(trials, tid, weak_arm, hard)
+        strong = arm_task_stats(trials, tid, strong_arm, hard)
+        if not weak or not strong:
+            return {
+                "task_id": tid,
+                "weak_arm": weak_arm,
+                "strong_arm": strong_arm,
+                "ran": False,
+                "separates": False,
+                "reason": "the control did not run on both arms",
+            }
+        alpha = float(spec.get("alpha", 0.05))
+        min_repeats = int(spec.get("min_repeats", 0))
+        p = fisher_one_sided(*weak["draws"], *strong["draws"])
+        underpowered = min(weak["n_trials"], strong["n_trials"]) < min_repeats
+        return {
+            "task_id": tid,
+            "weak_arm": weak_arm,
+            "strong_arm": strong_arm,
+            "ran": True,
+            "weak_draws": weak["draws"],
+            "strong_draws": strong["draws"],
+            "p": p,
+            "alpha": alpha,
+            "min_repeats": min_repeats,
+            "underpowered": underpowered,
+            "separates": p <= alpha and not underpowered,
+            "reason": (
+                f"fewer than the pre-registered {min_repeats} repeats per arm"
+                if underpowered
+                else ""
+            ),
+        }
+    return None
+
+
+def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
+    """Top-level: confusion matrix + per-task rows + control + dose-response + Pareto.
+
+    task_meta[task_id] = {"score": float, "hard_criteria": [...]}, optionally with
+    ``"control"`` on the one task that is a positive control. Only non-holdout tasks
+    that actually ran are included.
     """
     trials, runs = parse_ledger(raw)
     ran_tasks = sorted({tid for (_sc, tid, _r) in trials})
@@ -331,6 +441,9 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
                 "indeterminate": indet,
                 "means": {a: stats_by_arm[a]["mean"] for a in stats_by_arm},
                 "n": {a: stats_by_arm[a]["n_trials"] for a in stats_by_arm},
+                "mixed": sum(stats_by_arm[a]["mixed_trials"] for a in stats_by_arm),
+                # A control is read by its own rule and never counted on the diagonal.
+                "control": bool(meta.get("control")),
                 # Context dimension (§7) — None for model-tier banks; surfaced for context banks.
                 "context": meta.get("context"),
                 "pair": meta.get("pair"),
@@ -341,16 +454,21 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
     # Predicted rows are only weak/mid/strong — tier_for_score never assigns frontier
     # (the "frontier is never score-assigned" invariant). frontier IS reachable
     # empirically (a fable arm cheapest-adequate), so it is a COLUMN with no predicted row.
+    # Control tasks are excluded: they are not rungs of the ladder under test, and the
+    # cheapest-adequate statistic is not the question they answer (see control_separation).
     predicted_tiers = ["weak", "mid", "strong"]
     columns = [*TIER_ORDER, "indeterminate"]
     confusion: dict[str, dict[str, int]] = {p: dict.fromkeys(columns, 0) for p in predicted_tiers}
     for r in rows:
+        if r["control"]:
+            continue
         col = "indeterminate" if r["indeterminate"] else r["empirical"]
         confusion[r["predicted"]][col] += 1
 
     return {
         "rows": rows,
         "confusion": confusion,
+        "control": control_separation(trials, task_meta),
         "dose_response": _dose_response(trials, runs, task_meta),
         "pareto": _pareto(trials, runs, task_meta),
         # Context-size view (§7): empty list for banks with no `[context]` tags.
@@ -371,9 +489,16 @@ def _arm_cost(runs: dict, arm: str, tasks: list[str]) -> float:
 
 
 def _dose_response(trials: dict, runs: dict, task_meta: dict) -> dict:
-    """Per band: mean hard-fraction quality + mean cost for every arm on the ladder."""
+    """Per band: mean per-trial pass rate + mean cost for every arm on the ladder.
+
+    A declared control is excluded: this view is a claim about a BAND of the ladder,
+    and the control is a task ported from another bank to make a null interpretable,
+    not a rung whose score places it in a band under test.
+    """
     band_tasks: defaultdict[str, list[str]] = defaultdict(list)
     for tid, meta in task_meta.items():
+        if meta.get("control"):
+            continue
         band_tasks[tier_for_score(meta["score"])].append(tid)
     out: dict[str, dict] = {}
     for band, tids in band_tasks.items():
@@ -434,6 +559,47 @@ def _pareto(trials: dict, runs: dict, task_meta: dict) -> list[dict]:
 
 def _pct(x: float) -> str:
     return f"{100 * x:.0f}%"
+
+
+def _render_control(control: dict | None) -> list[str]:
+    """The positive control, read by its own rule; empty for banks that declare none."""
+    if not control:
+        return []
+    lines = ["### Positive control (read by its own rule, not the confusion matrix)", ""]
+    tid, weak, strong = control["task_id"], control["weak_arm"], control["strong_arm"]
+    if not control.get("ran"):
+        lines += [
+            f"`{tid}`: **did not run on both `{weak}` and `{strong}`** — the control is"
+            " absent, so a null on this bank stays uninterpretable and no tier"
+            " conclusion is available from any part of the matrix.",
+            "",
+        ]
+        return lines
+    wa, wn = control["weak_draws"]
+    sa, sn = control["strong_draws"]
+    verdict = "SEPARATES" if control["separates"] else "DOES NOT SEPARATE"
+    lines += [
+        f"| control | {weak} | {strong} | one-sided Fisher p | α | verdict |",
+        "|---|---|---|---|---|---|",
+        f"| `{tid}` | {wa}/{wn} | {sa}/{sn} | {control['p']:.4f} |"
+        f" {control['alpha']:.2f} | **{verdict}** |",
+        "",
+    ]
+    if control.get("underpowered"):
+        lines += [
+            f"> Underpowered: {control['reason']}. The verdict is forced to DOES NOT"
+            " SEPARATE rather than read off an underpowered comparison.",
+            "",
+        ]
+    if not control["separates"]:
+        lines += [
+            "> **The ladder did not separate on the control.** The instrument or the"
+            ' lineup moved; no conclusion of the form "tier X should be dropped" is'
+            " available from any part of this matrix, and a null here is not evidence"
+            " against the complexity score.",
+            "",
+        ]
+    return lines
 
 
 def _render_context_pairs(pairs: list[dict]) -> list[str]:
@@ -504,11 +670,20 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     on_diag = sum(conf[t][t] for t in tiers)
     total = sum(sum(conf[p].values()) for p in tiers)
     lines += ["", f"On-diagonal (well-tuned): **{on_diag}/{total}**.", ""]
+    if any(r.get("control") for r in rows):
+        lines += [
+            "> A declared positive control ran and is NOT counted above — it is read by"
+            " its own rule (below), because the cheapest-adequate statistic answers a"
+            " different question than the one a control is bought to answer.",
+            "",
+        ]
+
+    lines += _render_control(cal.get("control"))
 
     # Per-task detail. Arm columns are derived from the arms that actually ran, on the
     # ladder — so a renamed/gated arm (sonnet5, bare-gate) renders, and a 3-arm bank's
     # header stays byte-identical to `haiku | sonnet | opus`.
-    lines += ["### Per-task (hard-criteria quality fraction by arm)", ""]
+    lines += ["### Per-task (per-trial pass rate by arm: all hard criteria true)", ""]
     arm_cols = sorted({a for r in rows for a in r["means"]}, key=_ladder_key)
     lines.append("| task | score | predicted | empirical | " + " | ".join(arm_cols) + " | note |")
     lines.append("|" + "---|" * (len(arm_cols) + 5))
@@ -523,6 +698,8 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
             if r["indeterminate"]
             else ("✓" if r["predicted"] == r["empirical"] else f"{r['predicted']}→{r['empirical']}")
         )
+        if r.get("control"):
+            note = "positive control (not counted)"
         cells = " | ".join(cell(a) for a in arm_cols)
         emp = "?" if r["indeterminate"] else r["empirical"]
         lines.append(
@@ -530,10 +707,25 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
         )
     lines.append("")
 
+    # The estimator's own assumption, checked against the data it just scored. A trial
+    # scores one draw because a task's hard criteria come out all-true or all-false; a
+    # nonzero count here means they came apart, and ADR-0009 asks to be re-opened.
+    mixed = sum(r.get("mixed", 0) for r in rows)
+    trials_scored = sum(sum(r["n"].values()) for r in rows)
+    lines += [
+        f"Mixed-hard trials: **{mixed}/{trials_scored}** (a trial where some hard criteria"
+        " passed and others failed). The per-trial estimator treats a cell as one draw;"
+        " at 0 that is exact, above 0 it is conservative — see ADR-0009.",
+        "",
+    ]
+
     # Dose-response
     dr = cal["dose_response"]
     if dr:
-        lines += ["### Dose-response (quality × cost per upgrade, by band)", ""]
+        lines += [
+            "### Dose-response (per-trial pass rate × cost per upgrade, by band)",
+            "",
+        ]
         # Δ is against the arm one step DOWN the ladder (the row above). The rows are
         # tier-ordered, not dollar-ordered, so the column reads "vs prev arm" not "vs
         # cheaper" — on the committed ledger sonnet5 (mid) sorts above opus (strong) yet

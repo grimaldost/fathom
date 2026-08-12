@@ -2,6 +2,21 @@
 
 **Date:** 2026-08-11 · **Bank:** `model-tier-v2` · **Spend:** $0 · **Ledger:** none
 
+> **Amended 2026-08-12 — the power arithmetic in this note is superseded.** A second
+> adversarial review found that the decision statistic pooled a task's `k` hard criteria
+> as `k` independent draws. Measured on the committed `ledger/model-tier-v1.jsonl` they
+> are all-true or all-false on **175 of 175** multi-criterion trials, so every repeat
+> count derived here was sized against an interval that was ~`√k` too narrow. Read
+> [`docs/adr/0009-per-trial-tier-decision-statistic.md`](../adr/0009-per-trial-tier-decision-statistic.md)
+> and the bank's own README for the numbers that hold. Concretely superseded below:
+> "9/9 on-diagonal at repeats=2" (a noiseless rung is indeterminate at repeats 2 and 3
+> — the matrix is bought at 5), the "three pooled draws" justification for `k=3`, the
+> control's disjoint-CI rule at repeats=5 (p=0.078; replaced by a one-sided Fisher exact
+> test at repeats=10), and the 87-trial / $174 staging. The bank's *shape* — the rungs,
+> the overlays, the derived hard sets, the control's identity — is unchanged, and so is
+> everything this note records about what the offline evidence does and does not
+> establish.
+
 The bank the recalibration playbook has been calling its "known limitation" now exists.
 It is authored, validated and offline-demonstrated; it has not been run. This note
 records what was built, what the offline evidence establishes, and — the part a reader

@@ -137,6 +137,30 @@ adjustments = -10
 cross_shape = true
 note = "incremental fold must equal a whole-log replay under out-of-order and repeated events; ledger reconciliation scored regulatory"
 
+# The positive control, declared machine-readably so calibration.py reads it by its own
+# rule and keeps it out of the confusion matrix. The rule is a one-sided Fisher exact
+# test between `weak_arm` and `strong_arm` on PER-TRIAL pass counts (all hard criteria
+# true): the control separates iff p <= alpha at >= min_repeats repeats per arm.
+#
+# WHY min_repeats = 10. Costed by exact enumeration at the control's own recorded v1
+# rates (haiku 0.4, opus5 1.0) under per-trial scoring — see docs/adr/0009. The rule
+# this replaces (haiku's Wilson CI disjoint from opus5's) reproduces with probability
+# 0.078 at repeats=5 and needs repeats=15 to clear 0.9. The Fisher rule reaches 0.945
+# at repeats=10, which is the cheapest point that clears the 0.9 bar.
+#
+# HONEST LIMIT, RECORDED. 0.945 is computed with opus5 plugged in at the 5/5 point
+# estimate. If opus5's true rate is 0.9, repeats=10 gives 0.659 and 20 repeats are
+# needed for 0.951. The pre-registration buys 10 because that is the bar the reviewer
+# set (">= 0.9 at v1's own observed rates"); a control that fails at 10 therefore
+# blocks the tier conclusions without proving the ladder flat, which is the
+# conservative direction and is stated as such in README.md.
+[control]
+task = "control-nonlocal-parse"
+weak_arm = "haiku"
+strong_arm = "opus5"
+alpha = 0.05
+min_repeats = 10
+
 # Provenance of the control's score and its prior reading — the evidence that makes it
 # a usable positive control. Observed on ledger/model-tier-v1.jsonl at --repeats 5,
 # both hard criteria passing: haiku 2/5, sonnet 3/5, sonnet5 4/5, opus 5/5, opus5 5/5.

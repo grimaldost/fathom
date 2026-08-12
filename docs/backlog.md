@@ -855,3 +855,9 @@ review panel and declined: both collapse at K=1 banks and on all-0 or all-100 ta
 than Wilson. The chosen resolution — keep the pooled point and interval, state the clustering caveat
 plainly, and surface K beside n — stands. The escalation (a design-effect-inflated Wilson as a
 mechanical guard) is held at watch in FATH-B31, not declined. *(from the 2026-07-05 audit)*
+*Amended 2026-08-12:* this still stands for the scorecard's **per-criterion** pass-rate intervals,
+which is what the panel evaluated. It does **not** cover the **tier decision statistic**, where the
+clustering caveat was measured rather than stated and came back total — 175 of 175 multi-criterion
+trials all-true or all-false on `ledger/model-tier-v1.jsonl`. That cell is now one draw per trial
+(**ADR-0009**), which is not the cluster-t the panel declined but its degenerate case at ρ=1, and it
+avoids the K=1 collapse the panel objected to because it estimates nothing.

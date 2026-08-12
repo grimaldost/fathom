@@ -3,6 +3,30 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
+## [Unreleased]
+
+### Changed
+
+- **The tier decision statistic is one draw per trial** (ADR-0009, superseding ADR-0007
+  D3). `calibration.arm_task_stats` scored a cell by pooling a task's `k` hard criteria
+  across trials, which counts `k × n` draws. Measured on the committed
+  `ledger/model-tier-v1.jsonl`, a task's hard set comes out all-true or all-false on
+  **175 of 175** multi-criterion trials, so the extra draws were copies and every
+  interval was ~`√k` too narrow. A trial is now one Bernoulli draw — every hard
+  criterion true — with the Wilson CI on `(passing trials, trials)`, exposed as `draws`.
+  Committed readings are unchanged (`model-tier-v1` still 1/7 on-diagonal, pinned by a
+  test); the repeat counts derived from the old intervals are not.
+- `arm_task_stats` also returns `mixed_trials`, rendered on the scorecard, so the
+  correlation the estimator assumes is checkable from the ledger rather than asserted.
+
+### Added
+
+- **Positive controls are declarable and read by their own rule.** A bank may declare
+  one in `scores.toml`'s `[control]` table; `calibration.control_separation` reads it
+  with a one-sided Fisher exact test (`calibration.fisher_one_sided`) on per-trial pass
+  counts, renders it as its own scorecard section, and excludes it from the confusion
+  matrix and the per-band dose-response.
+
 ## [0.2.0] - 2026-08-11
 
 The instrument-trust release: backlog wave 1 (`docs/backlog.md`), driven by the

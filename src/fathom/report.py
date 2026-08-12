@@ -69,6 +69,11 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
 
     Returns {} when the bank ships no scores.toml (every non-calibration bank), so the
     calibration section is simply absent and other banks' scorecards are byte-unchanged.
+
+    A bank may also declare ONE positive control in scores.toml's ``[control]`` table
+    (``task``, ``weak_arm``, ``strong_arm``, ``alpha``, ``min_repeats``). It is attached
+    to that task's meta as ``entry["control"]``, which is what makes calibration.py read
+    it by its own rule and keep it out of the confusion matrix.
     """
     import tomllib
 
@@ -78,7 +83,9 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
         return {}
     try:
         with open(scores_path, "rb") as f:
-            scores = tomllib.load(f).get("scores", {})
+            scores_doc = tomllib.load(f)
+        scores = scores_doc.get("scores", {})
+        control = scores_doc.get("control") or {}
         from fathom.taskbank import load_bank
 
         loaded = load_bank(bank_dir)
@@ -89,6 +96,8 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
         hard = t.verify.get("hard_criteria")
         if t.id in scores and isinstance(hard, list) and hard:
             entry: dict[str, Any] = {"score": float(scores[t.id]), "hard_criteria": list(hard)}
+            if control.get("task") == t.id:
+                entry["control"] = dict(control)
             # [context] is dropped by load_bank's Task (FM-N4) — re-parse task.toml directly.
             try:
                 with open(t.task_dir / "task.toml", "rb") as tf:

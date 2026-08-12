@@ -23,11 +23,11 @@ Four overlays per task, each copied over a fresh copy of ``fixtures/``:
 
 The counter's HARD row is the one that was missing. The first authoring asserted
 only that the counter failed SOME standard criterion, which five tasks satisfied
-while still handing the symptom patch a hard criterion for free — diluting those
-cells to 0.5-vs-1.0, which is CI-overlapping and reads INDETERMINATE at any repeat
-count this program can buy. ``TestHardCriteriaDerivation`` re-derives the hard set
-from the overlays and compares it to what each ``task.toml`` declares, so the
-decision statistic cannot silently drift back.
+while still handing the symptom patch a hard criterion for free.
+``TestHardCriteriaDerivation`` re-derives the hard set from the overlays and compares
+it to what each ``task.toml`` declares, so the decision statistic cannot silently
+drift back, and ``TestOverlaysAreDeterminatePerTrial`` pins where each overlay lands
+under the per-trial estimator (ADR-0009) that the cells are actually scored with.
 
 Plus the bank's own integrity: ten tasks (nine ladder rungs and one positive
 control), a resolvable holdout, byte-identical ``original/`` stashes, nested oracle
@@ -83,10 +83,21 @@ OVERLAYS = ("solution", "counter", "counter-strong")
 # anchor lives in `thin`, and these two are the v1 contract's hygiene checks.
 NON_HARD = {"no_regression", "regression_test_present"}
 
-# The power target behind the derivation rule (oracles.toml § HOW hard_criteria IS
-# DERIVED): three pooled Bernoulli draws per repeat keep a 1/6-vs-6/6 cell readable
-# at repeats=2, where a two-criterion cell (1/4 vs 4/4) goes CI-overlapping.
+# The derivation rule's stop-at count (oracles.toml § HOW hard_criteria IS DERIVED).
+# NOT a power target: under per-trial scoring (ADR-0009) a cell is one draw whatever k
+# is, so k moves the difficulty of the conjunction, not the resolution. Three is the
+# headroom target; two is the floor below which the tier verdict would rest on a single
+# verifier assertion. Power comes from repeats — see README.md § Power.
 HARD_TARGET = 3
+
+# The pre-registered repeat counts, asserted here so the README's plan and the bank's
+# own arithmetic cannot drift apart. SCREEN_REPEATS is the design's Part B screen n;
+# MATRIX_REPEATS is the first repeat count at which a noiseless rung is determinate
+# under per-trial scoring (2 and 3 are not); CONTROL_REPEATS is where the Fisher rule
+# clears 0.9 at the control's own v1 rates.
+SCREEN_REPEATS = 5
+MATRIX_REPEATS = 5
+CONTROL_REPEATS = 10
 
 # Placeholder shapes that mean a command string was never wired to a real path — the
 # ablation-v2 defect (a gate command shipped with a literal `/path/to/...` in it,
@@ -265,17 +276,67 @@ class TestOracleLevels(unittest.TestCase):
                 self.assertFalse(hard & NON_HARD, f"{task.id}: hygiene criterion marked hard")
 
 
+class TestOverlaysAreDeterminatePerTrial(unittest.TestCase):
+    """The decision statistic's three contracted positions, measured per-trial.
+
+    calibration.py scores a trial as ONE draw — it passes iff EVERY hard criterion is
+    true (ADR-0009). The bank's contract with that estimator is three positions, and
+    this asserts them through the real verifiers rather than in prose:
+
+        fixture   -> 0   (nothing is banked before the arm does anything)
+        counter   -> 0   (the symptom patch cannot reach the bar)
+        solution  -> 1   (the bar is reachable)
+
+    The fourth overlay, ``counter-strong``, is asserted here too but is NOT one of the
+    three: it belongs to the oracle axis. Under the pooled estimator it landed at
+    1/3-2/3 of the hard set on every rung — the CI-overlapping middle that reads
+    indeterminate. Per-trial there is no middle, and this test pins which side it lands
+    on so the reading cannot drift back into ambiguity unnoticed.
+    """
+
+    @staticmethod
+    def _passes(task_id: str, overlay: str | None, hard: list[str]) -> tuple[int, int]:
+        criteria, _ = graded(task_id, overlay)
+        present = [c for c in hard if c in criteria]
+        return sum(1 for c in present if criteria[c]), len(present)
+
+    def test_the_three_contracted_overlays_score_zero_zero_one(self):
+        for task in load_bank().tasks:
+            hard = task.verify["hard_criteria"]
+            for overlay, expected in ((None, 0), ("counter", 0), ("solution", 1)):
+                with self.subTest(task=task.id, overlay=overlay or "fixture"):
+                    n_true, k = self._passes(task.id, overlay, hard)
+                    self.assertEqual(k, len(hard), f"{task.id}: a hard criterion is not emitted")
+                    self.assertEqual(
+                        int(n_true == k),
+                        expected,
+                        f"{task.id}/{overlay or 'fixture'}: per-trial draw is "
+                        f"{int(n_true == k)} ({n_true}/{k}), contract says {expected}",
+                    )
+
+    def test_the_counter_strong_overlay_lands_on_one_side_not_in_the_middle(self):
+        """Determinate under per-trial scoring, and recorded as a fail on every rung."""
+        for task_id in sorted(LADDER_TASKS):
+            with self.subTest(task=task_id):
+                hard = load_bank_task(task_id).verify["hard_criteria"]
+                n_true, k = self._passes(task_id, "counter-strong", hard)
+                self.assertLess(
+                    n_true,
+                    k,
+                    f"{task_id}: a standard-passing patch clears the hard bar, so the "
+                    "hard set adds nothing over the standard oracle here",
+                )
+
+
 class TestHardCriteriaDerivation(unittest.TestCase):
     """The decision statistic is derived from measurement, and re-derived here.
 
     calibration.py computes every (arm, task) cell from ``hard_criteria`` ALONE. A
-    criterion in that set which the plausible symptom patch already satisfies dilutes
-    the cell to 0.5-vs-1.0, which is CI-overlapping — indeterminate — at every repeat
-    count this program can afford, and indeterminate is the off-diagonal branch that
-    the owner's rule treats as evidence against a tier. The first authoring of this
-    bank shipped five such cells and its suite did not catch them, because it only
-    ever asserted that the counter failed SOME standard criterion, never that it
-    failed every HARD one. These tests assert the property that was missing.
+    criterion in that set which the plausible symptom patch already satisfies hands the
+    counter a free component of the conjunction, which is how the first authoring
+    shipped five diluted cells: its suite only ever asserted that the counter failed
+    SOME standard criterion, never that it failed every HARD one. These tests assert
+    the property that was missing.
     """
 
     def test_no_hard_criterion_is_one_the_symptom_patch_already_satisfies(self):
@@ -569,8 +630,95 @@ class TestScreenArms(unittest.TestCase):
                 )
 
     def test_the_screen_omits_the_arm_it_defers_buying(self):
-        """The whole point: decide whether the mid band has headroom before paying for it."""
+        """The whole point: decide whether a rung has headroom before paying for it."""
         self.assertNotIn("sonnet5", self._resolved(SCREEN_ARMS))
+
+    def test_the_screen_arms_are_the_control_rule_arms(self):
+        """One pair of arms serves both jobs, so neither is bought twice."""
+        control = load_toml(BANK / "scores.toml")["control"]
+        self.assertEqual(
+            sorted(self._resolved(SCREEN_ARMS)),
+            sorted({control["weak_arm"], control["strong_arm"]}),
+        )
+
+
+class TestPreRegistration(unittest.TestCase):
+    """The plan the README commits to, asserted against the bank rather than read.
+
+    The reviewer's third blocking finding was that the admission gate covered 4 of 9
+    rungs while the other 5 went straight into the matrix — and their hard criteria are
+    verbatim bullets in the fixture README the model is pointed at. The fix is a scope
+    rule, so it is a test: EVERY rung that can enter the matrix must be named in the
+    screen plan, and a rung that is not screened must not be buyable.
+    """
+
+    def _screen_plan(self) -> dict:
+        return load_toml(BANK / "screen-plan.toml")
+
+    def test_every_buyable_rung_is_in_the_screen_plan(self):
+        plan = self._screen_plan()
+        screened = set()
+        for block in plan["blocks"].values():
+            screened |= set(block["tasks"])
+        buyable = LADDER_TASKS - set(HOLDOUT)
+        self.assertEqual(
+            sorted(screened),
+            sorted(buyable),
+            "a rung the matrix can buy is not covered by any screen block",
+        )
+        self.assertFalse(
+            screened & set(HOLDOUT), "the sealed holdout may not be screened or bought"
+        )
+        self.assertFalse(screened & CONTROL_TASKS, "the control is not a rung to screen")
+
+    def test_the_screen_plan_uses_the_preregistered_repeats_and_arms(self):
+        plan = self._screen_plan()
+        self.assertEqual(plan["repeats"], SCREEN_REPEATS)
+        self.assertEqual(sorted(plan["arms"]), ["haiku", "opus5"])
+        for name, block in plan["blocks"].items():
+            with self.subTest(block=name):
+                self.assertEqual(
+                    block["trials"],
+                    len(plan["arms"]) * len(block["tasks"]) * plan["repeats"],
+                    f"{name}: the trial count does not match arms x tasks x repeats",
+                )
+
+    def test_the_control_is_declared_with_a_rule_that_clears_its_power_bar(self):
+        control = load_toml(BANK / "scores.toml")["control"]
+        self.assertEqual(sorted(control["task"] for _ in [0]), sorted(CONTROL_TASKS))
+        self.assertEqual(control["min_repeats"], CONTROL_REPEATS)
+        self.assertEqual(control["alpha"], 0.05)
+
+    def test_the_control_rule_reproduces_at_v1_rates_with_probability_at_least_point_nine(self):
+        """The bar the rule was sized against, recomputed rather than quoted.
+
+        Exact enumeration over both arms' binomial draws at the control's own recorded
+        model-tier-v1 rates (haiku 2/5 -> 0.4, opus5 5/5 -> 1.0), per-trial scoring. The
+        rule that shipped before — disjoint Wilson CIs — is recomputed alongside, which
+        is what makes the replacement a measurement and not a preference.
+        """
+        from math import comb
+
+        from fathom import calibration as cal
+
+        control = load_toml(BANK / "scores.toml")["control"]
+        n, alpha = control["min_repeats"], control["alpha"]
+
+        def pmf(k: int, p: float) -> float:
+            return comb(n, k) * p**k * (1 - p) ** (n - k)
+
+        p_fisher = p_ci = 0.0
+        for k_weak in range(n + 1):
+            for k_strong in range(n + 1):
+                w = pmf(k_weak, 0.4) * pmf(k_strong, 1.0)
+                if not w:
+                    continue
+                if cal.fisher_one_sided(k_weak, n, k_strong, n) <= alpha:
+                    p_fisher += w
+                if cal._wilson(k_weak, n)[1] < cal._wilson(k_strong, n)[0]:
+                    p_ci += w
+        self.assertGreaterEqual(round(p_fisher, 3), 0.9, f"control rule fires at {p_fisher:.3f}")
+        self.assertLess(p_ci, 0.9, "the disjoint-CI rule would have cleared the bar after all")
 
 
 if __name__ == "__main__":

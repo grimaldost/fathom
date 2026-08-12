@@ -5,13 +5,12 @@
 # levels are strictly nested — thin subset of standard subset of strong — so a
 # criterion in `thin` also appears in `standard` and `strong`.
 #
-# HOW `hard_criteria` IS DERIVED (the decision statistic; repaired 2026-08-11).
-# calibration.py computes each (arm, task) cell from `hard_criteria` ALONE, so any
-# criterion in that set which the plausible symptom patch already satisfies dilutes
-# the contrast: the counter scores 0.5 instead of 0, and a 0.5-vs-1.0 cell is
-# CI-overlapping — indeterminate — at every repeat count this bank can afford. The
-# first authoring shipped five such cells. The set is now derived mechanically,
-# from measurement rather than from judgement:
+# HOW `hard_criteria` IS DERIVED (the decision statistic; repaired 2026-08-12).
+# calibration.py computes each (arm, task) cell from `hard_criteria` ALONE, and it
+# scores a trial as ONE Bernoulli draw: the trial passes iff EVERY hard criterion is
+# true (ADR-0009). So a criterion the plausible symptom patch already satisfies would
+# hand the counter a free component of the conjunction. The set is derived
+# mechanically, from measurement rather than from judgement:
 #
 #   ADMIT a criterion iff, through the real verifier, it is FALSE on the untouched
 #   fixture (so it is capability-gated, not a regression guard that is already true
@@ -23,12 +22,21 @@
 #   ORDER standard-level admissible criteria first, then strong-level ones in the
 #   order they appear below, and stop at THREE (never fewer than two).
 #
-# Three is a power target, not a taste: at repeats=2 a three-criterion cell pools
-# six Bernoulli draws, and Wilson keeps 1/6 (upper 0.56) disjoint from 6/6 (lower
-# 0.61) — so one criterion coming out true by luck still leaves the cell readable.
-# A two-criterion cell pools four draws, where 1/4 (upper 0.67) overlaps 4/4 (lower
-# 0.51) and the cell goes indeterminate. `tests/test_bank_model_tier_v2.py` asserts
-# the derivation, so a hand edit that re-dilutes a hard set fails the suite.
+# WHY THREE — AND WHAT IT IS *NOT*. It is NOT a power target. The first repair
+# justified three as "six pooled Bernoulli draws at repeats=2", which was the pooled
+# estimator's arithmetic and is now known to be wrong: on the committed
+# ledger/model-tier-v1.jsonl a task's hard criteria came out all-true or all-false on
+# 175 of 175 multi-criterion trials, so those extra draws were copies of one draw and
+# bought no resolution at all. Under per-trial scoring k does not move the draw count;
+# it moves the DIFFICULTY of the conjunction. Three is kept for two reasons that
+# survive: (1) headroom — the bar that saturated model-tier-v1 is the standard oracle,
+# and a conjunction that also demands an independent check is the only lever authoring
+# has against the same ceiling; (2) a one-criterion hard set makes the entire tier
+# verdict rest on a single verifier assertion, which is a powerless read by
+# construction. Two is the floor, three the target, and the repeat count — not k — is
+# where power now comes from: see README.md § Power.
+# `tests/test_bank_model_tier_v2.py` asserts the derivation, so a hand edit that
+# re-dilutes a hard set fails the suite.
 #
 # CONSEQUENCE, RECORDED: on five tasks the third (and on two the second) admissible
 # criterion is a STRONG-level one, so `hard_criteria` is no longer a subset of
@@ -37,6 +45,16 @@
 # `bv.emit` still gates the EXIT CODE on `standard` only, so the two are decoupled:
 # raising the decision bar did not change any verifier's exit code, and the
 # thin/standard/strong slice below is unaffected.
+#
+# WHERE `counter-strong/` SITS. It is NOT a point on the decision statistic. Under the
+# pooled estimator it landed at 1/3-2/3 of the hard set on every rung — a middle value,
+# which is exactly the CI-overlapping region that reads indeterminate, and the reviewer
+# named it as such. Under per-trial scoring there is no middle: the overlay fails at
+# least one hard criterion on every rung and therefore scores 0, determinate. Its role
+# is unchanged and is the ORACLE axis, not the tier axis — it witnesses that the strong
+# oracle has headroom over the standard oracle. The three overlays the decision
+# statistic is contracted on are fixture (0), counter (0) and solution (1), and
+# tests/test_bank_model_tier_v2.py asserts all four positions per-trial.
 #
 # WHY THERE IS NO ORACLE ARM. The crossing is open-loop: the arm produces an
 # artifact, the verifier grades it afterwards, and nothing about the oracle reaches
