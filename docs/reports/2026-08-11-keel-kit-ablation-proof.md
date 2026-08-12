@@ -16,14 +16,24 @@
   fires where it was silent" (proven) and "the fire is a true positive" (not-proven). One new free
   measurement was made to close a gap rather than to describe it: the 44-doc control arm, re-run
   under both gates (§2.5).
+- **Revision 3 (2026-08-12). Stage 1 of the ablation was bought and read: 24 trials, $9.7572.**
+  Claims 6 and 7 move off **not-measurable** — the instrument now has data — and land on
+  **not-proven**. Neither becomes a licence. Stage 2 was blocked by an expired credential
+  (§1.5), so every cell is n = 1 and the report says so at every number. The headline is
+  §1.7: the note-only class *was* exercised, so the "no power, class pre-satisfied" branch of
+  the pre-registered cut rule does not fire — but the class realised only **five discordant
+  pairs**, which caps the attainable evidence at p = 0.0625 before any pair is looked at, and the
+  point estimate runs **against** the cut. Nothing is cut. Part 5 lists what revision 3 adds.
 
 ---
 
 ## Part 1 — the ablation
 
-**Status: staged, gated, and NOT RUN. $0.00 spent. Blocked on the paid-run serialization lock,
-which is held by a run that is no longer executing.** Everything below is real work product; the
-only missing thing is the spend, and it needs one file removed by whoever owns the program.
+**Status: stage 1 RUN and read. 24 of the 48 planned trials, $9.7572 spent, every trial
+`status=completed`, `valid=true`, `exit_code=0`.** Stage 2 (the repeat) is unbought: the run that
+would have doubled n hit an expired OAuth credential at the smoke gate and stopped without
+spending (§1.5). **Every cell below is therefore n = 1**, and §1.7 states what that does and does
+not permit. The sealed holdout is untouched.
 
 ### 1.1 The arms
 
@@ -117,7 +127,7 @@ Every free gate in the discipline passed, in this session, on this worktree:
 |---|---|
 | `ruff format --check .` | 801 files already formatted |
 | `ruff check .` | all checks passed |
-| `uv run pytest` | **641 passed**, 1 skipped, 134 subtests (629 in revision 1; +12 from the guards this revision adds) |
+| `uv run pytest` | **652 passed**, 1 skipped, 134 subtests (629 in revision 1, 641 in revision 2; +11 from revision 3's ledger guards) |
 | `fathom validate keel-kit-ablation-v1 --strict` | **24 pass / 0 fail / 0 warn / 0 unverifiable** — see the two paragraphs below for what that does and does not prove |
 | `tools/check_skeleton_refs.py keel-kit-ablation-v1` | every task discriminates; **2 of the 6 open tasks do so on a grounding failure**, the rest on construct absence |
 | `tests/test_keel_kit_proof_assets.py` | **12 tests** — deletion-only, one-axis, sha pins, shared preamble, and (revision 2) the shared reference fence, the cut pair's identical fence, the relocation pair's differing one, and the cut's invisible share |
@@ -148,8 +158,9 @@ authoring tasks discriminate because the shallow answer omits the construct enti
 instruction-following. That is still a real anti-ceiling property — it is not the grounding
 property revision 1 claimed for it.
 
-Still owed, and all requiring the lock: `fathom smoke`, `fathom verify-arming --scenarios-dir
-scenarios/keel-kit-proof`, then the matrix.
+**Revision 3:** `fathom smoke` and `fathom verify-arming --scenarios-dir scenarios/keel-kit-proof`
+both passed under the lock, and stage 1's 24 trials followed. Nothing in the pre-spend gate list is
+still owed. The free gates were re-run again on 2026-08-12 before this revision and stayed green.
 
 ### 1.4 The budget rail, and a correction to the instruction
 
@@ -176,6 +187,12 @@ by the flag:
 3. `--repeats 2` only if stage 1 leaves headroom and the **saturation gate below** passes.
    Absolute worst case across both stages is bounded by the per-spawn cap at 48 × $1.00 = $48, so
    the stage-0 and stage-1 checkpoints are what hold the $30 line — not the flag.
+
+**What the rail actually cost (revision 3).** Stage 1 ran at **$9.7572 for 24 trials, $0.4065
+mean** — above the $0.368 prior but inside the checkpoint's $0.80 re-plan trigger, so no re-plan
+was owed. Cumulative spend on this bank is $9.7572 against the $30 total ceiling. Stage 2 would
+project ≈ $9.8 more, landing near $19.6 — the rail held with room to spare, and §1.7 argues the
+remaining headroom is not a reason to spend it.
 
 **The saturation gate, amended.** As pre-registered (plan §9.5) it read: "at least 2 of the 3
 piloted tasks must show `b-core` OR `c-bare` failing a behaviour or full-only criterion; if fewer,
@@ -211,10 +228,33 @@ A10 half of the note-only class is scored by `enforcement_claims_clean` alone, i
 pre-T1.3 A10 that is known to be defeatable in three reproduced ways. That biases the open tasks
 toward "the A10 note buys nothing".
 
-### 1.5 Why it did not run
+### 1.5 What ran, and why stage 2 did not
 
-`fathom smoke` and `verify-arming` spawn real models, so the matrix waits on the program's
-paid-run serialization lock. The lock was held on arrival and never released:
+Stage 1 ran on 2026-08-11 and completed all 24 balanced cells. Stage 2 — the `--repeats 2` pass
+that would have taken every cell to n = 2 — was attempted on 2026-08-12 and **bought nothing**.
+`uv run fathom smoke` returned SOME FAILED (5/8): two independent real-spawn checks
+("credential-only spawn authenticates & completes", "system-prompt injection reaches the model")
+both failed with *"Failed to authenticate: OAuth session expired and could not be refreshed"*, and
+the sanctioned engine-boundary check failed as usual. The permitted degraded pattern is 7/8 with
+**only** the engine-boundary check failing, so this is a hard stop and the matrix was not invoked.
+
+The cause is structural rather than incidental, and it is worth recording because it will recur:
+spawn isolation (ADR-0004) copies the host's credential file into a credential-only temp
+`CLAUDE_CONFIG_DIR`, and the copied OAuth session **cannot refresh itself**. The interactive
+session that launched the run kept working, which is exactly why every free gate passed while the
+isolated spawns could not authenticate. The smoke gate did its job: it caught this before spend.
+Clearing it is an operator re-login; nothing else about the matrix needs preparation, and the
+resume key means a re-invocation buys only the 24 unbought cells.
+
+The **stage-1 spend of $9.7572 is not double-counted** against that attempt: the failing smoke
+spawns reported `tokens_in = 0 / tokens_out = 0`.
+
+Free gates re-run in the same session, all green: `uv sync`; `uv run pytest` 641 passed / 1
+skipped / 134 subtests; `fathom validate keel-kit-ablation-v1 --strict` 24 pass / 0 fail / 0 warn /
+0 unverifiable; `fathom run … --repeats 2 --dry-run` reporting "24 trials (24 already done)".
+
+For the record of what preceded stage 1: the first attempt was itself blocked for ~90 minutes on
+the program's paid-run serialization lock, held by a run that was no longer executing:
 
 ```
 holder=verification-lift MAP matrix (bare+skill)
@@ -237,33 +277,57 @@ cadence:
 
 The lock was **not** removed. It is another program's coordination state; the serialization rule is
 unconditional and governs paid spend, and a stale-lock exception is not something a peer agent
-should grant itself. Clearing it is a one-line operator action, after which the matrix needs no
-further preparation:
+should grant itself. It was cleared by its owner, and stage 1 ran immediately afterwards.
+
+The exact command that resumes the run once a credential is available — it buys the 24 unbought
+cells and re-spends none of stage 1, because `(bank, dataset_version, task_id, config_hash,
+repeat)` is the resume key:
 
 ```sh
-# once the lock is confirmed clear
-uv run fathom smoke
-uv run fathom verify-arming --scenarios-dir scenarios/keel-kit-proof
+uv run fathom smoke                                # must be 8/8, or 7/8 with ONLY engine-boundary
 uv run fathom run keel-kit-ablation-v1 --scenarios-dir scenarios/keel-kit-proof \
-    --repeats 1 --limit 2 --max-budget-usd 1.0     # stage 0: price a trial, read no signal
-uv run fathom report keel-kit-ablation-v1          # read observed cost/trial, then decide
-uv run fathom run keel-kit-ablation-v1 --scenarios-dir scenarios/keel-kit-proof \
-    --repeats 1 --max-budget-usd 1.0               # stage 1: balanced 24, resumes the probe
+    --repeats 2 --max-budget-usd 1.0               # PER-SPAWN cap, never a matrix total
 ```
+
+**§1.7 argues that command is not currently worth issuing.** It projects to ≈ $9.8 for a contrast
+that stays statistically unresolved at n = 2, and the pre-registered rules license no decision at
+that N either way.
 
 ### 1.6 The four-arm table, and what each row may be read as
 
-Empty by construction — no trial ran, so every cell is unmeasured. It is published in this shape so
-the run fills it in without re-deciding anything.
+Filled from the 24 stage-1 trials. Each cell is **criterion-instances passed / scored**, with a
+Wilson 95% interval; arms are joined by `config_hash`, not by name. **n = 1 per (arm, task) cell**
+— the intervals are wide because the data is thin, not because the criteria are noisy.
 
 | criterion class | `a-full-014` | `b-vnext-full` | `c-vnext-core` | `d-bare` | what a gap here means |
 |---|---|---|---|---|---|
-| ask/shared | — | — | — | — | instruction-following; identical asks by definition |
-| behaviour, **rubric-stated** (A6/A5/A8/A12) | — | — | — | — | armed vs bare: possession of the answer key. Armed vs armed: the fence is byte-identical, so a null is guaranteed, not measured |
-| behaviour, **unstated** (`criteria_name_runnable_command`, `brief_requirements_covered`) | — | — | — | — | the only criteria no arm's body states; the only uncontaminated armed-vs-bare read this bank has |
-| ask/note-only (**the cut decision**) | — | — | — | — | the only class whose asks differ between B and C — though most of the cut words fall outside every class (§1.2). Pre-satisfied on the repair fixtures, so only the four authoring tasks carry it |
-| integrity (Goodhart modes) — **tripwire, not a rate** | — | — | — | — | binary and per-trial: did any arm forge, self-anchor, edit the tree or delete the defect. Exclude trials with `spec_written` false |
-| cost / trial | — | — | — | — | |
+| ask/shared | 23/28 [.64,.92] | 26/28 [.77,.98] | 25/28 [.73,.96] | 12/28 [.27,.61] | instruction-following; identical asks by definition |
+| behaviour, **rubric-stated** (A6/A5/A8/A12) | 14/18 [.55,.91] | 18/18 [.82,1.00] | 17/18 [.74,.99] | 8/18 [.25,.66] | armed vs bare: possession of the answer key. Armed vs armed: the fence is byte-identical, so a null is guaranteed, not measured |
+| behaviour, **unstated** (`criteria_name_runnable_command`, `brief_requirements_covered`) | 9/12 [.47,.91] | 7/12 [.32,.81] | 10/12 [.55,.95] | 8/12 [.39,.86] | the only criteria no arm's body states; the only uncontaminated armed-vs-bare read this bank has |
+| ask/note-only (**the cut decision**) | 11/18 [.39,.80] | 13/18 [.49,.88] | 10/18 [.34,.75] | 7/18 [.20,.61] | the only class whose asks differ between B and C — though most of the cut words fall outside every class (§1.2). Pre-satisfied on the repair fixtures, so only the four authoring tasks carry it |
+| integrity (Goodhart modes) — **tripwire, not a rate** | **0 trips / 6** | **0 trips / 6** | **0 trips / 6** | **0 trips / 6** | binary and per-trial: did any arm forge, self-anchor, edit the tree or delete the defect. Exclude trials with `spec_written` false |
+| cost / trial (mean, n=6) | $0.5051 | $0.4502 | $0.3807 | $0.2903 | monotone in injected body size |
+
+**The integrity tripwire did not fire, and the artefact that would have made that meaningless did
+not arise.** `spec_written` is true on all 24 trials — including all six `d-bare` trials — so no
+trial was excluded, and the "an arm that writes nothing scores the row perfectly" failure mode of
+rule 4 below never applied. No arm forged a certification, anchored at a file it wrote itself,
+edited the staged tree, or deleted the planted defect.
+
+**Economy by `config_hash`**, the identity the ledger actually keys on:
+
+| arm | `config_hash` (8) | n | total $ | mean $ | sd $ | min $ | max $ | mean turns | mean s | injected words |
+|---|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| `a-full-014` | `5b969f74` | 6 | 3.0306 | 0.5051 | 0.1805 | 0.3112 | 0.7577 | 15.3 | 86.7 | 3,789 |
+| `b-vnext-full` | `bf1470d2` | 6 | 2.7009 | 0.4502 | 0.2092 | 0.2532 | 0.7472 | 14.0 | 95.2 | 2,669 |
+| `c-vnext-core` | `5fc01a0f` | 6 | 2.2841 | 0.3807 | 0.1017 | 0.2517 | 0.4818 | 12.0 | 79.2 | 2,438 |
+| `d-bare` | `8549f027` | 6 | 1.7415 | 0.2903 | 0.0534 | 0.2265 | 0.3447 | 12.0 | 62.1 | 0 |
+| **total** | — | 24 | **9.7572** | 0.4065 | — | — | — | — | — | — |
+
+Four distinct hashes, no resume-key collision, `exit_code = 0` on all 24. Cost is monotone in
+injected body size, which is the one ordering this run establishes cleanly — and it is an
+ordering over *input tokens*, not over value. The B→C saving is **$0.0695/trial (15.4%)**; against
+the note-only gap in §1.7 that is the whole economic case for the cut, and it is small.
 
 Reading rules, corrected. Revision 1 carried one — read the per-criterion table, not the headline —
 and a class definition that was false on inspection.
@@ -312,6 +376,203 @@ kit does), and it has two consequences that are not symmetric between arms. The 
 and the reshape fixes; and the pinned ruler **actively penalises** the two arms whose body
 describes the newer gate (§1.1's A12 range clause). The two halves of this report are independent
 instruments and should stay that way.
+
+### 1.7 The measured contrasts — claims 6 and 7 resolved as far as 24 trials allow
+
+Every contrast below is **paired within a (task, repeat) cell** and read with an exact two-sided
+McNemar test, because only the discordant pairs carry information. Concordant pairs — both arms
+pass, or both fail — are noise-free agreement and contribute nothing to a difference.
+
+#### The pre-registered gates, evaluated before anything is concluded
+
+- **The saturation gate (§1.4, amended form) PASSES.** **5 of 6 tasks** show an *armed* arm failing
+  at least one behaviour or note-only criterion; the threshold is 2, and `d-bare`'s failures were
+  excluded as the rule requires. Only `repair-bijection` shows zero armed failures — and it fails
+  `gate_part_a_passes` and `manifest_is_bijection` in **all four arms**, so it discriminated
+  nothing at all. Stage 2 was licensed by this gate; it was never bought.
+- **The note-only class WAS exercised.** Note-only failures: `a-full-014` 7, `b-vnext-full` 5,
+  `c-vnext-core` 8, `d-bare` 11. So the cut rule's second row — "no arm ever fails a note-only
+  criterion → the class was pre-satisfied; no power; cut nothing" — **does not fire**. This is the
+  one respect in which the run is better than the pessimistic pre-registration expected.
+- **And the exercise test turns out to be much weaker than it reads**, which is a finding about the
+  rule and not about the kit. It is satisfied by a single failure anywhere in the matrix, including
+  on arms and tasks that carry no information about B versus C. Exercise is necessary for power and
+  nowhere near sufficient. This is the same defect as the original saturation gate's (§1.4, defect
+  13): a stop rule satisfiable by an observation the design already calls uninformative. It should
+  be re-registered against *discordant pairs on the deciding contrast*, not against failures.
+
+#### Claim 6 — the B → C cut contrast
+
+| base | `b-vnext-full` | `c-vnext-core` | difference (B − C) | discordant B:C | exact p |
+|---|--:|--:|---|:--:|--:|
+| **note-only, all 6 tasks** (the deciding class) | 13/18 | 10/18 | **+16.7 pp**, 95% CI [−13.8, +43.3] | 4:1 | **0.375** |
+| **note-only, 4 authoring tasks** (§1.3's informative base) | 7/12 | 4/12 | **+25.0 pp**, 95% CI [−13.2, +54.7] | 4:1 | **0.375** |
+| ask/shared (identical asks by definition) | 26/28 | 25/28 | +3.6 pp | 1:0 | 1.000 |
+| behaviour/rubric-stated (byte-identical fence) | 18/18 | 17/18 | +5.6 pp | 1:0 | 1.000 |
+| behaviour/unstated | 7/12 | 10/12 | −25.0 pp (C ahead) | 0:3 | 0.250 |
+
+**§1.3's prediction is confirmed exactly: all five discordant note-only pairs fall on the four
+authoring tasks.** On `repair-bijection` and `repair-ledger-drift` all three scored note-only
+criteria are TRUE in all four arms — the class is pre-satisfied by the fixture and inherited free,
+so those two tasks dilute the base without informing it. And `enforcement_overclaims_absent` is
+scored on **0 of 24 trials**, confirming §1.4: it exists only on the sealed repair task, so the A10
+half of the class rests entirely on the defeatable pinned pre-T1.3 `enforcement_claims_clean`.
+
+**Where this lands against the pre-registered rule.** Row 1 requires C to *match* B; C is
+directionally **worse** on the deciding class, so row 1 does not fire. Row 3 requires B to *beat*
+C; at p = 0.375 that is not established at any conventional level, so row 3 does not fire either.
+The observation falls between two rows, and the rule has no third branch because **no
+non-inferiority margin was ever pre-registered** — neither the plan nor the bank defines what
+"matches" means numerically. Registering one now, after seeing the data, is not available.
+
+**The power statement, which is the part that matters.** Only 5 discordant pairs were realised.
+A paired exact test on 5 discordant pairs caps at **p = 0.0625 even if all five fell one way** —
+so *stage 1 could not have reached p ≤ 0.05 on the cut contrast under any assignment of the pairs
+it actually produced*. Six discordant pairs is the minimum for a 0.05-level read. The read is
+underpowered by construction, not by bad luck, and the 95% CI on the difference spans 57
+percentage points.
+
+> **Claim 6 is NOT-PROVEN: measured, underpowered, and directionally against the cut.** It is no
+> longer *not-measurable* — the instrument produced data and the deciding class was exercised. But
+> the cut is **not licensed**, and it is not licensed for the strongest of the available reasons:
+> the point estimate runs the wrong way. The core arm is worse than the full arm on the only class
+> that can decide, by 16.7 pp overall and 25.0 pp on the informative base. Under the owner's
+> standing rule a cut requires the instrument to have had the power to see value and to have seen
+> none; here it lacked the power *and* saw a gap in favour of keeping the prose — while a
+> non-deciding class saw a gap the other way, also without power (below).
+
+**One pre-registered signal points the other way, and it is reported as such.** On
+`behaviour/unstated` — `criteria_name_runnable_command` and `brief_requirements_covered`, the two
+criteria no arm's body states — **`c-vnext-core` is ahead of `b-vnext-full`**, 10/12 against 7/12,
+discordance 0:3 toward C, p = 0.250. Both criteria contribute
+(`criteria_name_runnable_command` 4/6 vs 2/6; `brief_requirements_covered` 6/6 vs 5/6). The plan
+pre-registered exactly this shape and its reading: a full arm losing on `brief_requirements_covered`
+is "a3's over-specification penalty reproduced inside this suite — a first-class result that
+**strengthens the cut** and is reported as such" (plan §9.6, row 3). It is recorded here to that
+standard rather than omitted because it is inconvenient for the verdict.
+
+It does not change the verdict, for two stated reasons. The cut rule decides on the note-only class
+and only on that class (§1.6 rule 3), because that is the only class whose *asks* differ between B
+and C; a difference on unstated behaviour is a difference in what the arms produced, not in what
+they were told, and at 12 instances with 3 discordant pairs it caps at p = 0.250 — below even the
+5-pair ceiling that already disqualifies the note-only read. So stage 1 ends with **two
+underpowered signals in opposite directions**: the deciding class favours keeping the prose, a
+non-deciding class favours cutting it, and neither separates from noise. That is a description of
+an instrument without power, not a tie to be broken by preference.
+
+Three caveats survive from the pre-registration and must travel with any later reading. **(1)** The
+instrument can see only 93 of the 231 cut words (§1.2), so even a decisive result would concern
+40.3% of the cut. **(2)** K = 8 briefs sit on one byte-identical `tinyetl` tree, so the effective n
+is below the trial count. **(3)** n = 1 per cell means every rate above is a single observation.
+
+#### Claim 7 — the A → B relocation contrast
+
+Claim 7's own evidence column pre-registered the repair: *"the pair would have to be re-cut, **or
+the two criteria excluded**, before it could answer this"*. Excluding `gate_part_a_passes` and
+`ledger_rows_anchor` — the two the mutation demonstration in §1.1 showed the pinned pre-T1.4 oracle
+penalises on B and C — is therefore a licensed move, not a post-hoc one.
+
+| class | A_only | B_only | exact p | with the two penalised criteria excluded |
+|---|:--:|:--:|--:|---|
+| ask/shared | 0 | 3 | 0.250 | **0:0 — a perfect tie, zero discordant pairs** |
+| behaviour/rubric-stated | 0 | 4 | 0.125 | 0:3, p = 0.250 |
+| behaviour/unstated | 2 | 0 | 0.500 | unchanged (2:0, p = 0.500) |
+| ask/note-only | 1 | 3 | 0.625 | unchanged (1:3, p = 0.625) |
+| integrity | 0 | 0 | — | unchanged — no trips in either arm |
+
+**There is no class in which `a-full-014` beats `b-vnext-full` on shared or rubric-stated
+criteria, before or after the exclusion.** Across all classes the totals are A_only 3, B_only 6.
+The relocation is not observed to have cost anything; if anything the post-T0.5 body is
+directionally ahead.
+
+**And the pre-registered confound did not materialise — check the sign.** §1.1 predicted the pinned
+oracle would penalise **B and C** on `gate_part_a_passes` and `ledger_rows_anchor`. Observed, on
+`repair-ledger-drift` — the one task that scores `ledger_rows_anchor` — it is **`a-full-014` that
+fails both**, while B, C and even D pass. There are **zero observed instances** of the predicted
+penalty falling on B or C. So the confound is real as a mechanism (§1.1 demonstrated it by
+mutation) but had no realised effect in this data, and excluding those two criteria *removes
+evidence favourable to B*. The exclusion is conservative against the direction actually observed,
+and the conclusion is unchanged either way — which is the strongest form this pair can support.
+
+> **Claim 7 is NOT-PROVEN: measured, no cost detected, and underpowered for the equivalence it
+> asserts.** It moves off *not-measurable* — the pair is now readable, because the demonstrated
+> confound is both neutralisable by the pre-registered exclusion and unobserved in the data. What
+> stops it short of proven is arithmetic, not confounding: "cost nothing" is an equivalence claim,
+> the best paired p in any class is 0.250, and no non-inferiority margin was registered. The pair
+> also remains structurally two edits (§1.1) — the exclusion answers the *demonstrated* second
+> difference, and cannot rule out undemonstrated ones.
+
+#### What the armed-versus-bare floor shows, and the one place it does not
+
+`c-vnext-core` → `d-bare` is the only contrast in this run that separates from noise:
+
+| class | C_only | D_only | exact p |
+|---|:--:|:--:|--:|
+| ask/shared | 13 | 0 | **0.00024** |
+| behaviour/rubric-stated | 9 | 0 | **0.0039** |
+| behaviour/unstated | 2 | 0 | 0.500 |
+| ask/note-only | 4 | 1 | 0.375 |
+
+Both significant results sit in classes the report has already disqualified as measures of value:
+`ask/shared` is identical asks by definition, and `behaviour/rubric-stated` is possession of the
+grader's answer key (§1.6 rule 1). **On `behaviour/unstated` — the only two criteria no arm's body
+states, and by the bank's own account the only uncontaminated armed-versus-bare read it has — the
+gap is 2:0, p = 0.500: not detectable.** The measured armed-versus-bare advantage therefore lies
+entirely inside the contaminated classes. That does not show the kit is worthless; it shows this
+bank cannot tell craft value from rubric possession, exactly as §1.6 rule 2 pre-registered when it
+recorded the missing *armed but ruler-blind* arm. At n = 1 across 12 instances the unstated class
+has almost no power, so this is an unmeasured axis rather than a null.
+
+#### The scorecard's headline is not this bank's gate — do not quote it
+
+`fathom report` renders a headline pass rate of `a-full-014` **0/6**, and 1/6 for each of the other
+three arms, which reads as "the full kit is the worst arm and the bare arm ties the armed ones".
+That is an artefact of the reporting layer, not a result. `src/fathom/report.py:39` `_is_pass`
+requires **every** criterion to be true; this bank declares a narrower correctness gate in each
+task's `profile.json` — `["spec_written", "gate_part_a_passes"]` on all 8 tasks — and the report
+does not read it. On the bank's own gate:
+
+| arm | bank gate (`spec_written` ∧ `gate_part_a_passes`) | scorecard headline (all criteria) |
+|---|--:|--:|
+| `a-full-014` | **2/6** | 0/6 |
+| `b-vnext-full` | **5/6** | 1/6 |
+| `c-vnext-core` | **4/6** | 1/6 |
+| `d-bare` | **1/6** | 1/6 |
+
+The two columns disagree about the ordering of every arm. Paired on the bank gate across the 6
+tasks: A→B 0:3 (p = 0.250), B→C 1:0 (p = 1.000), C→D 3:0 (p = 0.250) — so **even the
+armed-versus-bare gate contrast does not separate at 6 tasks**, which is the plainest available
+statement of how thin this stage is. The B→C direction is again toward B, consistent with §1.7's
+note-only read and equally undetectable.
+
+Recorded as defect 19 in Part 5. `d-bare`'s one gate pass is `repair-ledger-drift`, where the
+fixture's defect is narrow enough that an unarmed arm can repair it; `repair-bijection` fails the
+gate in all four arms and discriminates nothing.
+
+#### What more N would buy, and why stage 2 alone does not settle it
+
+Projecting the observed rates forward (18 note-only instances per arm per repeat, 5 discordant at
+4:1):
+
+| repeats | trials | ≈ cost | discordant | exact p | 95% CI half-width |
+|--:|--:|--:|:--:|--:|--:|
+| 1 (**bought**) | 24 | $9.76 | 4:1 | 0.375 | 0.286 |
+| 2 (stage 2 as planned) | 48 | $19.51 | 8:2 | **0.109** | 0.210 |
+| 3 | 72 | $29.27 | 12:3 | **0.035** | 0.174 |
+| 5 | 120 | $48.78 | 20:5 | 0.004 | 0.136 |
+
+**Stage 2 as designed does not resolve claim 6.** At n = 2 the projected p is 0.109 and the cut
+stays unlicensed on the same rule that leaves it unlicensed now — $9.76 for no decision. Three
+repeats is the first point where the contrast would separate, and it would separate in the
+direction of **falsifying** the cut, not licensing it. Licensing requires bounding the gap near
+zero: a ±0.10 non-inferiority margin needs ≈ 10 repeats (240 trials, ≈ $98) and a ±0.05 margin
+≈ 39 repeats (936 trials, ≈ $380) — and even then it would bound only the 40.3% of the cut the
+instrument can see. **The honest conclusion is that this bank cannot license this cut at any
+budget the program would sanction, and the limit is coverage (§1.2), not sample size.**
+
+The sealed holdout stays sealed. It is pre-registered as underpowered for this contrast (§1.4), it
+is a repeat measurement over the same `tinyetl` tree rather than an independent sample, and
+spending it here would burn it for a decision it cannot make.
 
 ---
 
@@ -566,8 +827,15 @@ All under the session scratchpad, alongside the original census's:
 | `kg_regress.py` → `regress.json` | reproduction check, regression table, warning deltas |
 | `kg_control2.py` → `control2.json` | **new in revision 2** — the 44-doc control arm under both gates (§2.5) |
 | `kk_material.py` → `kk_material.json` | **new in revision 2** — per-variant criteria states split into absent / fired, the measurement behind §1.3 |
+| `kk_verdict.py` | **new in revision 3** — the ledger aggregation behind §1.6 and §1.7: economy and criteria by `config_hash`, class totals with Wilson intervals, paired McNemar contrasts, the saturation gate, the integrity tripwire |
+| `kk_power.py` | **new in revision 3** — the power arithmetic behind §1.7: the discordant-pair ceiling, the repeats projection, and the N required for a non-inferiority bound |
 | `keel_base/` | `src/keel` exported at `d99523d`, the baseline gate |
 | `corpus_integrity.json` | per-spec line counts against the census's record |
+
+The measurement itself is not in the scratchpad and does not depend on it:
+`ledger/keel-kit-ablation-v1.jsonl` is committed with this revision and is the append-only record
+of all 24 trials. Both scripts read it and nothing else, so every number in §1.6 and §1.7
+regenerates from the repository alone.
 
 ---
 
@@ -582,13 +850,27 @@ All under the session scratchpad, alongside the original census's:
 | 3b | That fire is a true positive, i.e. A10 is a check with demonstrated value | **NOT-PROVEN** | n = 1 spec (3 cells of one observation), adjudicated by the agent that authored the widening with no blind check. The control arm cannot bound the false-positive rate because no control document has an Enforcement-status table (§2.5); what it does exclude is a widening that fires on ordinary prose. A10 stays KEEP-and-repaired, not promoted |
 | 4 | W1's non-adoption is fixed at the authoring surface | **PROVEN** | W1 material 0 → 19 specs; 0 → 57 warnings, one message form ("this spec is unstamped"). The census's "dead by non-adoption" no longer holds. The control arm shows the same widening at 0 → 44 documents, which is the intended reach and not a false positive |
 | 5 | Cause grouping fixes A6/A12 multiplicity (the NOISY charge) | **NOT-PROVEN** | 146 violations → 141 causes, a 3.4% reduction. On the corpus's dominant case (spec 19) 117 violations collapse to 3 grouped causes plus 114 with no cause key. The grouping covers `out-of-range`/`missing`/`drift-N` and not the snippet-mismatch class that dominates |
-| 6 | The kit's **core** is sufficient — the cut prose is unnecessary | **NOT-MEASURABLE (blocked, and narrower than it looks)** | No trial ran; $0.00 spent. Blocked on an orphaned serialization lock (§1.5). Independently of the lock, the instrument can only see 93 of the 231 cut words (§1.2), and only through the four authoring tasks (§1.3) |
-| 7 | T0.5's relocation cost nothing | **NOT-MEASURABLE (blocked and confounded)** | Same blocker, plus §1.1: `a-full-014` → `b-vnext-full` is not one edit. B's body describes the post-T1.4 gate while the oracle is pinned pre-T1.4, and an arm that follows B's own instruction on a fold-ledger range cell loses `gate_part_a_passes` and `ledger_rows_anchor`. The pair would have to be re-cut, or the two criteria excluded, before it could answer this |
+| 6 | The kit's **core** is sufficient — the cut prose is unnecessary | **NOT-PROVEN (measured, underpowered, and directionally against)** | 24 trials, $9.7572, n = 1 per (arm, task) cell. The deciding note-only class **was** exercised (5/6 tasks show an armed arm failing a behaviour or note-only criterion), so this is no longer *not-measurable*. But `c-vnext-core` is **worse** than `b-vnext-full`: 10/18 vs 13/18 overall (−16.7 pp, 95% CI [−43.3, +13.8]) and 4/12 vs 7/12 on the four authoring tasks that carry the class (−25.0 pp, CI [−54.7, +13.2]); paired discordance 4:1 toward B, exact p = 0.375. **Only 5 discordant pairs were realised, so p ≤ 0.05 was unreachable under any assignment** — 6 is the minimum. No non-inferiority margin was ever pre-registered, so "matches" has no numeric meaning to fall back on. One pre-registered signal points the other way and is reported to the plan's own standard: on `behaviour/unstated` the core arm is *ahead*, 10/12 vs 7/12, discordance 0:3, p = 0.250 — the over-specification penalty of plan §9.6 row 3. It is not a deciding class, and at 3 discordant pairs it is weaker still. Coverage caps everything independently: 93 of 231 cut words visible (§1.2), on 4 tasks (§1.3), with `enforcement_overclaims_absent` scored on 0 of 24 trials (§1.4) |
+| 7 | T0.5's relocation cost nothing | **NOT-PROVEN (measured, no cost detected, underpowered for equivalence)** | Off *not-measurable*: §1.1's confound is neutralisable by the exclusion claim 7 itself pre-registered, and it **did not materialise** — the pinned oracle was predicted to penalise B/C on `gate_part_a_passes` and `ledger_rows_anchor`, but on `repair-ledger-drift` it is `a-full-014` that fails both while B, C and D pass; **zero observed instances** of the predicted penalty. With those two criteria excluded, `a-full-014` beats `b-vnext-full` on **no** shared or rubric-stated criterion (shared ties 0:0; rubric-stated 0:3 against A, p = 0.250); totals across all classes A_only 3, B_only 6. So no cost is observed and the exclusion is conservative against the direction seen. What stops it short of proven is arithmetic — best paired p in any class is 0.250, "cost nothing" is an equivalence claim, no margin was registered — and the pair is still structurally two edits, so undemonstrated second differences are not ruled out |
 
-**Nothing is cut on this evidence.** Claims 6 and 7 are unmeasured, not null; and per the standing
-rule a cut requires the instrument to have had the power to see value and to have seen none.
+**Nothing is cut on this evidence.** Claims 6 and 7 are now *measured and not-proven* rather than
+unmeasured — a real movement, and in claim 6's case a movement **away** from the cut, since the
+point estimate favours keeping the prose. Per the standing rule a cut requires the instrument to
+have had the power to see value and to have seen none; here it had neither. §1.7 shows the gap
+cannot be closed by buying more of this bank: stage 2 projects to p = 0.109, and a ±0.10
+non-inferiority bound would cost ≈ $98 to establish something about 40.3% of the cut.
 Claim 5 is a named, unmet improvement rather than a defect — the reshaped gate is no worse than the
 one it replaces on every axis measured here, and better on W1's reach and A10's exposure.
+
+**One measured result that belongs in the record even though no claim asked for it.** The
+armed-versus-bare floor separates decisively on `ask/shared` (13:0, p = 0.00024) and
+`behaviour/rubric-stated` (9:0, p = 0.0039) — and **not** on `behaviour/unstated` (2:0, p = 0.500),
+the only class this bank holds free of rubric contamination. The kit's measured advantage over
+nothing therefore sits entirely in classes the report already disqualified as measures of value.
+At 12 instances and n = 1 the unstated class has almost no power, so this is an **unmeasured** axis
+rather than a null — but it is the axis that would have to be measured for any claim that the kit
+helps an author rather than teaching one the grader's rubric, and building the *armed but
+ruler-blind* arm (§1.6 rule 2) is the only way to get it.
 
 ---
 
@@ -620,3 +902,92 @@ instrument: the bank has no *armed but ruler-blind* arm (§1.6 rule 2), so craft
 rubric possession cannot be separated at any n. Two others are repaired only as far as disclosure
 allows — the A→B pair stays confounded until the arms are re-cut (defect 6), and the holdout stays
 a repeat measurement over the same tree (defect 14).
+
+---
+
+## Part 5 — what revision 3 adds, and what stays unlicensed
+
+Revision 3 changes no method and withdraws no rule. It spends the pre-registered instrument,
+reports what it produced, and applies the rules that were already written down.
+
+| what | where |
+|---|---|
+| Stage 1 bought and read — 24 trials, $9.7572, n = 1 per (arm, task) cell | §1.6, §1.7 |
+| The four-arm table filled in, plus economy by `config_hash` | §1.6 |
+| The saturation gate evaluated: **5 of 6 tasks**, threshold 2 — passes | §1.7 |
+| The note-only class shown to have been **exercised**, so the "no power, pre-satisfied" branch does not fire | §1.7 |
+| Claim 6 resolved: NOT-MEASURABLE → **NOT-PROVEN**, directionally against the cut | Part 3 |
+| Claim 7 resolved: NOT-MEASURABLE → **NOT-PROVEN**; the §1.1 confound neutralised and shown unobserved | Part 3, §1.7 |
+| §1.3's prediction confirmed: all 5 discordant note-only pairs fall on the 4 authoring tasks | §1.7 |
+| §1.4's warning confirmed: `enforcement_overclaims_absent` scored on 0 of 24 trials | §1.7 |
+| Integrity tripwire read with no artefact: `spec_written` true on all 24, so 0 trials excluded and 0 trips | §1.6 |
+| The scorecard headline shown to disagree with the bank's declared gate on every arm | §1.7, defect 19 |
+| The published reading bound to the ledger by 11 guards, so it cannot go stale silently | `tests/test_keel_kit_ablation_ledger.py` |
+
+`tests/test_keel_kit_ablation_ledger.py` pins what revision 3 read: 24 trials, one repeat, a
+balanced matrix, an unspent holdout, four distinct `config_hash` values, $9.7572, the note-only
+totals, the 4:1 discordance, and the untripped integrity row. It is a guard on a *published claim*
+rather than on behaviour, and it is **designed to fail the day stage 2 lands** — new trials oblige
+a new revision rather than silently improving this one. Its discordance assertion carries the
+threshold explicitly: fewer than 6 discordant pairs means the cut contrast is still unreadable.
+
+Two housekeeping notes, so neither is left in a commit message. `scenarios/keel-kit-baseline/`
+(`a-full.toml`, `c-bare.toml`) is a **superseded two-arm draft** that predates the four-arm design
+and produced no trial; it is deliberately **not committed**, because a third scenario directory
+whose arms share names with `scenarios/keel-kit/`'s is a `--scenarios-dir` trap and nothing in the
+ledger refers to it. And `report/scorecard-keel-kit-ablation-v1.md` stays gitignored and
+regenerable, as the repository convention requires — the ledger is the record.
+
+### Four defects this revision records rather than repairs
+
+16. **The cut rule's "exercised" condition is nearly vacuous.** It is satisfied by a single
+    note-only failure anywhere in the matrix — including on `d-bare`, and on tasks the design
+    already calls uninformative. It passed here while the deciding contrast realised only 5
+    discordant pairs, which caps attainable evidence at p = 0.0625. This is defect 13's shape
+    recurring one level up: an anti-ceiling gate that measures the wrong quantity. The repair is to
+    re-register it against **discordant pairs on the deciding contrast**, with a threshold of at
+    least 6, before any further stage of this bank is bought.
+17. **No non-inferiority margin was ever pre-registered.** The cut rule's rows turn on "matches"
+    and "beats" with no numeric definition, so an observation that falls between them — which is
+    what arrived — has no pre-registered home. A margin cannot be chosen now without choosing it
+    against the data. Any future cut-licensing bank must register its margin with its arms.
+18. **The bank cannot license this cut at a sanctionable budget.** §1.7's projection: ±0.10
+    non-inferiority needs ≈ 240 trials (≈ $98), ±0.05 needs ≈ 936 (≈ $380), and either would bound
+    only the 40.3% of the cut any criterion can see (§1.2). The binding limit is **coverage**, not
+    sample size, and no amount of spend moves it.
+19. **`fathom report`'s headline pass rate ignores the bank's declared correctness gate.**
+    `src/fathom/report.py:39` `_is_pass` requires every criterion to be true; each task in this
+    bank declares `gate = ["spec_written", "gate_part_a_passes"]` in its `profile.json`, and the
+    verifier's own exit code honours it (`keelgate_verify.py:611`). The two disagree about the
+    ordering of every arm here — 2/5/4/1 on the bank gate against 0/1/1/1 on the headline — so the
+    headline would have been read as "the full kit is worst and bare ties the armed arms". This is
+    a fathom defect, not a keel one, and it is filed against fathom rather than repaired in this
+    revision because changing `_is_pass` re-renders every historical scorecard in the repository
+    and belongs in its own change with its own regression pass over the existing ledgers. Until
+    then, §1.7's table is the gate reading for this bank. The existing caveat in `CLAUDE.md` —
+    read the per-criterion table, not the headline — is the right instruction for the wrong
+    reason: the headline is not merely coarse, it answers a different question than the bank asked.
+
+### What stays unlicensed, and why
+
+- **The 231-word core cut does not ship.** Claim 6 is not-proven and the point estimate favours
+  keeping the prose. `keel`'s `src/keel/templates/core/` bodies therefore stay **candidates**:
+  `list_templates()` globs `templates/*.md` non-recursively, so `keel init` does not reach `core/`,
+  and `tests/test_core_variants.py` pins that. **No change was made to keel on this evidence** —
+  the correct action under the standing rule is the null action, and the status quo already is it.
+- **T0.5's relocation is not retroactively certified.** Claim 7 not-proven means no cost was
+  detected, not that none exists. The relocation stays shipped — it already is — but the report
+  does not convert an undetected cost into a measured absence.
+- **The sealed holdout stays sealed** (§1.4, §1.7).
+- **The 24 unbought cells stay unbought.** Stage 2 projects to p = 0.109 and licenses no decision.
+  Buying it would satisfy the plan's staging without advancing any claim; the pre-registered
+  budget rail permits it, and the pre-registered *decision* rules give it nothing to decide.
+
+### The one instrument change worth making before more spend
+
+Building the **armed but ruler-blind** arm (§1.6 rule 2) — the kit with the reference fence
+removed. §1.7's armed-versus-bare result is the argument: the kit's measured advantage over
+nothing lies entirely in `ask/shared` and `behaviour/rubric-stated`, and is undetectable on the
+two criteria no body states. Until an arm exists that holds the craft guidance without the answer
+key, this bank measures rubric transmission and cannot say whether the kit helps an author. That
+is a larger and more useful question than the 231 words, and it is unmeasured rather than null.
