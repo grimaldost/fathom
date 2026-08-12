@@ -1,0 +1,36 @@
+# Arm C — the candidate core kit (2,438 w). THE arm this proof run exists to add.
+#
+# Body: `keel/src/keel/templates/core/{spec-template,definition-of-ready}.md` from
+# `feat/gate-empiricism`, assembled by the identical recipe. Those files are candidates, not
+# templates — `keel init` does not reach `core/` (non-recursive glob, pinned by
+# `tests/test_core_variants.py`).
+#
+# The property that makes a gap attributable: every non-blank line of this body appears, in order,
+# in arm B's body. Nothing is reworded and nothing is added, so a B→C gap is caused by the removed
+# prose and not by a rewrite. Asserted mechanically in `tests/test_keel_kit_proof_assets.py`.
+#
+# What C drops relative to B: the A10 enforcement-claim note, the A9 reuse-notation note and the
+# A11 anchor-range note from the spec template; and the DoR Part-B items beyond the certification
+# requirement and the operator close. The fenced reference block survives intact in C, so the
+# A9/A10/A11 contrast is worked-note versus one-line entry, not presence versus silence — which is
+# exactly what the verifier's `ask/note-only` class is for.
+#
+# Pre-registered power warning, from the implementer of the core bodies: the design projected a
+# 3,740 vs 1,970 contrast and the arms shipped at 2,669 vs 2,438 — a 231-word, 8.7% delta. Most of
+# the intended reduction left through T0.5's relocations instead. If B and C both pass everything,
+# that is a ceiling and the honest report is NO POWER, not a null.
+name = "c-vnext-core"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[context]
+inject = "assets/kit-vnext-core.md"
+
+[limits]
+trial_timeout_s = 900

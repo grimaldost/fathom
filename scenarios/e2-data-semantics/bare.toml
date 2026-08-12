@@ -1,0 +1,16 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+# The never-run baseline for the data-engineering discipline surface: the same
+# model, effort, tools and limits as every other arm, with no surface at all.
+# "bare" is the report's pairwise anchor.
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Skill"]
+
+[limits]
+trial_timeout_s = 900

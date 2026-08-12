@@ -1,0 +1,6 @@
+product_id,category,effective_from
+P1,electronics,2025-01-01
+P2,garden,2025-01-01
+P2,home,2026-02-01
+P3,home,2025-01-01
+P4,electronics,2025-01-01

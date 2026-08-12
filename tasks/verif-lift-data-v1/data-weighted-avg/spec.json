@@ -1,0 +1,58 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.wavg",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "value": 10,
+            "weight": 0
+          }
+        ]
+      ],
+      null
+    ],
+    [
+      [
+        [
+          {
+            "value": 5,
+            "weight": 0
+          },
+          {
+            "value": 7,
+            "weight": 0
+          }
+        ]
+      ],
+      null
+    ]
+  ],
+  "func": "weighted_avg",
+  "module_filename": "wavg.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "value": 4,
+            "weight": 2
+          },
+          {
+            "value": 6,
+            "weight": -2
+          }
+        ]
+      ],
+      null
+    ]
+  ]
+}

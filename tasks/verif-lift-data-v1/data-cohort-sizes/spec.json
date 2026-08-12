@@ -1,0 +1,61 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.cohort",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "cohort": "c1",
+            "id": 1
+          }
+        ],
+        [
+          {
+            "user_id": 1
+          },
+          {
+            "user_id": 1
+          }
+        ]
+      ],
+      {
+        "c1": 1
+      }
+    ]
+  ],
+  "func": "cohort_sizes",
+  "module_filename": "cohort.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "cohort": "c1",
+            "id": 1
+          },
+          {
+            "cohort": "c2",
+            "id": 2
+          }
+        ],
+        [
+          {
+            "user_id": 1
+          }
+        ]
+      ],
+      {
+        "c1": 1,
+        "c2": 0
+      }
+    ]
+  ]
+}

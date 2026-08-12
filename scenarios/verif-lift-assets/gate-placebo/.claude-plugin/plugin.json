@@ -1,0 +1,5 @@
+{
+  "name": "subagent-placebo-gate",
+  "version": "0.0.1",
+  "description": "Shape-matched control for the SubagentStop gate: same mechanism and same one extra turn, a reason that names no verification act."
+}

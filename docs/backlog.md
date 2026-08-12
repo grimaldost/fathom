@@ -18,6 +18,9 @@ Compiled 2026-08-11 from four inputs, tagged per item:
   keel, convoy, mantis-research). It adds notes to existing items and two new rows; it reorders nothing.
   Where it disagrees with an item's standing argument, the note sits beside that argument rather than
   replacing it.
+- **[wave-2 run] / [wave-3 run]** — defects the 2026-08-11 and 2026-08-12 measurement waves walked
+  into in field use, added after this file was compiled. They are not proposals read out of a corpus:
+  each names the run that paid for it, so the evidence line is an observation rather than a citation.
 
 Item shape: a stable ID, a one-line claim, the cause and its evidence, the proposed change, an effort
 estimate (**S** — one focused change; **M** — a small series with tests; **L** — a design decision plus
@@ -282,6 +285,35 @@ state.** *(M · [triage] T2a + [review] + [research])*
   then the `e1-*` trials, then the rest. None needs a re-run, and each closes a live dependency rather
   than tidying the index.
 
+**FATH-B51 — The ledger undercounts economy on the delegated path, and the published ×3.81 correction
+is refuted as stated, so every delegated cost figure is a floor of unknown depth.**
+*(M · [verif-lift closure])*
+
+- **Cause / evidence:** on the delegated path the ledger records the parent's final iteration and omits
+  the subagent's consumption outright. `verif-lift-trunc-v1` `bare` runs average **1.0 turns, 331 output
+  tokens and 5.7 s** while scoring 10/10 on `spec_met` for a code-fix task — work that cannot have been
+  done in 331 parent tokens. The undercount is therefore real. **Its published explanation is not.** The
+  ×3.81 multiplier was justified as: every arm delegates, so each stream carries two `result` events
+  (parent + subagent sidechain), and `parse_stream` keeps the last. Measured against the **1,072** saved
+  streams, that mechanism fails three ways: all 15 opus streams delegate (`Agent` tool 15/15) and each
+  carries **exactly one** `result` event; across the 959 plugin-mounted streams the second event tracks
+  the **stop hook**, not the subagent (fired + 2nd: 164; silent + 1st: 794; silent + 2nd: 1; fired +
+  1st: **0**); and where two events do exist the ratio runs **1.16–2.02, median 1.49**, with **0 of 232**
+  reaching 3.81. So ×3.81 cannot have come from this mechanism on any stream in the corpus. The cost of
+  leaving it: a per-program budget ceiling is computed from ledger sums, and the grid this wave priced
+  came to ≈$94 in floor units against ≈$223 corrected — the difference between fitting a $120 ceiling
+  and overrunning it by 86%.
+- **Change:** re-derive the delegated-path correction from the actual mechanism — sum the subagent
+  sidechain's usage into the trial's economy at parse time rather than post-hoc multiplying — and make
+  `parse_stream` state which events it folded, so the figure is auditable instead of asserted. Until it
+  is re-derived: **keep ×3.81 as the budgeting unit** (it over-reserves rather than overspends, so it is
+  conservative in the safe direction) and **stop publishing it as a measured multiplier**. Report every
+  delegated economy figure as a floor, and make no arm-to-arm economy claim from these figures at all —
+  the bias is not guaranteed common-mode across arms.
+- **Gate:** independent of the matrix; it is instrument work on saved streams and costs no spawns.
+  Pairs with FATH-B01's arming verification, which is the same class of defect — a declared property of a
+  run that nothing checks.
+
 ---
 
 ## Next
@@ -544,6 +576,159 @@ suffixes.** *(M · [triage] T15a + [research])*
   against a real instrument instead of waiting on one. FATH-B18's task tags are the natural carrier if
   the prompt sequence needs to vary per task.
 
+### Wave-3 field defects (2026-08-12)
+
+Seven instrument defects the 2026-08-12 measurement waves hit while trying to spend. They sit at the
+end of **Next** rather than in **Later** because each has an observed price attached this week, not an
+argued one. Three already have a home and are recorded here as pointers rather than as second rows —
+duplicating a row is how a backlog stops being the backlog of record:
+
+- **Economy pooled by arm name across `config_hash`es** — **FATH-B49**, extended above with the
+  general statement (a re-run against changed injected content is the shape that fires it) and the
+  rule that follows from it (key on the hash; render the name as a label).
+- **The delegated path undercounts economy** — **FATH-B51**, arriving with the `verif-lift` closure
+  branch, which measured it against the saved streams. The finding to carry forward, because it is
+  the part that is easiest to lose in transit: the undercount is **real** — a trial that delegates
+  through the Task tool records only the parent's final iteration, and the subagent's consumption is
+  absent from the ledger entirely — but the mechanism first proposed for it (two `result` events per
+  stream, `parse_stream` keeping the last) **does not reproduce**. Measured on the saved streams, a
+  second `result` appears only where a stop hook adds a turn, at **1.00–1.44×**, nowhere near the
+  **×3.81** correction in use. So the undercount is real by a route not yet identified, and ×3.81 is
+  usable **only as a conservative budgeting unit** — it over-reserves rather than overspends — and
+  **must not be published as a measured multiplier**. The ID is reserved here so it is not reused
+  before that branch lands.
+- **`--max-budget-usd` is a per-spawn cap, not a matrix total** — **FATH-B04**, whose (b) already
+  names it and whose text a pending branch is amending, so the wave-3 evidence is recorded here
+  rather than as a conflicting edit to that row. The arithmetic is the part worth keeping: the flag
+  reads as a program rail and is not one, so **an operator intending a $30 program rail licenses
+  roughly $1,440 across a 48-trial matrix**. The failure is not that the guard is weak; it is that
+  the guard's *name* asserts a guarantee it does not make, which is why operators keep re-deriving it
+  one wave at a time. Compounding it, the printed dry-run "ceiling" was the conservative flat
+  $2/trial figure, **decoupled from the flag entirely** — so the two numbers an operator reads before
+  spending disagreed, and neither bounded the run. Direction: a genuine program-level rail
+  (`--max-run-usd`, halting on cumulative `cost_usd_est`) **or** a rename that says what the flag
+  does (`--max-spawn-usd`), with the ceiling computed from the cap actually in force. The rename is
+  worth shipping even if the rail is not — an honest name costs nothing and removes the whole class.
+
+**FATH-B52 — `verify-arming` reports a correctly armed MCP arm as unarmed, and the way out it pushes
+the operator toward is the unsafe one.** *(S · [wave-3 run])*
+
+- **Cause / evidence:** the probe reads the CLI's **init event** and checks each declared server's
+  status against `HEALTHY_MCP_STATUSES` (`arming.py`). That event is emitted at session start. A
+  stdio MCP server that needs **6–11 s to connect under load** has not connected when the snapshot is
+  taken, so the one sample the check looks at shows it unhealthy — and an arm whose server does come
+  up, and whose tools the model then really calls, fails the pre-flight and the run refuses with
+  `EXIT_UNARMED`. Observed directly this wave: a mount that handshook healthy in 2.4 s and had the
+  model genuinely call its tool on 4 of 4 live spawns still read NOT ARMED, and the same probe listed
+  the ambient MCP tools on one sampling and `[]` minutes later — the timing dependency stated outright.
+- **Why this is worse than a plain gap.** The pre-flight is the last gate before a paid matrix, so a
+  false negative presents to the operator as "the instrument refuses to start", with exactly one
+  documented remedy: `--skip-arming-check`. The defect's own pressure therefore points at **disabling
+  the check FATH-B01 was built to add**, on MCP-served arms — the arms where an unarmed run is
+  hardest to notice afterwards. A gate that fails safe costs time; a gate that fails toward its own
+  blanket override is a hazard, and it should be priced as one.
+- **Change:** stop treating the init event as the whole observation. Take the server's **last-seen**
+  status in the probe stream (or a bounded poll) and pass when it ever reached a healthy state,
+  keeping the init sample as the fast path. Stronger still, corroborate at the tool level with the
+  helper already in tree: `tools_served_by` plus one observed `mcp__*` `tool_use` with no
+  permission-denied result settles the question with no timing assumption at all. Whichever form,
+  the refusal must name the server and its last-seen status, and must offer a scoped wait
+  (`--arming-mcp-timeout S`) **before** it offers the blanket flag.
+
+**FATH-B53 — Nothing in fathom serializes paid runs, so mutual exclusion is an ad-hoc caller
+convention — and it deadlocked three times in one day.** *(M · [wave-3 run])*
+
+- **Cause / evidence:** a paid matrix consumes one seat's credential and rate budget, so two
+  concurrent runs on the same seat interfere. fathom ships no lock; serialization is delegated
+  entirely to whatever convention each caller invents. With several concurrent sessions on one seat
+  that produced **three deadlocks in a single day** — **twice** from a holder that had already
+  finished spending and never released, and **once** from a process that had died still holding the
+  claim. The cost is not the waiting. A session blocked on a phantom holder either stalls a whole
+  wave or talks itself into overriding, and **neither is decidable from the artifacts**, because
+  nothing in the claim records whether its holder is alive. Two of this wave's programs reached their
+  paid window, found the lock held, and bought nothing.
+- **Change:** a native lock owned by fathom rather than by its callers. convoy ships the precedent
+  (`.git/convoy-run.lock`), so the shape is already argued next door; what it needs here are the two
+  properties the ad-hoc conventions lack. **(a) A heartbeat** written by the holder, so staleness is
+  decidable from the lock's own timestamps against a stated horizon instead of by guessing at process
+  tables — this is the half the three observed deadlocks name directly, since a finished or dead
+  holder then expires rather than blocking forever. **(b) A FIFO ticket directory** rather than a
+  single flag, so the release-to-relock window stops being a race that the politest poller always
+  loses. Home: the run path in `cli.py`, released in a `finally` that survives the Windows
+  process-tree teardown this repo already does where it spawns.
+
+**FATH-B54 — A gate command is handed to the shell verbatim with no path validation, so a committed
+placeholder silently degraded an armed arm to the ungated one.** *(S · [wave-3 run])*
+
+- **Cause / evidence:** gate commands are strings executed from the workspace cwd, and nothing checks
+  that the paths they name exist. A committed scenario shipped
+  `python /path/to/fathom/tasks/.../type_probe.py .` — a **literal editing placeholder** that was
+  never filled in. The command could not find its script, the gate contributed nothing, and the arm
+  ran as the ungated arm under the gated arm's name. It scored **9/10**, and that number is now
+  **unattributable**: no preimage of its ledger `config_hash` was found across roughly **170k**
+  candidate forms, so it cannot even be established which configuration produced it. This is the
+  FATH-B01 / FATH-B50 class reached by a third route — a confident number from an arm that was not
+  the arm — and the worst of the three, because it destroys the evidence rather than merely biasing
+  it: a biased trial can be re-read, an unattributable one can only be discarded.
+- **Change:** validate at **validate time**, before the first paid spawn. For every task's
+  `[gate] run` and every scenario's `[gate] extra`, extract the path-shaped tokens and assert each
+  resolves under the substitution the arm will actually use, refusing in the class of
+  `EXIT_BANK_INVALID`. Home: `fathom validate` (FATH-B02), already the pre-flight in the run path.
+  The distinction to encode is small and load-bearing: a gate that **ran and went red** is a
+  legitimate result; a gate that **could never have run** is a broken arm and must not reach a spawn.
+  The enabling half is in flight on a pending branch — `${task_dir}` / `${workspace}` expansion in
+  `gated_session.py` gives a gate command a portable way to name a harness-side path at all, which is
+  what turns "does it resolve?" into a checkable question instead of an unanswerable one.
+
+**FATH-B55 — The credential model does not survive a matrix longer than a token, so a long matrix is
+only viable chunked and resumable.** *(M · [wave-3 run])*
+
+- **Cause / evidence:** this answers the question FATH-B04 (a) held open, and the answer changes the
+  shape of the fix rather than confirming it. Under ADR-0004 every spawn copies the shared OAuth
+  credential into a throwaway `CLAUDE_CONFIG_DIR`, the CLI refreshes it **independently inside that
+  spawn**, and the refreshed token is discarded with the directory. Two consequences, both
+  structural: **(a)** under refresh-token rotation, concurrent spawns redeem the same refresh token
+  and invalidate one another — the credential half of the interference FATH-B53 records as deadlocks;
+  **(b)** the access token's own lifetime is about **8 hours**, while a matrix at this wave's scale
+  runs **longer than a day** of wall clock, so mid-run expiry is the expected path rather than an edge
+  case. Observed cost: three separate paid windows across the wave bought nothing, and in two of them
+  the attributed cause was an expired session failing `fathom smoke`'s auth checks — with the run
+  lock free on the first poll.
+- **The operational consequence, which is the part to record.** No pre-flight can fix (b): a
+  credential-TTL check at launch is correct, and still correct when the token dies six hours later.
+  **A long matrix must therefore be chunked and resumable** — the only run shape that survives a
+  mid-run expiry, and nearly free here, because resume already costs nothing (the dedupe key makes a
+  re-invocation skip completed trials). Plan in blocks that fit inside a token's life, re-authenticate
+  between blocks, and treat "run the whole matrix in one invocation" as the anti-pattern it is.
+- **Change:** write the chunking rule into the cost/rails section operators actually read, and make
+  the tool support that shape rather than merely tolerate it. The closing summary FATH-B13 proposes —
+  trials remaining, and the exact resume command — is most of it; a `--chunk N` that stops cleanly on
+  a stated boundary is the rest. The durable fix for (a) is the one FATH-B04 already names: copy the
+  config once per run, or write the refreshed credential back, so spawns stop racing each other's
+  refresh.
+
+**FATH-B56 — A relative `[tools] repo` resolves against the process cwd, so the series arm points at
+nothing outside the canonical checkout and `fathom smoke` reads 7/8.** *(S · [wave-3 run])*
+
+- **Cause / evidence:** `scenarios/series.toml` carries `repo = "../convoy"`, and
+  `resolve_repo_invocation_cmd` (`scenario.py`) resolves it with `Path(repo).resolve()` — against
+  **fathom's own process cwd**, not against the scenario file that wrote it. In the canonical
+  checkout that lands on the sibling engine repo and works. From a git worktree, or any checkout not
+  laid out as siblings, it resolves to a path that does not exist, the engine-boundary group cannot
+  run, and `fathom smoke` reads **7/8**. Cost: 8/8 is the documented go/no-go before any paid matrix,
+  so an operator in a worktree meets a failing gate that says nothing about spawn isolation, and the
+  remedy is a layout fact written down nowhere — every wave-3 program working from a worktree
+  re-derived it. The class is a repeat: the 2026-07-05 outage this same helper was written to close
+  was also a relative repo path that could not resolve from where it was used. The helper fixed the
+  cwd at **spawn** time and left the cwd at **resolution** time as the surviving assumption.
+- **Change:** resolve a relative `[tools] repo` against the **scenario file's** directory, as
+  `[context] inject` and `[settings] inject` already are, so the path means one thing from every cwd.
+  If that is judged to move committed `config_hash` inputs — the resolved string enters the hash —
+  take the cheaper half instead and **fail loudly**: refuse at resolution time when the resolved repo
+  does not exist, naming the path it resolved to, rather than emitting an invocation command that
+  cannot run. Either way the worktree case belongs beside the documented 8/8 expectation, which
+  `docs/STATUS.md` now states.
+
 ---
 
 ## Later
@@ -683,6 +868,17 @@ re-run reads as a truncated arm.** *(S · [wave-2 run])*
   name carries more than one, or refuse-and-warn when a scoped `dataset_version` holds two hashes
   under one arm name. Pairs with FATH-B28 (no way to render a chosen historical view) and
   FATH-B11 (treatment identity vs the resume key).
+- **Wave-3 recurrence, and the sharper statement of the rule** *(2026-08-12)*. The general form is
+  narrower than "two hashes": **an arm re-run with changed injected content — new `config_hash`,
+  same `name` — has its economy averaged with the old configuration's trials.** That is not an
+  exotic case; it is what a re-validation *is*, so the defect fires on precisely the runs whose
+  numbers get published. The fix statement follows from it: **aggregation keys on `config_hash`; the
+  name is a label rendered beside the key, never the key itself.** The cost is already being paid in
+  the corpus as a manual tax — the 2026-08-11 Opus 5 recalibration had to open with an explicit
+  instrument check ("aggregating the ledger independently by `config_hash` returns five hashes for
+  five names, one each — nothing pooled, so the scorecard's per-arm economy is read as-is") before
+  its economy table could be trusted. A hand-check written into every report is the shape of an
+  unbuilt invariant, and it fails silently the first time an author forgets it.
 
 **FATH-B50 — A scenario whose treatment fails to load is warned about and then dropped, so the matrix
 runs without it.** *(S · [wave-2 run])*

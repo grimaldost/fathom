@@ -1,0 +1,32 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "validate2.luhn",
+  "edge_cases": [
+    [
+      [
+        "18"
+      ],
+      true
+    ],
+    [
+      [
+        "1230"
+      ],
+      true
+    ],
+    [
+      [
+        "4539578763621486"
+      ],
+      true
+    ]
+  ],
+  "func": "is_valid",
+  "module_filename": "luhn.py",
+  "package": "validate2"
+}

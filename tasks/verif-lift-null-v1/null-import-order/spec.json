@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_fields.py": "db0e8ad45817f79e231ca605f3ee0d33c055c01c1935907108b58eeb838d31cb"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "logkit/fields.py",
+  "must_contain": "import json\nimport os\nimport time",
+  "must_not_contain": "import time\nimport json\nimport os",
+  "package": "logkit"
+}

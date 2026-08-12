@@ -7,6 +7,7 @@ import dataclasses
 import os
 import pathlib
 import sys
+import tomllib
 from collections.abc import Sequence
 from typing import Any, Callable, TextIO
 
@@ -22,6 +23,10 @@ _DEFAULT_BASE_BRANCH = "main"
 # here so the plan's ceiling is computed from the cap that will actually bound the
 # spawns when --max-budget-usd is not given; test_cli_budget asserts the two agree.
 _DEFAULT_SPAWN_BUDGET_USD = 5.00
+_SERIES_TEMPLATE_NAME = "series.toml"
+# The engine's own default when a series template omits [review]; mirrors
+# GatedSessionExecutor's repair budget.
+_SERIES_DEFAULT_MAX_FIX_ATTEMPTS = 2
 # Bound on the verifier output persisted per trial (FATH-B14). The ledger is
 # committed, so this is the line between "diagnosable" and "a megabyte of agent
 # output in git history on one bad trial".
@@ -185,6 +190,65 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def _series_spawn_plan(task: Task) -> tuple[int, int] | None:
+    """`(n_prs, max_fix_attempts)` from a task's committed series template.
+
+    Returns None when the template is absent or unreadable — the trial will fail at
+    run time for the same reason, and the planner's job is to price, not to gate.
+    """
+    template = pathlib.Path(task.task_dir) / _SERIES_TEMPLATE_NAME
+    try:
+        with template.open("rb") as fh:
+            data = tomllib.load(fh)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+    prs = data.get("prs")
+    if not isinstance(prs, list) or not prs:
+        return None
+    review = data.get("review")
+    attempts = _SERIES_DEFAULT_MAX_FIX_ATTEMPTS
+    if isinstance(review, dict) and isinstance(review.get("max_fix_attempts"), int):
+        attempts = review["max_fix_attempts"]
+    return len(prs), max(0, attempts)
+
+
+def _trial_ceiling_usd(
+    scenario: ResolvedScenario, task: Task, max_budget_usd: float | None
+) -> float:
+    """Worst-case USD for ONE trial of `scenario` on `task`.
+
+    Two corrections to a flat per-trial rate, both of which made the plan understate
+    what a run could spend, and neither of which the other catches.
+
+    **Spawns per trial.** One spawn per trial is true of every single-spawn strategy
+    and false of `series`, which spends one implementation spawn plus up to
+    `max_fix_attempts` fix spawns for EVERY PR in the task's decomposition, each
+    against its own per-spawn cap. Pricing that at one spawn is not a conservative
+    estimate — it is a bound the operator believes and the run exceeds by an order of
+    magnitude, which is exactly what the upfront ceiling exists to prevent
+    (spec §10 / C4).
+
+    **The cap actually in force.** `--max-budget-usd` is PER-SPAWN, so passing a
+    number larger than the adapter's default LOOSENS the only runaway guard there is.
+    While the single-spawn price was a hardcoded constant, the plan printed the same
+    reassuring total either way — which is how a 20x loosening once got written up as
+    a $100 rail. Deriving it from the cap makes the flag's real effect visible in the
+    plan, before the spend.
+    """
+    per_spawn = max_budget_usd if max_budget_usd is not None else _DEFAULT_SPAWN_BUDGET_USD
+    if scenario.strategy != "series":
+        return per_spawn
+    plan = _series_spawn_plan(task)
+    if plan is None:
+        return per_spawn
+    from fathom.strategies.series import DEFAULT_BUDGET_FIX, DEFAULT_BUDGET_IMPL
+
+    n_prs, attempts = plan
+    impl = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_IMPL
+    fix = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_FIX
+    return n_prs * (impl + attempts * fix)
+
+
 def run_matrix(
     bank: Bank,
     resolved_scenarios: list[ResolvedScenario],
@@ -274,14 +338,10 @@ def run_matrix(
         planned = planned[:limit]
 
     num_planned = len(planned)
-    # The ceiling must track the cap that actually bounds a spawn, not a constant that
-    # happens to equal the documented rail. `--max-budget-usd` is PER-SPAWN: passing a
-    # number larger than the default LOOSENS the only runaway guard there is, and while
-    # the ceiling was hardcoded at $2/trial it printed the same reassuring total either
-    # way — which is how a 20x loosening once got written up as a $100 rail. Deriving it
-    # makes the flag's real effect visible in the plan, before the spend.
-    per_trial_usd = max_budget_usd if max_budget_usd is not None else _DEFAULT_SPAWN_BUDGET_USD
-    ceiling_usd = num_planned * per_trial_usd
+    # Per TRIAL, not a flat rate: a series trial spends many spawns, and a
+    # single-spawn trial is bounded by the cap actually in force. Both corrections
+    # live in `_trial_ceiling_usd`.
+    ceiling_usd = sum(_trial_ceiling_usd(sc, task, max_budget_usd) for sc, task, _ in planned)
 
     # --- Print plan + ceiling BEFORE any spawn (spec §10 invariant) ---
     print(
@@ -299,6 +359,26 @@ def run_matrix(
         f"  ceiling: ${ceiling_usd:.2f}",
         file=_out,
     )
+    # Show the arithmetic for any multi-spawn arm. A ceiling many times the per-trial
+    # rail reads as a typo unless the spawn count is named; naming it is what makes
+    # the number actionable (chunk it with --limit, lower the rail, or don't run).
+    series_cells: dict[tuple[str, str], list[Any]] = {}
+    for sc, task, _ in planned:
+        if sc.strategy == "series":
+            series_cells.setdefault((sc.name, task.id), [sc, task, 0])[2] += 1
+    for (arm, task_id), (sc, task, count) in sorted(series_cells.items()):
+        spawn_plan = _series_spawn_plan(task)
+        shape = (
+            f"{spawn_plan[0]} PRs x (1 impl + {spawn_plan[1]} fix) spawns"
+            if spawn_plan is not None
+            else "spawn count UNKNOWN (series template unreadable)"
+        )
+        print(
+            f"  series arm {arm}/{task_id}: {count} x "
+            f"${_trial_ceiling_usd(sc, task, max_budget_usd):.2f}/trial"
+            f"  ({shape}; the per-spawn rail applies to each)",
+            file=_out,
+        )
 
     if dry_run:
         print("[dry-run] no spawns", file=_out)
@@ -377,9 +457,13 @@ def run_matrix(
         if to_verify:
             print("arming: all declared treatments verified\n", file=_out)
 
-    _executor_factory = (
-        executor_factory if executor_factory is not None else _default_executor_factory
-    )
+    if executor_factory is not None:
+        _executor_factory = executor_factory
+    else:
+
+        def _executor_factory(sc: ResolvedScenario) -> Any:
+            return _default_executor_factory(sc, max_budget_usd=max_budget_usd)
+
     if runner_factory is not None:
         _runner_factory = runner_factory
     else:
@@ -503,11 +587,25 @@ def run_matrix(
     return EXIT_OK
 
 
-def _default_executor_factory(scenario: ResolvedScenario) -> Any:
+def _default_executor_factory(
+    scenario: ResolvedScenario, max_budget_usd: float | None = None
+) -> Any:
     if scenario.strategy == "series":
         from fathom.strategies.series import SeriesExecutor
 
-        return SeriesExecutor()
+        if max_budget_usd is None:
+            return SeriesExecutor()
+        # `--max-budget-usd` is the per-spawn cost rail, and the engine's spawns are
+        # spawns. Without this the flag silently did nothing on a series arm — the
+        # runner it caps is the one the engine never uses (ADR-0001) — so the only
+        # ceiling in force was SeriesExecutor's own $20/$5/$3 default, and an operator
+        # who set the rail believed in one that was not there. Every role gets the
+        # same cap because the flag names a per-spawn cap, not a per-role policy.
+        return SeriesExecutor(
+            budget_impl=max_budget_usd,
+            budget_review=max_budget_usd,
+            budget_fix=max_budget_usd,
+        )
     if scenario.strategy in ("gated-session", "gated-review"):
         from fathom.strategies.gated_session import GatedSessionExecutor
 

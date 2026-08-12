@@ -1,0 +1,33 @@
+# CONTEMPORANEOUS CONTROL COPY of scenarios/ablation-v2/haiku.toml — byte-identical in
+# every hashed field, so it resolves to the SAME config_hash and its trials extend the
+# same arm rather than forking it (config_hash covers the scenario fields, not the file
+# path; src/fathom/scenario.py). Comments are not parsed and cannot shift the hash.
+#
+# WHY IT EXISTS. ledger/ablation-v2.jsonl's haiku and haiku-gate rows were all recorded
+# in a single commit dated 2026-07-04 and carry no timestamp, empty cli_version and empty
+# tool_git_sha. A treatment measured five weeks later against a subscription-served
+# endpoint and an unrecorded CLI would absorb any endpoint or CLI drift into the reported
+# effect. Running repeats 8+ of the two baselines in the SAME session as the treatment
+# converts the comparison from historical to contemporaneous, for about $5.
+#
+# HOW TO USE IT. Run this directory with the same --repeats as the treatment block, then
+# compare the new repeat block against repeats 0-7 BEFORE pooling them. A material
+# difference between the two blocks IS the finding: it means the historical comparators
+# cannot carry the ADR, and the treatment must be read only against the new block.
+
+name = "haiku"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# Tier axis, weak tier. Same single-session bare harness as `bare`/`sonnet`, only the
+# model changes. On an instrument with real failure headroom this tests whether the
+# tier ladder discriminates (and is the likely place the gate/review arms show lift --
+# a weaker model that skips or botches self-verification).
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

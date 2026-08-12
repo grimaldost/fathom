@@ -1,0 +1,17 @@
+id = "data-forward-fill"
+instruction = """
+`series2.fill.forward_fill` substitutes `0` for a leading `None` because it
+seeds the carry value with zero. The README says a leading `None` stays `None`.
+Fix the seed; the ordinary carry-forward already behaves.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

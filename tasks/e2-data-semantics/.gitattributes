@@ -1,0 +1,7 @@
+# Fixture bytes are part of the measurement: a task fixture that checks out with
+# different line endings on a different host is a different fixture, and
+# `dataset_version` would not record the change. The repo root already pins
+# .md/.py/.json/.toml to LF; these are the extensions this bank adds.
+*.csv text eol=lf
+*.sql text eol=lf
+.gitattributes text eol=lf

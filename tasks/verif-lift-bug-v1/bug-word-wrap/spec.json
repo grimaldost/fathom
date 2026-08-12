@@ -1,0 +1,34 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "textkit.wrap",
+  "edge_cases": [
+    [
+      [
+        "ok unbreakablewordhere ok",
+        6
+      ],
+      [
+        "ok",
+        "unbreakablewordhere",
+        "ok"
+      ]
+    ],
+    [
+      [
+        "supercalifragilistic",
+        5
+      ],
+      [
+        "supercalifragilistic"
+      ]
+    ]
+  ],
+  "func": "wrap_words",
+  "module_filename": "wrap.py",
+  "package": "textkit"
+}

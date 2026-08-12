@@ -1,0 +1,55 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.parts",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "partition": null
+          }
+        ],
+        [
+          "p1"
+        ]
+      ],
+      {
+        "__unpartitioned__": 1,
+        "p1": 0
+      }
+    ]
+  ],
+  "func": "rows_per_partition",
+  "module_filename": "parts.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "partition": null
+          },
+          {
+            "partition": "p1"
+          },
+          {
+            "partition": null
+          }
+        ],
+        [
+          "p1"
+        ]
+      ],
+      {
+        "__unpartitioned__": 2,
+        "p1": 1
+      }
+    ]
+  ]
+}

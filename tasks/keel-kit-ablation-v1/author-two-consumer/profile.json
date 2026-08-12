@@ -1,0 +1,48 @@
+{
+  "shape": "authoring",
+  "spec_path": "spec.md",
+  "gate": [
+    "spec_written",
+    "gate_part_a_passes"
+  ],
+  "brief_tokens": [
+    "reporting-daily",
+    "alerting-hourly",
+    "row_count"
+  ],
+  "cert_policy": "absent",
+  "criteria": [
+    "anchors_point_at_staged_files",
+    "anchors_resolve",
+    "brief_requirements_covered",
+    "concept_map_paths_resolve",
+    "criteria_name_runnable_command",
+    "enforcement_claims_clean",
+    "every_section_has_criterion",
+    "gate_part_a_passes",
+    "manifest_is_bijection",
+    "no_placeholders",
+    "no_self_certification",
+    "numbered_sections_present",
+    "range_anchors_balanced",
+    "reuse_refs_resolve",
+    "section_refs_resolve",
+    "spec_written",
+    "staged_tree_untouched"
+  ],
+  "staged_sha256": {
+    "brief.md": "62f7497e46e12d949405d577bb1bb2ede05a3236a8e20c042059fb70569f76c0",
+    "docs/adr/0001-record-architecture-decisions.md": "d13df9fc33bf2c4b42724e14528934ad1ad06a53cc1cf5b925d440b16f2197eb",
+    "docs/adr/0002-orders-are-append-only.md": "21c51e9ae8985dc671c37fcb555f78eb256945e06851bda85c00214bbd1daffa",
+    "README.md": "bf2b64b57804360913033abf5837698881996ed79e85fb6a5999205520303845",
+    "tests/__init__.py": "d50cadd24d6555858ed1704f76989ef9045b7bd86eda651f7e8215e56aca294d",
+    "tests/test_cli.py": "ab860a5d2135ac693b96f50a8530f319e6995f25f4c7b84e11e405ef2d68e589",
+    "tests/test_transform.py": "bc0bec03efd82b761bdf1673b627de1a5bb611ddfdb001e234464a0595be22f3",
+    "tinyetl/__init__.py": "8aa8d32a0a9d28a1912db5733dd280237b8eab68b5fd50bae46b24e35d45fb29",
+    "tinyetl/cli.py": "a42a9492ab5b997bf11d329ffeb12cd78199a780dd8ecc4a663c535814366103",
+    "tinyetl/config.py": "2d8fd08c45797e8335899f2dd8c456ac3f5d0cb14c7dfc190963f78cb8332755",
+    "tinyetl/extract.py": "262f8b92c61c1dcd67c08cfaea39c7731e25b0c48cead4b824ae355f7e9cb3e2",
+    "tinyetl/load.py": "549ee488e76253d37b1b1e3b5ef6031876f1075c842cf222da12405c588800ff",
+    "tinyetl/transform.py": "2ffb086e99ec5d0ae3790c5061c5bc4cfcd74414f46544021731f19074926145"
+  }
+}

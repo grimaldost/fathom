@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_short.py": "a82220e9141606d716e410789eaca3aafedf46f14859f23f973c1e3aaf1c275d"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "idkit/short.py",
+  "must_contain": "def is_short_id(value) -> bool:",
+  "must_not_contain": "def is_short_id(value):",
+  "package": "idkit"
+}

@@ -1,0 +1,35 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "allocate.split",
+  "edge_cases": [
+    [
+      [
+        100,
+        3
+      ],
+      [
+        34,
+        33,
+        33
+      ]
+    ],
+    [
+      [
+        7,
+        2
+      ],
+      [
+        4,
+        3
+      ]
+    ]
+  ],
+  "func": "split_amount",
+  "module_filename": "split.py",
+  "package": "allocate"
+}

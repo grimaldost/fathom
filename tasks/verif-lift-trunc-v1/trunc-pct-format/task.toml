@@ -1,0 +1,17 @@
+id = "trunc-pct-format"
+instruction = """
+A defect in `reportkit/summary.py` shows up as a share renders as 12.3% where 12.4% is expected; the reported
+symptom points at `reportkit/summary.py:1-29`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

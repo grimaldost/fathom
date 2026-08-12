@@ -1,0 +1,80 @@
+# Single source of truth for the choosing-models tier data. The SKILL.md and
+# rubric cite this file instead of hardcoding lineup or thresholds in prose;
+# /refresh-models updates it (mechanical lineup changes on approval; threshold
+# changes only with calibration evidence).
+#
+# Deliberately thin: NO sticker prices here — the platform's model reference
+# (e.g. the claude-api skill) is the price source, read at the point of use.
+# Duplicating prices would create one more unowned mirror.
+#
+# Project override chain: a project-level copy of this file (project skill dir
+# or a method binding) wins over the plugin's copy. Calibration is
+# distribution-relative — project-specific corrections land in the override,
+# not here.
+
+schema_version = '1'
+
+[meta]
+last_reviewed = "2026-08-11"   # stamped by /refresh-models; mirrored nowhere else
+review_by = "2026-11-11"       # age tripwire — past this date, refresh before trusting
+calibration = "model-tier calibration runs of 2026-06-16, 2026-07-01 and 2026-08-11 (fathom model-tier-v1; the last is 5 arms x 7 tasks x 5 repeats, adding claude-opus-5). Thresholds are still ported defaults, and the 2026-08-11 decision was to change neither them nor the scoring mechanics: the bank has no power to move a cut. On-diagonal is 1/7 in all three runs, but 6 of 7 tasks sit at 100% for every arm, no task resolves empirically to mid or strong, and a 10/10 cell carries a Wilson 95% CI of [0.72, 1.00] - so a null here is manufactured by saturation, not observed. The tier-separating bank that would have the power is designed and unrun (fathom docs/specs/2026-07-14-tier-separating-bank-design.md). Observed direction, recorded not acted on: over-provisioning persists - 5 of 7 tasks were served by the weak tier, and the newest strong model was quality-flat against its predecessor at ~1.4x the per-task cost."
+oracle_discount = "Labeled hypothesis, pending the crossed model x oracle-quality calibration in the same unrun bank. Established: a suite-only gate at the weak tier neither detects nor lifts (gates green, escapes reach the oracle), so gate value tracks the independence and coverage of the checks; and, twice over, scored tiers over-provision in the small while an iterative implement-gate-fix loop beat a bigger one-shot model on feature-refactor shapes. New 2026-08-11 (fathom model-tier-v1, n=30/arm, directional): the executing model authored a regression test in 70% of trials where four other models did so in 0-3%, so the oracle a task will have is partly a function of which model runs it - which is why the discount asks what oracle will exist for this run, not what exists now."
+lineup_reconciled = "2026-08-11 against the platform model reference: strong was pinned to a model the machines are no longer served. Direction settled before any mirror walk - the sibling PRICE mirrors are keyed by family substring (opus/sonnet/haiku/fable), so a model-id change inside a family does not touch them and they are correct today; the one sibling tier-to-model map carried the same stale strong entry, so the walk propagates a corrected lineup rather than a stale one."
+
+# Score -> tier. Calibratable data, not doctrine: the rubric owns how to
+# score, these bands own where the cuts sit. frontier is opt-in only and
+# never score-assigned (criteria in SKILL.md).
+[thresholds]
+weak = "0-25"
+mid = "26-55"
+strong = "56-100"
+
+[[models]]
+tier = 'weak'
+api_string = 'claude-haiku-4-5'   # undated alias, never a dated snapshot
+harness_alias = 'haiku'           # Agent tool / workflow agent() vocabulary
+display = 'Haiku 4.5'
+available = true
+notes = ''
+
+[[models]]
+tier = 'mid'
+api_string = 'claude-sonnet-5'
+harness_alias = 'sonnet'
+display = 'Sonnet 5'
+available = true
+notes = 'intro pricing through 2026-08-31; tokenizer ~30% more tokens for the same text vs Sonnet 4.6 — cheaper per token is not cheaper per task'
+
+[[models]]
+tier = 'strong'
+api_string = 'claude-opus-5'
+harness_alias = 'opus'
+display = 'Opus 5'
+available = true
+notes = 'same price as Opus 4.8; thinking is ON by default, and disabling it is rejected above `high` effort'
+
+[[models]]
+tier = 'frontier'
+api_string = 'claude-fable-5'
+harness_alias = 'fable'
+display = 'Fable 5'
+available = true
+notes = '2x Opus 5 pricing; opt-in only — never score-assigned'
+
+# Per-task cost observations from calibration/production runs — provenance
+# above. Small-prompt baselines; a large prompt at max effort runs 5-10x.
+# These are observations for batch-table estimates, not sticker math.
+[typical_cost]
+weak = "$0.01 small-prompt baseline"
+mid = "$0.06 small-prompt baseline"
+strong = "$0.15 small-prompt baseline"
+frontier = "$0.29 small-prompt baseline"
+
+# Authoring guidance for per-tier budget ceilings (implementation / review /
+# fix), where the executing engine takes them. Ported defaults; engines may
+# carry their own flat fallback.
+[budget_guidance]
+weak = { implementation = 3.00, review = 2.00, fix = 2.00 }
+mid = { implementation = 8.00, review = 3.00, fix = 3.00 }
+strong = { implementation = 20.00, review = 5.00, fix = 3.00 }
+frontier = { implementation = 30.00, review = 10.00, fix = 6.00 }

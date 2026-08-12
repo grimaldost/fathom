@@ -1,0 +1,23 @@
+# CONTEMPORANEOUS CONTROL COPY of scenarios/ablation-v2/haiku-gate.toml — byte-identical
+# in every hashed field, so it resolves to the SAME config_hash and its trials extend the
+# same arm rather than forking it. See the sibling haiku.toml in this directory for the
+# full rationale: the committed comparators are five weeks old and carry no timestamp,
+# cli_version or tool_git_sha, so drift would land inside the reported treatment effect.
+# Compare the new repeat block against repeats 0-7 BEFORE pooling.
+
+name = "haiku-gate"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "high"
+
+# The KEY interaction cell. If a strong model self-verifies (making the gate redundant),
+# the gate's value should surface at the WEAK tier: does the deterministic gate + fix
+# loop rescue Haiku failures that bare Haiku leaves on the table? bare-haiku vs
+# haiku-gate is the fair isolation of the gate's value where headroom actually exists.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[limits]
+trial_timeout_s = 1800

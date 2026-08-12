@@ -1,0 +1,24 @@
+# Arm B — the kit as it stands on keel `feat/gate-empiricism` after the T0.5 relocations (2,669 w).
+#
+# `assets/kit-vnext-full.md` is built by the same recipe as the pinned `kit-full.md`: the two-line
+# framing preamble that EVERY armed arm carries identically, then `spec-template.md`, then
+# `definition-of-ready.md`, verbatim, joined by a `---` rule.
+#
+# This is the control the core arm is actually a deletion of. Without it the only available
+# contrast would be 0.14.0-full vs vNext-core, which mixes two independent edits — the relocations
+# and the core cut — into one number that can be attributed to neither.
+name = "b-vnext-full"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[context]
+inject = "assets/kit-vnext-full.md"
+
+[limits]
+trial_timeout_s = 900

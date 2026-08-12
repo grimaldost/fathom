@@ -1,0 +1,23 @@
+name = "stack-humble"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "high"
+
+# Treatment: humblepowers at MERGED state (0.9.1) inside the held-constant stack.
+# Mounts are resolved relative to THIS file (src/fathom/scenario.py), so the
+# `../../tasks/...` prefix is load-bearing — it must point at v5's own vendored trees,
+# never at v1/v2's.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v5/plugins/humblepowers@0.9.1",
+    "../../tasks/humble-vs-super-v5/plugins/engineering-discipline",
+    "../../tasks/humble-vs-super-v5/plugins/session-workflow",
+]
+
+[limits]
+trial_timeout_s = 2400

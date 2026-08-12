@@ -1,0 +1,10 @@
+account_id,region,opened_on,status,deleted_at,balance
+A100,north,2025-01-15,active,,1200.00
+A101,south,2025-02-20,active,,800.00
+A102,north,2025-03-05,active,2026-01-10,450.00
+A103,east,2025-03-18,suspended,,300.00
+A104,west,2025-04-02,active,,975.50
+A105,south,2027-02-01,active,,50.00
+A106,east,2025-05-11,suspended,,110.00
+A107,north,2025-06-30,active,2026-02-02,620.00
+A108,west,2025-07-14,closed,,0.00
