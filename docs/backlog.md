@@ -314,6 +314,41 @@ is refuted as stated, so every delegated cost figure is a floor of unknown depth
   Pairs with FATH-B01's arming verification, which is the same class of defect — a declared property of a
   run that nothing checks.
 
+### Added by the routing-mechanisms wave (`eval/routing-mechanisms`)
+
+**FATH-B57 — Under subscription auth the fallback cost estimate ignores every cached token, and it
+understates the arm with the largest injected prompt most.** *(S · [routing-mechanisms run])*
+
+- **Cause / evidence:** `adapters/claude_cli.py::_finish_record` computes
+  `tin, tout, tcache = _tokens(parsed.usage)` and then calls
+  `estimate_cost_usd(parsed.model_id, tin, tout)` — **`tcache` is never passed.** `tin` is the raw
+  `input_tokens` field, i.e. the *uncached* remainder only. The adapter prefers the CLI's own
+  `total_cost_usd`, so the fallback fires only when that is 0, which is exactly the subscription-auth
+  case the fallback exists for (defect D2). Scale, from a real row on `ledger/model-tier-v1.jsonl`:
+  `input_tokens=48`, `cache_creation_input_tokens=26441`, `cache_read_input_tokens=547913`,
+  `output_tokens=7603`. The fallback prices **48** input tokens where the trial actually consumed
+  ~574k — three orders of magnitude of input cost silently dropped. Prompt caching is on by default
+  in this adapter, so on any real trial the cached buckets are nearly all of the input.
+- **Why the direction is what makes it serious:** this is not a flat bias that cancels in an A/B.
+  Cached input is dominated by the system prompt, and the system prompt is where `[context] inject`
+  puts a treatment. So the error scales with the size of the injected content and **understates the
+  treatment arm most** — in any study whose treatment *is* a larger injected prompt (a skill body, a
+  policy, a protocol), the arm under test is reported as very nearly free while its bare control,
+  carrying no injected doc, is priced almost correctly. A cost-effectiveness verdict computed that
+  way is biased in favour of the treatment by construction, and the bias grows with exactly the
+  quantity the study is manipulating. The `routing-decision-v1` arms are 6.1k tokens of injected
+  policy against a 0-token control, which is the worst case this defect has.
+- **Not currently wrong on record:** every committed ledger has 0 zero-cost rows, so no landed
+  analysis is affected. This is a trap set for the next run that happens to be under subscription
+  auth, and nothing in the output would say so.
+- **Change:** price the cache buckets rather than discarding them — cache read at 0.1x the input
+  rate, 5-minute cache write at 1.25x, 1-hour cache write at 2.0x — so the fallback approximates the
+  CLI's own cache-aware number instead of a floor. A worked, tested implementation is already in
+  `routing.py::cost_from_usage`, with `audit_ledger_costs` reporting the recomputed-vs-reported
+  ratio; lift it or reuse it directly. Then have `fathom report` label a run whose rows came from the
+  fallback path, so a cache-blind number is visibly marked rather than silently consumed — the same
+  "a check satisfied by absence" shape FATH-B50 and FATH-B12 name.
+
 ---
 
 ## Next

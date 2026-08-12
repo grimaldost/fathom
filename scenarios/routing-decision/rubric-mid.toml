@@ -1,0 +1,31 @@
+name = "rubric-mid"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Mechanism: rubric. Deciding tier: mid (Sonnet 5).
+#
+# Treatment arm: the `choosing-models` skill AS SHIPPED — body, scoring rubric and
+# models.toml, copied verbatim into the system prompt. ~3.8k words / ~6.1k tokens.
+# This is the mechanism on trial: it is the most expensive decision procedure in the
+# grid, and the study asks whether the routing it buys is worth that.
+#
+# THE AXES ARE CROSSED ON PURPOSE. The routing decision is taken by whatever session
+# is dispatching the work, and that session is frequently an expensive one — so a
+# scored rubric can be paying strong-tier prices to decide that some downstream task
+# deserves a weak-tier model. Pricing the decision at one tier would hide that. Every
+# mechanism is therefore priced at all three deciding tiers, and arms differ ONLY by
+# `model` and by the injected policy.
+[tools]
+source = "none"
+# Read/Glob/Grep to reach the briefs, Write to emit routing.json. No Bash and no
+# Task: the job is a judgment, there is nothing to execute and nothing to delegate,
+# and a shell would let an arm burn tokens exploring instead of deciding.
+allowed = ["Read", "Write", "Glob", "Grep"]
+
+[context]
+inject = "assets/rubric.md"
+
+[limits]
+trial_timeout_s = 900

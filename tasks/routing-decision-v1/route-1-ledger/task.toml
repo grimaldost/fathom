@@ -1,0 +1,27 @@
+id = "route-1-ledger"
+instruction = """
+Read `README.md` in this workspace, then read every brief under `briefs/`.
+
+For each brief, decide which model tier that task should be dispatched to, and record
+your decisions in `routing.json` exactly as `README.md` specifies.
+
+Do not carry out the tasks the briefs describe. Deciding the tier is the whole job.
+"""
+
+# Sized for the WEAKEST arm's longer, more-iterative runs so a weak-tier decision is
+# not truncated into ERRORED and dropped (which would read as a false decision-cost
+# saving — the cheapest arm looking cheap because its trials were cut short).
+[limits]
+trial_timeout_s = 900
+max_turns = 60
+
+[gate]
+run = "python gate.py"
+
+[verify]
+entry = "verify.py"
+timeout_s = 60
+# Well-formedness only. Routing ACCURACY is not a criterion here and deliberately so —
+# its ground truth (`cheapest_adequate_tier`) does not exist yet; see routingverify.py.
+# The `chose__*` criteria are records, not grades, and must never be listed as hard.
+hard_criteria = ["answer_present", "covers_every_brief", "tiers_are_legal"]
