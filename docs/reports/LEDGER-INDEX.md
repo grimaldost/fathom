@@ -31,3 +31,6 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
 | `tu-grounding-v1` | `59ffe9c7330a44439653770c6e28155793dd0bca5712e5bc2796d72f3958c7b9` | armed-haiku:3, armed-opus:2, armed-sonnet:3, bare-haiku:3, bare-opus:3, bare-sonnet:3 | 27 | 27 |
+| `verif-lift-bug-v1` | `9bdad4817b4f97e3c340e3aadc0b628953c77ac6880dc338c89f6b0be79ea572` | bare:4 | 4 | 4 |
+| `verif-lift-null-v1` | `6249a43bcca6462e817d7fda1154e3fd5e53f5883b117e0a4e8260dcf78fd548` | bare:6, skill:6 | 13 | 13 |
+| `verif-lift-trunc-v1` | `32ece351ccb9a50497ed59986f44a45bd01d5db83c7de1f896345e229439262a` | bare:10, skill:10 | 20 | 20 |
