@@ -3,19 +3,18 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
-## [Unreleased]
+## [0.3.0] - 2026-08-12
 
-**Draft, and deliberately ahead of the tree.** This section describes what the next cut will
-contain once the seven pending evidence branches merge; no version number is bumped here, and the
-cut itself is a separate change that follows those merges. Two of those branches carry their own
-`[Unreleased]` block; this one is written as their superset, so the merge resolves by keeping it.
-Every entry below names the surface it changes, not the analysis that motivated it — the analyses
-are indexed in `docs/STATUS.md`.
+The routing-and-evidence release, cut from a two-day measurement wave. 0.2.0 made a *measurement*
+provable — the arm was armed, the bank could discriminate, the trial actually ran. This cut makes a
+**bank** provable: that its criteria can fail, that a null from it is a null about the treatment
+rather than a bank with no headroom, and that every published number was read against the ledger as
+committed. It also writes down, without fixing them, the instrument defects the wave hit in field
+use.
 
-The theme, one sentence: 0.2.0 made a measurement provable; this cut makes a **bank** provable —
-that its criteria can fail, that its published numbers were read against the ledger as committed —
-and it writes down, without fixing them, the instrument defects that stopped the wave's matrices
-from being bought.
+Every entry in Added / Changed / Fixed names the surface it changes, not the analysis that motivated
+it. The wave's own results are in "Analyses published in this cut" below, and indexed with their
+verdicts and limits in `docs/STATUS.md`.
 
 ### Added
 
@@ -47,6 +46,11 @@ from being bought.
 - **`build_calibration` warns when one arm name maps to more than one `config_hash`.** Cost is
   aggregated per arm for readability but identity is the hash; two configurations averaged under one
   label is silent-wrong, and it now says so.
+- **`fathom run --tasks ID[,ID...]` runs only the named task ids.** This is how a *screen* gets
+  bought before a full matrix — one band, or the positive control, at higher repeats. `--limit`
+  cannot do it: the plan is scenario-major, so `--limit` cuts whole arms off the end rather than
+  narrowing the bank. An unknown id is an error, never a silent empty run. Both bought analyses in
+  this cut were screens taken this way.
 
 ### Changed
 
@@ -107,9 +111,6 @@ from being bought.
 - **Fixture generation for a shared-tree bank** (`tools/build_kit_fixtures.py`) — one staged tree is
   the source for eight tasks, so a fixture cannot silently diverge between them and
   `profile.json`'s `staged_sha256` protects the right bytes.
-
-### Changed
-
 - **The tier decision statistic is one draw per trial** (**ADR-0009**, superseding **ADR-0007 D3**
   only — the other five decisions in that document stand). `calibration.arm_task_stats` scored a cell
   by pooling a task's `k` hard criteria across trials, counting `k x n` draws. Measured on the
@@ -145,36 +146,91 @@ from being bought.
   self-consistency property between an overlay and a contract written together, with no agent
   behaviour observed.
 
-### Evidence merged in this cut
+### Analyses published in this cut
 
-Seven analyses, most of them **authored and armed but not bought** — recorded that way deliberately,
-because an unbought matrix with a validated instrument is a different state from a null result, and
-the repo's failure mode has been letting the two read alike:
+Some matrices were bought and some were deliberately not, and the two states are kept apart on
+purpose: an unbought matrix with a validated instrument is not a null result, and letting the two
+read alike has been this repo's recurring failure. Verdicts and their limits are indexed in
+`docs/STATUS.md`; the per-arm completed counts every number here is read against are stamped in
+`docs/reports/LEDGER-INDEX.md`.
 
-- `verif-lift-{bug,data,trunc,null}-v1` — 62 tasks, `validate --strict` clean, `verify-arming` on all
-  22 arms, and a 274-workspace pass showing every criterion both satisfiable and violable. Unrun.
-- `research-fusion-v1` — the MCP-serving mount vendored and proven to arm on live spawns. Unrun.
-- `e2-data-semantics` — bank and three arms authored and pinned. Unrun.
-- `humble-vs-super-v5` — authored, then **deliberately not bought** on power grounds: 15 of 16
-  criterion-slots sit at 100% in every arm including `bare`.
+**Bought.**
+
+- **`routing-decision-v1`** (54 trials, 53 completed, $14.04) — *what a routing decision costs, and
+  whether a rubric changes one.* Against unaided judgment the rubric leaves **8 of 9** decisions
+  unchanged at the mid deciding tier and **9 of 9** at the strong tier, while costing **$0.075 and
+  $0.203 more per decision** at K=1. At the strong tier, one decision at a time, the break-even
+  correction rate exceeds 100% — there the rubric cannot pay for itself at any correction rate. It
+  does change 4 of 9 decisions at the weak deciding tier, every disagreement an upgrade, and the
+  premium spans two orders of magnitude across deciding tiers ($0.0021 at weak/K=9 against $0.2026
+  at strong/K=1). A separate finding bounds the question rather than answering it: six of nine arms
+  routed the one shared brief differently at K=1 than at K=9, so presentation context moves the
+  answer independently of mechanism.
+- **`model-tier-v2`** (89 trials, $27.60) — **the tier-separating bank the programme had been
+  missing.** Its positive control separates decisively: `haiku` 1/10 against `opus5` 10/10,
+  one-sided Fisher **p = 5.95e-05** at the pre-registered `min_repeats = 10`. That is what makes the
+  bank's other readings interpretable — a null from it is a null about *routing*, not a bank without
+  headroom, which is exactly what `model-tier-v1` could never establish. On the four discordant
+  briefs the two mechanisms split 2–2 and are reported unpooled, because one verdict over them would
+  average away the structure that is the result.
+- **Every failure on that bank was invisible to the shipped test suite — 89 trials, 63 passes, 26
+  failures, 0 gate-caught, 26 silent.** This is the cut's most consequential measurement, and it is
+  a property of the bank's displaced-cause task shapes rather than of any routing policy. A
+  start-cheap-and-escalate mechanism has nothing to fire on: its retry term is structurally zero
+  here and its apparent cheapness is bought entirely with escapes, so the marginal value of *any*
+  better router is bounded by the fact that nothing notices when it is wrong. Both mechanisms also
+  come in **under** the oracle's execution cost, which is not a saving — they under-provisioned into
+  a failure and never paid for the tier the task required. Any `C(m)` table that nets that against
+  correctly-routed briefs reports a saving that does not exist.
+- **`verif-lift-{bug,data,trunc,null}-v1`** — the fourth window bought 90 runs ($11.79 in
+  ledger-floor units) after three windows that bought nothing. The shipped
+  `verification-before-completion` body lifts the footprint criterion **+50.0 pp** at weak/BUG
+  (3/10 → 8/10, paired interval excluding zero) — the programme's first positive result — while the
+  vNext body gives most of it back (−40.0 pp) and improves nothing anywhere, so **it does not ship**.
+  The `SubagentStop` gate ties its placebo exactly (7/10 vs 7/10) with delivery confirmed at 80–90%:
+  the gate is not promoted, and the n=10 interval does not license deleting it either. Carried
+  caveat: the shipped body costs −30.0 pp on weak/DATA's subtle-case criterion.
+- **`premortem-ablation-v1`** ($20.13) — keel's ~500-word pre-mortem core matches the ~2,300-word
+  full body on everything measurable, at 80% of the cost; `bare` fails 11 of 12, so the value is in
+  being asked at all. Finding *quality* is unmeasured by construction.
+- **`keel-kit-ablation-v1`** — the four-arm ablation, with a stage-1 read that licenses no cut.
+
+**Authored, armed, and deliberately not bought** — a different state from a null, recorded as one:
+
+- `research-fusion-v1` — the MCP-serving mount vendored and proven to arm on live spawns.
+- `e2-data-semantics` — bank and three arms authored and pinned.
+- `humble-vs-super-v5` — stopped on power grounds: 15 of 16 criterion-slots sit at 100% in every
+  arm, `bare` included.
 - `ablation-v2` series arm — authored and repaired; stopped on the rail.
-- `model-tier-v2` — the tier-separating bank, authored and repaired twice under adversarial review;
-  the second repair is ADR-0009 above. Unrun.
-- `keel-kit-ablation-v1` — the four-arm ablation with its ledger and a stage-1 read that licenses no
-  cut.
+
+**What this cut does not claim.** Decision cost is measured for `routing-decision-v1`'s mechanisms
+and for nothing else: every `C(m)` from `model-tier-v2` is a lower bound, which is why
+`decision_cost_usd` renders as `null` and never `0`. Whether the rubric routes *better* anywhere is
+unmeasured — T1 measured what each mechanism emits and what emitting it costs, never whether the
+emitted tier was right. How often the mechanisms disagree on a real workload is unmeasured, because
+the four briefs are an enriched discordant set from which no per-session figure can be derived. No
+threshold move is licensed, and whether escalation recovers cannot be observed at all on a bank
+where no failure is gate-visible.
 
 ### Instrument defects recorded, not fixed
 
 The wave's field defects are written into `docs/backlog.md` rather than repaired here, so the cut
-carries an honest account of what the instrument still gets wrong: **FATH-B49** (economy pooled by
-arm name across `config_hash`es — extended with the general statement and the keying rule),
-**FATH-B51** (the delegated path undercounts economy; the ×3.81 correction is a budgeting unit, not
-a publishable multiplier), **FATH-B52** (`verify-arming`'s false negative on MCP-served mounts, whose
-only documented remedy is the unsafe one), **FATH-B53** (no native mutual exclusion for paid runs —
-three deadlocks in one day), **FATH-B54** (a gate command passed to the shell unvalidated, which made
-one 9/10 unattributable), **FATH-B55** (the credential model does not survive a matrix longer than a
-token; long matrices must be chunked and resumable) and **FATH-B56** (a relative `[tools] repo`
-resolved against the process cwd, so `fathom smoke` reads 7/8 from a worktree).
+carries an honest account of what the instrument still gets wrong — **FATH-B49 through FATH-B57**:
+**B49** (economy pooled by arm name across `config_hash`es — extended with the general statement and
+the keying rule), **B50** (a scenario whose treatment fails to load is warned about and then dropped,
+so the matrix runs without it), **B51** (the delegated path undercounts economy; the ×3.81 correction
+is a budgeting unit, not a publishable multiplier), **B52** (`verify-arming`'s false negative on
+MCP-served mounts, whose only documented remedy is the unsafe one), **B53** (no native mutual
+exclusion for paid runs — three deadlocks in one day), **B54** (a gate command passed to the shell
+unvalidated, which made one 9/10 unattributable), **B55** (the credential model does not survive a
+matrix longer than a token; long matrices must be chunked and resumable), **B56** (a relative
+`[tools] repo` resolved against the process cwd, so `fathom smoke` reads 7/8 from a worktree) and
+**B57** (under subscription auth the fallback cost estimate discards every cached token, and because
+cached input is dominated by the system prompt it understates whichever arm carries the largest
+`[context] inject` — a bias that grows with exactly the quantity such a study manipulates). B57 is
+latent rather than active: every committed ledger has zero zero-cost rows, and this wave's
+`routing-decision-v1` run cross-validated the independent recomputation in `routing.cost_from_usage`
+against the CLI's own cache-aware figure at a ratio of 0.9888 over 54 trials.
 
 ## [0.2.0] - 2026-08-11
 
