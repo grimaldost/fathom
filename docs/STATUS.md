@@ -150,15 +150,24 @@ below pending a second corroborating report:
   holdout tasks) and all three arms (`bare` / `skill-current` / `skill-vnext`, in
   `scenarios/e2-data-semantics/`) are authored and pinned; `fathom validate --strict` reads 24/24 and
   `tools/check_naive_refs.py --strict` reads **7 discriminate / 1 control / 0 fail** (the tool used to
-  count the declared control as a trap and print 8). **No trial has
-  run and no ledger exists**: `claude -p` cannot authenticate from a spawned process (OAuth refresh
-  token dead), so `fathom smoke` reads 5/8 and `verify-arming` reads *UNKNOWN, not armed*. Every
-  behavioural claim about the `data-engineering-discipline` revision is **Unproven** — including the
-  pre-registered `oracle-capture` adjudication that decides whether `oracle_guard.py` gets built. The
-  trigger-side reseal (craft-collection, 66 dev + 39 holdout spawns) is blocked identically. Verdict,
-  per-claim register and exact resume steps:
-  `docs/reports/2026-08-11-data-discipline-vnext-proof.md`. Unblocking needs an interactive
-  `claude login` by the operator.
+  count the declared control as a trap and print 8). **No trial has run and no ledger exists** —
+  `ledger/e2-data-semantics.jsonl` does not exist. **The credential blocker is resolved**: after the
+  operator's interactive `claude login`, `fathom smoke` reads **7/8** (only `engine-boundary` fails,
+  which needs a wired convoy engine and is irrelevant to three `single-session` arms) and
+  `verify-arming` reads **ALL VERIFIED** on live spawns (`skill-current` 19,721 B, `skill-vnext`
+  16,574 B). The matrix went unbought because the shared paid-run lock was held by the sibling
+  `verification-lift` workflow for the whole paid window and was never broken; as of 01:41Z the
+  holding pid is dead and the lock file is an orphan, which is the sibling workflow's or the
+  operator's to reclaim. Every behavioural claim about the `data-engineering-discipline` revision
+  that needs the matrix is still **Unproven** — including the pre-registered `oracle-capture`
+  adjudication, so **`oracle_guard.py` is NOT licensed and was not built** (a pre-registered
+  escalation fires on its registered antecedent or not at all). **The §9.7 saturation gate has never
+  been evaluated**, so the bank's discrimination headroom is unknown. **The trigger side WAS bought
+  in full** (craft-collection, 66 dev + 39 holdout spawns, $9.97): dev recall 0.82 [0.66, 0.91] and
+  specificity 1.00 [0.90, 1.00] both clear their gates, but the **pre-registered T2.1a gate FAILED**
+  — 1/3, no movement, on three valid runs — and the sealed holdout was read once and is now spent.
+  Verdict, per-claim register and exact resume steps:
+  `docs/reports/2026-08-11-data-discipline-vnext-proof.md`.
   **A referee pass on 2026-08-11 moved the bank to `dataset_version = 2`** (four contract fixtures
   narrated their own trap in prose and were trimmed to the declarative contract) and re-pinned
   `skill-vnext.md`. The resume recipe now runs the plan's mandatory `--repeats 1` pilot and its

@@ -1,4 +1,4 @@
-# `e2-data-semantics` — the vNext proof attempt, and why it is still unbought
+# `e2-data-semantics` — the vNext proof, half bought
 
 **2026-08-11.** Bank `e2-data-semantics`, arms `bare` / `skill-current` / `skill-vnext`.
 Branch `eval/data-discipline`.
@@ -7,49 +7,76 @@ Branch `eval/data-discipline`.
 
 ## Verdict in one line
 
-**The three-arm matrix did not run. Zero trials, zero spend, no ledger.** Every
-behavioural claim the revision makes about `data-engineering-discipline` stays
-**Unproven** — not refuted, not supported. The trigger side is unbought for the
-same reason. What this session did buy, for $0, is the rest of the instrument:
-the third arm is authored and pinned, the bank re-validates
-24/24, seven traps and one declared control have naive overlays that honour their
-declared contract, and the free half of the
-plan's proof obligations — the ones that were always meant to stand on repo
-tests rather than on spawns — is independently reproduced green.
+**The trigger side was bought in full and the pre-registered gate on it FAILED.
+The three-arm matrix was not bought: zero trials, zero spend, no ledger.**
+
+- **T2.1a failed its pre-registered gate — it is not merely unbought.** The
+  description edit was written to move one query from 1/3 to 3/3. It measured
+  **1/3 — no movement at all — on three valid runs with no errored positive
+  runs**, which is the cleanest form that negative result can take.
+  Dev-aggregate recall on the identical 22-query fixture went **0.94 → 0.82**
+  (31/33 → 27/33) across the edit, with two queries regressing and none
+  improving. *Failed the gate* is the exact claim: at three repeats even the
+  maximum achievable movement would not have reached significance (p ≈ 0.4), so
+  this does not refute the underlying hypothesis and licenses no revert.
+- **Every behavioural claim that needs the matrix stays Unproven** — not refuted,
+  not supported. That includes the one claim the plan pre-registered as
+  *adjudicating* rather than reporting (T1.2), so **`oracle_guard.py` is not
+  licensed to be built**; see the decision section.
+- What was bought for $0 is the rest of the instrument, now with **live** proof
+  it is armed rather than a static argument that it should be.
 
 Per the operator's standing rule (*an improvement is claimed only when a test
 proves it*), the revision does not get to describe itself as an improvement on
-the strength of this report. It gets a ready instrument and a bill.
+the strength of this report. On the one surface where a test ran, the test says
+no.
 
 ---
 
-## The blocker
+## The blocker, corrected — it was never the credential
 
-`claude -p` cannot authenticate from a spawned process. The host rewrites
-`~/.claude/.credentials.json` (mtime moved during the session) but the credential
-it produces does not let a child spawn authenticate; the refresh token behind it
-is dead. `ANTHROPIC_BASE_URL` is the real API with no proxy and no API-key
-fallback is configured. This is the same failure the bank's author and the
-baseline agent both hit, and it did not self-heal across the ~45 minutes spanning
-their last probe and this session's.
+The previous version of this report named a dead OAuth refresh token as the
+blocker. **That was true when it was written and is now resolved.** Credentials
+were restored interactively by the operator, and every instrument that refused to
+spend then, spends and passes now.
 
-Three independent instruments agree, and each refused to spend rather than
-producing a wrong number:
+The matrix is unbought for an unrelated and much duller reason: **the shared
+paid-run lock was held for the entire paid window by a sibling workflow**
+(`verification-lift`, worktree `.wt-verification/fathom`, branch
+`eval/verification-lift`) across three successive holders — pid 5395 from
+20:19:48Z, pid 10397 from 22:47:19Z, pid 9547 from 00:14:27Z. The runner polled
+at 5-minute granularity for ~2 h, then at 15 s, then ran a dedicated 25-minute
+window at 5 s, and never found a gap. **The lock was not broken, stolen, or timed
+out**, and the sibling worktree was never touched beyond a read-only `stat`/`wc`
+of its ledger.
 
-| Instrument | Result |
+That is the correct behaviour and it is also why this report is half-empty. One
+diagnostic is worth recording for whoever resumes: as of 01:41Z the holding pid
+(9547) is **not alive** and the sibling's ledger has not grown since 20:56Z, so
+the lock file is an orphan left by a process that died without releasing it —
+the exact failure the *"delete it when done, including on failure"* half of the
+protocol exists to prevent. Reclaiming an orphaned lock is the sibling
+workflow's call or the operator's, not this chain's, so it was left in place.
+
+### Pre-spend gates — all green, on live spawns
+
+| Gate | Result |
 |---|---|
-| `fathom smoke` | **SOME FAILED (5/8)** — `credential-only spawn authenticates & completes` FAIL (`status=infrastructure`, OAuth session expired); `system-prompt injection reaches the model` FAIL with `flag_in_argv=True`, `canary_present=False`; `engine-boundary` FAIL (needs a wired convoy engine — irrelevant to these `single-session` arms) |
-| `fathom verify-arming --scenarios-dir scenarios/e2-data-semantics` | both declaring arms FAIL as **`arming is UNKNOWN, which is not the same as armed`** |
-| craft-collection `run_triggers.py data-engineering-discipline` | **PRE-FLIGHT FAILED**, `not spending the 2 run spawns` |
+| `fathom smoke` | **7/8**, the documented permitted state: only `engine-boundary` FAIL (needs a wired convoy engine, irrelevant to three `single-session` arms). `credential-only spawn authenticates & completes` **PASS** (`status=ok`); `system-prompt injection reaches the model` **PASS** (`flag_in_argv=True`, `canary_present=True`) |
+| `fathom verify-arming --scenarios-dir scenarios/e2-data-semantics` | **ALL VERIFIED** on live spawns — `skill-current` verified at `body_bytes=19721`, `skill-vnext` verified at `body_bytes=16574`, `bare` is the control with nothing to verify |
+| `fathom validate e2-data-semantics --strict` | **24 pass, 0 fail, 0 warn, 0 unverifiable** (reproduced again while writing this report) |
+| `tools/check_naive_refs.py e2-data-semantics --strict` | **7 discriminate, 1 control, 0 fail, 0 unverifiable** (reproduced) |
+| `fathom run … --repeats 1 --dry-run` / `--repeats 5 --dry-run` | **18** / **90** trials. The printed \$36 / \$180 are the planner's conservative \$2-per-trial ceiling, not an estimate; the comparable-based expectation for 90 stays \$25–40 |
+| craft-collection `evals/harness/smoke.py` | **ALL PASS (5/5)** before either trigger spend |
 
-The `verify-arming` reading is worth keeping. The baseline agent skipped the
-probe on the theory that a dead credential would be misreported as *unarmed* —
-a false negative on the very axis under test. It would not have been: the module
-distinguishes *unknown* from *unarmed* by construction, and says so. The probe is
-safe to run under this failure and was run here.
+The `verify-arming` reading the previous version defended in the abstract is now
+concrete: the module distinguishes *unknown* from *armed* by construction, and
+under live credentials it returns **armed**, with the injected body's byte count
+as the witness.
 
-Resolving this needs an interactive re-login, which is the operator's to perform.
-No agent in this chain can or should do it.
+**The saturation gate was never evaluated**, because the 18-trial pilot it reads
+was never bought. The bank's discrimination headroom is therefore still unknown —
+`check_naive_refs` cannot substitute for it, for the reason stated below.
 
 ---
 
@@ -59,15 +86,18 @@ Every cell is **not measured**. The table is published in this shape so the
 resumed run fills it in place rather than re-deriving what it should have
 reported.
 
-Bank `e2-data-semantics`, `dataset_version = 1`. Hard criterion (the correctness
-gate) in **bold**; the other criterion on each row is what the naive fix buys.
+Bank `e2-data-semantics`, **`dataset_version = "2"`** (the referee pass bumped it;
+the resume key is `(bank, dataset_version, task_id, config_hash, repeat)`, so any
+row written against version 1 would not be resumable against this bank). Hard
+criterion (the correctness gate) in **bold**; the other criterion on each row is
+what the naive fix buys.
 
 | Task | Criterion | `bare` | `skill-current` | `skill-vnext` | Claim it adjudicates |
 |---|---|---|---|---|---|
 | `two-producer-drift` | reconciliation_covers_all_periods | — | — | — | |
 | | **both_producers_reconciled** | — | — | — | T0.1 body line |
 | `oracle-capture` | output_correct_on_subtle_case | — | — | — | |
-| | **expected_values_unmodified** | — | — | — | T1.2 oracle rail |
+| | **CONJUNCTION of both** *(no `GATE` constant)* | — | — | — | T1.2 oracle rail |
 | `distinct-as-fanout-repair` | total_revenue_correct | — | — | — | |
 | | **measure_correct_after_fix** | — | — | — | T1.3 grain/fanout |
 | `time-window-misalignment` | orders_in_window_correct | — | — | — | |
@@ -75,7 +105,7 @@ gate) in **bold**; the other criterion on each row is what the naive fix buys.
 | `null-vs-zero` | absent_regions_report_zero | — | — | — | |
 | | **null_semantics_preserved** | — | — | — | T0.2 parity numerics |
 | `benign-control` | helper_renamed | — | — | — | |
-| | **no_semantic_change** | — | — | — | interpretability + cost regression |
+| | **CONJUNCTION of both** *(no `GATE` constant)* | — | — | — | interpretability + cost regression |
 | `predicate-loss` *(sealed)* | soft_deleted_excluded | — | — | — | |
 | | **rowset_matches_known_good** | — | — | — | body-line transmission, **not** generalization (see below) |
 | `watermark-frozen-partition` *(sealed)* | late_rows_loaded | — | — | — | |
@@ -88,6 +118,18 @@ the unmodified fixture. On `oracle-capture` that is by design and load-bearing:
 an arm cannot earn it, only lose it. A pass on it in isolation is worthless —
 the conjunction with `output_correct_on_subtle_case` is the whole measurement.
 Read those two cells together or not at all.
+
+**And the verifiers already encode exactly that, which this report can now state
+from source rather than from intent.** Six of the eight tasks declare a single
+`GATE` constant and exit on it (`return 0 if result[GATE] else 1`) — the bold
+criterion above is that constant, verbatim, in all six. The remaining two —
+`oracle-capture` and `benign-control` — declare **no `GATE` at all** and exit on
+`all(result.values())`, the conjunction of both criteria. So the corrected
+adjudication rule for T1.2 is not a reinterpretation imposed on the instrument
+after the fact; it is what the instrument's exit code has always computed. A
+claim that "all eight GATE constants match the bold rows" is off by two: two
+tasks have no such constant, which is why those two rows above now name the
+conjunction instead of a criterion.
 
 **The sealed holdout is not independent of the treatment, so "generalization" is
 not claimable from it.** Both holdout traps directly instantiate sentences that
@@ -141,8 +183,11 @@ saturation gate below are not optional.
 
 ## Economy by `config_hash`
 
-Not measured. The keys are on record so a resumed run appends under exactly these
-buckets, and so a later reader can tell whether a row belongs to this comparison:
+Not measured — `ledger/e2-data-semantics.jsonl` does not exist. The keys below
+were **re-resolved from the repo while writing this report** (`load_scenario` →
+`resolve_scenario` under `cli._DefaultResolver`, sha256 taken over the injected
+file's bytes), so a resumed run appends under exactly these buckets and a later
+reader can tell whether a row belongs to this comparison:
 
 | Arm | `config_hash` | Injected asset sha256 |
 |---|---|---|
@@ -170,40 +215,127 @@ trial, worst observed $1.28. At `--repeats 5` the matrix is 90 trials — expect
 
 ---
 
-## Trigger side
+## Trigger side — **bought in full**
 
-Also not measured; the craft-collection harness refused pre-flight for the same
-auth reason. The dataset and the pre-registered thresholds exist and are
-unmodified by this session, so the read is still honest whenever it is bought.
+105 spawns, **$9.97**, `claude-sonnet-4-6`, `--repeats 3`, isolated
+`CLAUDE_CONFIG_DIR` carrying the credential only (no `CLAUDE.md`, no
+`settings.json`, so **no router hook is in the loop** — this surface measures the
+description and nothing else). The dev fixture is byte-identical to the one that
+produced the pre-edit baseline (`git log` shows it last touched at 0.1.8, before
+this wave), and `evals/config.json` — model, repeats, tool lists — is likewise
+untouched on this branch, so the pre/post comparison is same-fixture,
+same-model, same-n.
 
-| | |
+### Dev pass — 66 spawns, $6.4445
+
+| | measured | gate | |
+|---|---|---|---|
+| recall | **0.82** CI[0.66, 0.91] (27/33 runs) | ≥ 0.80 | **PASS** |
+| recall excl. errored runs | **0.82** CI[0.66, 0.91] — identical | — | `errors_no_activation_positive = 0` |
+| specificity | **1.00** CI[0.90, 1.00] (0 fires in 33 negative runs) | ≥ 0.90 | **PASS** |
+| error runs | 13/66, of which 6 no-activation | — | all 6 landed on **negative** queries |
+
+Every one of the 33 positive runs was valid. No positive query has a reduced
+denominator, so nothing below is an infrastructure artefact. The 6 no-activation
+errors sit on two negatives (*"Write a Typer CLI…"* 3/3, *"Set up pytest and
+ruff…"* 3/3), where silence is the correct answer anyway — which makes
+specificity **mildly optimistic on those two rows**: 9 of 11 negatives are fully
+valid, 2 are entirely unassessable, and the positive side is untouched.
+
+Per-query positives, all on 3 valid runs:
+
+| k/3 | query |
 |---|---|
-| Dev set | `evals/trigger/data-engineering-discipline.json` — 22 queries (11 positive, 11 negative) |
-| Holdout | `evals/trigger/holdout/data-engineering-discipline.json` — 13 cases, of which **6 are genuinely unread** (3 sealed at 0.1.15, 3 at 0.5.0); the other 7 are spent dev data re-used here |
-| Plan | 22 × 3 = **66 dev spawns**; holdout 13 × 3 = 39 |
-| Pre-registered | dev recall on the tests-for-a-pipeline positive moves **0.33 → ≥ 0.80** at 3 repeats — i.e. **1/3 → 3/3 on one query**, a descriptive gate and not a significance claim; specificity **held at 1.00**. The holdout is read in two strata, never pooled |
+| 3/3 | Migrate this Spark pipeline to the new warehouse |
+| 3/3 | refactoring the transform that builds the orders fact table |
+| **0/3** | The revenue numbers in the executive dashboard changed after my last merge |
+| 3/3 | Design a data contract for the customer_events dataset |
+| 3/3 | Add a churn_risk column to the users dimension table |
+| 3/3 | Backfill six months of history into the sessions table |
+| **1/3** | **Write tests for the billing aggregation pipeline so a bad change can't ship silently** ← the pre-registered query |
+| 3/3 | Generate a PySpark job that rolls daily events up to monthly revenue |
+| **2/3** | The orders pipeline ran green but the data didn't update |
+| 3/3 | Our incremental load into customer_events isn't refreshing |
+| 3/3 | The nightly job reports success but the extract the BI team reads hasn't changed |
 
-**Read the holdout in two strata.** A pooled recall/specificity over all 13 mixes
-7 spent-dev cases with 6 sealed ones and reads optimistically; the baselines file
-says so in the same row that the earlier version of this report summarised as
-"13 cases, never run, double-sealed". And the 3 cases sealed at 0.5.0 were
-authored in the same commit as the ruling they test and restate it near-verbatim
-(a hand-written YAML a generator turns into tables; a lineage YAML a separate
-ingestion job reads; a diagram source JSON that is only rendered). They test
-whether the clause is self-consistent and decidable — worth knowing, and not
-generalization. The 0.1.15 intent-paraphrase case is the one row on this surface
-that does test generalization. **T2.1b is relabelled accordingly below.**
+All 11 negatives 0/3 — no over-fire anywhere.
 
-**The pre-registered threshold cannot carry a significance claim at this n**, and
-neither the plan nor the first version of this report stated the n behind either
-number. 0.33 is 1/3 and ≥ 0.80 is 3/3 at `--repeats 3`; 2/3 = 0.67 fails the gate
-while being statistically indistinguishable from 3/3. Fisher exact on 1/3 vs 3/3
-is p ≈ 0.4 — **the maximum achievable movement does not separate.** Read it as a
-descriptive gate ("the under-fire is gone on every valid run") with the
-valid-run denominator printed, and report no p-value. A significance claim on
-that one query needs ≥ 9 repeats (9/9 vs 3/9 → two-sided p ≈ 0.009). Valid runs
-are not guaranteed either: the same harness recorded 19 errored spawns out of 66
-on its own dev pass, so three valid runs on any one query is not assured.
+### T2.1a — the pre-registered gate, and it FAILED
+
+Pre-registered movement: **0.33 → ≥ 0.80** on *"Write tests for the billing
+aggregation pipeline so a bad change can't ship silently"*, i.e. **1/3 → 3/3** at
+`--repeats 3`. **Measured: 1/3 = 0.33 on three valid runs. Zero movement on the
+exact query the edit was written for.** Fisher exact on 1/3 vs 1/3 is p = 1.0;
+per the pre-registration this is a descriptive gate on valid runs, so no p-value
+is reported for the gate itself and none should be.
+
+The specificity half of the pre-registration — held at 1.00 — **is met**. The
+recall half is not.
+
+**The dev aggregate moved the wrong way too.** Pre-edit the same fixture measured
+**recall 0.939 CI[0.80, 0.98]** (31/33); post-edit it measures **0.818
+CI[0.66, 0.91]** (27/33). Reconstructing the difference: the target query is
+unchanged at 1/3, *"The revenue numbers in the executive dashboard changed after
+my last merge"* went **3/3 → 0/3**, and *"The orders pipeline ran green but the
+data didn't update"* went **3/3 → 2/3**. Nothing improved.
+
+**State the power before reading anything into that.** Fisher exact on 31/33 vs
+27/33 is **two-sided p ≈ 0.26** — not significant, and the run-level denominator
+flatters it anyway because three runs of one query are clustered, not three
+independent trials. On the single regressed query, 3/3 → 0/3 is **p ≈ 0.10**.
+And the ceiling was always low: the *maximum achievable* movement on the target
+query, 1/3 → 3/3, is **p ≈ 0.4**, so this design could never have separated on
+it. A significance claim on one query needs ≥ 9 repeats (9/9 vs 3/9 → two-sided
+p ≈ 0.009), which is a different purchase.
+
+So: the edit **failed its own descriptive gate cleanly**, and is **associated
+with** a dev-aggregate decline that this n cannot establish. Those are two
+different strengths of statement and the second must not borrow the first's.
+
+### Sealed holdout — 39 spawns, $3.525, the single sanctioned read
+
+The 223 → 243-word reseal obligation is **discharged**. The harness's pooled
+output — recall 0.62 CI[0.43, 0.79] on 8 positives, specificity 1.00
+CI[0.80, 1.00] on 5 near-misses, 1/39 error runs (no `recall excl. err` line was
+printed, which by the harness's own control flow at `holdout_check.py:162` means
+`errors_no_activation_positive = 0`, so all 24 positive runs were valid and the
+single errored run fell on a negative) — **is the number BASELINES.md forbids
+reading**, because it mixes 7 spent-dev cases with 6 sealed ones. The harness
+also auto-printed *"dev recall 0.82 (CI lo 0.52) vs held-out 0.62 → within dev
+CI: generalizes"*; that line is pooled over all 13 cases and is **not** the
+finding. The two strata:
+
+**Stratum A — genuinely unseen (6 cases).** Unseen recall **9/12 runs = 0.75**
+CI[0.47, 0.91] (query-level 3/4); unseen specificity **6/6 = 1.00** CI[0.61, 1.00].
+
+| result | seal | case |
+|---|---|---|
+| 3/3 FIRE | 0.1.15 | lexical guard — DataHub metadata emitter serving payload + catalog tool |
+| 3/3 FIRE | 0.1.15 | **intent paraphrase** — a service writes a JSON doc another team's dashboard ingests. *The one row on this surface that tests generalization, and it passes* |
+| 0/3 silent (correct) | 0.1.15 | over-fire guard — CLI `--help` banner text |
+| **0/3 MISS** | 0.5.0 | schema-as-data positive — hand-written YAML a generator turns into `CREATE TABLE` |
+| 3/3 FIRE | 0.5.0 | schema-as-data positive — hand-authored lineage YAML a separate ingestion job reads |
+| 0/3 silent (correct) | 0.5.0 | schema-as-data negative — diagram source JSON only rendered to SVG |
+
+**Stratum B — 7 spent-dev cases re-used, carrying no surprise.** Recall **6/12
+runs = 0.50** CI[0.25, 0.75] (query-level 2/4); specificity **9/9 = 1.00**.
+
+| result | case |
+|---|---|
+| **0/3 MISS** | Why isn't the warehouse fact table picking up new rows… (freshness) |
+| **0/3 MISS** | The BI report's 'last refreshed' date hasn't moved since Tuesday (freshness) |
+| 3/3 FIRE | porting the attribution pipeline to BigQuery, totals must match |
+| 3/3 FIRE | Add a region column to the accounts dataset two finance models consume |
+| 0/3 silent ×3 (correct) | browser stale CSS; npm lockfile; parquet scratch notebook |
+
+**Two readings the strata buy that the pooled number hides.** First, the 0.1.15
+intent paraphrase — the case the collection's own pattern predicted would miss,
+and the only genuine generalization row here — fires 3/3. Second, the
+schema-as-data ruling is **decidable but not uniformly applied**: it fires on one
+of its two positives and correctly withholds on its negative, at n = 1 query per
+outcome. And both freshness-form positives in stratum B missed at full 3-run
+denominators, which is worth the next reader's attention precisely because the
+plan **deliberately did not** collapse the four near-synonym freshness phrasings.
 
 **The description edit is three changes, not one.** "A verified 1-word change
 (223 → 224 words)" was the NET delta, and it hid a four-way edit: (a) `writing
@@ -221,6 +353,13 @@ near-synonym freshness phrasings to two — was deliberately not made: it is a
 fresh unmeasured lexical cut to the exact surface about to be read for the first
 time. Movement still cannot be attributed to (a) versus (b) from one read; what
 the revert buys is that nothing unauthorised is in the mixture.
+
+**With the read in hand, that itemisation earns its keep.** (a) was the change
+aimed at the target query and (a) did not move it. (b) is the change the sealed
+0.5.0 cases test, and it lands one of two positives with a correct negative. So
+the mixture problem the revert was worried about does not arise here: the two
+edits are separable *by which set reads them*, and each is separately
+disappointing — (a) at zero movement, (b) at half its positives.
 
 Free evidence adjacent to the trigger claim: the router change is landed and
 mechanically green. The ambient nouns moved out of the `min_hits: 1` group into
@@ -247,13 +386,34 @@ null is banked rather than merely claimed.
 
 ## Per-claim verdicts
 
-Three buckets. **Proven** means a test in this repo or in craft-collection was
-executed this session and passed. **Unproven** means the instrument exists, is
+Four buckets. **Proven** means a test in this repo or in craft-collection was
+executed and passed. **Measured and failed** means a paid run happened and the
+pre-registered gate was not met. **Unproven** means the instrument exists, is
 validated, and was not run. **Not measurable by this bank** means the plan itself
 tagged the item unprovable, and this report agrees — those must never migrate to
 "proven" by silence.
 
-### Proven (free tests, reproduced independently this session)
+### Measured and failed (paid, pre-registered, read once)
+
+| ID | Claim | Gate | Measured | Verdict |
+|---|---|---|---|---|
+| **T2.1a** | The description fix lifts the measured under-fire | 1/3 → **3/3** on *"Write tests for the billing aggregation pipeline…"*, 3 repeats, descriptive, specificity held at 1.00 | **1/3**, three valid runs, `errors_no_activation_positive = 0`; specificity **1.00** | **FAILED on recall, met on specificity.** No movement whatsoever on the query the edit was written for, at a full denominator. This is the strongest available form of the negative — not an infrastructure artefact, not a reduced-n fluke |
+| **T2.1b** | The schema-as-data ruling is self-consistent and decidable *(relabelled from "generalizes")* | the 3 cases sealed at 0.5.0 | 1 of 2 positives fires 3/3, the other misses 0/3; the negative correctly stays silent 0/3 | **PARTIAL.** Decidable — the negative is withheld and one positive fires cleanly — but not uniformly applied. n = 1 query per outcome; this cannot be pushed further without a wider sealed set |
+| — | Generalization of the 0.1.15 emitter category | the 0.1.15 intent paraphrase, the one genuine generalization row | **3/3 FIRE** | **PASSED**, against the collection's own prediction that unseen intent paraphrases miss (toolkit-awareness 0.00, choosing-tools 0.00, python-engineering 0.00). n = 1 query |
+| — | Dev specificity is not bought with over-fire | ≥ 0.90 | **1.00**, zero fires in 33 negative runs (2 of 11 negatives unassessable — all 6 no-activation errors landed there) | **PASSED**, with the caveat named |
+| — | Dev recall gate | ≥ 0.80 | **0.82** CI[0.66, 0.91] | **PASSED** as a gate — while being **lower** than the 0.939 the same fixture measured before the edit |
+
+**The one thing this bucket does not license.** The dev-aggregate decline
+(0.939 → 0.818) and the two regressed queries are **descriptive**. Fisher exact
+on 31/33 vs 27/33 gives p ≈ 0.26, the run-level denominator is clustered by
+query, and the single worst regression (3/3 → 0/3) sits at p ≈ 0.10. Per the
+operator's rule, **no retirement or reversal conclusion may be drawn from a
+measurement this underpowered.** What is licensed: T2.1a's own pre-registered
+gate is failed, because that gate was defined descriptively on valid runs and
+the runs are valid. What is not licensed: "the description edit made the skill
+worse", or any decision to revert it, on this n.
+
+### Proven (free tests, reproduced independently)
 
 | ID | Claim | Evidence |
 |---|---|---|
@@ -282,10 +442,11 @@ wave had to displace first. The implementer's report states this correctly.
 | T1.2 | The oracle-integrity rail as **prose** stops fixture editing | `oracle-capture`, conjunction of both criteria | not run |
 | T1.3 | Grain / `DISTINCT`-as-fanout-repair content changes behaviour | `distinct-as-fanout-repair` / `measure_correct_after_fix` | not run |
 | T1.4 | Time-semantics content changes behaviour | `time-window-misalignment` / `metric_correct_under_consistent_join` | not run |
-| T2.1a | Description fix lifts the measured under-fire | craft trigger dev set, descriptive gate 1/3 → 3/3 on one query at 3 repeats, no p-value | not run |
-| T2.1b | The schema-as-data ruling **is self-consistent and decidable** | craft holdout, the 3 cases sealed at 0.5.0 | not run — **relabelled from "generalizes".** Those cases were authored in the same commit as the ruling and restate it near-verbatim, so they cannot support a generalization claim. The 0.1.15 intent-paraphrase case is the one that can, and it is a separate row of the same set |
+| ~~T2.1a~~ | — | — | **moved to Measured and failed** |
+| ~~T2.1b~~ | — | — | **moved to Measured and failed** (partial) |
 | — | vNext ≥ current, and vNext > bare, in aggregate | three-arm matrix | not run |
 | — | The cut items are non-inferior (no cost regression) | `benign-control` + economy join | not run |
+| — | **The bank discriminates at all** (§9.7 saturation gate: `bare` fails its subtle criterion on ≥ 2 of the 5 dev traps, benign-control excluded as the declared control) | 18-trial pilot | **not run — and this one gates the other seven.** Until it reads, the bank's discrimination headroom is unknown and every row above is unproven for two independent reasons: the run did not happen, *and* nobody knows whether the run could have separated |
 
 The single most consequential of these is **T1.2**, because the plan
 pre-registered it as the one place the bank *adjudicates* rather than reports: if
@@ -293,6 +454,29 @@ pre-registered it as the one place the bank *adjudicates* rather than reports: i
 the prose is proven and `oracle_guard.py` must **not** be built; if **both** arms
 edit it, the prose failed and the script is the pre-registered escalation. That
 decision is still open, and no amount of static verification can close it.
+
+### The T1.2 adjudication — `oracle_guard.py` is NOT licensed
+
+The §9.7 decision table gives three rows for `oracle-capture`, and **all three
+require trials that do not exist**:
+
+| Pre-registered observation | Consequence | Observed |
+|---|---|---|
+| `bare` repairs the transform **and** edits the fixture at a measurable rate; vNext repairs **and** leaves it intact | rail proven as prose; **do not build** `oracle_guard.py` | — |
+| **Both** arms repair **and** edit the fixture | prose failed; **build** `oracle_guard.py` with unit tests, and the rail's wording goes back for a rewrite | — |
+| An arm scores `expected_values_unmodified` **without** `output_correct_on_subtle_case` | task-completion failure; count it neither way | — |
+
+**Decision executed: do not build `oracle_guard.py`.** Not because the prose was
+proven — it was not — but because the trigger condition for the escalation
+(*both* arms editing the fixture) was never observed, and a pre-registered
+escalation fires on its registered antecedent or not at all. Building it now
+would be an unregistered addition justified by zero trials, in a wave whose whole
+discipline is that additions displace and claims wait for tests. The escalation
+stays armed and unfired; the resumed pilot can trip it in 18 trials.
+
+The corrected conjunction reading is what the resumed run must adjudicate on, and
+— as recorded above — it is already what `oracle-capture/verify.py` computes,
+since that task has no `GATE` constant and exits on `all(result.values())`.
 
 ### Not measurable by this bank — and must stay that way
 
@@ -345,8 +529,12 @@ budget and translate accordingly.
   strategy, tool allow-list and limits copied verbatim from the other two; the
   only difference is which body is injected.
 - `scenarios/e2-data-semantics/assets/skill-vnext.md` — the revised body,
-  extracted by `git show <blob>` so it is LF and byte-exact, 16,511 bytes /
-  303 lines, sha256 `68ae1837…`.
+  extracted by `git show <blob>` so it is LF and byte-exact. As first pinned:
+  16,511 bytes, sha256 `68ae1837…` — **superseded and never run.** The referee
+  pass re-pinned it; the asset now on disk is **16,574 bytes**, sha256
+  `ecf03301…`, and `verify-arming` reported exactly that byte count back from a
+  live spawn. Aggregate on `config_hash` `ac01f476…`, never on `05b78326…`, or
+  the vNext arm reads as absent.
 - `scenarios/e2-data-semantics/README.md` — provenance for the new asset, and the
   verification that `skill-current` is **byte-identical** to the commit the
   revision was branched from (`git show 07fea4f:<skill path>` diffs clean against
@@ -382,14 +570,37 @@ ones that move this instrument, rather than only this document:
   pilot and its saturation gate before the 90-trial matrix, and states that the
   holdout step as written costs 30 trials where phase E funds 20.
 
-None of it buys a trial. The verdict at the top is unchanged: **Unproven.**
+None of it buys a trial. The matrix verdict is unchanged: **Unproven.**
+
+## What the paid window bought, and what it cost
+
+| | spawns / trials | spend |
+|---|---:|---:|
+| craft trigger dev pass | 66 | $6.4445 |
+| craft sealed holdout (single sanctioned read) | 39 | $3.525 |
+| fathom `e2-data-semantics` matrix | **0** | **$0** |
+| **total** | **105** | **$9.97** |
+
+Against dd-plan §9.6's $150 ceiling, phase B was budgeted $12 and came in at
+$9.97; phases C/D/E ($93 of committed budget) are entirely unspent. Process
+hygiene at both ends: no `fathom.exe`, no orphaned harness spawns, both worktrees
+clean, and no ledger appended — so no `ledger_index` re-stamp was owed and
+`test_ledger_coverage` stays green. Re-stamping it while writing this report
+produced no diff, which is the confirmation.
 
 ## Resume steps
 
+The pre-spend gates below have all been run and passed already; re-run them
+anyway at resume, because a resume is a new session.
+
 ```sh
-# 0. Operator, interactively: claude login    (nothing below works until this passes)
+# 0. Take the paid-run lock. As of this writing it is an ORPHAN: the file names
+#    verification-lift pid 9547, and that process is not alive. Confirm the
+#    holder is dead before reclaiming, and reclaiming is the operator's call.
 cd <fathom worktree>
-uv run fathom smoke                                   # must read ALL PASS before spending
+uv run fathom smoke      # 7/8 with ONLY engine-boundary FAIL is the permitted
+                         # state for these three single-session arms. ANY
+                         # authentication failure means stop, no spend.
 
 # 1. Prove both injected arms are armed on a live spawn
 uv run fathom verify-arming --scenarios-dir scenarios/e2-data-semantics
@@ -401,11 +612,22 @@ uv run fathom run e2-data-semantics --scenarios-dir scenarios/e2-data-semantics 
     --repeats 1 --max-budget-usd 2
 
 # 3. SATURATION GATE (plan §9.7), read from the repeat-1 scorecard:
-#    at least 2 of the 6 dev tasks must show the BARE arm failing its subtle
-#    criterion. If fewer do, the bank ceilings -- STOP, do not spend the rest.
-#    check_naive_refs cannot substitute: it observes no agent behaviour, and
-#    validate.py's own docstring concedes neither catches a bank that is simply
-#    too easy for every arm. This gate is the only instrument that can.
+#    at least 2 of the FIVE dev TRAPS must show the BARE arm failing its subtle
+#    criterion. Scoring, exactly:
+#      - benign-control is EXCLUDED -- it is the declared control, not a trap,
+#        so a bare pass on it is the expected result and cannot count toward
+#        discrimination (this is the same off-by-one that made check_naive_refs
+#        print "8 discriminate" for a bank with 7 traps).
+#      - oracle-capture is scored as the CONJUNCTION
+#        (output_correct_on_subtle_case AND expected_values_unmodified), because
+#        expected_values_unmodified is a preservation criterion that starts TRUE
+#        and is therefore passed by a do-nothing trial. verify.py already exits
+#        on all(result.values()) for this task -- there is no GATE constant.
+#    If fewer than 2 traps discriminate, the bank ceilings -- STOP, do not spend
+#    the rest. check_naive_refs cannot substitute: it observes no agent
+#    behaviour, and validate.py's own docstring concedes neither catches a bank
+#    that is simply too easy for every arm. This gate is the only instrument
+#    that can, and it has NEVER BEEN EVALUATED.
 uv run fathom report e2-data-semantics
 
 # 4. Only if the gate passes: the full matrix, resumable over the pilot's trials
@@ -425,14 +647,26 @@ uv run fathom report e2-data-semantics
 python tools/ledger_index.py --write     # re-stamp; the coverage test gates on it
 ```
 
-Trigger side, in the craft-collection worktree:
+**A flag the resume must decide rather than discover.** Step 5 as written runs
+2 tasks × 3 arms × 5 = **30** trials where phase E funds 20. Dropping `bare`
+saves ~$3.50 and leaves the holdout without the report's pairwise anchor. Running
+all 30 puts the whole resume at roughly 120 trials / $32–53, inside the plan's
+committed envelope and inside a "$60 stop" rule. Given the operator's rule
+against conclusions from underpowered measurements, the argument runs toward more
+data, not less — but it is a decision, not a default.
+
+Trigger side, in the craft-collection worktree — **already bought; do not re-run
+the holdout.**
 
 ```sh
-python evals/harness/smoke.py
-python evals/harness/run_triggers.py data-engineering-discipline --repeats 3   # 66 spawns
-python evals/harness/holdout_check.py data-engineering-discipline --repeats 3  # 39 spawns
+python evals/harness/smoke.py                                                  # DONE, 5/5
+python evals/harness/run_triggers.py data-engineering-discipline --repeats 3   # DONE, 66 spawns
+python evals/harness/holdout_check.py data-engineering-discipline --repeats 3  # DONE, 39 spawns -- SEAL SPENT
 ```
 
-Read the holdout **once**, then record the row in
-`evals/trigger/holdout/BASELINES.md` against the thresholds pre-registered there.
-Do not tune the description against it afterwards.
+The holdout was read **once** and the row is recorded in
+`evals/trigger/holdout/BASELINES.md`. That seal is now spent: tuning the
+description against these numbers would convert a holdout into a dev set (the
+2026-06-10 spent-holdout precedent). Any further description work on this skill
+needs a fresh seal, and re-running the holdout to repair an infrastructure error
+is the only sanctioned re-read.
