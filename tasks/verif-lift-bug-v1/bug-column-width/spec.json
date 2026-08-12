@@ -1,0 +1,47 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "tablekit.width",
+  "edge_cases": [
+    [
+      [
+        [
+          "identifier"
+        ],
+        [
+          [
+            "12"
+          ]
+        ]
+      ],
+      [
+        10
+      ]
+    ],
+    [
+      [
+        [
+          "a",
+          "region"
+        ],
+        [
+          [
+            "xx",
+            "eu"
+          ]
+        ]
+      ],
+      [
+        2,
+        6
+      ]
+    ]
+  ],
+  "func": "column_widths",
+  "module_filename": "width.py",
+  "package": "tablekit"
+}

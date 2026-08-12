@@ -161,8 +161,9 @@ discriminate, and the trial actually ran.
 
 ### Analyses published under the fixed instrument
 
-- `skill-pyeng-v1` re-validated: skill arm 3/3 vs 0/7 pooled controls (p=0.0083), and
-  the skill arm is also the cheapest. Binding limit K=1 task, stated on the scorecard.
+- `skill-pyeng-v1` re-validated: skill arm 3/3 vs 0/8 pooled controls (two-sided Fisher
+  p=0.0061), and the skill arm is also the cheapest. Binding limit K=1 task, stated on
+  the scorecard.
 - Cross-project gate verdicts recorded in `docs/backlog.md`; skeletons and cost plans
   for the two still-unmeasured gates in
   `docs/specs/2026-08-11-cross-project-gate-banks.md`.

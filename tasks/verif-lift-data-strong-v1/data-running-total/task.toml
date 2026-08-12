@@ -1,0 +1,17 @@
+id = "data-running-total"
+instruction = """
+`rollup.running.running_total` adds the absolute value of each entry, so a
+negative entry increases the running sum instead of reducing it. Accumulate the
+signed values as the README describes.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

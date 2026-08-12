@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_parse.py": "1e1569737f0eaf9d187a205c83e20857f2b30e047758fa50aa1cf5fb605d7633"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "README.md",
+  "must_contain": "default timeout is 30 seconds",
+  "must_not_contain": "default timeout is 60 seconds",
+  "package": "flagkit"
+}

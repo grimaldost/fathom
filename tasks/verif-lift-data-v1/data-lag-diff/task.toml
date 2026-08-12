@@ -1,0 +1,17 @@
+id = "data-lag-diff"
+instruction = """
+`series2.lag.lag_diff` trusts the input order, so a series that arrives unsorted
+produces differences against the wrong neighbour. Sort by `t` ascending first,
+as the README states; the `None` for the first point is already right.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

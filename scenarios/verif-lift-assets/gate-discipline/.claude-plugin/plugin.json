@@ -1,0 +1,5 @@
+{
+  "name": "subagent-generic-gate",
+  "version": "0.0.1",
+  "description": "Validity test: a SubagentStop gate whose wording does NOT name the measured criterion (no 'check', 'test', or 'regression') — does the mechanism generalize beyond teaching-to-the-test?"
+}

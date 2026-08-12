@@ -1,0 +1,26 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "textkit.title",
+  "edge_cases": [
+    [
+      [
+        "well-known issue"
+      ],
+      "Well-Known Issue"
+    ],
+    [
+      [
+        "up-to-date"
+      ],
+      "Up-To-Date"
+    ]
+  ],
+  "func": "title_case",
+  "module_filename": "title.py",
+  "package": "textkit"
+}

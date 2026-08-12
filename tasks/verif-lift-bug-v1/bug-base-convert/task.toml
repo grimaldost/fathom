@@ -1,0 +1,17 @@
+id = "bug-base-convert"
+instruction = """
+`numerals.base.to_base` returns the empty string for zero instead of the
+single digit the README specifies. Render zero correctly in every supported
+base without disturbing the non-zero cases.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

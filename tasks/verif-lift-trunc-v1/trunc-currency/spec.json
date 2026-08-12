@@ -1,0 +1,47 @@
+{
+  "cited_slice_end": 21,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "amounts.money",
+  "edge_cases": [
+    [
+      [
+        123456789
+      ],
+      "1,234,567.89"
+    ],
+    [
+      [
+        100000
+      ],
+      "1,000.00"
+    ]
+  ],
+  "func": "fmt_amount",
+  "func_past_slice": "fmt_total",
+  "module_filename": "money.py",
+  "package": "amounts",
+  "past_slice_cases": [
+    [
+      [
+        [
+          123456789
+        ]
+      ],
+      "1,234,567.89"
+    ],
+    [
+      [
+        [
+          100000,
+          0
+        ]
+      ],
+      "1,000.00"
+    ]
+  ],
+  "twin_def_line": 27
+}

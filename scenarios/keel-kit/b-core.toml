@@ -1,0 +1,39 @@
+# Arm B — the candidate core kit.
+#
+# `assets/kit-core.md` is a STRICT DELETION of `assets/kit-full.md`: 2,109 words, every one of
+# them also in the full body, nothing reworded and nothing added. That is what makes a gap
+# attributable to the removed prose rather than to a rewrite. `tests/test_keel_kit_ablation.py`
+# asserts the subset property mechanically.
+#
+# What the core keeps: the header block, the six parser notes that are field-derived traps
+# (A5 basename claiming, A6 adjacency-snippet + repo-root-relative anchors + the next-free-ADR
+# convention, A3/B1 fence-your-gate-adversarial-examples, A12 ledger-is-the-first-table,
+# B2 leading-path-token), the structural sections, the DoR framing, the whole fenced reference
+# block, the two Part-B certification requirements, and the operator close.
+#
+# What the core drops: the `## Enforcement status` section and its A10 note, the A9 reuse-notation
+# note, the A11 anchor-range note, the out-of-wave-consumers note, the counting note, the
+# release-notes-in-wave note, the `## Experiment design (Part B)` section, the closing footer, the
+# DoR Part-A prose checklist (which restates the fence), and DoR Part B beyond the certification
+# requirement and the operator close.
+#
+# NOTE on the third criterion class: the fenced reference block in the core still carries the one-line
+# A9/A10/A11 entries. So `enforcement_claims_clean`, `reuse_refs_resolve` and `range_anchors_balanced`
+# are not "full states it, core is silent" — they are "full states it as a worked template note, core
+# states it as one line of a reference list". That contrast IS the ~490-word cut decision, and the
+# verifier names the class `ask/note-only` for exactly that reason.
+name = "b-core"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Grep", "Glob", "Write", "Edit"]
+
+[context]
+inject = "assets/kit-core.md"
+
+[limits]
+trial_timeout_s = 900

@@ -1,0 +1,17 @@
+id = "data-cohort-sizes"
+instruction = """
+`rollup.cohort.cohort_sizes` counts EVENTS rather than distinct users, so a user
+with several events inflates their cohort. Count distinct users per cohort, as
+the README describes.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

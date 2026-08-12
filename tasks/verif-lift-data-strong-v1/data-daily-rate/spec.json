@@ -1,0 +1,65 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.rate",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "actors": 0,
+            "day": "d1",
+            "events": 0
+          }
+        ]
+      ],
+      {
+        "d1": null
+      }
+    ],
+    [
+      [
+        [
+          {
+            "actors": 0,
+            "day": "d1",
+            "events": 7
+          }
+        ]
+      ],
+      {
+        "d1": null
+      }
+    ]
+  ],
+  "func": "daily_rate",
+  "module_filename": "rate.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "actors": 0,
+            "day": "d1",
+            "events": 3
+          },
+          {
+            "actors": 3,
+            "day": "d2",
+            "events": 6
+          }
+        ]
+      ],
+      {
+        "d1": null,
+        "d2": 2.0
+      }
+    ]
+  ]
+}

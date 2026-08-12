@@ -1,0 +1,14 @@
+{
+  "baseline_checks": {
+    "tests/test_retries.py": "233eaa055f436667659c87f46c4ddee0fe7b86a067173046239562ee89f82505"
+  },
+  "class": "NULL",
+  "criteria": [
+    "spec_met",
+    "scope_respected"
+  ],
+  "edit_file": "httpkit/retries.py",
+  "must_contain": "MAX_ATTEMPTS",
+  "must_not_contain": "MAX_TRYS",
+  "package": "httpkit"
+}

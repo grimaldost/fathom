@@ -1,0 +1,20 @@
+id = "fix-cache-eviction-bug"
+instruction = """
+The `lru` package provides a fixed-capacity least-recently-used cache (`LRUCache`).
+Users report that entries they recently read are sometimes evicted before entries they
+have not touched in a long time. Find and fix the bug so eviction follows true
+least-recently-used order, counting a successful read as a use. Preserve the existing
+public API — `LRUCache(capacity)`, `.get(key, default=None)`, `.put(key, value)` — and
+all current behavior; the shipped test suite must still pass.
+"""
+
+# Sized for the LONGEST arm (Task-subagent orchestration + a test-discipline loop), so
+# discipline arms are not truncated out of the per-criterion table. The cost-probe pilot
+# (spec DoD) recalibrates against observed turn/cost counts; the per-spawn budget cap is
+# the real spend guard, not these ceilings.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"

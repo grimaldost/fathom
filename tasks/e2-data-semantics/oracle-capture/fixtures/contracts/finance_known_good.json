@@ -1,0 +1,8 @@
+{
+  "_source": "Hand-computed by finance from the signed source documents, April close.",
+  "_note": "Only the days finance re-derived are listed. Days with no refunds already agreed with the extract and were not re-derived.",
+  "net_revenue": {
+    "2026-04-02": "100.00",
+    "2026-04-04": "240.00"
+  }
+}

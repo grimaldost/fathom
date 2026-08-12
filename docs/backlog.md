@@ -277,6 +277,35 @@ state.** *(M · [triage] T2a + [review] + [research])*
   then the `e1-*` trials, then the rest. None needs a re-run, and each closes a live dependency rather
   than tidying the index.
 
+**FATH-B51 — The ledger undercounts economy on the delegated path, and the published ×3.81 correction
+is refuted as stated, so every delegated cost figure is a floor of unknown depth.**
+*(M · [verif-lift closure])*
+
+- **Cause / evidence:** on the delegated path the ledger records the parent's final iteration and omits
+  the subagent's consumption outright. `verif-lift-trunc-v1` `bare` runs average **1.0 turns, 331 output
+  tokens and 5.7 s** while scoring 10/10 on `spec_met` for a code-fix task — work that cannot have been
+  done in 331 parent tokens. The undercount is therefore real. **Its published explanation is not.** The
+  ×3.81 multiplier was justified as: every arm delegates, so each stream carries two `result` events
+  (parent + subagent sidechain), and `parse_stream` keeps the last. Measured against the **1,072** saved
+  streams, that mechanism fails three ways: all 15 opus streams delegate (`Agent` tool 15/15) and each
+  carries **exactly one** `result` event; across the 959 plugin-mounted streams the second event tracks
+  the **stop hook**, not the subagent (fired + 2nd: 164; silent + 1st: 794; silent + 2nd: 1; fired +
+  1st: **0**); and where two events do exist the ratio runs **1.16–2.02, median 1.49**, with **0 of 232**
+  reaching 3.81. So ×3.81 cannot have come from this mechanism on any stream in the corpus. The cost of
+  leaving it: a per-program budget ceiling is computed from ledger sums, and the grid this wave priced
+  came to ≈$94 in floor units against ≈$223 corrected — the difference between fitting a $120 ceiling
+  and overrunning it by 86%.
+- **Change:** re-derive the delegated-path correction from the actual mechanism — sum the subagent
+  sidechain's usage into the trial's economy at parse time rather than post-hoc multiplying — and make
+  `parse_stream` state which events it folded, so the figure is auditable instead of asserted. Until it
+  is re-derived: **keep ×3.81 as the budgeting unit** (it over-reserves rather than overspends, so it is
+  conservative in the safe direction) and **stop publishing it as a measured multiplier**. Report every
+  delegated economy figure as a floor, and make no arm-to-arm economy claim from these figures at all —
+  the bias is not guaranteed common-mode across arms.
+- **Gate:** independent of the matrix; it is instrument work on saved streams and costs no spawns.
+  Pairs with FATH-B01's arming verification, which is the same class of defect — a declared property of a
+  run that nothing checks.
+
 ---
 
 ## Next

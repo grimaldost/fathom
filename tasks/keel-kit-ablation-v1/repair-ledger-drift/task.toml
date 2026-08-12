@@ -1,0 +1,28 @@
+id = "repair-ledger-drift"
+instruction = """
+This repository is `tinyetl`, a small batch loader for order records. `spec.md` at the root of the
+workspace is the design spec for a change to it, and it is inconsistent: the fold ledger in its certification records rows against `path:line` positions that no longer hold the content the rows name, and one row is missing a cell.
+
+Repair `spec.md` so the document is internally consistent and everything it asserts about the
+staged code is accurate.
+
+Do not implement the change, and do not modify any staged file — `spec.md` is the only file you
+edit.
+"""
+
+[limits]
+# Writing or repairing a design spec is a read-and-reason pass over a small staged tree, not a
+# build. 900 s / 40 turns is set from the full-kit arm's shape (it has the most to read and the
+# most to emit); the bare arm finishes well inside it.
+trial_timeout_s = 900
+max_turns = 40
+
+[verify]
+entry = "verify.py"
+# The verifier imports a pinned copy of the readiness gate and runs it over the produced spec.
+timeout_s = 120
+
+[gate]
+# The staged tree's own suite. Green on the untouched fixture, and it must stay green: no task in
+# this bank asks any arm to touch the code, so a red gate means an arm edited the tree.
+run = "python -m unittest discover -s tests -t ."

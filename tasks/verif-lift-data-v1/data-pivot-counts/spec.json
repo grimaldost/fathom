@@ -1,0 +1,65 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "reshape.pivot",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "c": "x",
+            "r": "a"
+          }
+        ],
+        "r",
+        "c",
+        [
+          "x",
+          "y"
+        ]
+      ],
+      [
+        {
+          "r": "a",
+          "x": 1,
+          "y": 0
+        }
+      ]
+    ]
+  ],
+  "func": "pivot_counts",
+  "module_filename": "pivot.py",
+  "package": "reshape",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "c": "x",
+            "r": "a"
+          },
+          {
+            "c": "x",
+            "r": "a"
+          }
+        ],
+        "r",
+        "c",
+        [
+          "x"
+        ]
+      ],
+      [
+        {
+          "r": "a",
+          "x": 2
+        }
+      ]
+    ]
+  ]
+}

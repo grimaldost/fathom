@@ -1,0 +1,28 @@
+id = "time-window-misalignment"
+instruction = """
+The settlement desk says our monthly volume statement doesn't match theirs. Some
+orders they expect in the month are missing, some they don't expect are in it,
+and the converted total is off by more than the missing orders account for.
+
+Fix `settled_volume.monthly_volume()` so the statement matches the contract in
+`contracts/monthly_volume.md`. Preserve the public API and the return shape
+(`{"total": Decimal, "order_ids": [...]}`), and keep the shipped suite passing.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 50
+
+[verify]
+entry = "verify.py"
+timeout_s = 120
+hard_criteria = ["metric_correct_under_consistent_join"]
+
+[gate]
+run = "python -m unittest discover -s tests -t ."
+
+# The naive overlay repairs the window filter and leaves the rate lookup keyed on
+# the ingestion day: the right orders, converted at the wrong day's rate.
+[naive]
+must_pass = ["orders_in_window_correct"]
+must_fail = ["metric_correct_under_consistent_join"]

@@ -1,0 +1,17 @@
+id = "data-daily-rate"
+instruction = """
+`rollup.rate.daily_rate` clamps the denominator to 1, so a day with zero actors
+reports a rate equal to its event count instead of the undefined marker the
+README specifies. Report an undefined rate as `None`.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

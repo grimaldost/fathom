@@ -1,0 +1,17 @@
+id = "trunc-trim-label"
+instruction = """
+A defect in `labels/trim.py` shows up as a label rendered with limit 6 comes back 9 characters long; the reported
+symptom points at `labels/trim.py:1-20`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

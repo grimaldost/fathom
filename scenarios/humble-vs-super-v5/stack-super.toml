@@ -1,0 +1,26 @@
+name = "stack-super"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "high"
+
+# Contrast: superpowers 5.1.0 @ 6fd4507 inside the SAME held-constant stack, so the only
+# difference from `stack-humble` is which discipline library is mounted.
+#
+# The superpowers tree is gitignored and untracked (plugins/VENDORED.md). fathom only
+# WARNS on a missing mount, and a missing tree would quietly degrade this arm toward the
+# stack-only control and manufacture a null. Re-vendor and check the sha256 manifest
+# before any spend; `fathom verify-arming` (EXIT_UNARMED) is the live gate.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "PowerShell", "Bash"]
+
+[plugins]
+mount = [
+    "../../tasks/humble-vs-super-v5/plugins/superpowers@6fd4507",
+    "../../tasks/humble-vs-super-v5/plugins/engineering-discipline",
+    "../../tasks/humble-vs-super-v5/plugins/session-workflow",
+]
+
+[limits]
+trial_timeout_s = 2400
