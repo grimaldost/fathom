@@ -507,9 +507,11 @@ def main() -> None:
     # ---------------- economy by config_hash (a FLOOR) ----------------
     print("\n\n# Economy by config_hash — a FLOOR, not a measurement\n")
     print(
-        "The delegated path emits two `result` events per trial (parent + subagent "
-        "sidechain) and `parse_stream` keeps the last, so every figure below "
-        "understates the true consumption. Treat as a lower bound.\n"
+        "On the delegated path the ledger records the parent's final iteration and omits "
+        "the subagent's consumption, so every figure below understates the true cost. "
+        "Treat as a lower bound. (The earlier two-`result`-events explanation of the "
+        "undercount is refuted — see the report's economy section; the floor stands, its "
+        "cause is not yet re-derived.)\n"
     )
     print("| tier | class | arm | config_hash | runs | $ total | $/run | turns | dur s |")
     print("|---|---|---|---|---|---|---|---|---|")
