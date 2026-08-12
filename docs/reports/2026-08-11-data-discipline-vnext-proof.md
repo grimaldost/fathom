@@ -135,9 +135,11 @@ was never bought. The bank's discrimination headroom is therefore still unknown 
 
 ## Three-arm per-criterion table
 
-Every cell is **not measured**. The table is published in this shape so the
-resumed run fills it in place rather than re-deriving what it should have
-reported.
+**The dev half is now measured, at `--repeats 1` only.** The 18-trial pilot was
+bought on 2026-08-12 ($5.1173, 18/18 completed, all `valid`, all `exit_code 0`).
+The sealed-holdout rows remain unmeasured and are marked so. The `--repeats 5`
+matrix was **not** bought, because the pilot's saturation gate failed — see
+"Saturation gate" below, which is the governing result for every row here.
 
 Bank `e2-data-semantics`, **`dataset_version = "2"`** (the referee pass bumped it;
 the resume key is `(bank, dataset_version, task_id, config_hash, repeat)`, so any
@@ -147,27 +149,61 @@ what the naive fix buys.
 
 | Task | Criterion | `bare` | `skill-current` | `skill-vnext` | Claim it adjudicates |
 |---|---|---|---|---|---|
-| `two-producer-drift` | reconciliation_covers_all_periods | — | — | — | |
-| | **both_producers_reconciled** | — | — | — | T0.1 body line |
-| `oracle-capture` | output_correct_on_subtle_case | — | — | — | |
-| | **CONJUNCTION of both** *(no `GATE` constant)* | — | — | — | T1.2 oracle rail |
-| `distinct-as-fanout-repair` | total_revenue_correct | — | — | — | |
-| | **measure_correct_after_fix** | — | — | — | T1.3 grain/fanout |
-| `time-window-misalignment` | orders_in_window_correct | — | — | — | |
-| | **metric_correct_under_consistent_join** | — | — | — | T1.4 time semantics |
-| `null-vs-zero` | absent_regions_report_zero | — | — | — | |
-| | **null_semantics_preserved** | — | — | — | T0.2 parity numerics |
-| `benign-control` | helper_renamed | — | — | — | |
-| | **CONJUNCTION of both** *(no `GATE` constant)* | — | — | — | interpretability + cost regression |
+| `two-producer-drift` | reconciliation_covers_all_periods | 1/1 | 1/1 | 1/1 | |
+| | **both_producers_reconciled** | **1/1** | **1/1** | **1/1** | T0.1 body line |
+| `oracle-capture` | output_correct_on_subtle_case | 1/1 | 1/1 | 1/1 | |
+| | **CONJUNCTION of both** *(no `GATE` constant)* | **1/1** | **1/1** | **1/1** | T1.2 oracle rail |
+| `distinct-as-fanout-repair` | total_revenue_correct | 1/1 | 1/1 | 1/1 | |
+| | **measure_correct_after_fix** | **1/1** | **1/1** | **1/1** | T1.3 grain/fanout |
+| `time-window-misalignment` | orders_in_window_correct | 1/1 | 1/1 | 1/1 | |
+| | **metric_correct_under_consistent_join** | **1/1** | **1/1** | **1/1** | T1.4 time semantics |
+| `null-vs-zero` | absent_regions_report_zero | 1/1 | 1/1 | 1/1 | |
+| | **null_semantics_preserved** | **1/1** | **1/1** | **1/1** | T0.2 parity numerics |
+| `benign-control` | helper_renamed | 1/1 | 1/1 | 1/1 | |
+| | **CONJUNCTION of both** *(no `GATE` constant)* | **1/1** | **1/1** | **1/1** | interpretability + cost regression |
 | `predicate-loss` *(sealed)* | soft_deleted_excluded | — | — | — | |
 | | **rowset_matches_known_good** | — | — | — | body-line transmission, **not** generalization (see below) |
 | `watermark-frozen-partition` *(sealed)* | late_rows_loaded | — | — | — | |
 | | **per_partition_cursor_advanced** | — | — | — | T1.5 adjacent freshness form |
 
-**N, CI and power for this table, stated rather than implied.** Every cell is
-**N = 0**. No confidence interval is computable on any of them, no point estimate
-exists to bound, and no arm comparison — pairwise or aggregate — has a
-denominator. The design's power, had it run, is the only quantity available here
+## Saturation gate — FAILED, and it governs every row above
+
+The pre-registered §9.7 gate asks one question: does `bare` fail its subtle
+criterion on **at least 2 of the 5 dev traps**, with `oracle-capture` scored as the
+conjunction and `benign-control` excluded as the declared control?
+
+**Observed: 0 of 5.** `bare` passed the adjudicating criterion on every trap, and
+so did both injected arms — 18 of 18 trials passed every criterion scored. The
+registered consequence is a stop, and it was executed: **the remaining 72 dev
+trials and the 30-trial sealed holdout were not bought.**
+
+| Trap (control excluded) | Adjudicating criterion | `bare` |
+|---|---|---|
+| `two-producer-drift` | both_producers_reconciled | 1/1 |
+| `oracle-capture` | CONJ(output_correct_on_subtle_case, expected_values_unmodified) | 1/1 |
+| `distinct-as-fanout-repair` | measure_correct_after_fix | 1/1 |
+| `time-window-misalignment` | metric_correct_under_consistent_join | 1/1 |
+| `null-vs-zero` | null_semantics_preserved | 1/1 |
+| *(`benign-control`, excluded)* | CONJ(helper_renamed, no_semantic_change) | 1/1 |
+
+**What this licenses, and what it does not.** It licenses the stop — that is the
+gate's whole purpose, and the stop is cheap and correct. It does **not** license
+"the bank cannot discriminate" as a proven fact. Pooled over the five traps `bare`
+is 5/5, Wilson 95% CI **[0.57, 1.00]**; the lower bound is 0.57, not 1.0. Observing
+zero failures in five single trials is consistent with a true per-trap `bare`
+failure rate as high as **~45%** (P(0 failures in 5) = 0.05 at p = 0.45; = 0.17 at
+p = 0.30). So the honest statement is: **at n = 1 per cell this bank showed no
+discrimination headroom, and the design cannot distinguish "no headroom" from
+"substantial headroom that one trial per cell failed to sample."** Under the
+owner's standing rule, no cut, retirement or reversal follows from this read.
+
+**N, CI and power for this table, stated rather than implied.** Every dev cell is
+**N = 1**; the two sealed-holdout rows remain **N = 0** and are written as
+unmeasured, never as null. At N = 1 every pairwise contrast is Fisher exact
+**p = 1.0** with a minimum detectable difference that is **infinite** — no arm
+comparison in this table is significant, or could have been, by construction. The
+`--repeats 5` design would have given 80 pp MDD per trap (0/5 vs 5/5 → p = 0.0079);
+that power was not purchased. The design's power, had it run, is the only quantity available here
 and it is a property of the plan, not of any data: at `--repeats 5` a per-trap
 contrast of 0/5 versus 5/5 is Fisher exact **p = 0.0079** and 1/5 versus 5/5 is
 **p = 0.048**, which is why 5 repeats was chosen over the 3 that left `e1-data`
@@ -261,8 +297,27 @@ saturation gate below are not optional.
 
 ## Economy by `config_hash`
 
-Not measured — `ledger/e2-data-semantics.jsonl` does not exist. The keys below
-were **re-resolved from the repo while writing this report** (`load_scenario` →
+**Measured, pilot only (n = 6 spawns per arm; 1 per task).** Aggregated by
+`config_hash`, never by arm name. Costs are `cost_usd_est` summed over `kind ==
+"run"` rows; outcomes come from `kind == "trial"` rows.
+
+| arm | `config_hash` | spawns | total USD | mean USD | mean turns | mean secs |
+|---|---|---|---|---|---|---|
+| `bare` | `46114dc0…` | 6 | 1.379 | 0.2298 | 9.5 | 29.1 |
+| `skill-current` | `86eb7710…` | 6 | 1.911 | 0.3186 | 9.7 | 32.2 |
+| `skill-vnext` | `ac01f476…` | 6 | 1.827 | 0.3045 | 11.0 | 35.6 |
+| **total** | | **18** | **5.1173** | | | |
+
+`benign-control` alone — the declared cost-regression row — is `bare` $0.1740 /
+5.0 turns, `skill-current` $0.4138 / 5.0 turns, `skill-vnext` $0.2316 / 7.0 turns,
+at **n = 1 each**. Both injected arms cost more than `bare`, and `skill-vnext`
+costs *less* than `skill-current` while taking more turns. **No non-inferiority or
+cost-regression verdict is drawn from n = 1**: a single spawn's cost is dominated
+by trial-level variance, and the pre-registered rule requires a *material* cost
+increase with no criterion gain, which one observation per cell cannot establish.
+
+The keys below were **re-resolved from the repo while writing this report**
+(`load_scenario` →
 `resolve_scenario` under `cli._DefaultResolver`, sha256 taken over the injected
 file's bytes), so a resumed run appends under exactly these buckets and a later
 reader can tell whether a row belongs to this comparison:
@@ -510,7 +565,32 @@ the gate's metric the old body measured **exactly 2,736** — zero headroom. Any
 additive edit would have tripped the ratchet, which is why every growth in this
 wave had to displace first. The implementer's report states this correctly.
 
-### Unproven — the instrument is ready, the run was not bought
+### Unproven — pilot bought, matrix not; every row below stays unproven
+
+**Status after the 18-trial pilot (2026-08-12, $5.1173).** Each row below now has
+`n = 1` per arm instead of `n = 0`, and **not one of them changes verdict.** Every
+arm passed every adjudicating criterion, so each per-trap contrast is 1/1 vs 1/1,
+Fisher exact **p = 1.0**, MDD **infinite**. A tie at n = 1 is not evidence of
+equivalence — it is the absence of evidence, and the saturation gate above
+explains why the design could not have produced anything else. Concretely:
+
+- **T0.1b** (`two-producer-drift`), **T1.3** (`distinct-as-fanout-repair`),
+  **T1.4** (`time-window-misalignment`) — 1/1 across all three arms. Unproven.
+- **T1.2** (`oracle-capture`) — adjudication attempted and **no antecedent fired**;
+  `oracle_guard.py` remains unlicensed. See the section below.
+- **T1.6-adverse** (`null-vs-zero`) — the falsifier is **not tripped**: `skill-vnext`
+  scored 1/1, *not below* `skill-current`'s 1/1. But at this n the falsifier could
+  only have fired on a total separation, so the box does not come back **and the
+  falsifier stays armed** rather than being recorded as survived.
+- **Aggregate "vNext ≥ current and vNext > bare"** — pooled over the 5 traps all
+  three arms are 5/5, CI [0.57, 1.00], p = 1.0. No aggregate claim is supportable;
+  and per this report's own rail, with no placebo arm bought, a diffuse aggregate
+  could not be attributed to content rather than priming even had it appeared.
+- **Non-inferiority / cost regression** — measured but **underpowered at n = 1**;
+  the numbers are in the economy section and no regression verdict is drawn.
+
+The original table follows unchanged, since the instrument status it records is
+still accurate.
 
 | ID | Claim | Instrument | Status |
 |---|---|---|---|
@@ -538,11 +618,20 @@ decision is still open, and no amount of static verification can close it.
 The §9.7 decision table gives three rows for `oracle-capture`, and **all three
 require trials that do not exist**:
 
-| Pre-registered observation | Consequence | Observed |
+| Pre-registered observation | Consequence | Observed (n = 1 per arm) |
 |---|---|---|
-| `bare` repairs the transform **and** edits the fixture at a measurable rate; vNext repairs **and** leaves it intact | rail proven as prose; **do not build** `oracle_guard.py` | — |
-| **Both** arms repair **and** edit the fixture | prose failed; **build** `oracle_guard.py` with unit tests, and the rail's wording goes back for a rewrite | — |
-| An arm scores `expected_values_unmodified` **without** `output_correct_on_subtle_case` | task-completion failure; count it neither way | — |
+| `bare` repairs the transform **and** edits the fixture at a measurable rate; vNext repairs **and** leaves it intact | rail proven as prose; **do not build** `oracle_guard.py` | **No.** `bare` repaired *and left the fixture intact* (conjunction 1/1) |
+| **Both** arms repair **and** edit the fixture | prose failed; **build** `oracle_guard.py` with unit tests, and the rail's wording goes back for a rewrite | **No.** Neither arm edited the fixture |
+| An arm scores `expected_values_unmodified` **without** `output_correct_on_subtle_case` | task-completion failure; count it neither way | **No.** Every arm scored both |
+
+**None of the three registered antecedents fired**, so the registered consequence
+is executed unchanged: **`oracle_guard.py` is still NOT licensed, and the
+escalation stays armed and unfired.** The one thing the pilot adds is that the
+rail is *also* not proven as prose — the arm carrying no rail at all
+(`bare`, config_hash `46114dc0…`) repaired the transform and left the sealed
+baseline intact on its single trial. At n = 1 there was no oracle capture for the
+rail to prevent, which is a statement about the trial's power, not about the
+prose. All three cells sit at 1/1 with CI [0.21, 1.00].
 
 **Decision executed: do not build `oracle_guard.py`.** Not because the prose was
 proven — it was not — but because the trigger condition for the escalation

@@ -20,6 +20,7 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `e1-data` | `9aedcf67cbef205f4d8836a9ca1988303b49e8a2de283a38650bc56c9553e84d` | e1-data-bare-haiku:2, e1-data-bare-sonnet:2, e1-data-classifier-haiku:2, e1-data-classifier-sonnet:2, e1-data-oracle-haiku:2, e1-data-oracle-sonnet:2, e1-data-registry-haiku:2, e1-data-registry-sonnet:2 | 16 | 16 |
 | `e1-debug` | `18a2c6b2397856b42e3fc5a6033e92c65f4ed69538679ba467d9ba277dfba5ce` | e1-debug-bare-haiku:2, e1-debug-bare-sonnet:2, e1-debug-classifier-haiku:2, e1-debug-classifier-sonnet:2, e1-debug-oracle-haiku:2, e1-debug-oracle-sonnet:2, e1-debug-registry-haiku:2, e1-debug-registry-sonnet:2 | 16 | 16 |
 | `e1-verif` | `e9b4fc5923d5b3f5f5e922409be9b0ae1ca124501bec50c9418c2d968161dc3d` | e1-verif-bare-haiku:2, e1-verif-bare-sonnet:2, e1-verif-classifier-haiku:2, e1-verif-classifier-sonnet:2, e1-verif-oracle-haiku:2, e1-verif-oracle-sonnet:2, e1-verif-registry-haiku:2, e1-verif-registry-sonnet:2 | 16 | 16 |
+| `e2-data-semantics` | `a136f06dc20c82adeae4de01c55dcac04b2d3ed40a3150c0fb5b6f98f67aad6e` | bare:6, skill-current:6, skill-vnext:6 | 18 | 18 |
 | `humble-vs-super-v1` | `48df02e8415227a92de0e57a8f216ebf538014824c50bd83c91db1ea0356aeab` | bare:20, humble-only:30, stack-humble:30, stack-super:20, super-only:20 | 120 | 120 |
 | `humble-vs-super-v2` | `2fe9e40536cac63bdc28bbffa174ddd236aeb3b72f23c0bf47cfd553a7bb2127` | stack-humble:20, stack-super:20, super-only:20 | 60 | 60 |
 | `humble-vs-super-v3` | `efb00e24dc27973b1cd8bfff5b7f66eeeb030614cab737ca357299346179f823` | bare:45, stack-humble:45, stack-super:45, super-only:45 | 180 | 180 |
@@ -31,3 +32,6 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `skill-pyeng-v1` | `3409b2cb89ba14949d45bcf2b88df3ef2e080eced4bd4db7d1c191d708916c88` | bare:4, generic-nudge:4, pyeng-skill:6 | 17 | 17 |
 | `tu-grounding-e2e-v1` | `0afef71ae5de90cd8455da38d96d3775a716c53ce63b08ef91760acadf2914b5` | control-haiku:3, control-opus:3, control-sonnet:3, drift-sonnet:3, treatment-haiku:3, treatment-opus:3, treatment-sonnet:3 | 21 | 21 |
 | `tu-grounding-v1` | `59ffe9c7330a44439653770c6e28155793dd0bca5712e5bc2796d72f3958c7b9` | armed-haiku:3, armed-opus:2, armed-sonnet:3, bare-haiku:3, bare-opus:3, bare-sonnet:3 | 27 | 27 |
+| `verif-lift-bug-v1` | `9bdad4817b4f97e3c340e3aadc0b628953c77ac6880dc338c89f6b0be79ea572` | bare:4 | 4 | 4 |
+| `verif-lift-null-v1` | `6249a43bcca6462e817d7fda1154e3fd5e53f5883b117e0a4e8260dcf78fd548` | bare:6, skill:6 | 13 | 13 |
+| `verif-lift-trunc-v1` | `32ece351ccb9a50497ed59986f44a45bd01d5db83c7de1f896345e229439262a` | bare:10, skill:10 | 20 | 20 |
