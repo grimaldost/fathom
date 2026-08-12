@@ -47,6 +47,29 @@ from being bought.
 - **`build_calibration` warns when one arm name maps to more than one `config_hash`.** Cost is
   aggregated per arm for readability but identity is the hash; two configurations averaged under one
   label is silent-wrong, and it now says so.
+
+### Changed
+
+- **The word `quality` no longer names a first-attempt pass rate anywhere.** A cross-implementation
+  check found `calibration` reporting 0.55 where a consuming programme reported 0.70 on the same
+  fixture; both were right and they were different quantities — first-attempt pass rate at the chosen
+  tier, versus the probability the work is ultimately correct after a gate-detected repair. The
+  estimand is the post-repair figure, because `C(m)` already charges the retry cost and charging for
+  an escalation while crediting none of its benefit penalises a cheap-start mechanism twice.
+  `mechanisms[].quality` is now **`first_attempt_pass_rate`**, and the routing-substrate artifact's
+  `schema_version` goes **1 → 2** so a consumer pinned to 1 fails on the version rather than reading a
+  missing key as absent data. `calibration` computes no post-repair figure: it exports the facts that
+  bound it (`first_attempt_pass_rate` ≤ post-repair ≤ `1 - escape_rate`) and the consuming analysis
+  picks the repair-success assumption between them.
+- **The scorecard's dose-response and Pareto columns are renamed to match**: `mean quality` →
+  `mean first-attempt pass`, `Δquality vs prev arm` → `Δ first-attempt vs prev arm`, and the section
+  heading `Cost-quality Pareto frontier` → `Cost vs first-attempt pass: Pareto frontier`. **Reports
+  dated before this change render the older header**; they are dated snapshots of what the tool
+  rendered when they were written and are left untouched, as the ledger-index discipline requires.
+  The scorecard itself is regenerated from the ledger, so the rename only affects future renders.
+- **`per_tier` cells state `failures` explicitly** rather than leaving it as `trials - passing`. The
+  general rule, since these cells cross a programme boundary: *a consumer that has to derive a count
+  is a consumer that can derive it differently.*
 - **The ledger index** (`tools/ledger_index.py`, `docs/reports/LEDGER-INDEX.md`). The publication
   ratchet proved a verdict existed somewhere; it could not prove the verdict had been read against
   the ledger as committed. A re-validation report was published against a 10-trial snapshot, an
