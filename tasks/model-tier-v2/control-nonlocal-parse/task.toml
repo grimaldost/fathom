@@ -1,0 +1,50 @@
+id = "control-nonlocal-parse"
+
+# POSITIVE CONTROL — ported verbatim from model-tier-v1's `fix-nonlocal-parse`.
+#
+# WHY THE BANK HAS ONE. Without a control, a null result on this bank is
+# uninterpretable, and an uninterpretable null is the failure that invalidated
+# model-tier-v1: every task saturated, every cheapest-adequate arm read `weak`, and
+# nothing in the data separated "the complexity score does not predict the tier" from
+# "this bank had no headroom for a tier to matter". The two hypotheses license
+# opposite decisions, and one of them is a deletion.
+#
+# WHAT MAKES THIS TASK THE CONTROL. It is the one task on the committed
+# `ledger/model-tier-v1.jsonl` with an OBSERVED monotone tier gradient on its hard
+# criteria: haiku 2/5, sonnet 3/5, sonnet5 4/5, opus 5/5, opus5 5/5. So the ladder
+# demonstrably separates on it, with these arms, under this instrument. If the v2
+# ladder saturates on this task too, the instrument (or the model lineup) moved and
+# nothing about the ladder's usefulness follows from the run. If it separates here
+# and nowhere else, the v2 tasks are the thing without headroom.
+#
+# NOTHING ABOUT IT WAS RETUNED. The instruction, the fixture, the stashed original,
+# the shipped suite, the two hard criteria and their exact assertions are byte- or
+# behaviour-identical to v1, because the whole value of a control is that its prior
+# reading transfers. In particular it is NOT subject to this bank's `hard_criteria`
+# derivation rule (../oracles.toml): applying that rule would change the bar and
+# void the comparison. It carries no oracle slice for the same reason.
+instruction = """
+Users of the `logparse` package report two problems with log lines whose message
+contains spaces: `codes()` raises a ValueError on some of those lines, and `messages()`
+comes back garbled (cut off at the first space). Lines with a simple one-word message
+are fine. Find and fix the bug so `messages()` and `codes()` behave as documented for
+all log lines. Preserve the existing public API, and keep the shipped test suite passing.
+"""
+
+# v1's limits, unchanged — see above.
+[limits]
+trial_timeout_s = 1200
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+hard_criteria = ["messages_quoted", "codes_quoted_tagged"]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the quoted-message case), so a gated strategy
+# would see a truthful baseline. This bank's own arms are single-session and never run
+# it; it is here so the gate property is VERIFIABLE rather than unverifiable, and it
+# names only paths that exist in the staged workspace.
+run = "python -m unittest discover -s tests -t ."

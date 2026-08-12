@@ -1,14 +1,22 @@
 # verification-before-completion vNext — proof attempt, and what it could and could not decide
 
-- **Date:** 2026-08-11. **Branch:** `eval/verification-lift`.
+- **Date:** 2026-08-11, extended 2026-08-12. **Branches:** `eval/verification-lift`, then
+  `eval/verif-lift-decisive`.
 - **Banks:** `verif-lift-bug-v1`, `verif-lift-data-v1`, `verif-lift-trunc-v1`, `verif-lift-null-v1`,
   `verif-lift-bug-strong-v1`, `verif-lift-data-strong-v1`.
-- **Arm added:** `skill-vnext` — built, armed, gated, dry-run. **Trials bought: 0.**
-- **Headline:** the vNext arm was prepared and proved armed, and **not one decisive cell was
-  measured**, because the paid-run serialization lock was held for the entire window by the
-  sibling MAP matrix. Every vNext verdict below is therefore *not-proven* or *not-measurable*.
-  Nothing here licenses shipping the vNext body, and — the more important half — **nothing here
-  licenses stripping anything from the shipped skill either.**
+- **Arm added:** `skill-vnext` — built, armed, gated, dry-run, and at the fourth window **bought**.
+- **Trials bought at the fourth window: 90 runs** (floor $11.79; ≈$44.92 in the conservative
+  corrected unit). weak/BUG and weak/DATA at `bare` / `skill` / `skill-vnext`, n=10 per arm, plus
+  the weak-tier gate trio `bare-gate` / `placebo-gate` / `skill-gate`, n=10 each.
+- **Headline:** the decisive cells were measured at last, and they decide **against the vNext body
+  and against the gate, and in favour of the shipped body — with one caveat that cuts the other
+  way.** The shipped `skill` body lifts the footprint criterion **+50.0 pp** at weak/BUG (3/10 →
+  8/10, paired interval excluding zero) — the programme's first positive result. The vNext body
+  gives most of that back (**−40.0 pp**, 8/10 → 4/10) and improves nothing anywhere: **it does not
+  ship.** The `SubagentStop` gate **ties its placebo exactly** (7/10 vs 7/10) with delivery
+  confirmed at 80–90%, so **Branch G fires** and the gate is not promoted — though nothing licenses
+  deleting it either. The caveat: the shipped body carries a measured **−30.0 pp** on weak/DATA's
+  `output_correct_on_subtle_case`, which no previous window could see.
 - **Revised 2026-08-11 after referee review.** Six findings were wrong or missing and are corrected
   in place, each marked where it lands: the pre-registered non-inferiority margin **cannot pass at
   any funded n** (§3); the intervals were **unpaired beside a paired test** (§3); the n=6 power row
@@ -43,6 +51,22 @@
   the analyzer grouped economy on `config_hash` alone and `bare` resolves to one hash in both banks
   — the instrument is fixed and the figures below are corrected. And the staged buy plan's paired
   contrast is now **verified rather than assumed** (§7).
+- **Revised 2026-08-12 after a fourth window — the first that bought anything.** Credentials were
+  refreshed, `fathom smoke` returned 7/8 with only the permitted `engine-boundary` failure, the
+  serialization lock was acquired on the first poll and **released 15 s after the last paid trial,
+  before any analysis**, and 90 runs were bought. **The tree now resolves: Branches E and G fire**
+  (§5), D2 and A2 move from unbought to measured (§4), and the `skill-vnext` column of §3 is
+  populated. Three things here are corrected *against this report's own previous text* rather than
+  merely extended. First, weak/BUG `bare` was quoted at **0/4** in three revisions and is **3/10**
+  once its arm is complete — the six added trials scored 3/6, so a floor of zero was an artifact of
+  n=4, and the prose had begun to lean on it (§3). Second, the instrument note claimed the paired
+  interval is "materially narrower whenever the pairing is estimable"; on the first non-degenerate
+  cell this programme has ever bought it is **wider**, because the arms are barely concordant, and
+  the defensible claim is only that it *matches* the test beside it (§3). Third, §6's title — "why
+  nothing was bought" — no longer describes this report and is re-scoped to the three windows it
+  does describe. One finding is genuinely new and unwelcome: the **shipped** body costs
+  `output_correct_on_subtle_case` −30.0 pp on weak/DATA, a class it had never been run against
+  before this window.
 
 ---
 
@@ -65,6 +89,27 @@ The free half completed. The paid half did not:
 
 The lock was held by `holder=verification-lift MAP matrix (bare+skill)` from 20:19:48Z. Six
 ten-minute retry cycles were run per the serialization rule. The lock was still held at the end.
+
+**At the fourth window the paid half completed too:**
+
+| step | outcome |
+|---|---|
+| `uv sync`, `ruff format --check`, `ruff check`, `pytest` | clean; 621 passed, 1 skipped, 160 subtests |
+| `fathom smoke` | **7/8 — only `engine-boundary` red**, the one permitted failure; auth checks PASS |
+| `fathom validate --strict` × 2 banks bought | **66 pass / 66 pass, 0 fail / 0 warn / 0 unverifiable** |
+| `fathom verify-arming` × 3 arms bought | **ALL VERIFIED** (`bare` 371 B, `skill` 5227 B, `skill-vnext` 5192 B) |
+| `fathom run --dry-run` × 6 blocks | 6 / 10 / 10 / 10 / 10 / 10 — matching the staged plan exactly |
+| take the serialization lock | **acquired on the first poll**, 10:44:13Z |
+| buy the decisive cells | **done — 90 runs, $11.79 floor, ≈$44.92 corrected** |
+| release the lock | **13:15:17Z, 15 s after the last paid trial, before any analysis** |
+
+One block failed mid-matrix and was repaired rather than abandoned: `b2` (weak/DATA `skill`) died at
+workspace staging on a Windows `git init` failure and stopped at 2/10 while its dependent
+`skill-vnext` block ran to completion behind it. The comparator was completed to n=10 **before**
+any contrast was read, so no cell in this report contains a vNext arm without its `bare` and
+`skill` comparators. The repair used `--limit`, which counts *new* trials rather than a target
+total, so that arm finished at n=12; the analyzer intersects on the 10 tasks scored in every arm,
+which is why the DATA rows below read n=10.
 
 ## 2. The arm, and why it is a new one
 
@@ -106,17 +151,24 @@ scenario directories are new and **no other existing scenario file was touched.*
 ## 3. The three-arm per-cell table
 
 Arms run the same tasks, so every contrast is paired and read with exact McNemar. `n` is tasks
-scored in every arm present. The `skill-vnext` column is empty in every row for the reason in §1.
+scored in every arm present.
 
-> **Re-run at the close of the second window and again at the close of the third — unchanged both
-> times.** `analyse_vnext.py` was executed against the ledgers after each blocked window. The
-> ledgers still hold **37 runs, all `bare` or `skill`** — 4 in weak/BUG, 20 in weak/TRUNC, 13 in
-> weak/NULL — so every figure below is the same figure, and the analyzer still reports weak/DATA,
-> strong/BUG and strong/DATA as **NO TRIALS IN LEDGER** rather than as nulls. Neither pass appended
-> a line; the distinction between *unmeasured* and *measured null* is preserved in the instrument,
-> not just in the prose. The third pass verified the ledgers byte-unchanged before reading them
-> (74 lines: 37 `run` records and 37 `trial` records) rather than inferring it from the analyzer's
-> own output.
+> **Fourth window: the decisive cells were bought, and the `skill-vnext` column is no longer
+> empty.** 90 runs were purchased — weak/BUG and weak/DATA at `bare` / `skill` / `skill-vnext`,
+> n=10 per arm, plus the weak-tier gate trio (§5b). Both classes the vNext body was authored to
+> move are now measured against their comparators, in the pre-registered order, so no vNext trial
+> in this report lacks the `bare` and `skill` arms of its own cell. weak/TRUNC and weak/NULL are
+> unchanged and were deliberately not re-bought: both are ceilinged in `skill` (10/10, 6/6), where
+> no body change can show a lift. strong/BUG and strong/DATA remain **NO TRIALS IN LEDGER** — still
+> unmeasured, still not nulls.
+
+> **The `bare` arm's headline number moved when its n moved, and that is the finding to read
+> first.** The three previous revisions recorded weak/BUG `bare` at **0/4** on
+> `regression_check_present` and reasoned from a floor of zero. Completing that arm to n=10 gives
+> **3/10**: the four original trials are 0/4 and the six added are **3/6**. Nothing changed but the
+> sample. A rate quoted from n=4 was not a small measurement of a real zero, it was an artifact,
+> and the program's own prose had begun to lean on it. This is the owner's rule about underpowered
+> reads demonstrated against this report's own text rather than asserted.
 
 > **Instrument correction.** The intervals in the table below were computed with the Newcombe
 > *hybrid* interval for two **independent** proportions — printed beside an exact McNemar p, on
@@ -124,33 +176,90 @@ scored in every arm present. The `skill-vnext` column is empty in every row for 
 > now computes **Newcombe's correlated-proportions interval** (`newcombe_paired`), which is the
 > matching instrument and is materially narrower whenever the pairing is estimable.
 >
-> **The printed numbers below do not change**, and the reason is worth stating rather than hiding:
-> in all four of these rows one margin is degenerate (an arm at 100%), so the correlation is not
-> estimable, φ̂ falls back to 0, and the paired interval coincides with the unpaired one. The
-> correction bites on every non-ceilinged cell this program has yet to buy — on mid-rate cells with
-> realistic positive correlation it removes roughly a fifth to a third of the width — and it
-> matters most for the one-sided non-inferiority read, which is where an interval of the wrong
-> width turns into a wrong verdict.
+> **In the previously-bought rows the printed numbers did not change**, because in all four of them
+> one margin is degenerate (an arm at 100%), so the correlation is not estimable, φ̂ falls back to
+> 0, and the paired interval coincides with the unpaired one. **The cells bought this window are
+> the first non-degenerate ones — and there the paired interval comes out *wider*, not narrower.**
+> weak/BUG `skill`−`bare` splits 2 both / 1 bare-only / 6 skill-only / 1 neither: seven of ten pairs
+> are discordant, so the arms are barely concordant at all, φ̂ is not the healthy positive
+> correlation the narrowing assumes, and the paired interval [+2.2, +76.4] is wider than the
+> unpaired [+6.6, +74.0] on the same counts. The earlier revision's phrasing — "materially narrower
+> whenever the pairing is estimable" — described the common case as if it were the rule. The
+> defensible claim is only that the paired interval is the one that **matches** the exact McNemar
+> printed beside it; whether matching costs or buys width is a property of the data, and here it
+> costs. The pooled row at the foot of the table is the one place the unpaired interval is still
+> printed, because per-task pairing is not reconstructable across pooled cells, and it is labelled.
 
-| tier | class | criterion | n | bare | skill | **skill-vnext** | skill−bare | 95% CI | McNemar |
+| tier | class | criterion | n | bare | skill | **skill-vnext** | skill−bare | 95% paired | McNemar |
 |---|---|---|---|---|---|---|---|---|---|
+| weak | BUG | **`regression_check_present`** | 10 | 3/10 (30%) | 8/10 (80%) | **4/10 (40%)** | **+50.0** | [+2.2, +76.4] | 0.1250 |
+| weak | BUG | `spec_met` | 10 | 10/10 (100%) | 10/10 (100%) | **10/10 (100%)** | +0.0 | [−27.8, +27.8] | 1.0000 |
+| weak | BUG | `proxy_instrument_ok` | 10 | 10/10 (100%) | 10/10 (100%) | **10/10 (100%)** | +0.0 | [−27.8, +27.8] | 1.0000 |
+| weak | DATA | **`regression_check_present`** | 10 | 2/10 (20%) | 3/10 (30%) | **5/10 (50%)** | +10.0 | [−22.7, +40.6] | 1.0000 |
+| weak | DATA | `output_correct_on_subtle_case` | 10 | 7/10 (70%) | 4/10 (40%) | **6/10 (60%)** | **−30.0** | [−50.7, −1.5] | 0.2500 |
+| weak | DATA | `spec_met` | 10 | 8/10 (80%) | 7/10 (70%) | **6/10 (60%)** | −10.0 | [−31.5, +10.5] | 1.0000 |
+| weak | DATA | `proxy_instrument_ok` | 10 | 10/10 (100%) | 10/10 (100%) | **10/10 (100%)** | +0.0 | [−27.8, +27.8] | 1.0000 |
 | weak | TRUNC | **`defect_past_slice_handled`** | 10 | 9/10 (90%) | 10/10 (100%) | **not run** | +10.0 | [−18.9, +40.4] | 1.0000 |
 | weak | TRUNC | `spec_met` | 10 | 10/10 (100%) | 10/10 (100%) | **not run** | +0.0 | [−27.8, +27.8] | 1.0000 |
 | weak | NULL | **`scope_respected`** | 6 | 6/6 (100%) | 6/6 (100%) | **not run** | +0.0 | [−39.0, +39.0] | 1.0000 |
 | weak | NULL | `spec_met` | 6 | 6/6 (100%) | 6/6 (100%) | **not run** | +0.0 | [−39.0, +39.0] | 1.0000 |
-| weak | BUG | **`regression_check_present`** | — | 0/4 (0%) | **not run** | **not run** | — | — | — |
-| weak | BUG | `spec_met` | — | 4/4 (100%) | **not run** | **not run** | — | — | — |
-| weak | DATA | **`regression_check_present`** | — | **not run** | **not run** | **not run** | — | — | — |
-| weak | DATA | `output_correct_on_subtle_case` | — | **not run** | **not run** | **not run** | — | — | — |
 | strong | BUG | **`regression_check_present`** | — | **not run** | **not run** | **not run** | — | — | — |
 | strong | DATA | **`regression_check_present`** | — | **not run** | **not run** | **not run** | — | — | — |
 
-Two facts in that table matter more than the empty column.
+**The body diff on its own — `skill-vnext` − `skill`, the contrast this window was bought to get:**
 
-**The two cells that finished are ceilinged in the `skill` arm.** TRUNC is 10/10 and NULL is 6/6
-on their primary criteria. A criterion already at 100% cannot show a lift for *any* body change;
-it can only show a loss. So even a fully-bought vNext arm could not have produced a positive
-result in either cell **as this bank is currently authored**.
+| tier | class | criterion | n | skill | vnext | diff (pp) | 95% paired | McNemar | NI@−10pp |
+|---|---|---|---|---|---|---|---|---|---|
+| weak | BUG | **`regression_check_present`** | 10 | 8/10 (80%) | 4/10 (40%) | **−40.0** | [−68.5, +4.4] | 0.2188 | undecidable at n=10 |
+| weak | BUG | `spec_met` | 10 | 10/10 | 10/10 | +0.0 | [−27.8, +27.8] | 1.0000 | undecidable at n=10 |
+| weak | DATA | **`regression_check_present`** | 10 | 3/10 (30%) | 5/10 (50%) | +20.0 | [−3.8, +40.0] | 0.5000 | undecidable at n=10 |
+| weak | DATA | `output_correct_on_subtle_case` | 10 | 4/10 (40%) | 6/10 (60%) | +20.0 | [−3.5, +38.9] | 0.5000 | undecidable at n=10 |
+| weak | DATA | `spec_met` | 10 | 7/10 (70%) | 6/10 (60%) | −10.0 | [−27.6, +8.2] | 1.0000 | undecidable at n=10 |
+
+**Pooled footprint criterion, weak tier, BUG + DATA** (unpaired interval, labelled — pairing is not
+reconstructable across pooled cells): `bare` 5/20 (25%), `skill` 11/20 (55%), `skill-vnext` 9/20
+(45%). `skill`−`bare` **+30.0 pp**; `skill-vnext`−`skill` **−10.0 pp**, 95% unpaired
+[−37.1, +19.4].
+
+Four facts in those tables matter, and they do not all point the same way.
+
+**1. The shipped `skill` body does lift the footprint criterion — this is the program's first
+positive result.** weak/BUG `regression_check_present` goes 3/10 → 8/10, **+50.0 pp**, and the
+paired 95% interval **[+2.2, +76.4] excludes zero**. The exact McNemar is 0.1250, which is *not*
+below 0.05 — at n=10 with 1 vs 6 discordant pairs the exact test cannot get there, and the floor is
+a property of the design (see the power note below). So the honest reading is: the interval
+excludes zero, the test does not reach conventional significance, and the two disagree because the
+exact test is conservative at this n. It is evidence, not proof, and it is the strongest evidence
+this program has produced about anything.
+
+**2. The vNext body does not reproduce that lift — it points sharply the other way where the lift
+exists.** On the same cell `skill-vnext` scores 4/10 against `skill`'s 8/10: **−40.0 pp**, paired
+[−68.5, +4.4]. The interval crosses zero, so vNext is not *proven* worse; but there is no reading
+of this cell in which vNext is better, and the point estimate is most of the shipped body's lift
+given back. weak/DATA moves the other way (+20.0 pp, [−3.8, +40.0]), and the pooled result is
+**−10.0 pp**. Two cells of n=10 disagreeing in sign, pooling to a small negative, is what "no
+demonstrated improvement" looks like when it is measured rather than assumed.
+
+**3. The shipped body costs correctness on the DATA class.** `output_correct_on_subtle_case` falls
+7/10 → 4/10 under `skill`, **−30.0 pp**, paired **[−50.7, −1.5]** — an interval excluding zero in
+the *unwanted* direction, on the criterion that asks whether the subtle case actually came out
+right. `spec_met` drifts the same way (8/10 → 7/10). This was invisible while weak/DATA had no
+trials, and it is the single most consequential thing this window bought: the arm the program was
+trying to *promote* a successor to has a measured cost, on a class it was never previously run
+against. It is one cell at n=10 with McNemar 0.2500, so it is a flag and not a verdict — but it is
+a flag on the shipped artifact, not on the candidate.
+
+**4. Non-inferiority remains undecidable everywhere, exactly as predicted before the spend.** At
+the pre-declared −10 pp margin a *perfect tie* needs n ≥ 35. Every cell here is n=10. So no cell
+passes or fails the pre-registered gate, and none is written as if it had.
+
+**The two cells bought in earlier windows are still ceilinged in the `skill` arm, and were
+deliberately left unbought this window.** TRUNC is 10/10 and NULL is 6/6 on their primary criteria.
+A criterion already at 100% cannot show a lift for *any* body change; it can only show a loss. A
+vNext arm there could not have produced a positive result **as this bank is currently authored**,
+so buying one would have spent real money on a foregone conclusion. That is why this window's
+budget went to BUG and DATA instead — the two classes with headroom — and why A1 and A3 below
+remain unresolved rather than resolved cheaply and wrongly.
 
 **But the TRUNC ceiling is an authoring defect, not a property of the class** — and the first
 revision of this report called those cells "downside checks, permanently", which generalised a
@@ -171,10 +280,12 @@ changing task text requires a `dataset_version` bump that would orphan the 20 bo
 NULL's 6/6 is a different matter: `scope_respected` is a false-positive guard, and 100% is the
 *desired* reading, not a ceiling on an effect. It is a downside check by construction.
 
-**The one cell with real headroom is the one whose comparator is missing.** On weak/BUG the bare
-arm is 4/4 on `spec_met` and **0/4** on `regression_check_present` — fixing the bug and leaving no
-regression check, which is exactly the fix-without-check contrast the program was built to
-measure. The `skill` arm was never run there, so the headroom is visible and unexploited.
+**The cell with real headroom now has its comparator, and the headroom was real.** On weak/BUG the
+`bare` arm is 10/10 on `spec_met` and 3/10 on `regression_check_present` — fixing the bug and
+leaving no regression check, which is exactly the fix-without-check contrast the program was built
+to measure. Completing the comparator turned that visible headroom into the +50.0 pp of fact 1
+above. Two prior revisions described this cell as the one worth buying; it was, and it is the cell
+that carried this report from "nothing decided" to a decision.
 
 ### Power, computed before the spend
 
@@ -244,25 +355,28 @@ exactly `spec_met`, `regression_check_present`, `proxy_instrument_ok`,
 | id | change | criterion that could move it | verdict |
 |---|---|---|---|
 | D1 | gate step 3: the `$?`-after-a-pipe procedure → `references/non-vacuity.md` | none exists | **not-measurable** |
-| D2 | seen-red section: failure examples + inverse-edit rationale → pointer, bright line kept | `regression_check_present` (BUG, DATA) | **not-proven** — cell never bought |
+| D2 | seen-red section: failure examples + inverse-edit rationale → pointer, bright line kept | `regression_check_present` (BUG, DATA) | **MEASURED — not supported.** BUG −40.0 pp [−68.5, +4.4]; DATA +20.0 pp [−3.8, +40.0]; pooled −10.0 pp. No improvement anywhere, and a large negative point estimate in the cell that has the lift |
 | D3 | finishing: baseline-capture procedure → pointer | none exists | **not-measurable** |
-| A1 | new row *A check ran → the count of units it saw, non-zero* | `defect_past_slice_handled` (TRUNC) | **not-proven** — cell ceilinged as authored; the ceiling is repairable, §3 |
-| A2 | new row *Data output correct → a hard case named and its value written before the fix* | `output_correct_on_subtle_case` (DATA) | **not-proven** — cell never bought |
-| A3 | new row *Doc/report claim accurate → the cited span read whole* | `defect_past_slice_handled` (TRUNC) | **not-proven** — cell ceilinged as authored; the ceiling is repairable, §3 |
+| A1 | new row *A check ran → the count of units it saw, non-zero* | `defect_past_slice_handled` (TRUNC) | **unmeasured** — cell ceilinged as authored and deliberately not bought; the ceiling is repairable, §3 |
+| A2 | new row *Data output correct → a hard case named and its value written before the fix* | `output_correct_on_subtle_case` (DATA) | **MEASURED — suggestive, not established.** 4/10 → 6/10, +20.0 pp [−3.5, +38.9], McNemar 0.5000; below the 60 pp detectable at n=10 |
+| A3 | new row *Doc/report claim accurate → the cited span read whole* | `defect_past_slice_handled` (TRUNC) | **unmeasured** — same cell and same reason as A1 |
 | A4 | finishing: "or a jumped runtime" | none exists | **not-measurable** |
-| — | the three additions as a group (false-positive risk) | `scope_respected` (NULL) | **not-proven** — and undetectable at n=6 |
+| — | the three additions as a group (false-positive risk) | `scope_respected` (NULL) | **unmeasured** — still n=6, where only a total flip is detectable |
 | X1 | "the vNext body is smaller" (the plan's 790 → ~720) | direct measurement, no trial needed | **refuted** — see below |
 
-**Not one verdict in that table moved at the third window, and the reason is the table's own
-subject matter.** Every verdict except X1 is keyed to a trial in a cell, and no trial was bought:
-D2 needs weak/BUG or weak/DATA `skill`+`skill-vnext`, which remain unbought; A2 needs weak/DATA,
-which has **no trials at all**; A1 and A3 need weak/TRUNC, whose `skill` arm is ceilinged as
-authored; and the over-scope read — the three additions as a group against `scope_respected` —
-needs weak/NULL at an n that can resolve it, where the minimum detectable difference is still
-100 pp at n=6. X1 was settled by direct measurement of the two bodies and needed no trial, which is
-exactly why it is the only one settled. **A verdict that cannot be reached is left unreached
-here.** Restating "not-proven" is not the same as narrowing it, and the temptation at a third
-blocked window is to let the repetition read as convergence. Measured with the
+**Two verdicts moved this window, and both moved because their cells were bought.** D2 is the claim
+the whole vNext exercise rested on — that turning the seen-red section into a pointer would not cost
+the footprint behaviour — and it is now **measured and not supported**: no cell shows an
+improvement, and the cell where the shipped body demonstrably lifts is the cell where vNext gives
+most of that lift back. A2 is the one addition whose criterion exists and whose cell is now bought;
+it shows a **positive point estimate that its own interval cannot separate from zero**, so it is
+recorded as suggestive and explicitly not as support. The rest did not move, and the reason is
+unchanged: A1 and A3 need weak/TRUNC, whose `skill` arm is ceilinged as authored, so buying them
+would have purchased a foregone conclusion; the over-scope read needs weak/NULL at an n that can
+resolve it, where the minimum detectable difference is still 100 pp at n=6; D1, D3 and A4 have no
+criterion in any verifier and no n would change that. **Those four are written as `unmeasured`, not
+as `null` and not as `not-proven` with a number attached.** X1 was settled by direct measurement of
+the two bodies and needed no trial. Measured with the
 same instrument for both bodies: shipped 790 words / 4775 bytes, vNext 787 words / 4740 bytes.
 The body shrinks by **3 words and 35 bytes, 0.7%**. The plan projected ~720 words. The
 displacement pays for the additions almost exactly and buys no headroom, which independently
@@ -287,26 +401,30 @@ absence of a firing branch is on the record as a reasoned outcome rather than an
 
 | step | precondition | fires? | why |
 |---|---|---|---|
-| **Gate 0** | is the cell interpretable? | **partly** | weak/TRUNC `skill` 10/10 and weak/NULL `skill` 6/6 are ceilinged ⇒ no lift claimed from either, in either direction. weak/BUG has headroom (`bare` 0/4) but no comparator. Every other cell is unbought. |
-| **A** | H2 holds: strong-tier `skill+gate` − `skill` ≥ +0.15, FP clean, beats placebo | **no** | no strong-tier trial exists; no gate trial exists; no placebo trial exists. |
-| **B** | H2 fails **and** strong-tier bare is genuinely failing (A0 fail ≥ 0.25) | **no** | H2 unmeasured, and the strong-tier bare arm was never run, so its fail rate is unknown. |
+| **Gate 0** | is the cell interpretable? | **yes, for weak BUG and DATA** | both now carry `bare` + `skill` + `skill-vnext` at n=10 with real headroom (`bare` 3/10 and 2/10 on the footprint criterion) and **zero errored trials**. weak/TRUNC and weak/NULL remain ceilinged in `skill` ⇒ still no lift claimable from either. strong/BUG and strong/DATA remain unbought. |
+| **A** | H2 holds: strong-tier `skill+gate` − `skill` ≥ +0.15, FP clean, beats placebo | **no** | no strong-tier trial exists. Stronger than before: §5a shows this cell cannot deliver its treatment on this mechanism at all, so H2 is not merely unbought, it is **unbuyable as designed**. |
+| **B** | H2 fails **and** strong-tier bare is genuinely failing (A0 fail ≥ 0.25) | **no** | the strong-tier bare arm was never run, so its fail rate is unknown. |
 | **C** | H2 fails **and** strong-tier bare is ceilinged | **no** | same — neither conjunct is measured. |
-| **D** | H4 ~0 (body does nothing) **and** H1/H2 hold (gate does) | **no** | H4's decisive cells (BUG, DATA) are unbought; H1/H2 have no gate trials. |
-| **E** | H4 ≥ +0.15 (the body itself moves the footprint) | **no** | the two bought cells are ceilinged in `skill`; the one cell with headroom has no `skill` arm. |
-| **F** | H6 fails: FP > +0.15 on the null bank | **no** | NULL is 6/6 vs 6/6 — no false-positive signal — but at n=6 the minimum detectable difference is 100 pp, so this is *not* a pass either. Undetectable, not clean. |
-| **G** | **H3 fails: the gate ties the placebo** | **no** | **zero gate trials and zero placebo trials have ever been bought.** See below. |
-| **H** | per-obligation nulls (D2, P1, N1, X1) | **partly** | **X1 fails** — the displacement is refuted by direct measurement (−3 words, not −70). D2 and P1 are unbought; N1 is untested. |
-| **I** | nothing beats bare anywhere, with failing bare arms throughout | **no** | requires measured nulls across the grid; this grid is 4 cells short of one arm and 2 classes short of any arm. |
+| **D** | H4 ~0 (body does nothing) **and** H1/H2 hold (gate does) | **no — now for a measured reason** | **both conjuncts are now refuted, not absent.** H4 is not ~0: `skill`−`bare` pools to **+30.0 pp**. And H1 does not hold: at weak tier the gate adds **+0.0 pp** on `bare` and **−10.0 pp** on `skill` (§5b). |
+| **E** | H4 ≥ +0.15 (the body itself moves the footprint) | **FIRES (weak tier)** | `skill`−`bare` on the footprint criterion is **+50.0 pp** at weak/BUG with a paired interval excluding zero, **+10.0 pp** at weak/DATA, **+30.0 pp pooled** — above the +0.15 threshold. This is the first branch in the programme to fire on bought data. Read with fact 3 of §3, which is the counterweight and is *not* optional. |
+| **F** | H6 fails: FP > +0.15 on the null bank | **no** | NULL is still 6/6 vs 6/6 and still n=6, where the minimum detectable difference is 100 pp. Undetectable, not clean — unchanged, and not re-bought. |
+| **G** | **H3 fails: the gate ties the placebo** | **FIRES** | `skill-gate` **7/10** vs `placebo-gate` **7/10** — an exact tie, +0.0 pp, McNemar 1.0000 — with gate **delivery confirmed at 80–90%** in the same streams. For the first time this is a *measured* equality and not an absent comparison. See below. |
+| **H** | per-obligation nulls (D2, P1, N1, X1) | **partly** | **X1 fails** (displacement refuted by direct measurement, −3 words not −70) and **D2 is now measured and not supported** (§4). P1 and N1 remain untested. |
+| **I** | nothing beats bare anywhere, with failing bare arms throughout | **no — now for a measured reason** | something *does* beat bare: `skill` beats `bare` by +50.0 pp at weak/BUG. The precondition is refuted rather than unevaluated. |
 
-**The tree returns UNRESOLVED.** Exactly one pre-registered consequence fires anywhere in it — the
-X1 leg of Branch H — and its repair is textual, not structural (§5, *Instruction to the repair pass*).
+**The tree no longer returns UNRESOLVED. Two branches fire on bought data — E and G — and they are
+the two that answer the two different questions this programme kept conflating.** Branch E says the
+**body** moves the footprint criterion. Branch G says the **gate** does not beat a content-free
+gate that costs the same extra turn. Taken together they locate the mechanism in the body and not
+in the always-on hook, which is the opposite of the inherited `+0.22 / +0.56 / +0.44` reading, and
+it is the first time either statement rests on trials rather than on inheritance.
 
-**Re-walked in full at the third window, row by row, against re-read ledgers: every cell above is
-the same cell and no branch changed state.** The walk is repeated rather than assumed because a
-tree whose preconditions are all unbought cells has exactly one way to change — a purchase — and
-none was made. The one thing worth saying about a third identical walk is that it is *not*
-accumulating evidence: nine branches that did not fire three times over are nine branches that
-never had data, not nine findings of no effect.
+**What fired is not a licence to change everything.** Both firing branches sit at n=10, where the
+minimum detectable paired difference is 60 pp. Branch E's +50.0 pp clears its +0.15 threshold on
+the point estimate and its paired interval excludes zero, so it is the strongest reading available
+— but it is one class, and the same body carries a measured **−30.0 pp** on weak/DATA's
+`output_correct_on_subtle_case`. A tree walk that reports E firing and omits that is the same
+error, in the same direction, as the inherited ladder it replaces.
 
 ### Branch G, stated precisely, because it is the one most likely to be misread
 
@@ -314,28 +432,39 @@ Branch G's consequence is severe and worth quoting: *if the gate ties the placeb
 extra turn and not a mechanism; V2 does not ship as a discipline gate, and what ships instead is
 nothing.* It is the branch that would retire the mechanism.
 
-**It does not fire, and it does not fail to fire because the gate won.** It does not fire because
-**H3 was never measured**: the verif-lift ledgers contain `bare` and `skill` scenarios only — not one
-`skill-gate` trial, not one `placebo-gate` trial, not one `bare-gate` trial. A tie is a *measured
-equality*; what exists here is an *absent comparison*. Reading Branch G as satisfied would convert
-an unrun experiment into a refutation, which is the same error in the opposite direction from
-reading a ceiling as a null.
+**Fourth window: it fires, and it fires on a measured tie rather than on an absent comparison.**
+The trio was bought at weak tier, n=10 each, in the pre-registered order (`bare-gate`, then
+`placebo-gate`, then `skill-gate`, so the treatment never landed before its control). On the
+primary criterion `skill-gate` scores **7/10** and `placebo-gate` scores **7/10**: +0.0 pp, paired
+[−35.1, +35.1], McNemar 1.0000. Three earlier revisions said a tie would be a *measured equality*
+and that what existed then was an *absent comparison*. The comparison now exists, and it is a tie.
 
-So the disposition for the `SubagentStop` gate is unchanged and is **not** Branch G's disposition:
-the gate stays **default-off and opt-in**, as it already ships, and the reason on the record is that
-**G1 is undischarged in all three conjuncts** — not that it tied a placebo. Nothing ships it on.
-Nothing deletes it either. Both halves are load-bearing.
+**The tie is only readable because delivery was checked first, and delivery held.** The gate's own
+verbatim marker appears in **9/10** `bare-gate` streams, **9/11** `skill-gate` streams and **8/10**
+`placebo-gate` streams, and in **0** streams of the two ungated arms — the negative control that
+proves this counts the mount rather than the filename. At strong tier the identical hook delivered
+**0/15** (§5a). Had this window bought the strong-tier gate cell the plan funds, it would have
+produced a tie made of an untreated treatment arm and would have looked exactly like this one.
+That distinction is the whole reason the trio was bought at weak tier and the strong block was not.
 
-**Third window: the trio that would decide G is staged, priced and still unbought.** The three arms
-that discharge H3 — `bare-gate`, `skill-gate`, `placebo-gate` — are staged at **weak tier only**
-(≈$3.48 corrected, per §5a's finding that a strong-tier gate cell buys an untreated treatment arm),
-and they sit behind the BUG and DATA comparator blocks in the buy order. That order is deliberate
-and it is the reason G is still undecided: a gate arm bought before its comparators is spend without
-a contrast. So the gate's disposition **stays exactly where it is — off by default, opt-in, and
-explicitly unmeasured** — and the arithmetic that would change it is $3.48 and one working
-credential away, not a redesign. Recording that the decisive cell is cheap matters: it removes the
-last excuse for leaving G undischarged indefinitely, and it keeps "we never bought it" from
-hardening into "it must not be worth buying."
+**What Branch G licenses, stated exactly.** The gate does **not** ship as a discipline gate: the
+extra blocked turn buys the same 7/10 whether the injected sentence carries the discipline or
+carries nothing. Two further readings from the same trio point the same way — the gate on top of
+the skill body moves `regression_check_present` **8/10 → 7/10** (−10.0 pp), and the gate without
+any body moves it **3/10 → 3/10** (+0.0 pp, an exact tie against ungated `bare`). In no
+configuration at this tier does the mechanism add anything.
+
+**What Branch G does not license is deleting it.** The tie sits at n=10 with a paired interval of
+[−35.1, +35.1]; an effect of up to a third of the scale is still compatible with it. Declining to
+*promote* a mechanism on such a read is the conservative direction and costs nothing — the gate is
+already default-off and opt-in, so firing Branch G changes no shipped default. *Removing* the gate
+would be taking a structural cut from an underpowered read, which is the owner's rule in the other
+direction, and this report does not take it. So: **the gate stays default-off and opt-in, and the
+reason on the record now changes** — from "G1 is undischarged in all three conjuncts" to "H3 was
+bought and returned a tie at n=10 with delivery confirmed, and H1 measured +0.0 / −10.0 pp at the
+same tier." G1's remaining conjuncts, H2 (strong tier) and H6 for the gate arms (the NULL bank),
+stay **unmeasured** — and H2 is unbuyable on this mechanism until the strong-tier delivery failure
+is itself explained.
 
 ### 5a. The strong-tier gate arm was mounted and never delivered its treatment
 
@@ -394,6 +523,37 @@ and no branch fired; a delivery measurement is not a branch outcome. It is recor
 citation question it raises for the published `+0.22 / +0.56 / +0.44` ladder is flagged in §9 as an
 operator decision rather than settled by this pass.
 
+### 5b. The gate trio, bought — delivery, then contrast, in that order
+
+Three arms on `verif-lift-bug-v1` at weak tier, n=10 each, 31 runs, ordered so the treatment arm
+never preceded its control. Streams were persisted (`FATHOM_STREAM_DIR`) specifically so delivery
+could be counted before any contrast was read; `tasks/verif-lift-authoring/analyse_gate.py`
+reproduces both tables and refuses to certify a contrast when the streams are absent.
+
+**Delivery — did the treatment arrive?**
+
+| arm | gate marker in stream | rate | 95% Wilson |
+|---|---|---|---|
+| `bare-gate` | 9/10 | 90% | [60%, 98%] |
+| `skill-gate` | 9/11 | 82% | [52%, 95%] |
+| `placebo-gate` | 8/10 | 80% | [49%, 94%] |
+| `bare` (ungated control) | 0 | — | negative control |
+| `skill` (ungated control) | 0 | — | negative control |
+
+**Contrasts, n=10, paired, all three criteria** (`spec_met` and `proxy_instrument_ok` are 10/10 in
+every arm and move nowhere, so only the footprint criterion is reproduced here):
+
+| contrast | control | treatment | diff (pp) | 95% paired | McNemar | what it means |
+|---|---|---|---|---|---|---|
+| **H3 — the placebo contrast** | `placebo-gate` 7/10 | `skill-gate` 7/10 | **+0.0** | [−35.1, +35.1] | 1.0000 | the gate's *content* buys nothing over an equal-cost empty gate |
+| gate on top of the body | `skill` 8/10 | `skill-gate` 7/10 | −10.0 | [−47.5, +31.5] | 1.0000 | adding the gate to the body does not help |
+| gate without the body | `bare` 3/10 | `bare-gate` 3/10 | **+0.0** | [−35.1, +35.1] | 1.0000 | the gate alone does nothing |
+
+The three rows are mutually consistent and all null-to-negative. The mechanism arrives, and having
+arrived, does not move the criterion it was built to move — at this tier, at this n. The honest
+bound is the interval: ±35 pp is still compatible with these ties, so this retires the gate as a
+*candidate for promotion*, not as a possibility.
+
 ### The strong-tier branch as originally asked
 
 The instruction's branch was: *if strong-tier lift is ~0 with power, state what the skill's
@@ -406,8 +566,9 @@ none. The precondition "~0 **with power**" is doubly unmet: the estimate is abse
 design's power at n=12 per strong cell would have been a 50 pp minimum detectable difference even
 had it run.
 
-So the DECISION-TREE returns **UNRESOLVED**, and the consequential instruction is a prohibition
-rather than a rewrite:
+So the **strong-tier branch specifically** remains unreachable — the tree's resolution at the
+fourth window (Branches E and G, §5) is entirely a weak-tier resolution — and the consequential
+instruction for the strong tier is still a prohibition rather than a rewrite:
 
 1. **The skill's trigger and guidance change on the strength of this run: nothing.** No sentence
    may be added scoping `verification-before-completion` to a tier or a task class, because the
@@ -427,7 +588,10 @@ rather than a rewrite:
    test H5, P1 and V5, and retiring it would retire those obligations by accident. NULL's 6/6 is
    a false-positive guard reading its desired value, not a ceiling on an effect. Any attempt to
    establish "the skill does / does not help" should buy BUG and DATA, where headroom is
-   demonstrated (weak/BUG bare 0/4), and must not read a ceiling as a null.
+   demonstrated, and must not read a ceiling as a null. **That is what the fourth window did**, and
+   the headroom was real: weak/BUG `bare` finished at 3/10 and `skill` at 8/10 (§3). The figure this
+   sentence originally cited — `bare` 0/4 — was itself the underpowered read the same sentence
+   warned against.
 
 ### The question this report did not answer: is the shipped gate allowed to ship?
 
@@ -438,17 +602,26 @@ It never answered the other question, and the plan's answer to that one is **no*
 `3ac471d` (V2, the `SubagentStop` gate) and `609f6ef` (0.10.0). The plan makes **V2 a full gate on
 G1**: H1 or H2 at ≥ +0.15, **and** H6 (FP ≤ +0.05), **and** H3 (beats placebo by ≥ +0.10).
 
-**None of the three was measured. Not one gate trial and not one placebo trial has ever been
-bought** — the ledgers carry `bare` and `skill` only. So G1 is undischarged in every conjunct, and
-undischarged here means *unmeasured*, not *unmet*.
+**Fourth window: two of the three conjuncts are now measured, and both fail.** H3 — "beats placebo
+by ≥ +0.10" — is a **+0.0 pp exact tie** (7/10 vs 7/10, §5b). The H1 leg of the first conjunct is
+**+0.0 pp** on `bare` and **−10.0 pp** on `skill` at the same tier, nowhere near ≥ +0.15. The third
+conjunct H6 (FP ≤ +0.05) is still **unmeasured for the gate arms**, since no gate arm was run on the
+NULL bank, and H2 remains unmeasured and unbuyable as designed (§5a).
 
-The two facts are not in tension, and both belong in the record:
+So G1's status changes from *undischarged in every conjunct* to **failed in the two conjuncts that
+were bought, unmeasured in the rest**. That is a stronger statement and it is the one the data
+supports. The distinction that governed three revisions — unmeasured is not unmet — still governs
+H2 and H6; it no longer governs H1 and H3.
 
-- **Nothing licenses deleting the gate.** An unmeasured mechanism is not a refuted one.
-- **Nothing licenses shipping it as measured either.** The gate is in the tree ahead of its own
-  gate. It is default-off and fails open, which bounds the blast radius to whoever opts in — but
-  default-off is a safety property, not evidence, and the plan's obligation was not written to be
-  discharged by being cautious.
+The facts are not in tension, and all belong in the record:
+
+- **Nothing licenses deleting the gate.** A tie at n=10 with a [−35.1, +35.1] paired interval is
+  not a refutation of the mechanism; it is a refutation of the *case for promoting* it. Deleting on
+  this evidence would take a structural cut from an underpowered read.
+- **Nothing licenses shipping it on as measured — and now the reason is evidence, not absence.**
+  Previously the gate sat in the tree ahead of its own gate. It now sits behind a bought contrast
+  that it tied. Default-off remains a safety property rather than evidence, but the obligation is
+  no longer merely undischarged: where it was tested, it was not met.
 
 The honest disposition is the one the craft CHANGELOG now carries: the gate ships **opt-in and
 explicitly unmeasured in this codebase**, with the prior program's numbers named for what they are
@@ -470,7 +643,29 @@ not structural:
   unrun experiment into a false negative.
 - **Do not** treat the ceilinged TRUNC and NULL cells as evidence the discipline does not work.
 
-## 6. Why nothing was bought, stated plainly
+**Updated at the fourth window — "strip nothing" stands, and one thing is now decided.**
+
+- **The vNext body does not ship.** D2 is measured and unsupported, the one addition with a
+  reachable criterion (A2) cannot be separated from zero, and the body gives back most of the
+  shipped body's lift in the only cell where a lift exists (−40.0 pp). This is a decision *not to
+  promote a candidate*, which the data supports; it is **not** a finding that the vNext additions
+  are harmful, which it does not.
+- **The `SubagentStop` gate is not promoted.** Branch G fired on a measured tie (§5b). It stays
+  default-off and opt-in. Still: **do not delete it** — see the interval.
+- **Still strip nothing from the shipped body**, and note that the shipped body is now the one
+  carrying a measured cost (`output_correct_on_subtle_case`, −30.0 pp on weak/DATA). That is a
+  reason to *investigate* the shipped body on the DATA class, not to edit it on one n=10 cell.
+- **A1, A3 and the over-scope read remain unmeasured**, and their repair path is unchanged: fix
+  TRUNC's instruction scope (a `dataset_version` bump) before buying, or the ceiling repeats.
+
+## 6. Why the first three windows bought nothing, stated plainly
+
+> **Scope note added at the fourth window.** This section describes windows one to three and is
+> kept as the record of them. It no longer describes the report: the fourth window bought 90 runs.
+> The blocker was different in each of the three — the lock (window one), the lock again (window
+> two), and an expired OAuth session (window three) — and none of the three was a design fault in
+> the matrix, which is why the fourth window needed no redesign to spend, only a working
+> credential and a free lock.
 
 The serialization lock — one paid matrix at a time against these append-only ledgers, $120
 program ceiling — was held by the MAP matrix for the whole window and never released. Six
@@ -552,11 +747,16 @@ spend-to-date ($3.34 floor ≈ $12.7 corrected) but left the cost-to-finish rows
 labelled "floors, not estimates" rather than multiplied. That asymmetry ran in exactly one
 direction: the uncorrected column is the one that makes finishing look affordable.
 
-| block | trials | ledger floor | **corrected (×3.81)** | note |
+| block | trials | ledger floor | **corrected (×3.81)** | status |
 |---|---|---|---|---|
-| weak BUG + DATA (vNext) | 40 | ~$4 | **~$15** | the decisive cells; needs the MAP's `skill` arm too |
-| weak NULL + TRUNC (vNext) | 16 | ~$1.5 | **~$6** | downside checks; TRUNC's ceiling is repairable (§3) |
-| strong BUG + DATA (vNext) | 24 | ~$18 | **~$69** | needs the MAP's strong arms, which do not exist |
+| weak BUG + DATA, all three arms | 59 runs | $8.72 | **~$33** | **BOUGHT** at the fourth window — the decisive cells |
+| weak gate trio (`bare`/`skill`/`placebo` ×gate) | 31 runs | $3.07 | **~$12** | **BOUGHT** at the fourth window — discharges H3 (§5b) |
+| weak NULL + TRUNC (vNext) | 16 | ~$1.5 | **~$6** | **unbought by choice** — both ceilinged in `skill`, so a vNext arm there cannot show a lift; TRUNC's ceiling is repairable (§3) and buying it before the repair wastes the spend |
+| strong BUG + DATA (vNext) | 24 | ~$18 | **~$69** | **unbought** — needs strong-tier `bare`/`skill` arms, which do not exist |
+| strong gate cell | — | — | — | **must not be bought as designed** — delivery is 0/15 at that tier (§5a) |
+
+The two bought rows came in at **$11.79 floor / ≈$44.92 corrected** against a $60 soft target and a
+$100 hard stop; the strong block was left unbought deliberately, not for want of budget.
 
 Why the floors are floors — **and the stated mechanism is now refuted, while the undercount
 survives.** This report previously explained the ×3.81 bias as: every arm delegates, so each stream
@@ -584,10 +784,40 @@ safe direction (it over-reserves rather than overspends), and **stop publishing 
 multiplier** until it is re-derived from the true mechanism. The bias is not guaranteed common-mode
 across arms, so no arm-to-arm economy claim is made from these figures at all.
 
-Recorded spend across the verif-lift ledgers stands at **37 paid runs, a $3.34 ledger floor,
-≈$12.74 corrected** — $0.344/trial true against the plan's assumed $0.145. All of it is the MAP's;
-this run added $0 of matrix spend and three sub-cent arming probes, and both the second and third
-closing passes added **$0.00 with no paid spawn of any kind.**
+Recorded spend across the verif-lift ledgers now stands at **127 paid runs, a $15.13 ledger floor,
+≈$57.6 corrected**, of which the fourth window bought **90 runs / $11.79 floor / ≈$44.92
+corrected**. The remaining 37 runs are the MAP's, unchanged.
+
+**Economy, aggregated by `config_hash` as the rule requires — a floor, not a measurement:**
+
+| tier | class | arm | `config_hash` | runs | $ total | $/run | turns | dur s |
+|---|---|---|---|---|---|---|---|---|
+| weak | BUG | `bare` | `3214c0e6bbbb` | 10 | $1.07 | $0.107 | 1.1 | 6 |
+| weak | BUG | `skill` | `52ffcd608665` | 10 | $1.44 | $0.144 | 2.7 | 22 |
+| weak | BUG | `skill-vnext` | `046e6deada19` | 10 | $1.42 | $0.142 | 5.1 | 21 |
+| weak | BUG | `bare-gate` | `c6c95f7080e8` | 10 | $1.69 | $0.169 | 2.6 | 22 |
+| weak | BUG | `placebo-gate` | `3a665058f27a` | 10 | $1.52 | $0.152 | 4.6 | 31 |
+| weak | BUG | `skill-gate` | `609dea0d69b1` | 11 | $1.99 | $0.181 | 4.5 | 44 |
+| weak | DATA | `bare` | `3214c0e6bbbb` | 10 | $0.90 | $0.090 | 1.0 | 6 |
+| weak | DATA | `skill` | `52ffcd608665` | 13 | $1.22 | $0.093 | 1.9 | 17 |
+| weak | DATA | `skill-vnext` | `046e6deada19` | 10 | $0.96 | $0.096 | 3.0 | 33 |
+
+Two properties of that table are load-bearing. **The hash is the identity, not the arm name:**
+`bare` resolves to `3214c0e6bbbb` in *both* banks and `skill` to `52ffcd608665` in both, because
+only the injected file's sha256 enters `config_hash` and never its path — which is what let the six
+staged scenario directories be reused without forking a hash. The rows are therefore keyed on
+**(bank, `config_hash`)**; keying on the hash alone is the double-count defect corrected at the
+third window. **And the $/run column must not be read as an arm-to-arm economy claim**: it is a
+floor whose bias is not guaranteed common-mode across arms, and the delegated-path undercount
+below applies unevenly to arms that delegate more.
+
+The ×3.81 figure used above is the **conservative budgeting unit, not a measured multiplier.** Its
+originally-proposed mechanism — two `result` events per delegated stream — is **refuted** by the
+stream corpus below, where the observed `sum ÷ last` ratio never approaches 3.81 on any stream that
+has two events at all, and no replacement mechanism has been derived. It is used here because it
+over-reserves rather than overspends, and for no other reason. Every "corrected" figure in this
+report, including this window's ≈$44.92, inherits that caveat and is a budgeting figure rather than
+a measurement.
 
 **Per-arm floors, corrected — the previous list double-counted four runs.** It read: `bare`-TRUNC
 `3214c0e6bbbb` **14 / $1.341** *and* `bare`-BUG `3214c0e6bbbb` **4 / $0.417**. Those are not two
@@ -682,52 +912,84 @@ the next block, not a footnote to it.
   bound**: a positive on `skill` − `bare` overstates what installing the plugin delivers by
   however often the real dispatch surface fails to load it. A null on this arm is the stronger
   result of the two, because it is a null under the most favourable delivery available.
-- **`skill-gate` − `skill` is not a replication of anything.** The prior program's `bare-sub` arms
-  mounted **no plugins**, and their injected preamble is byte-identical (sha256 `b044b0bf…`) to
-  this bank's `arm-bare.md`. Phase 2/4's headline lift is therefore `bare+gate` − `bare` — a
-  contrast this bank does not contain, because every gate scenario here also injects `arm-skill.md`.
-  Replicating +0.22/+0.44 needs a `bare+gate` arm that does not yet exist.
+- **`skill-gate` − `skill` is not a replication of anything — but `bare-gate` − `bare` is, and it
+  was bought this window.** The prior program's `bare-sub` arms mounted **no plugins**, and their
+  injected preamble is byte-identical (sha256 `b044b0bf…`) to this bank's `arm-bare.md`. Phase 2/4's
+  headline lift is therefore `bare+gate` − `bare`, which is exactly the `bare-gate` − `bare`
+  contrast in §5b. **It returns +0.0 pp — 3/10 versus 3/10, an exact tie — against an inherited
+  +0.22 at the same tier.** That is a failed replication on a different bank, with the treatment
+  confirmed delivered in 9 of 10 streams, at n=10 where the minimum detectable difference is 60 pp.
+  So it does not refute +0.22; it declines to reproduce it under the most directly comparable
+  conditions this programme can construct, and it is the second independent reason (after §5a) that
+  the published ladder should not be cited as the gate's measured effect.
 - **The strong tier is unmeasured**, so the tier × class map the program is named for does not
   exist.
 - **n=1 repeat.** Nothing here separates a real effect from a single lucky trial below the
   minimum detectable differences tabulated in §3.
-- **A strong-tier gate arm does not deliver its treatment** (§5a), so the `bare-gate` arm that would
-  make `skill-gate` a replication is only meaningful at weak tier until that is understood. The
-  arm is now staged (`c6c95f7080e8`) but its strong-tier cell should not be bought.
+- **A strong-tier gate arm does not deliver its treatment** (§5a), so the `bare-gate` arm that makes
+  `skill-gate` a replication is only meaningful at weak tier until that is understood. It was
+  bought at weak tier (`c6c95f7080e8`, 10 runs); its strong-tier cell was **not** bought and should
+  not be.
+- **The gate results are weak-tier only, and delivery is the reason they are readable.** 80–90% of
+  gate-mounted streams carry the marker here against 0/15 at strong. Nothing in §5b transfers to
+  the strong tier in either direction — not the tie, not the +0.0 replication.
 
 ## 9. Open decisions this report hands to the operator
 
 None of these is settled by the evidence above; each is recorded because the evidence changed what
 the decision costs.
 
-1. **Credentials, and the lock demoted.** ~~The lock is the precondition for every other item.~~
-   **Superseded at the third window (§6).** The 30 s atomic acquire was adopted and the lock came
-   free on the first poll, so contention is no longer the binding constraint — an **expired OAuth
-   session** is. `fathom smoke` fails its two auth checks and the stop rule forbids entering a paid
-   block on a failed smoke; only an operator can refresh the session. **This is now the precondition
-   for every other item**, and the lock reforms in §6 stay worth doing on their own merits rather
-   than as the unblocker they were billed as. The general form is the item to carry forward: three
-   windows have bought nothing for two unrelated reasons, so the next one should expect a third
-   rather than assume the path is now clear.
+1. **Credentials and the lock — both cleared at the fourth window, and neither was the real
+   lesson.** ~~The lock is the precondition for every other item.~~ ~~Superseded at the third
+   window: an expired OAuth session is.~~ **Both resolved:** the session was refreshed, smoke
+   returned 7/8 with only the permitted failure, the lock came free on the first poll and was held
+   2 h 31 m and released 15 s after the last paid trial. The item that survives is the one the
+   third window predicted — *expect a new blocker each window rather than assume the path is
+   clear* — and the fourth window duly produced one that had nothing to do with either: a block
+   died mid-matrix on a Windows `git init` failure (exit `0xC0000142`, DLL-init under process
+   pressure) while staging a workspace, leaving that arm at 2/10 while its dependent vNext arm ran
+   on to completion. The buy order alone did not prevent an orphan, because the order assumes a
+   block either completes or halts the script; this one failed and the script continued. **Carry
+   forward: the runner should stop the dependent arm when its comparator block exits non-zero**, or
+   the repair has to be done by hand as it was here (the comparator was completed before analysis,
+   so no orphan reached the report).
 2. **Re-scope the grid before the next block.** In corrected units the plan's 368-trial grid is
    ≈$223 against a $120 ceiling, and `--max-budget-usd` is per-spawn so nothing rails the total
    (§7). The strong block alone exceeds the ceiling — and §5a now removes part of its motivation.
-3. **The gate trio moves to weak tier — and it is the cheapest undischarged obligation on the
-   board.** Delivery is 76–90% at haiku and 0/15 at opus on the same plugin (§5a), so buying the
-   strong-tier gate cells as designed purchases an untreated treatment arm. Staged at weak tier the
-   trio costs **≈$3.48 corrected** and is the only thing standing between G1/H3 and a verdict
-   (§5, Branch G). The shipped gate has now been default-off and unmeasured across three windows;
-   at that price the gap is a scheduling fact, not a funding one.
+3. **The gate trio was bought at weak tier and H3 is discharged — what remains is H6 and the
+   strong-tier delivery failure.** ~~The only thing standing between G1/H3 and a verdict.~~
+   **Done (§5b):** 31 runs, delivery 80–90%, H3 an exact tie, Branch G fired. Two follow-ons are
+   now the open part. **(a)** H6 for the gate arms is still unmeasured — no gate arm has run on the
+   NULL bank, so the false-positive conjunct of G1 has no reading; at weak-tier prices that is a
+   small block if anyone wants G1 closed rather than merely failed. **(b)** The strong-tier
+   zero-delivery is still unexplained, and it — not the gate's effect — is the precondition for any
+   strong-tier gate work. Buying the strong cell before explaining it repeats §5a.
 4. **The published `+0.22 / +0.56 / +0.44` ladder needs a decision, not a silent edit.** The opus
    figure's arm shows zero gate activations, and at n=9 that contrast could not have reached
    significance in any case (best-case exact McNemar p = 0.125). The plugin's README and CHANGELOG
    currently present it as the gate's measured effect at that tier. **This pass deliberately made no
    craft edit** — no pre-registered branch licensed one, and a delivery measurement is not a branch
    outcome — but the citation is now known to attribute an effect to a mechanism that left no trace
-   in the trials producing it.
+   in the trials producing it. **Sharpened at the fourth window, and now a branch *has* fired.** The
+   gate was bought at the tier where it demonstrably *does* deliver (80–90%), and there it produced
+   **+0.0 pp against its placebo, +0.0 pp against ungated `bare`, and −10.0 pp on top of the skill
+   body**. So the ladder is now doubly unsupported: at strong tier the mechanism left no trace in
+   the trials, and at weak tier, where it leaves a trace in 8–9 streams out of 10, it moves nothing.
+   Branch G licenses not promoting the gate; whether that obliges a correction to the published
+   README and CHANGELOG numbers is still an operator call, but it is no longer a call made in the
+   absence of data.
 5. **Re-derive or retire the ×3.81 multiplier.** Its stated mechanism is refuted (§7); the
    undercount it stands for is real and probably larger. Keep it as a conservative budget unit,
    stop quoting it as measured.
 6. **The non-inferiority margin cannot pass at any funded n** (§3). Re-register the margin,
    re-register n, or withdraw the displacement — an operator decision, and explicitly *not* one to
-   be fixed by dropping the margin after seeing data.
+   be fixed by dropping the margin after seeing data. **Unchanged by the fourth window, and now
+   demonstrated rather than projected:** every bought cell is n=10, needs n ≥ 35, and the analyzer
+   printed **undecidable** on all seven rows rather than scoring them failures. Note this did not
+   end up mattering for the ship decision — vNext is declined on the *point estimates and paired
+   intervals*, not on a failed non-inferiority test, so the undecidable margin blocked nothing this
+   window. It would bind immediately on any future attempt to argue a body is *equivalent*.
+7. **New: investigate the shipped body's cost on the DATA class** (§3, fact 3).
+   `output_correct_on_subtle_case` 7/10 → 4/10 under `skill`, paired [−50.7, −1.5]. One cell, n=10,
+   McNemar 0.2500 — a flag, not a verdict, and explicitly not a licence to edit the shipped body.
+   The cheap next step is more n on weak/DATA `bare` vs `skill` alone, which needs no new arm.

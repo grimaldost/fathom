@@ -1,0 +1,34 @@
+id = "fix-ledger-replay"
+instruction = """
+Users of the `book` package report that the two ways of computing the totals
+disagree once a void is in the log. For
+`[{"kind": "post", "id": "a", "amount": 100}, {"kind": "void", "id": "a"}]`,
+`live.fold` reports `{"total": 0, "count": 1}` while `replay.replay` reports
+`{"total": 0, "count": 0}`. Per the package README a voided entry counts for
+nothing and the two paths must agree. Find and fix the bug so the package behaves
+as documented. Preserve the existing public API, and keep the shipped test suite
+passing.
+"""
+
+[limits]
+trial_timeout_s = 1500
+max_turns = 120
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived — see ../oracles.toml § HOW `hard_criteria` IS DERIVED. `fold_excludes_voided` is
+# dropped: the symptom patch already satisfies it. Last two are strong-level.
+hard_criteria = [
+    "parity_duplicate_void",
+    "parity_void_before_post",
+    "parity_prefix_sweep",
+]
+
+[gate]
+# The shipped suite, run from the workspace root. Green on the untouched fixture by
+# construction (the suite does not cover the planted bug), so a gated strategy would
+# see a truthful baseline. This bank's own arms are single-session and never run it;
+# it is here so the gate property is VERIFIABLE rather than unverifiable, and it names
+# only paths that exist in the staged workspace — no placeholder ever reaches a shell.
+run = "python -m unittest discover -s tests -t ."

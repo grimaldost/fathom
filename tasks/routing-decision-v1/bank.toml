@@ -1,0 +1,8 @@
+name = "routing-decision-v1"
+dataset_version = "1"
+# No holdout. This bank measures the COST and the RECORDED OUTPUT of a routing
+# decision; it does not fit a threshold or tune a rubric against these tasks, so
+# there is no overfitting surface for a sealed task to protect. The sealed holdout
+# that matters to this study is `model-tier-v2`'s (`fix-quota-rollup`), and it stays
+# sealed here too: it is not among the briefs, so no mechanism is ever scored on it.
+holdout = []

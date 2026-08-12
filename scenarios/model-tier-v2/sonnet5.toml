@@ -1,0 +1,16 @@
+name = "sonnet5"
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+# Mid tier. Identical to haiku/opus5 except `model`. The arm name carries the family
+# token `sonnet`, which is what puts it on the capacity ladder (calibration.arm_tier);
+# the `5` keeps it distinguishable from model-tier-v1's Sonnet 4.6 arm in a
+# cross-bank read.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "PowerShell", "Bash"]
+
+[limits]
+trial_timeout_s = 1800

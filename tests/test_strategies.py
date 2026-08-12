@@ -516,19 +516,44 @@ class TestSeriesClassification(SeriesTestBase):
             ' "integrated": %s}\n' % (self._RUN, outcome, "true" if integrated else "false")
         )
 
-    def test_blocking_red_nonzero_exit_is_errored(self):
-        # exit 1 = a blocking gate stayed red — a scored task failure.
+    def test_blocking_red_is_completed_and_therefore_actually_scored(self):
+        # exit 1 = a blocking gate stayed red: the engine's own TASK failure, which
+        # contract §7 says is SCORED. It must be COMPLETED, because ERRORED is what
+        # "not measured" looks like downstream — cli.py drops verifier_results and
+        # writes valid=false for any non-completed trial, and report.py counts only
+        # completed ones. Recording a block as ERRORED therefore deleted every trial
+        # the engine refused to integrate from the denominator, leaving a pass rate
+        # conditioned on the engine having succeeded. The result view is real: the
+        # engine halts with the failing PR branch checked out, carrying every merged
+        # predecessor plus this PR's work.
         engine = StubEngine(
             returncode=1,
             stdout="PR01 gate stayed red",
             telemetry_text=self._IMPL + self._run_complete("blocked", False),
         )
         result = self.run_series(engine)
-        self.assertEqual(result.status, TrialStatus.ERRORED)
+        self.assertEqual(result.status, TrialStatus.COMPLETED)
         self.assertTrue(result.scored)
-        self.assertIn("exit 1", result.detail)
-        # records are still materialized from the telemetry even on an errored trial
+        self.assertIn("blocked", result.detail)
+        # records are still materialized from the telemetry
         self.assertEqual(len(result.runs), 1)
+
+    def test_blocked_outcome_caught_even_if_exit_code_differs(self):
+        # Symmetry with the budget case: classify on the engine's own terminal verdict
+        # too, not only on the exit code.
+        events = [
+            {"event": "run_complete", "run_id": "R", "outcome": "blocked", "integrated": False}
+        ]
+        status, detail = _classify(EngineOutcome(returncode=0, stdout=""), events)
+        self.assertEqual(status, TrialStatus.COMPLETED)
+        self.assertIn("blocked", detail)
+
+    def test_undocumented_nonzero_exit_stays_errored(self):
+        # An exit outside the engine's 0-4 taxonomy states no verdict (a crash, a
+        # wrapper error), so it must not be silently scored as a task result.
+        status, detail = _classify(EngineOutcome(returncode=9, stdout=""), [])
+        self.assertEqual(status, TrialStatus.ERRORED)
+        self.assertIn("engine exit 9", detail)
 
     def test_infrastructure_exit_code_is_infrastructure(self):
         engine = StubEngine(

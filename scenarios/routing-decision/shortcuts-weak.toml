@@ -1,0 +1,32 @@
+name = "shortcuts-weak"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# Mechanism: shortcuts. Deciding tier: weak (Haiku 4.5).
+#
+# Treatment arm: a floor plus a shape lookup, NO scoring arithmetic. ~335 words /
+# ~0.4k tokens, 14x smaller than `rubric`. Authored to be as good as a careful
+# person would make it — it encodes the same coverage insight as the rubric's
+# cross-shape floor, stated as a rule rather than computed as a score — so a win
+# for `rubric` cannot be explained by `shortcuts` having been built to lose.
+#
+# THE AXES ARE CROSSED ON PURPOSE. The routing decision is taken by whatever session
+# is dispatching the work, and that session is frequently an expensive one — so a
+# scored rubric can be paying strong-tier prices to decide that some downstream task
+# deserves a weak-tier model. Pricing the decision at one tier would hide that. Every
+# mechanism is therefore priced at all three deciding tiers, and arms differ ONLY by
+# `model` and by the injected policy.
+[tools]
+source = "none"
+# Read/Glob/Grep to reach the briefs, Write to emit routing.json. No Bash and no
+# Task: the job is a judgment, there is nothing to execute and nothing to delegate,
+# and a shell would let an arm burn tokens exploring instead of deciding.
+allowed = ["Read", "Write", "Glob", "Grep"]
+
+[context]
+inject = "assets/shortcuts.md"
+
+[limits]
+trial_timeout_s = 900

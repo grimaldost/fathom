@@ -69,6 +69,11 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
 
     Returns {} when the bank ships no scores.toml (every non-calibration bank), so the
     calibration section is simply absent and other banks' scorecards are byte-unchanged.
+
+    A bank may also declare ONE positive control in scores.toml's ``[control]`` table
+    (``task``, ``weak_arm``, ``strong_arm``, ``alpha``, ``min_repeats``). It is attached
+    to that task's meta as ``entry["control"]``, which is what makes calibration.py read
+    it by its own rule and keep it out of the confusion matrix.
     """
     import tomllib
 
@@ -78,7 +83,15 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
         return {}
     try:
         with open(scores_path, "rb") as f:
-            scores = tomllib.load(f).get("scores", {})
+            scores_doc = tomllib.load(f)
+        scores = scores_doc.get("scores", {})
+        control = scores_doc.get("control") or {}
+        # The routing layer: the reduced mechanism's per-task prediction, the task's
+        # genre, and the pre-registered analysis parameters. Absent on every other
+        # bank, so their scorecards are byte-unchanged.
+        reduced = scores_doc.get("reduced") or {}
+        genre = scores_doc.get("genre") or {}
+        analysis = scores_doc.get("analysis") or {}
         from fathom.taskbank import load_bank
 
         loaded = load_bank(bank_dir)
@@ -89,6 +102,14 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
         hard = t.verify.get("hard_criteria")
         if t.id in scores and isinstance(hard, list) and hard:
             entry: dict[str, Any] = {"score": float(scores[t.id]), "hard_criteria": list(hard)}
+            if control.get("task") == t.id:
+                entry["control"] = dict(control)
+            if t.id in reduced:
+                entry["reduced"] = dict(reduced[t.id])
+            if t.id in genre:
+                entry["genre"] = genre[t.id]
+            if analysis:
+                entry["analysis"] = dict(analysis)
             # [context] is dropped by load_bank's Task (FM-N4) — re-parse task.toml directly.
             try:
                 with open(t.task_dir / "task.toml", "rb") as tf:
@@ -656,14 +677,34 @@ def render(
     # Heading switches to Context-Size when the bank's tasks carry [context] tags (FM-B);
     # model-tier banks keep the default heading, so their scorecards are byte-unchanged.
     task_meta = _load_task_meta(bank)
+    routing_path: pathlib.Path | None = None
     if task_meta:
         from fathom import calibration as _cal
 
         is_ctx = any("context" in m for m in task_meta.values())
         heading = "## Context-Size Calibration" if is_ctx else "## Model-Tier Calibration"
-        lines.extend(
-            _cal.render_calibration(_cal.build_calibration(raw, task_meta), heading=heading)
-        )
+        cal = _cal.build_calibration(raw, task_meta)
+        lines.extend(_cal.render_calibration(cal, heading=heading))
+        # The routing substrate, emitted as a machine-readable artifact beside the
+        # scorecard. A separate programme compares routing MECHANISMS on cost, and it
+        # consumes this table rather than parsing markdown or reading the ledger a
+        # second way — one producer, one schema, one place the numbers come from.
+        # Written only for a bank that declares a reduced mechanism.
+        if any(m.get("reduced") for m in task_meta.values()):
+            report_dir.mkdir(parents=True, exist_ok=True)
+            routing_path = report_dir / f"routing-substrate-{bank}.json"
+            substrate = _cal.routing_substrate(cal, task_meta, cal.get("analysis_params"))
+            substrate["bank"] = bank
+            routing_path.write_text(
+                json.dumps(substrate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            lines += [
+                f"> Routing substrate written to `{routing_path.as_posix()}`"
+                " (schema in the bank README). It is the input to the"
+                " mechanism-cost comparison; regenerate it any time with"
+                f" `fathom report {bank}`.",
+                "",
+            ]
 
     while lines and not lines[-1]:
         lines.pop()

@@ -1,0 +1,390 @@
+# Per-task complexity scores for the calibration confusion matrix.
+#
+# RATING STATUS: **author-only, one rater**. The design's acceptance criteria ask for
+# two blind raters, as model-tier-v1 had. The bank was authored in a single
+# non-interactive session with no way to convene a second, blind rater, so the second
+# rating is an OPEN pre-run step, not a completed one. The per-axis breakdown below is
+# recorded in full precisely so a second rater can check the arithmetic rather than
+# re-derive it, and so a disagreement lands on a named axis. Until that rating exists,
+# every band claim in README.md is provisional.
+#
+# Rubric: the pinned model-complexity rubric shipped at
+# `choosing-models/references/scoring-rubric.md` (the same rubric model-tier-v1 used,
+# kept pinned for cross-study continuity). Base 30 for anything with logic; the
+# cross-shape floor raises a sub-26 score to 26 but never lowers one.
+#
+# Predicted tier = tier_for_score(score): 0-25 weak / 26-55 mid / 56-100 strong.
+
+[scores]
+# The positive control, ported verbatim from model-tier-v1's `fix-nonlocal-parse`. Its
+# score is v1's recorded FINAL, from v1's TWO-rater process (author 70, blind second
+# rater 61, final 65) — not from this bank's one-rater pass, and not re-derived here.
+# There is consequently no per-axis breakdown for it below: fabricating one that summed
+# to 65 would misrepresent where the number came from. The exemption is asserted in
+# tests/test_bank_model_tier_v2.py, not left to prose. Predicted tier: strong.
+control-nonlocal-parse = 65
+
+fix-clamp2 = 20
+fix-strip-unicode = 40
+feature-ndjson-merge = 38
+fix-tz-window = 50
+fix-decimal-round = 54
+fix-quota-rollup = 60
+fix-graph-cycle = 62
+fix-merge-3way = 67
+fix-ledger-replay = 71
+
+# The shape-extension rungs (added 2026-08-12). The nine above are all bug fixes;
+# routing decisions are not. Each of these five carries a genre the bank had no rung
+# for AND sits where the scored rubric and the reduced floor+shortcut mechanism route
+# differently — see [reduced] below and README § *The two mechanisms this bank can
+# separate*. Their per-axis breakdowns are at the foot of this file.
+refactor-dedupe-validators = 45
+review-locate-defects = 46
+plan-migration-order = 37
+debug-cache-staleness = 60
+data-reconcile-telemetry = 66
+
+# Per-axis breakdown, for the second rater. Keys are the rubric's own axes:
+# base + structure + reasoning + domain + context + output + adjustments.
+# `cross_shape` records whether the cross-shape floor fired (it never lowers a score).
+
+[breakdown.fix-clamp2]
+base = 30
+structure = 0
+reasoning = 0
+domain = 0
+context = 0
+output = 0
+adjustments = -10
+cross_shape = false
+note = "the high bound already works; the fix mirrors an existing branch — copy/paste reasoning, mechanical verification and clear acceptance both discount"
+
+[breakdown.fix-strip-unicode]
+base = 30
+structure = 0
+reasoning = 5
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = false
+note = "single function, fix site named; Unicode normalisation is a domain rule the prompt does not state"
+
+[breakdown.feature-ndjson-merge]
+base = 30
+structure = 5
+reasoning = 10
+domain = 0
+context = 3
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered shared-helper fan-out: the prompt names one of three entry points for one rule"
+
+[breakdown.fix-tz-window]
+base = 30
+structure = 5
+reasoning = 10
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered displaced cause: symptom in the report layer, fault in the window bound; DST-shaped day arithmetic"
+
+[breakdown.fix-decimal-round]
+base = 30
+structure = 5
+reasoning = 10
+domain = 12
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "uncovered backend parity; money rounding scored regulatory (+12) rather than domain-rule (+8) — the axis a second rater is most likely to move, and the one that puts this rung on the 55 edge"
+
+[breakdown.fix-quota-rollup]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "cross-module invariant across four modules; reasoning scored trade-off (+15) because the fix has to choose between refreshing the cached rollup and deriving it"
+
+[breakdown.fix-graph-cycle]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "displaced cause across builder/traverse/report; the fix must also leave genuine cycle detection intact"
+
+[breakdown.fix-merge-3way]
+base = 30
+structure = 10
+reasoning = 20
+domain = 8
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "a duplicated four-rule resolution table with two rules wrong; proof-like case analysis over base/ours/theirs including absence"
+
+[breakdown.fix-ledger-replay]
+base = 30
+structure = 10
+reasoning = 20
+domain = 12
+context = 7
+output = 2
+adjustments = -10
+cross_shape = true
+note = "incremental fold must equal a whole-log replay under out-of-order and repeated events; ledger reconciliation scored regulatory"
+
+# =================================================================================
+# THE SHAPE-EXTENSION RUNGS (added 2026-08-12), one rater, same pinned rubric.
+#
+# All five sit where the scored rubric and the reduced floor+shortcut model disagree,
+# which is the only place a mechanism comparison can move. Every one of them is scored
+# by the rubric as written, NOT tuned to produce a disagreement — the disagreement is
+# read off afterwards, from `[reduced]` below, and the enrichment is declared in
+# README.md as a limit on what the bank can estimate (it can say which mechanism wins
+# WHERE THEY DIFFER; it cannot say how often they differ on a real workload).
+
+[breakdown.refactor-dedupe-validators]
+base = 30
+structure = 10
+reasoning = 10
+domain = 0
+context = 3
+output = 2
+adjustments = -10
+cross_shape = false
+note = "four named files; reconciling three drifted copies against a rules document is conditional logic, not copy/paste. The floor does NOT fire: the prompt enumerates every caller, which is breadth and not cross-shape (rubric Example 5)"
+
+[breakdown.debug-cache-staleness]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 7
+output = 0
+adjustments = -10
+cross_shape = true
+note = "no file is named at all: the symptom is a stale view, the cause is the key builder, and three views share it. Reasoning scored trade-off (+15) because the fix has to choose between scoping the key, expiring the entry and invalidating on write"
+
+[breakdown.data-reconcile-telemetry]
+base = 30
+structure = 10
+reasoning = 15
+domain = 8
+context = 10
+output = 3
+adjustments = -10
+cross_shape = false
+note = "the strong band reached WITHOUT any shortcut signal and without the floor: every edit site is named, and the points come from breadth, domain rules, and a brief that requires both the rules document and the package conventions. This is the cell the bank had no rung in"
+
+[breakdown.review-locate-defects]
+base = 30
+structure = 0
+reasoning = 10
+domain = 8
+context = 3
+output = 0
+adjustments = -5
+cross_shape = false
+note = "one module read, one file written, both named. Adjustments are -5 and not -10: the acceptance criteria are specific, but there is no mechanical verification the arm can run against its own review — the shipped suite says nothing about it"
+
+[breakdown.plan-migration-order]
+base = 30
+structure = 5
+reasoning = 10
+domain = 0
+context = 0
+output = 2
+adjustments = -10
+cross_shape = false
+note = "constraint satisfaction over a declared set: conditional, not proof-like. Everything is given, so context scores 0. The most contestable declaration in [reduced] is this one — a rater who reads C3 as `multi-stage migration with rollback` fires the strong shortcut and the rung stops being discordant"
+
+# =================================================================================
+# THE REDUCED MECHANISM, DECLARED PER TASK AND FROZEN BEFORE ANY SPEND.
+#
+# The decision this bank feeds is not "is the rubric accurate" but "which routing
+# MECHANISM costs least at equal quality". Two of the candidate mechanisms are
+# authored here because they are properties of the TASK, not of a run:
+#
+#   points  — tier_for_score(score), the scored rubric as it ships.
+#   reduced — the floor plus a few shape shortcuts: the cross-shape floor fires -> mid;
+#             else a shortcut from the rubric's OWN published "Likely strong" list
+#             fires -> strong; else weak.
+#
+# `shortcut` names the entry from that list, verbatim, or is empty. Taking the list
+# from the rubric rather than inventing one is what keeps the reduced mechanism from
+# being a straw man: it is the rubric's own advice with the arithmetic removed.
+#
+# A rung is DISCORDANT when the two mechanisms route it differently. Those rungs, and
+# only those, are where C(points) and C(reduced) can differ, so they are what tranche 1
+# buys. The other mechanisms under test (always-weak-with-escalation, a fixed single
+# tier, no mechanism) differ from both on EVERY rung and need the full census.
+
+[reduced.fix-clamp2]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.fix-strip-unicode]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.feature-ndjson-merge]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-tz-window]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-decimal-round]
+floor_fires = true
+shortcut = "regulatory / compliance"
+prediction = "strong"
+
+[reduced.fix-quota-rollup]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-graph-cycle]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.fix-merge-3way]
+floor_fires = true
+shortcut = "novel algorithm"
+prediction = "strong"
+
+[reduced.fix-ledger-replay]
+floor_fires = true
+shortcut = "regulatory / compliance"
+prediction = "strong"
+
+[reduced.refactor-dedupe-validators]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.debug-cache-staleness]
+floor_fires = true
+shortcut = ""
+prediction = "mid"
+
+[reduced.data-reconcile-telemetry]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.review-locate-defects]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+[reduced.plan-migration-order]
+floor_fires = false
+shortcut = ""
+prediction = "weak"
+
+# The control is not a rung and takes no mechanism prediction.
+
+# =================================================================================
+# TASK GENRE, so the substrate table can be read by shape as well as by score.
+
+[genre]
+fix-clamp2 = "bugfix"
+fix-strip-unicode = "bugfix"
+feature-ndjson-merge = "bugfix"
+fix-tz-window = "bugfix"
+fix-decimal-round = "bugfix"
+fix-quota-rollup = "bugfix"
+fix-graph-cycle = "bugfix"
+fix-merge-3way = "bugfix"
+fix-ledger-replay = "bugfix"
+control-nonlocal-parse = "bugfix"
+refactor-dedupe-validators = "refactor"
+debug-cache-staleness = "debugging"
+data-reconcile-telemetry = "data"
+review-locate-defects = "review"
+plan-migration-order = "planning"
+
+# =================================================================================
+# THE ANALYSIS PARAMETERS, FIXED BEFORE THE SPEND.
+#
+# `tau` is the adequacy bar: a tier is adequate for a task when its per-trial pass
+# rate is at least tau. 0.7 is chosen against measured accuracy, not taste — see
+# README § *Why the rung statistic changed*: over six realistic rungs, the absolute
+# bar at 0.7 reads the right tier 88% of the time at repeats=5 and 96% at repeats=10,
+# where the as-built relative statistic reads it 33% and 63%. At repeats=5 the bar is
+# "4 of 5 or better".
+#
+# `non_inferiority_margin` is the quality side of the constraint: a cheaper mechanism
+# wins only if its mean quality is within this of the best mechanism's.
+#
+# `escalation_cost_multiplier` prices the retry term: a gate-caught failure is assumed
+# to buy the failing tier's spend AND the next tier up. A silent failure buys the
+# failing tier's spend and an escape, which the quality constraint handles rather than
+# the cost model — the two are reported separately and never summed.
+[analysis]
+tau = 0.7
+tau_sensitivity = [0.6, 0.7, 0.8]
+non_inferiority_margin = 0.05
+alpha = 0.05
+escalation_cost_multiplier = 1.0
+
+# The positive control, declared machine-readably so calibration.py reads it by its own
+# rule and keeps it out of the confusion matrix. The rule is a one-sided Fisher exact
+# test between `weak_arm` and `strong_arm` on PER-TRIAL pass counts (all hard criteria
+# true): the control separates iff p <= alpha at >= min_repeats repeats per arm.
+#
+# WHY min_repeats = 10. Costed by exact enumeration at the control's own recorded v1
+# rates (haiku 0.4, opus5 1.0) under per-trial scoring — see docs/adr/0009. The rule
+# this replaces (haiku's Wilson CI disjoint from opus5's) reproduces with probability
+# 0.078 at repeats=5 and needs repeats=15 to clear 0.9. The Fisher rule reaches 0.945
+# at repeats=10, which is the cheapest point that clears the 0.9 bar.
+#
+# HONEST LIMIT, RECORDED. 0.945 is computed with opus5 plugged in at the 5/5 point
+# estimate. If opus5's true rate is 0.9, repeats=10 gives 0.659 and 20 repeats are
+# needed for 0.951. The pre-registration buys 10 because that is the bar the reviewer
+# set (">= 0.9 at v1's own observed rates"); a control that fails at 10 therefore
+# blocks the tier conclusions without proving the ladder flat, which is the
+# conservative direction and is stated as such in README.md.
+[control]
+task = "control-nonlocal-parse"
+weak_arm = "haiku"
+strong_arm = "opus5"
+alpha = 0.05
+min_repeats = 10
+
+# Provenance of the control's score and its prior reading — the evidence that makes it
+# a usable positive control. Observed on ledger/model-tier-v1.jsonl at --repeats 5,
+# both hard criteria passing: haiku 2/5, sonnet 3/5, sonnet5 4/5, opus 5/5, opus5 5/5.
+[control_provenance.control-nonlocal-parse]
+bank = "model-tier-v1"
+task_id = "fix-nonlocal-parse"
+score_author = 70
+score_blind_rater = 61
+score_final = 65
+observed_hard_pass_haiku = "2/5"
+observed_hard_pass_sonnet = "3/5"
+observed_hard_pass_sonnet5 = "4/5"
+observed_hard_pass_opus = "5/5"
+observed_hard_pass_opus5 = "5/5"

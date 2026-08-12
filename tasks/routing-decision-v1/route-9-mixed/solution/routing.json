@@ -1,0 +1,13 @@
+{
+  "routes": {
+    "debug-cache-staleness": "strong",
+    "feature-ndjson-merge": "mid",
+    "fix-clamp2": "weak",
+    "fix-decimal-round": "mid",
+    "fix-ledger-replay": "strong",
+    "fix-tz-window": "mid",
+    "plan-migration-order": "mid",
+    "refactor-dedupe-validators": "mid",
+    "review-locate-defects": "mid"
+  }
+}

@@ -1,0 +1,39 @@
+id = "review-locate-defects"
+instruction = """
+`billing/prorate.py` is meant to implement the six rules in `billing/RULES.md`, one
+function per rule. Some of the functions do not.
+
+Review the module against the rules and write `REVIEW.md` at the root of the
+workspace, in the shape `README.md` specifies: a `## Defects` section with one line
+per defective function, reading
+
+  - <function_name> (<rule id>): <one sentence saying what is wrong>
+
+Name every function that does not implement its rule, and name nothing else — a
+correct function listed as a defect is a false positive, and a review that names
+everything has decided nothing.
+
+Change no code. `billing/prorate.py` must be byte-identical when you are done, and
+the shipped test suite must still pass.
+"""
+
+[limits]
+trial_timeout_s = 1200
+max_turns = 70
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
+# Derived, not chosen — see ../oracles.toml § HOW `hard_criteria` IS DERIVED: false on
+# the untouched fixture, false on counter/, true on solution/.
+hard_criteria = [
+    "names_every_defect",
+    "cites_a_rule_for_every_named_defect",
+    "precision_within_one_false_positive",
+]
+
+[gate]
+# The shipped suite, green on the untouched fixture. On this task it is also the
+# preservation check: a review that edits the module is a review that changed the
+# thing it was reviewing.
+run = "python -m unittest discover -s tests -t ."
