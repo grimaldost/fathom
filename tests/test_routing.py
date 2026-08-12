@@ -120,11 +120,11 @@ class TestDecisionCost:
 
     def test_mechanisms_with_no_decision_pay_nothing(self):
         assert r.fixed_tier_mechanism("mid", ["a"]).decision_cost.per_task(5) == 0.0
-        assert r.always_weak_escalate().decision_cost.per_task(5) == 0.0
+        assert r.always_weak_start().decision_cost.per_task(5) == 0.0
 
 
 class TestRetryEconomics:
-    """`always-weak-escalate` lives or dies here, so the recursion is pinned by hand."""
+    """`always-weak` lives or dies here, so the recursion is pinned by hand."""
 
     def test_expected_cost_matches_the_hand_worked_ladder(self):
         # weak 0.10 @ p=0.5 -> mid 0.20 @ p=0.8 -> strong 0.40 @ p=1.0, detection perfect.
@@ -160,12 +160,57 @@ class TestRetryEconomics:
         result = r.expected_task(_outcome(), "strong", max_escalations=2)
         assert result.expected_cost == pytest.approx(0.40)
 
-    def test_every_mechanism_gets_the_same_retry_machinery(self):
-        """No mechanism may be credited with a repair loop another is denied."""
+    def test_escalation_depth_is_environmental_not_per_mechanism(self):
+        """Every mechanism gets the SAME ladder, whatever its name suggests.
+
+        A failed task gets retried somewhere regardless of how its tier was chosen, so
+        `fixed-mid` escalates on a failure exactly as `always-weak` does. Handing a
+        ladder only to the mechanism whose name mentions one would flatter the
+        challenger — the mirror image of the two defects that flattered the incumbent.
+
+        Asserted by construction: two mechanisms that START at the same tier must give
+        identical results, because starting tier is the only thing that differs between
+        them once depth is environmental.
+        """
+        substrate = r.Substrate({"t": _outcome("t")})
+        mix = r.Mix("m", {"t": 1.0})
+        starts_weak = r.Mechanism("always-weak", {}, start_tier="weak")
+        routed_weak = r.Mechanism("rubric", {"t": "weak"})
+        for depth in (r.PRIMARY_MAX_ESCALATIONS, r.SENSITIVITY_MAX_ESCALATIONS):
+            a = r.evaluate(starts_weak, substrate, mix, episode_size=1, max_escalations=depth)
+            b = r.evaluate(routed_weak, substrate, mix, episode_size=1, max_escalations=depth)
+            assert a.execution_usd == pytest.approx(b.execution_usd)
+            assert a.quality_post_repair == pytest.approx(b.quality_post_repair)
+
+    def test_the_primary_depth_is_the_one_least_favourable_to_cheap_starts(self):
+        """The adversarial posture, asserted rather than described.
+
+        Depth 1 credits less repair than depth 2, so a weak-start mechanism looks WORSE
+        on quality and CHEAPER on cost under the primary assumption. If a cheap-start
+        mechanism still clears the quality bar at depth 1, that survives its own least
+        favourable setting. This test fails if the primary is ever quietly raised.
+        """
+        assert r.PRIMARY_MAX_ESCALATIONS < r.SENSITIVITY_MAX_ESCALATIONS
         outcome = _outcome()
-        started_weak = r.expected_task(outcome, "weak", max_escalations=2)
-        fixed_at_weak = r.expected_task(outcome, "weak", max_escalations=2)
-        assert started_weak == fixed_at_weak
+        shallow = r.expected_task(outcome, "weak", max_escalations=r.PRIMARY_MAX_ESCALATIONS)
+        deep = r.expected_task(outcome, "weak", max_escalations=r.SENSITIVITY_MAX_ESCALATIONS)
+        assert shallow.p_correct_post_repair <= deep.p_correct_post_repair
+        assert shallow.expected_cost <= deep.expected_cost
+
+    def test_the_default_depth_is_the_primary(self):
+        outcome = _outcome()
+        assert r.expected_task(outcome, "weak") == r.expected_task(
+            outcome, "weak", max_escalations=r.PRIMARY_MAX_ESCALATIONS
+        )
+
+    def test_every_result_carries_the_depth_it_was_computed_at(self):
+        """So a headline and a sensitivity can never be confused once separated."""
+        substrate = r.Substrate({"t": _outcome("t")})
+        mix = r.Mix("m", {"t": 1.0})
+        mech = r.Mechanism("m", {"t": "weak"})
+        for depth in (1, 2):
+            out = r.evaluate(mech, substrate, mix, episode_size=1, max_escalations=depth)
+            assert out.max_escalations == depth
 
 
 class TestRouteReconstruction:
@@ -441,7 +486,7 @@ class TestSubstrateJoin:
 
         substrate = r.Substrate.from_artifact(self.ARTIFACT)
         mine = r.evaluate(
-            r.always_weak_escalate(),
+            r.always_weak_start(),
             substrate,
             r.uniform_mix(list(substrate.tasks)),
             episode_size=1,
@@ -480,7 +525,7 @@ class TestSubstrateJoin:
 
         substrate = r.Substrate.from_artifact(self.ARTIFACT)
         mine = r.evaluate(
-            r.always_weak_escalate(),
+            r.always_weak_start(),
             substrate,
             r.uniform_mix(list(substrate.tasks)),
             episode_size=1,
@@ -539,7 +584,7 @@ class TestSubstrateJoin:
 
         substrate = r.Substrate.from_artifact(self.ARTIFACT)
         mine = r.evaluate(
-            r.always_weak_escalate(),
+            r.always_weak_start(),
             substrate,
             r.uniform_mix(list(substrate.tasks)),
             episode_size=1,
@@ -571,12 +616,26 @@ class TestEstimand:
     """C(m), its terms, and the constraint that quality is not tradeable."""
 
     def test_total_is_the_sum_of_its_named_terms(self):
+        """Depth stated explicitly: these are the hand-worked depth-2 ladder numbers.
+
+        Leaving it implicit would silently re-anchor this assertion the next time the
+        primary depth moves, which is exactly the drift the depth stamp exists to stop.
+        """
         substrate = r.Substrate({"a": _outcome("a")})
         mech = r.Mechanism("rubric", {"a": "weak"}, r.DecisionCost("rubric", "strong", 0.05, 0.01))
-        out = r.evaluate(mech, substrate, r.Mix("x", {"a": 1.0}), episode_size=1)
+        out = r.evaluate(mech, substrate, r.Mix("x", {"a": 1.0}), episode_size=1, max_escalations=2)
         assert out.decision_usd == pytest.approx(0.06)
         assert out.execution_usd == pytest.approx(0.24)
         assert out.total_usd == pytest.approx(0.30)
+
+    def test_the_same_case_costs_less_at_the_primary_depth(self):
+        """One escalation, not two: 0.10 + 0.5*0.20 = 0.20 execution, 0.26 total."""
+        substrate = r.Substrate({"a": _outcome("a")})
+        mech = r.Mechanism("rubric", {"a": "weak"}, r.DecisionCost("rubric", "strong", 0.05, 0.01))
+        out = r.evaluate(mech, substrate, r.Mix("x", {"a": 1.0}), episode_size=1)
+        assert out.max_escalations == r.PRIMARY_MAX_ESCALATIONS
+        assert out.execution_usd == pytest.approx(0.20)
+        assert out.total_usd == pytest.approx(0.26)
 
     def test_batching_lowers_c_for_a_mechanism_with_a_fixed_cost(self):
         substrate = r.Substrate({"a": _outcome("a")})
@@ -648,6 +707,87 @@ class TestEstimand:
         assert r.rank([], delta=0.05) == []
 
 
+class TestEscalationSensitivity:
+    """The depth-2 sensitivity as a computed value, not a paragraph."""
+
+    def _substrate(self) -> r.Substrate:
+        # weak fails often but its failures are always caught; mid repairs most of them;
+        # strong repairs the rest. A second escalation is therefore worth real quality.
+        return r.Substrate(
+            {
+                "t": _outcome(
+                    "t",
+                    pass_rate={"weak": 0.3, "mid": 0.6, "strong": 1.0},
+                    exec_cost={"weak": 0.05, "mid": 0.20, "strong": 0.50},
+                    detect=1.0,
+                )
+            }
+        )
+
+    def test_it_reports_both_rankings_and_whether_they_differ(self):
+        substrate = self._substrate()
+        mechanisms = [r.always_weak_start(), r.fixed_tier_mechanism("strong", ["t"])]
+        out = r.rank_with_sensitivity(
+            mechanisms, substrate, r.Mix("m", {"t": 1.0}), episode_size=1, delta=0.05
+        )
+        assert out.primary and out.sensitivity
+        assert isinstance(out.ranking_changed, bool)
+        assert isinstance(out.winner_changed, bool)
+
+    def test_each_half_is_computed_at_its_own_depth(self):
+        substrate = self._substrate()
+        out = r.rank_with_sensitivity(
+            [r.always_weak_start()],
+            substrate,
+            r.Mix("m", {"t": 1.0}),
+            episode_size=1,
+            delta=1.0,
+        )
+        assert all(m.max_escalations == r.PRIMARY_MAX_ESCALATIONS for m in out.primary)
+        assert all(m.max_escalations == r.SENSITIVITY_MAX_ESCALATIONS for m in out.sensitivity)
+
+    def test_a_depth_driven_ranking_flip_is_detected(self):
+        """The case the ruling cares about: depth 2 changing the answer.
+
+        At depth 1 the weak start cannot reach `strong`, so it caps below the quality
+        bar and is excluded; `fixed-strong` wins. At depth 2 it reaches `strong`, clears
+        the bar, and wins on cost. `winner_changed` must be True — that IS the finding,
+        and it has to be a value the report cannot omit.
+        """
+        substrate = self._substrate()
+        mechanisms = [r.always_weak_start(), r.fixed_tier_mechanism("strong", ["t"])]
+        out = r.rank_with_sensitivity(
+            mechanisms, substrate, r.Mix("m", {"t": 1.0}), episode_size=1, delta=0.05
+        )
+        assert out.primary_order[0] == "fixed-strong"
+        assert out.sensitivity_order[0] == "always-weak"
+        assert out.winner_changed is True
+        assert out.ranking_changed is True
+
+    def test_a_stable_ranking_reports_no_change(self):
+        """Where depth does not matter, the sensitivity must say so rather than noise."""
+        substrate = r.Substrate(
+            {"t": _outcome("t", pass_rate={"weak": 1.0, "mid": 1.0, "strong": 1.0})}
+        )
+        mechanisms = [r.always_weak_start(), r.fixed_tier_mechanism("strong", ["t"])]
+        out = r.rank_with_sensitivity(
+            mechanisms, substrate, r.Mix("m", {"t": 1.0}), episode_size=1, delta=0.05
+        )
+        assert out.ranking_changed is False
+        assert out.winner_changed is False
+
+    def test_the_mechanism_is_named_for_where_it_starts_not_for_escalating(self):
+        """`always-weak-escalate` -> `always-weak`: escalation is no longer its property.
+
+        The name also matches `calibration`'s own `always-weak`, so the two programmes
+        share one vocabulary for the same mechanism.
+        """
+        from fathom import calibration as cal
+
+        assert r.always_weak_start().name == "always-weak"
+        assert "always-weak" in cal.TASK_LEVEL_MECHANISMS
+
+
 class TestMix:
     """A mechanism that wins on hard tasks can lose on a realistic session."""
 
@@ -699,14 +839,65 @@ class TestMix:
             {"easy": "weak", "hard": "strong"},
             r.DecisionCost("smart", "strong", 0.05, 0.0),
         )
-        naive = r.always_weak_escalate()
+        naive = r.always_weak_start()
         easy_mix = r.Mix("easy", {"easy": 1.0})
         hard_mix = r.Mix("hard", {"hard": 1.0})
+        # Depth stated explicitly. At depth 2 the weak start burns three attempts on the
+        # hard task, so routing eventually pays; at the primary depth 1 it cannot reach
+        # `strong` at all and stays cheaper, so no crossing exists. The crossing is a
+        # function of the environment assumption, which is the point of stamping it.
         crossing = r.break_even_hard_fraction(
-            smart, naive, substrate, episode_size=1, easy_mix=easy_mix, hard_mix=hard_mix
+            smart,
+            naive,
+            substrate,
+            episode_size=1,
+            easy_mix=easy_mix,
+            hard_mix=hard_mix,
+            max_escalations=r.SENSITIVITY_MAX_ESCALATIONS,
         )
         assert crossing is not None
         assert 0.0 < crossing < 1.0
+
+    def test_the_crossing_can_depend_on_the_escalation_depth(self):
+        """Same fixture, primary depth: the weak start never reaches `strong`, so it
+        never pays the third attempt and routing never becomes the cheaper option.
+
+        This is a sensitivity worth seeing, not a bug: the break-even a reader acts on
+        is conditional on how many times the environment retries.
+        """
+        substrate = r.Substrate(
+            {
+                "easy": _outcome(
+                    "easy",
+                    20,
+                    pass_rate={"weak": 1.0, "mid": 1.0, "strong": 1.0},
+                    exec_cost={"weak": 0.05, "mid": 0.20, "strong": 0.40},
+                ),
+                "hard": _outcome(
+                    "hard",
+                    70,
+                    pass_rate={"weak": 0.0, "mid": 0.0, "strong": 1.0},
+                    exec_cost={"weak": 0.05, "mid": 0.20, "strong": 0.40},
+                ),
+            }
+        )
+        smart = r.Mechanism(
+            "smart",
+            {"easy": "weak", "hard": "strong"},
+            r.DecisionCost("smart", "strong", 0.05, 0.0),
+        )
+        assert (
+            r.break_even_hard_fraction(
+                smart,
+                r.always_weak_start(),
+                substrate,
+                episode_size=1,
+                easy_mix=r.Mix("easy", {"easy": 1.0}),
+                hard_mix=r.Mix("hard", {"hard": 1.0}),
+                max_escalations=r.PRIMARY_MAX_ESCALATIONS,
+            )
+            is None
+        )
 
     def test_break_even_returns_none_when_a_mechanism_never_catches_up(self):
         substrate = r.Substrate({"a": _outcome("a", 20)})

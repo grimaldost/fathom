@@ -42,6 +42,29 @@ from collections.abc import Iterable, Mapping, Sequence
 # Cheapest first. The ladder is ordered, and "escalate" means "one step right".
 TIERS: tuple[str, ...] = ("weak", "mid", "strong")
 
+# ---------------------------------------------------------------- escalation depth
+#
+# How many times a gate-detected failure may escalate. It is a property of the
+# ENVIRONMENT, not of any mechanism: a failed task gets retried somewhere regardless of
+# how its tier was chosen, so every mechanism is evaluated at the same depth. Handing a
+# ladder only to the mechanism whose name mentions one would flatter the challenger the
+# way the first two design defects flattered the incumbent.
+#
+# WHY THE PRIMARY IS 1, AND THE REASONING IS ADVERSARIAL RATHER THAN PHYSICAL. Depth 1
+# credits less repair, so it is the assumption LEAST favourable to the cheap-start
+# mechanisms — which are the ones the projection expects to win. A result that survives
+# its own least favourable assumption is worth something; one that needs the generous
+# setting is a finding about the setting. The author of this analysis is an interested
+# party in that outcome, so the posture is chosen to make the conclusion credible rather
+# than merely defensible.
+#
+# Depth 2 is reported BESIDE the headline as a sensitivity, never as an alternative
+# headline. If it changes the ranking, that IS the finding and
+# :func:`rank_with_sensitivity` returns it as a value so it cannot be left in a
+# paragraph nobody reads.
+PRIMARY_MAX_ESCALATIONS = 1
+SENSITIVITY_MAX_ESCALATIONS = 2
+
 # The only criteria a routing-decision task is allowed to gate on. Routing ACCURACY is
 # deliberately absent: its ground truth does not exist yet, so a bank that graded it
 # would be asserting an answer key rather than measuring one. Kept here (not only in
@@ -191,7 +214,7 @@ class TaskOutcome:
     ``pass_rate`` and ``exec_cost`` are per tier and come from `model-tier-v2`'s run.
     ``detect_rate`` is P(the task's gate reports a failure that happened) at that tier —
     the term that decides whether a failure buys a retry or becomes a silent escape, and
-    the reason `always-weak-escalate` is not free.
+    the reason `always-weak` is not free.
     """
 
     task_id: str
@@ -351,14 +374,14 @@ class Mechanism:
     ``routes`` maps task_id to the tier this mechanism chose. For the three measured
     mechanisms (`rubric`, `shortcuts`, `none`) it is RECONSTRUCTED from the ledger's
     ``chose__<task>__<tier>`` booleans — the mechanism's real behaviour, not a
-    simulation of it. For `fixed-mid` it is a constant, and for `always-weak-escalate`
+    simulation of it. For `fixed-mid` it is a constant, and for `always-weak`
     it is `weak` everywhere with the escalation carried by the retry machinery.
     """
 
     name: str
     routes: Mapping[str, str]
     decision_cost: DecisionCost = ZERO_DECISION_COST
-    start_tier: str | None = None  # overrides `routes`; used by always-weak-escalate
+    start_tier: str | None = None  # overrides `routes`; used by always-weak
 
     def tier_for(self, task_id: str) -> str:
         if self.start_tier is not None:
@@ -426,14 +449,21 @@ def fixed_tier_mechanism(tier: str, task_ids: Sequence[str]) -> Mechanism:
     return Mechanism(f"fixed-{tier}", {t: tier for t in task_ids}, ZERO_DECISION_COST)
 
 
-def always_weak_escalate() -> Mechanism:
-    """`always-weak-escalate` — start weak, escalate one tier when the gate fails.
+def always_weak_start() -> Mechanism:
+    """`always-weak` — start every task at the weak tier. Zero decision cost.
 
-    Zero decision cost by construction: there is no decision. Its whole economy is the
-    retry term, which :func:`expected_task` computes from the substrate's own pass and
-    detection rates rather than from an assumed retry rate.
+    RENAMED from `always-weak-escalate`, and the rename is the ruling. Escalation is a
+    property of the ENVIRONMENT, not of this mechanism: a failed task gets retried
+    somewhere regardless of how its tier was chosen, so `rubric` and `fixed-mid` escalate
+    on a failure exactly as this one does. Giving a ladder only to the mechanism whose
+    name mentions one would be the mirror image of the bias this study already recorded
+    — it would flatter the challenger instead of the incumbent.
+
+    What actually distinguishes this mechanism is therefore only where it STARTS. The
+    name now says that and nothing more, and it matches `calibration`'s own
+    `always-weak` so the two programmes share one vocabulary.
     """
-    return Mechanism("always-weak-escalate", {}, ZERO_DECISION_COST, start_tier="weak")
+    return Mechanism("always-weak", {}, ZERO_DECISION_COST, start_tier="weak")
 
 
 # ------------------------------------------------------------------- retry / quality
@@ -475,7 +505,9 @@ class TaskResult:
         return self.p_correct_post_repair - self.p_first_attempt
 
 
-def expected_task(outcome: TaskOutcome, start_tier: str, *, max_escalations: int = 2) -> TaskResult:
+def expected_task(
+    outcome: TaskOutcome, start_tier: str, *, max_escalations: int = PRIMARY_MAX_ESCALATIONS
+) -> TaskResult:
     """Expected execution cost and P(correct) for one task started at *start_tier*.
 
     The recursion is the retry model, and it is the same for every mechanism so no
@@ -581,6 +613,10 @@ class MechanismCost:
     n_tasks: int
     n_missing: int
     missing: tuple[str, ...]
+    # The environment assumption this result was computed under. Stamped on every row so
+    # a primary figure and a sensitivity figure can never be mistaken for each other
+    # once they are out of the function that produced them.
+    max_escalations: int = PRIMARY_MAX_ESCALATIONS
 
     @property
     def repair_credit(self) -> float:
@@ -594,7 +630,7 @@ def evaluate(
     mix: Mix,
     *,
     episode_size: int,
-    max_escalations: int = 2,
+    max_escalations: int = PRIMARY_MAX_ESCALATIONS,
 ) -> MechanismCost:
     """Compute C(m) on *mix*, per dispatched task.
 
@@ -634,6 +670,7 @@ def evaluate(
         n_tasks=len(covered),
         n_missing=len(missing),
         missing=tuple(missing),
+        max_escalations=max_escalations,
     )
 
 
@@ -661,6 +698,64 @@ def rank(results: Sequence[MechanismCost], *, delta: float) -> list[MechanismCos
     return sorted(eligible, key=lambda r: r.total_usd)
 
 
+@dataclasses.dataclass(frozen=True)
+class RankingSensitivity:
+    """The primary ranking, the depth-2 ranking, and whether they disagree.
+
+    The point of returning this rather than writing a paragraph: "depth 2 changes the
+    ranking" is a finding that must be as prominent as the headline, and a boolean in a
+    result object cannot be quietly dropped from a write-up the way a sentence can.
+    """
+
+    primary: tuple[MechanismCost, ...]
+    sensitivity: tuple[MechanismCost, ...]
+
+    @property
+    def primary_order(self) -> tuple[str, ...]:
+        return tuple(m.mechanism for m in self.primary)
+
+    @property
+    def sensitivity_order(self) -> tuple[str, ...]:
+        return tuple(m.mechanism for m in self.sensitivity)
+
+    @property
+    def ranking_changed(self) -> bool:
+        return self.primary_order != self.sensitivity_order
+
+    @property
+    def winner_changed(self) -> bool:
+        """The sharper question: did the CHOICE move, or only the order behind it?"""
+        return self.primary_order[:1] != self.sensitivity_order[:1]
+
+
+def rank_with_sensitivity(
+    mechanisms: Sequence[Mechanism],
+    substrate: Substrate,
+    mix: Mix,
+    *,
+    episode_size: int,
+    delta: float,
+) -> RankingSensitivity:
+    """Rank at the primary depth and at the sensitivity depth, and compare.
+
+    Every mechanism is evaluated at the SAME depth within each run — escalation is an
+    environment property, so `fixed-mid` gets the same ladder `always-weak` does. The
+    two runs differ only in how deep that shared ladder goes.
+    """
+
+    def _rank(depth: int) -> tuple[MechanismCost, ...]:
+        results = [
+            evaluate(m, substrate, mix, episode_size=episode_size, max_escalations=depth)
+            for m in mechanisms
+        ]
+        return tuple(rank(results, delta=delta))
+
+    return RankingSensitivity(
+        primary=_rank(PRIMARY_MAX_ESCALATIONS),
+        sensitivity=_rank(SENSITIVITY_MAX_ESCALATIONS),
+    )
+
+
 def break_even_hard_fraction(
     mechanism: Mechanism,
     reference: Mechanism,
@@ -669,7 +764,7 @@ def break_even_hard_fraction(
     episode_size: int,
     easy_mix: Mix,
     hard_mix: Mix,
-    max_escalations: int = 2,
+    max_escalations: int = PRIMARY_MAX_ESCALATIONS,
     steps: int = 200,
 ) -> float | None:
     """The share of hard work at which *mechanism* stops losing to *reference*.

@@ -19,7 +19,7 @@ For each candidate routing mechanism `m`:
 ```
 C(m) = decision_cost(m) + execution_cost(tier chosen by m) + retry_cost(m)
 
-subject to   quality(m) >= quality(best) - delta
+subject to   quality_post_repair(m) >= quality_post_repair(best) - delta
 ```
 
 Winner is `argmin C(m)`. **Quality is a constraint, not the objective.** Every term is
@@ -53,7 +53,7 @@ This is the single most load-bearing choice in the design.
 | `shortcuts` | a floor plus a shape lookup, no scoring arithmetic (authored here; text below) | ~335 words / ~0.44k tokens | **measured** (3 deciding tiers) |
 | `none` | no mechanism — whatever the dispatching session would do unaided. The true baseline | nothing injected | **measured** (3 deciding tiers) |
 | `fixed-mid` | one tier for everything | zero by construction | computed |
-| `always-weak-escalate` | start weak; escalate one tier when the gate fails | zero by construction | computed (retry term is the whole arm) |
+| `always-weak` | start every task at the weak tier | zero by construction | computed |
 | `classifier` | delegate the decision to a weak-tier call that emits a tier | the `weak` deciding-tier cells, plus one delegated spawn | computed from measured cells |
 
 `classifier` earns its place without a tenth arm: it is exactly "`shortcuts` or
@@ -122,7 +122,7 @@ and the two are complements, not duplicates:
 
 | term | owner |
 |---|---|
-| `execution_cost`, `retry_cost`, `quality`, `cheapest_adequate_tier` | `calibration.mechanism_costs` (the substrate bank) |
+| `execution_cost`, `retry_cost`, `first_attempt_pass_rate`, `cheapest_adequate_tier` | `calibration.mechanism_costs` (the substrate bank) |
 | `decision_cost` | **this bank** — measured by running each mechanism |
 
 Their `mechanism_costs` reports `decision_cost_usd` as `null` rather than `0` and calls
@@ -165,6 +165,39 @@ So that neither programme owns the other's estimand:
   becomes `0` is the same failure class as a gate that cannot fail: it reads as a
   measurement when it is an absence.
 
+### Escalation depth — an environment property, pre-registered at two settings
+
+Ruled 2026-08-12, and the mechanism was renamed to match:
+`always-weak-escalate` -> **`always-weak`**.
+
+**Escalation belongs to the environment, not to a mechanism.** A failed task gets
+retried somewhere regardless of how its tier was chosen, so `rubric` and `fixed-mid`
+escalate on a failure exactly as the weak-start mechanism does. Giving a ladder only to
+the arm whose name mentioned one would have been the mirror image of the two defects
+recorded below — it would have flattered the *challenger*. Nothing now distinguishes
+`always-weak` except where it starts, and its name says only that. It also matches
+`calibration`'s own `always-weak`, so both programmes use one word for one thing.
+
+**The primary analysis runs at `max_escalations = 1`; depth 2 is reported beside it as
+a sensitivity, never as an alternative headline.** The reason is adversarial rather than
+physical: depth 1 credits less repair, so it is the assumption *least favourable to the
+cheap-start mechanisms* — the ones this study's own projection expects to win. A result
+that survives its least favourable assumption is worth something; one that needs the
+generous setting is a finding about the setting. The author of this analysis is an
+interested party in that outcome, which is exactly why the posture is chosen this way.
+
+Both settings are pre-registered here, before any spend. **If depth 2 changes the
+ranking, that is itself a finding and is reported as prominently as the headline** —
+`rank_with_sensitivity` returns `ranking_changed` and `winner_changed` as values, and
+every `MechanismCost` is stamped with the depth it was computed at, so a sensitivity
+figure cannot be mistaken for a primary one once the two are separated. The sensitivity
+is a test, not a paragraph: `TestEscalationSensitivity` asserts a depth-driven winner
+flip is detected and that a stable ranking reports no change.
+
+One consequence already visible offline: the break-even fraction is itself
+depth-conditional. On the test fixture a crossing exists at depth 2 and does not exist
+at depth 1, which is a sensitivity a reader has to see rather than a bug to fix.
+
 ### Two design elements leaning the same way — worth stating plainly
 
 The quality definition is the **second** element found biasing in the same direction.
@@ -193,7 +226,7 @@ Three properties worth naming, each asserted by a test:
 1. **The same retry machinery for every mechanism.** A failure buys a retry only if the
    gate detects it; an undetected failure is an escape that costs nothing more and
    removes the quality instead. This is what stops a cheap tier from looking free, and
-   it is why `always-weak-escalate` is evaluated on the substrate's own detection rates
+   it is why `always-weak` is evaluated on the substrate's own detection rates
    rather than an assumed retry rate.
 2. **Cost is recomputed from raw usage, not read from `cost_usd_est`.** Under
    subscription auth the CLI reports `total_cost_usd == 0` and fathom's fallback prices
@@ -207,7 +240,26 @@ Three properties worth naming, each asserted by a test:
    decision-relevant output is `break_even_hard_fraction`: the share of hard work above
    which a mechanism starts paying for itself.
 
-## Priced tranches, in buy order
+## Buy order across BOTH programmes — cheap-first
+
+Ruled 2026-08-12. The two programmes' tranches are bought in one order, not two:
+
+| order | tranche | cost | why here |
+|---|---|--:|---|
+| 1 | **this bank's T1** | **$4.73** | carries a stop rule that can settle the mechanism comparison on decision cost alone, with no outcome table |
+| 2 | substrate T0 control | $40 | only if T1 does not settle it |
+| 3 | substrate T1 core | $240 | only if the question is still open |
+
+**This ordering can save $280.** If `rubric` and `none` emit the same tier on ≥8 of 9
+briefs, then C(m)'s execution and retry terms are identical between them and the
+comparison reduces to decision cost — which T1 measures directly. Buying a $240 tranche
+to answer a question a $4.73 tranche might already close is precisely the spend the
+owner's objective argues against, and this study is about that objective.
+
+The stop rule is pre-registered in code (`modal_route`, `agreement`), landed before any
+trial, so it cannot be reinterpreted once the counts are visible.
+
+## Priced tranches within this bank, in buy order
 
 Prerequisite, $0: **host re-authentication, then `fathom smoke` must pass.** A human
 step. Nothing below is buyable until it does.
