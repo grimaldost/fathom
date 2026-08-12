@@ -515,17 +515,26 @@ def main() -> None:
     )
     print("| tier | class | arm | config_hash | runs | $ total | $/run | turns | dur s |")
     print("|---|---|---|---|---|---|---|---|---|")
-    econ: dict[str, list[dict]] = defaultdict(list)
+    # Keyed on (bank, config_hash), NOT on config_hash alone. An arm whose
+    # injected file is identical across two banks resolves to the SAME
+    # config_hash in both -- `bare` is hash 3214c0e6bbbb in verif-lift-bug-v1
+    # and in verif-lift-trunc-v1 alike. Grouping on the hash alone merged those
+    # two banks' runs into one row and labelled it with whichever bank came last
+    # in BLOCKS, so weak/BUG vanished from this table while weak/TRUNC reported
+    # 14 runs it had not bought. The per-bank key keeps each cell its own.
+    econ: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    econ_block: dict[tuple[str, str], tuple[str, str]] = {}
     for bank, tier, klass in BLOCKS:
         _, runs = load(bank)
         for r in runs:
-            econ[r["config_hash"]].append(r)
-    for ch, recs in sorted(
+            econ[(bank, r["config_hash"])].append(r)
+            econ_block[(bank, r["config_hash"])] = (tier, klass)
+    for (bank, ch), recs in sorted(
         econ.items(),
-        key=lambda kv: (hash_to_block.get(kv[0], ("", "")), hash_to_arm.get(kv[0], "")),
+        key=lambda kv: (econ_block.get(kv[0], ("", "")), hash_to_arm.get(kv[0][1], "")),
     ):
         arm = hash_to_arm.get(ch, "?")
-        tier, klass = hash_to_block.get(ch, ("?", "?"))
+        tier, klass = econ_block.get((bank, ch), ("?", "?"))
         tot = sum(r.get("cost_usd_est", 0.0) for r in recs)
         n = len(recs)
         turns = sum(r.get("turns", 0) for r in recs) / n if n else 0

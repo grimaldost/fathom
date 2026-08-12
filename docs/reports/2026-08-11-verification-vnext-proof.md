@@ -30,6 +30,19 @@
   it re-scopes what is worth buying rather than deciding anything. §7's stated mechanism for the
   ×3.81 economy bias is also **refuted as stated**, while the undercount itself survives by a
   different route.
+- **Revised 2026-08-12 after a third window that also bought nothing — and this time the lock was
+  not the reason.** The blocker moved: the paid block was never entered because `fathom smoke`
+  failed its two authentication checks twice, ~30 s apart, on an expired OAuth session, and the
+  stop rule is *auth failure = stop* (§6). The serialization lock was **acquired on the first poll**
+  and released 57 s later holding zero trials — so this report's previous claim that *"the lock is
+  now the binding constraint on the whole programme"* is **refuted by measurement**, and §9's first
+  open decision is reclassified accordingly. Nothing was appended to any ledger, so **§3's table,
+  §4's verdicts and §5's tree are byte-unchanged**; the tree was re-walked in full and still returns
+  **UNRESOLVED**, with Branch G still not firing. Two free corrections did land, both in §7: the
+  per-arm floor list **double-counted** weak/BUG's four runs inside weak/TRUNC's fourteen, because
+  the analyzer grouped economy on `config_hash` alone and `bare` resolves to one hash in both banks
+  — the instrument is fixed and the figures below are corrected. And the staged buy plan's paired
+  contrast is now **verified rather than assumed** (§7).
 
 ---
 
@@ -95,12 +108,15 @@ scenario directories are new and **no other existing scenario file was touched.*
 Arms run the same tasks, so every contrast is paired and read with exact McNemar. `n` is tasks
 scored in every arm present. The `skill-vnext` column is empty in every row for the reason in §1.
 
-> **Re-run at the close of the second window and unchanged.** `analyse_vnext.py` was executed again
-> against the ledgers after the second locked-out window. The ledgers still hold **37 runs, all
-> `bare` or `skill`** — 4 in weak/BUG, 20 in weak/TRUNC, 13 in weak/NULL — so every figure below is
-> the same figure, and the analyzer still reports weak/DATA, strong/BUG and strong/DATA as **NO
-> TRIALS IN LEDGER** rather than as nulls. Nothing was appended by that pass; the distinction
-> between *unmeasured* and *measured null* is preserved in the instrument, not just in the prose.
+> **Re-run at the close of the second window and again at the close of the third — unchanged both
+> times.** `analyse_vnext.py` was executed against the ledgers after each blocked window. The
+> ledgers still hold **37 runs, all `bare` or `skill`** — 4 in weak/BUG, 20 in weak/TRUNC, 13 in
+> weak/NULL — so every figure below is the same figure, and the analyzer still reports weak/DATA,
+> strong/BUG and strong/DATA as **NO TRIALS IN LEDGER** rather than as nulls. Neither pass appended
+> a line; the distinction between *unmeasured* and *measured null* is preserved in the instrument,
+> not just in the prose. The third pass verified the ledgers byte-unchanged before reading them
+> (74 lines: 37 `run` records and 37 `trial` records) rather than inferring it from the analyzer's
+> own output.
 
 > **Instrument correction.** The intervals in the table below were computed with the Newcombe
 > *hybrid* interval for two **independent** proportions — printed beside an exact McNemar p, on
@@ -237,7 +253,16 @@ exactly `spec_met`, `regression_check_present`, `proxy_instrument_ok`,
 | — | the three additions as a group (false-positive risk) | `scope_respected` (NULL) | **not-proven** — and undetectable at n=6 |
 | X1 | "the vNext body is smaller" (the plan's 790 → ~720) | direct measurement, no trial needed | **refuted** — see below |
 
-**X1 is the one claim this run settles, and it settles it against the plan.** Measured with the
+**Not one verdict in that table moved at the third window, and the reason is the table's own
+subject matter.** Every verdict except X1 is keyed to a trial in a cell, and no trial was bought:
+D2 needs weak/BUG or weak/DATA `skill`+`skill-vnext`, which remain unbought; A2 needs weak/DATA,
+which has **no trials at all**; A1 and A3 need weak/TRUNC, whose `skill` arm is ceilinged as
+authored; and the over-scope read — the three additions as a group against `scope_respected` —
+needs weak/NULL at an n that can resolve it, where the minimum detectable difference is still
+100 pp at n=6. X1 was settled by direct measurement of the two bodies and needed no trial, which is
+exactly why it is the only one settled. **A verdict that cannot be reached is left unreached
+here.** Restating "not-proven" is not the same as narrowing it, and the temptation at a third
+blocked window is to let the repetition read as convergence. Measured with the
 same instrument for both bodies: shipped 790 words / 4775 bytes, vNext 787 words / 4740 bytes.
 The body shrinks by **3 words and 35 bytes, 0.7%**. The plan projected ~720 words. The
 displacement pays for the additions almost exactly and buys no headroom, which independently
@@ -276,6 +301,13 @@ absence of a firing branch is on the record as a reasoned outcome rather than an
 **The tree returns UNRESOLVED.** Exactly one pre-registered consequence fires anywhere in it — the
 X1 leg of Branch H — and its repair is textual, not structural (§5, *Instruction to the repair pass*).
 
+**Re-walked in full at the third window, row by row, against re-read ledgers: every cell above is
+the same cell and no branch changed state.** The walk is repeated rather than assumed because a
+tree whose preconditions are all unbought cells has exactly one way to change — a purchase — and
+none was made. The one thing worth saying about a third identical walk is that it is *not*
+accumulating evidence: nine branches that did not fire three times over are nine branches that
+never had data, not nine findings of no effect.
+
 ### Branch G, stated precisely, because it is the one most likely to be misread
 
 Branch G's consequence is severe and worth quoting: *if the gate ties the placebo, the lift is an
@@ -293,6 +325,17 @@ So the disposition for the `SubagentStop` gate is unchanged and is **not** Branc
 the gate stays **default-off and opt-in**, as it already ships, and the reason on the record is that
 **G1 is undischarged in all three conjuncts** — not that it tied a placebo. Nothing ships it on.
 Nothing deletes it either. Both halves are load-bearing.
+
+**Third window: the trio that would decide G is staged, priced and still unbought.** The three arms
+that discharge H3 — `bare-gate`, `skill-gate`, `placebo-gate` — are staged at **weak tier only**
+(≈$3.48 corrected, per §5a's finding that a strong-tier gate cell buys an untreated treatment arm),
+and they sit behind the BUG and DATA comparator blocks in the buy order. That order is deliberate
+and it is the reason G is still undecided: a gate arm bought before its comparators is spend without
+a contrast. So the gate's disposition **stays exactly where it is — off by default, opt-in, and
+explicitly unmeasured** — and the arithmetic that would change it is $3.48 and one working
+credential away, not a redesign. Recording that the decisive cell is cheap matters: it removes the
+last excuse for leaving G undischarged indefinitely, and it keeps "we never bought it" from
+hardening into "it must not be worth buying."
 
 ### 5a. The strong-tier gate arm was mounted and never delivered its treatment
 
@@ -461,6 +504,37 @@ cheapest fixes, in order: a **heartbeat** (touch the lock each block) so stalene
 rather than guessed; a **FIFO ticket directory** instead of one file, so the gap stops being a race;
 and failing both, an atomic `noclobber` acquire loop at ~30 s.
 
+### The third window: the lock was not the blocker, and this section's headline was wrong
+
+The 30 s atomic-acquire fix was adopted for the third window, and the lock was **free on the first
+poll** — acquired 08:38:40Z, released 08:39:37Z, 57 seconds, zero trials. The paid block was never
+entered for an unrelated reason: `uv run fathom smoke` failed **two of its three authentication
+checks**, twice, ~30 s apart —
+
+```
+[FAIL] credential-only spawn authenticates & completes
+        status=infrastructure turns=1
+        result='Failed to authenticate: OAuth session expired and could not be refreshed'
+[FAIL] system-prompt injection reaches the model   (canary_present=False, status=infrastructure)
+[FAIL] engine-boundary                             <- the one PERMITTED failure (convoy not importable)
+SMOKE RESULT: SOME FAILED (5/8 checks)
+```
+
+The go/no-go rule admits ALL PASS, or 7/8 with **only** `engine-boundary` failing. This was neither,
+so the stop rule fired and nothing was spent. The credential file behind the isolated spawn config
+had expired; refreshing it is an operator action in the user's own session and not something an
+agent may perform.
+
+**Two corrections to what this section previously asserted.** First, *"the lock is now the binding
+constraint on the whole programme"* is **refuted**: the one window that tested it acquired
+immediately. Second, and the sharper lesson — the two starved windows made the lock the obvious
+suspect, and it was the wrong one. Contention was real but it was never the *only* thing standing
+between this programme and a purchase; a second, independent blocker sat behind it the whole time
+and only became visible once the first cleared. The programme has now spent nothing across three
+windows for **two different reasons**, which is worth more than either reason alone: it says the
+zero is not one fixable obstacle but a thin operational path with several single points of failure,
+and clearing them one at a time will keep producing windows that buy nothing.
+
 ## 7. What is banked, and what it costs to finish
 
 Banked, free, and reusable the moment the lock clears:
@@ -512,10 +586,55 @@ across arms, so no arm-to-arm economy claim is made from these figures at all.
 
 Recorded spend across the verif-lift ledgers stands at **37 paid runs, a $3.34 ledger floor,
 ≈$12.74 corrected** — $0.344/trial true against the plan's assumed $0.145. All of it is the MAP's;
-this run added $0 of matrix spend and three sub-cent arming probes, and the closing pass added
-**$0.00 with no paid spawn of any kind.** Per-arm floors, by `config_hash`: `bare`-NULL
-`4aa4b7da5965` 7 runs / $0.443; `skill`-NULL `5fe55a4e55d6` 6 / $0.360; `bare`-TRUNC `3214c0e6bbbb`
-14 / $1.341; `skill`-TRUNC `52ffcd608665` 10 / $1.200; `bare`-BUG `3214c0e6bbbb` 4 / $0.417.
+this run added $0 of matrix spend and three sub-cent arming probes, and both the second and third
+closing passes added **$0.00 with no paid spawn of any kind.**
+
+**Per-arm floors, corrected — the previous list double-counted four runs.** It read: `bare`-TRUNC
+`3214c0e6bbbb` **14 / $1.341** *and* `bare`-BUG `3214c0e6bbbb` **4 / $0.417**. Those are not two
+arms. `bare` injects the same file in both banks, so it resolves to the **same `config_hash` in
+both**, and the 14 already contained the BUG 4. The five entries summed to 41 runs and $3.76 against
+a ledger holding 37 runs and $3.343 — the very total stated in the paragraph directly above, which
+is how a reader could have caught it without opening a file. Recomputed per `(bank, config_hash)`:
+
+| tier | class | arm | config_hash | runs | $ floor | $/run |
+|---|---|---|---|---|---|---|
+| weak | BUG | `bare` | `3214c0e6bbbb` | 4 | $0.417 | $0.104 |
+| weak | NULL | `bare` | `4aa4b7da5965` | 7 | $0.443 | $0.063 |
+| weak | NULL | `skill` | `5fe55a4e55d6` | 6 | $0.360 | $0.060 |
+| weak | TRUNC | `bare` | `3214c0e6bbbb` | 10 | $0.920 | $0.092 |
+| weak | TRUNC | `skill` | `52ffcd608665` | 10 | $1.204 | $0.120 |
+
+Five rows, **37 runs, $3.343** — reconciling to the ledger exactly.
+
+**The instrument, not the arithmetic, produced that error, and it is fixed.**
+`analyse_vnext.py` grouped its economy table on `config_hash` **alone** and labelled each group with
+a single `(tier, class)` taken from a dict that the last bank in `BLOCKS` overwrote. A hash shared
+across two banks therefore merged their runs into one row and attributed the whole of it to
+whichever bank came last — so **weak/BUG disappeared from the economy table entirely** while
+weak/TRUNC reported 14 runs it had not bought. The key is now `(bank, config_hash)`.
+
+Two things are worth keeping from this. The defect was **visible in this very section all along**:
+the prose above reports the weak/TRUNC `bare` runs at "1.0 turns, 331 output tokens and 5.7 s",
+computed on the TRUNC-only subset, while the superseded table said **1.1 turns** for the same arm on
+the pooled 14 — prose and table disagreed inside one section, and the table was the wrong one. The
+mismatch was there to be found at every earlier revision and no reader, this one included, followed
+it up until the numbers were reconciled against the ledger deliberately. And the sharing that caused it is
+not a bug to be designed away: an identical arm file resolving to an identical hash across banks is
+`config_hash` **working as specified**, which is what makes the cross-bank reuse in the staged block
+sound. The hash identifies a *configuration*; it was never a key for a *cell*, and using it as one
+is what merged two cells. No verdict in this report moves — the economy table feeds no contrast —
+but the corrected per-cell figures are the ones any future budgeting should read.
+
+**The staged block's paired contrast is verified, not assumed.** The buy script gives the `bare` arm
+`--limit 6` (it has 4 done) and the `skill` and `skill-vnext` arms `--limit 10`, which pairs
+correctly only if those slices land on the *same* tasks. They do: BUG `bare`'s four completed trials
+are exactly the **first four non-holdout tasks in plan order** — `bug-base-convert`,
+`bug-checksum-mod`, `bug-csv-quote`, `bug-even-split` — so `--limit 6` puts `bare` on tasks 1–10,
+the identical set `--limit 10` gives the other two arms. Had the done-set been scattered through the
+bank instead, `--limit` would have produced a **mismatched pairing in silence**, and every paired
+interval and McNemar p downstream would have been computed on arms that ran different tasks. The
+analyzer intersects on task id and would have reported a smaller honest `n` rather than a wrong
+number — but it would not have told anyone the block had bought half a contrast.
 
 **The next block is staged and its reuse of the longitudinal hashes is proven, not asserted.**
 Single-arm scenario directories with absolute inject paths reproduce the existing `config_hash`
@@ -581,14 +700,24 @@ the next block, not a footnote to it.
 None of these is settled by the evidence above; each is recorded because the evidence changed what
 the decision costs.
 
-1. **The lock.** Two agents have now been starved across two windows and the programme has spent
-   nothing since 17:56Z. Heartbeat, FIFO tickets, or a 30 s atomic acquire — §6. This is the
-   precondition for every other item.
+1. **Credentials, and the lock demoted.** ~~The lock is the precondition for every other item.~~
+   **Superseded at the third window (§6).** The 30 s atomic acquire was adopted and the lock came
+   free on the first poll, so contention is no longer the binding constraint — an **expired OAuth
+   session** is. `fathom smoke` fails its two auth checks and the stop rule forbids entering a paid
+   block on a failed smoke; only an operator can refresh the session. **This is now the precondition
+   for every other item**, and the lock reforms in §6 stay worth doing on their own merits rather
+   than as the unblocker they were billed as. The general form is the item to carry forward: three
+   windows have bought nothing for two unrelated reasons, so the next one should expect a third
+   rather than assume the path is now clear.
 2. **Re-scope the grid before the next block.** In corrected units the plan's 368-trial grid is
    ≈$223 against a $120 ceiling, and `--max-budget-usd` is per-spawn so nothing rails the total
    (§7). The strong block alone exceeds the ceiling — and §5a now removes part of its motivation.
-3. **The gate trio moves to weak tier.** Delivery is 76–90% at haiku and 0/15 at opus on the same
-   plugin (§5a). Buying the strong-tier gate cells as designed purchases an untreated treatment arm.
+3. **The gate trio moves to weak tier — and it is the cheapest undischarged obligation on the
+   board.** Delivery is 76–90% at haiku and 0/15 at opus on the same plugin (§5a), so buying the
+   strong-tier gate cells as designed purchases an untreated treatment arm. Staged at weak tier the
+   trio costs **≈$3.48 corrected** and is the only thing standing between G1/H3 and a verdict
+   (§5, Branch G). The shipped gate has now been default-off and unmeasured across three windows;
+   at that price the gap is a scheduling fact, not a funding one.
 4. **The published `+0.22 / +0.56 / +0.44` ladder needs a decision, not a silent edit.** The opus
    figure's arm shows zero gate activations, and at n=9 that contrast could not have reached
    significance in any case (best-case exact McNemar p = 0.125). The plugin's README and CHANGELOG
