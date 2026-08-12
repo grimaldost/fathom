@@ -1,0 +1,60 @@
+{
+  "cited_slice_end": 23,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "ranges.bounds",
+  "edge_cases": [
+    [
+      [
+        [
+          1,
+          3,
+          5
+        ],
+        3
+      ],
+      1
+    ],
+    [
+      [
+        [
+          2,
+          4
+        ],
+        2
+      ],
+      0
+    ]
+  ],
+  "func": "lower_bound",
+  "func_past_slice": "upper_bound",
+  "module_filename": "bounds.py",
+  "package": "ranges",
+  "past_slice_cases": [
+    [
+      [
+        [
+          1,
+          3,
+          5
+        ],
+        3
+      ],
+      1
+    ],
+    [
+      [
+        [
+          2,
+          4
+        ],
+        4
+      ],
+      1
+    ]
+  ],
+  "twin_def_line": 29
+}

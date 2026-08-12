@@ -1,0 +1,15 @@
+name = "bare"
+adapter = "claude-cli"
+model = "claude-opus-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[context]
+inject = "../verif-lift-assets/arm-bare.md"
+
+[limits]
+trial_timeout_s = 900

@@ -1,0 +1,77 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "cleanse.keys",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "k": "ABC"
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": "abc"
+        }
+      ]
+    ],
+    [
+      [
+        [
+          {
+            "k": " MiXeD "
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": "mixed"
+        }
+      ]
+    ]
+  ],
+  "func": "normalize_keys",
+  "module_filename": "keys.py",
+  "package": "cleanse",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "k": "   "
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": null
+        }
+      ]
+    ],
+    [
+      [
+        [
+          {
+            "k": ""
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": null
+        }
+      ]
+    ]
+  ]
+}

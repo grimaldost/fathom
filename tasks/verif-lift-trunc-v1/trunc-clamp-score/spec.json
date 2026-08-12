@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 28,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "scoring.clamp",
+  "edge_cases": [
+    [
+      [
+        140.0
+      ],
+      100.0
+    ],
+    [
+      [
+        100.5
+      ],
+      100.0
+    ]
+  ],
+  "func": "clamp_score",
+  "func_past_slice": "clamp_weight",
+  "module_filename": "clamp.py",
+  "package": "scoring",
+  "past_slice_cases": [
+    [
+      [
+        1.4
+      ],
+      1.0
+    ],
+    [
+      [
+        2.0
+      ],
+      1.0
+    ]
+  ],
+  "twin_def_line": 34
+}

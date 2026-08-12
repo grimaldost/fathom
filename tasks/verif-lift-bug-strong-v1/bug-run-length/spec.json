@@ -1,0 +1,40 @@
+{
+  "class": "BUG",
+  "criteria": [
+    "spec_met",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rlekit.encode",
+  "edge_cases": [
+    [
+      [
+        "aaabb"
+      ],
+      [
+        [
+          "a",
+          3
+        ],
+        [
+          "b",
+          2
+        ]
+      ]
+    ],
+    [
+      [
+        "x"
+      ],
+      [
+        [
+          "x",
+          1
+        ]
+      ]
+    ]
+  ],
+  "func": "encode_runs",
+  "module_filename": "encode.py",
+  "package": "rlekit"
+}

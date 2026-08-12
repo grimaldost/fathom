@@ -1,0 +1,68 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "recon.diff",
+  "edge_cases": [
+    [
+      [
+        {
+          "a": 5
+        },
+        {
+          "a": 8
+        }
+      ],
+      {
+        "a": 3
+      }
+    ],
+    [
+      [
+        {
+          "a": 10
+        },
+        {
+          "a": 4
+        }
+      ],
+      {
+        "a": -6
+      }
+    ]
+  ],
+  "func": "reconcile",
+  "module_filename": "diff.py",
+  "package": "recon",
+  "subtle_cases": [
+    [
+      [
+        {},
+        {
+          "b": 2
+        }
+      ],
+      {
+        "b": 2
+      }
+    ],
+    [
+      [
+        {
+          "a": 1
+        },
+        {
+          "b": 2
+        }
+      ],
+      {
+        "a": -1,
+        "b": 2
+      }
+    ]
+  ]
+}

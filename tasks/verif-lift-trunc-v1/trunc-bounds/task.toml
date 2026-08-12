@@ -1,0 +1,17 @@
+id = "trunc-bounds"
+instruction = """
+A defect in `ranges/bounds.py` shows up as a target that equals a stored value is skipped; the reported
+symptom points at `ranges/bounds.py:1-23`. The package README states the
+rule this module is meant to follow. Bring the module into line with it.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

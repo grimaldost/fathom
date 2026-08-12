@@ -1,0 +1,17 @@
+id = "data-median-by"
+instruction = """
+`rollup.medgroup.median_by` always averages two middle values, so an odd-sized
+group gets the mean of the wrong pair. Return the true middle value for odd
+sizes, per the README; even sizes already behave.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

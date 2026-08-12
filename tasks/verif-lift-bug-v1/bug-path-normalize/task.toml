@@ -1,0 +1,17 @@
+id = "bug-path-normalize"
+instruction = """
+`pathkit.norm.normalize` leaves a trailing `..` in the output instead of
+resolving it, so `a/b/..` normalizes to `a/b/..`. Resolve `..` wherever it
+appears, per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

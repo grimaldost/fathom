@@ -1,0 +1,15 @@
+name = "skill"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "medium"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Task"]
+
+[context]
+inject = "../verif-lift-assets/arm-skill.md"
+
+[limits]
+trial_timeout_s = 900

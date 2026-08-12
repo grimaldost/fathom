@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 20,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "ordering.sortkeys",
+  "edge_cases": [
+    [
+      [
+        "Beta"
+      ],
+      "beta"
+    ],
+    [
+      [
+        "  ALPHA "
+      ],
+      "alpha"
+    ]
+  ],
+  "func": "sort_key_name",
+  "func_past_slice": "sort_key_group",
+  "module_filename": "sortkeys.py",
+  "package": "ordering",
+  "past_slice_cases": [
+    [
+      [
+        "West"
+      ],
+      "west"
+    ],
+    [
+      [
+        " NORTH "
+      ],
+      "north"
+    ]
+  ],
+  "twin_def_line": 26
+}

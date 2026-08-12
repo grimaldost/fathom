@@ -1,0 +1,18 @@
+id = "data-pct-share"
+instruction = """
+`rollup.share.pct_share` returns the raw values instead of shares when the total
+is zero, so a group whose values cancel out reports whatever numbers it happened
+to hold as if they were percentages. Return `0.0` for every key in that case,
+per the README.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

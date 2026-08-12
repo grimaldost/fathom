@@ -1,0 +1,17 @@
+id = "null-readme-default"
+instruction = """
+The README states the default timeout is 60 seconds; `DEFAULT_TIMEOUT_S` in
+`flagkit/parse.py` is 30. The code is correct. Fix the README sentence so it
+matches. Change no code.
+"""
+
+[limits]
+trial_timeout_s = 600
+max_turns = 25
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180

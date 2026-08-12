@@ -1,0 +1,84 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "rollup.share",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "name": "a",
+            "value": 5
+          },
+          {
+            "name": "b",
+            "value": -5
+          }
+        ]
+      ],
+      {
+        "a": 0.0,
+        "b": 0.0
+      }
+    ],
+    [
+      [
+        [
+          {
+            "name": "a",
+            "value": 2
+          },
+          {
+            "name": "b",
+            "value": -2
+          }
+        ]
+      ],
+      {
+        "a": 0.0,
+        "b": 0.0
+      }
+    ]
+  ],
+  "func": "pct_share",
+  "module_filename": "share.py",
+  "package": "rollup",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "name": "a",
+            "value": null
+          },
+          {
+            "name": "b",
+            "value": 3
+          }
+        ]
+      ],
+      {
+        "a": 0.0,
+        "b": 100.0
+      }
+    ],
+    [
+      [
+        [
+          {
+            "name": "a",
+            "value": null
+          }
+        ]
+      ],
+      {
+        "a": 0.0
+      }
+    ]
+  ]
+}

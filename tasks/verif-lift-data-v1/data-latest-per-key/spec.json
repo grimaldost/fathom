@@ -1,0 +1,75 @@
+{
+  "class": "DATA",
+  "criteria": [
+    "spec_met",
+    "output_correct_on_subtle_case",
+    "regression_check_present",
+    "proxy_instrument_ok"
+  ],
+  "dotted": "dedupe.latest",
+  "edge_cases": [
+    [
+      [
+        [
+          {
+            "k": "a",
+            "ts": 5,
+            "v": "first"
+          },
+          {
+            "k": "a",
+            "ts": 5,
+            "v": "second"
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": "a",
+          "ts": 5,
+          "v": "second"
+        }
+      ]
+    ]
+  ],
+  "func": "latest_per_key",
+  "module_filename": "latest.py",
+  "package": "dedupe",
+  "subtle_cases": [
+    [
+      [
+        [
+          {
+            "k": "a",
+            "ts": 3,
+            "v": "x"
+          },
+          {
+            "k": "b",
+            "ts": 3,
+            "v": "y"
+          },
+          {
+            "k": "b",
+            "ts": 3,
+            "v": "z"
+          }
+        ],
+        "k"
+      ],
+      [
+        {
+          "k": "a",
+          "ts": 3,
+          "v": "x"
+        },
+        {
+          "k": "b",
+          "ts": 3,
+          "v": "z"
+        }
+      ]
+    ]
+  ]
+}

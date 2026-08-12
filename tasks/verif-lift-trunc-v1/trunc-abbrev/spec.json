@@ -1,0 +1,42 @@
+{
+  "cited_slice_end": 23,
+  "class": "TRUNC",
+  "criteria": [
+    "spec_met",
+    "defect_past_slice_handled"
+  ],
+  "dotted": "units.abbrev",
+  "edge_cases": [
+    [
+      [
+        1000
+      ],
+      "1k"
+    ],
+    [
+      [
+        2000000
+      ],
+      "2m"
+    ]
+  ],
+  "func": "abbrev_count",
+  "func_past_slice": "abbrev_bytes",
+  "module_filename": "abbrev.py",
+  "package": "units",
+  "past_slice_cases": [
+    [
+      [
+        1024
+      ],
+      "1KiB"
+    ],
+    [
+      [
+        2097152
+      ],
+      "2MiB"
+    ]
+  ],
+  "twin_def_line": 29
+}

@@ -1,0 +1,18 @@
+id = "data-left-join"
+instruction = """
+`joinkit.left.left_join` keeps only the LAST right-hand row for a key, because
+it builds a one-row-per-key index, so a left row matching several right rows
+produces one output row instead of several. Fan the matches out as the README
+describes; the unmatched-left-row behaviour is already right.
+"""
+
+[limits]
+trial_timeout_s = 900
+max_turns = 45
+
+[gate]
+run = "python -m unittest discover -s tests -t . -q"
+
+[verify]
+entry = "verify.py"
+timeout_s = 180
