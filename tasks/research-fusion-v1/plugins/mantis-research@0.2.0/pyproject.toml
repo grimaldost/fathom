@@ -19,7 +19,7 @@ classifiers = [
 ]
 dependencies = [
     "pydantic>=2.9",
-    "pydantic-settings>=2.5",
+    "pydantic-settings>=2.14.2",
     "structlog>=24.4",
     "typer>=0.13",
     "httpx>=0.28",
