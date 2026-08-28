@@ -12,6 +12,7 @@ method (`docs/method/`).
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest                 # stdlib-runnable test suite (count moves as tests are added; don't gate on an exact N)
+uv run fathom reconcile       # free — every fact this repo derives twice must agree (exit 13 = it doesn't)
 uv run fathom smoke             # real-spawn isolation gate — spends a little; run before any paid matrix
 ```
 
