@@ -94,7 +94,7 @@ def append_record(bank: str, record: Any, *, ledger_dir: pathlib.Path = LEDGER_D
     else:
         data = dict(record)
     line = json.dumps(data, sort_keys=True)
-    with open(path, "a", encoding="utf-8") as f:
+    with open(path, "a", encoding="utf-8", newline="\n") as f:
         f.write(line + "\n")
 
 
