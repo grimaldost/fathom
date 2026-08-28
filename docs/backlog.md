@@ -22,6 +22,11 @@ Compiled 2026-08-11 from four inputs, tagged per item:
   into in field use, added after this file was compiled. They are not proposals read out of a corpus:
   each names the run that paid for it, so the evidence line is an observation rather than a citation.
 
+- **[wave-4 triage]** - the 2026-08-28 delta pass over four instrument-trust reports (2026-08-11 to
+  2026-08-12), reconciled against `origin/main` @ `ed80f45` (0.3.0). It adds the rows below plus two
+  built the same day, and it re-proposes nothing already carrying a FATH-B id. Corpus stem:
+  `2026-08-28-triage-v4`.
+
 Item shape: a stable ID, a one-line claim, the cause and its evidence, the proposed change, an effort
 estimate (**S** — one focused change; **M** — a small series with tests; **L** — a design decision plus
 a multi-PR series), and the source tag. Feedback reports are cited by their corpus stem. Where the
@@ -110,6 +115,55 @@ ceiling was the *other* mode — tasks too easy, so every arm succeeds — which
 cannot detect and which a re-run would simply reproduce at full price. Re-running them would buy a
 known answer.
 
+## Shipped in the 2026-08-28 disclosure-and-stamp pass (triage v4)
+
+The v4 delta pass triaged four reports (2026-08-11 → 2026-08-12) against `origin/main` @ `ed80f45`,
+version 0.3.0. Two items were built the same day because both were low-risk and one was urgent. The
+pass's own findings live in the feedback corpus as `2026-08-28-triage-v4.md`; what follows is the
+repo-side record.
+
+- **FATH-B60 — SHIPPED (PR #39).** A void arm's number may not appear in a document without saying
+  it is void. `haiku-gate-sg` was disclosed on 2026-08-11 as unattributable — its gate probe shipped
+  as a literal placeholder path, so it never executed and the arm ran as its own control. **The
+  disclosure did not travel.** An audit of all 37 files under `docs/reports/` found the number still
+  unqualified at every point of use six weeks later, in five load-bearing places in
+  `2026-07-01-pr-pilot-ablation-v2-findings.md` alone — including **E-d, a negative product verdict**
+  (retire the escalation ladder) resting on a trigger that "fired 0/10", which is exactly what an
+  inert probe produces, and in `2026-08-11-series-contract-sync-convoy-0.8.0.md` as the comparison set
+  a future **paid** engine arm (FATH-B17) would be priced against. Each site now carries the mark at
+  the point of use; the E-d verdict is withdrawn as unevidenced rather than refuted; no number is
+  rewritten and no ledger line is touched. `tests/test_void_arms.py` makes it a gate: a registry of
+  void arms, and the suite is red while any document names one without a qualifier on the line. The
+  promotion **displaces** the prose control it replaces — the sentence "no report may cite it as a
+  probe-arm result" is now a test. Also qualified here: `docs/STATUS.md`'s flat "undercounts cost
+  3.81×", which the report it summarises refutes (measured 1.16–2.02, median 1.49; 0 of 232 streams
+  reach 3.81), so 3.81 stands only as a conservative budgeting unit.
+- **FATH-B61 — SHIPPED (PR #38).** The ledger stamp is taken over canonical LF bytes, not the
+  checkout's line endings. `test_the_ledger_index_is_current` was **red on `main`**: eight ledgers'
+  digests disagreed with the committed index while every per-arm count, trial-row and run-row count
+  matched exactly — nothing had been appended. `append_record` opened in text mode with no `newline`,
+  so Python wrote CRLF on Windows; git normalises it away on check-in (`.gitattributes` pins `*.jsonl
+  text eol=lf`), so the committed bytes stayed LF and no diff ever showed it; and `ledger_index`
+  hashed the working tree. The freshness gate therefore failed on the platform this project runs on,
+  with a message accusing the operator of a data-integrity incident that had not happened — the
+  earlier encounter with this was settled by hand-stamping one file with its canonical LF digest
+  (`eval/keel-gate`), which does not generalise. `canonical_bytes` makes the digest equal to the one
+  over the committed blob on every platform, and **reproduces the committed index byte-for-byte**, so
+  no published number moves. Note the shape: the fix removes the false-cause condition rather than
+  documenting it, so the gate's original message becomes true again. Both guards proven non-vacuous.
+
+### Preserved, not built: the orphaned serena-nav banks
+
+A branch sweep during this pass found `docs/bank-spec-revision` (`eb2b865`) unmerged with no remote.
+It carries the serena-nav v1/v2/v3 banks — **27 paid trials, $21.51**, a committed ledger, an archived
+invalid run, a v3 pre-registration an adversarial pre-mortem returned NOT_READY on, and
+`scenarios/serena-nav/arming_probe.py`, which asserts an `mcp__*` tool is *actually invoked with no
+permission denial* — a check `smoke` does not perform. Preserved as tag
+`preserve/serena-nav-banks-eb2b865` and remote branch `preserve/serena-nav-banks`. **That probe is a
+working reference implementation for FATH-B52**, whose whole problem is that `verify-arming` cannot
+tell an armed MCP mount from an unarmed one. Merging the banks themselves is a separate decision.
+
+---
 ## Reconciled — shipped since the last sweep, not re-proposed
 
 - `[settings] inject`, the user-scope hook arming axis (`1d6de89`). Its two follow-ups did not ship and
@@ -766,6 +820,161 @@ nothing outside the canonical checkout and `fathom smoke` reads 7/8.** *(S · [w
 
 ---
 
+### Added by the 2026-08-28 triage delta (v4)
+
+Four reports, all about instrument trust. The pass tested one hypothesis - *the defects of this
+instrument are only observable under real cost and under prolonged operation, and the authoring cycle
+does not reach them* - and it survives **with a refinement that changes what to build**. Counting the
+discovery mode of every post-0.2.0 defect: paid-measurement **6**, sustained-operation **6**,
+post-hoc-audit **3**, authoring-review **2**, calibration-before-trust **1**.
+
+Two corrections follow from that count. First, the dividing line is not cost or duration but the
+**absence of an offline oracle**: calibration reliably catches *false positives in a new gate* (loud,
+with a ground truth already on disk), while buying and operating catch *false negatives* - FATH-B54's
+gate passed while never running, FATH-B50's arm was absent while the plan looked clean, FATH-B52 read
+unarmed on an arm the model demonstrably used 4/4. Second, the hypothesis **omits a third mode**, and
+it is the one that has already put wrong numbers into circulation: **post-hoc reconciliation**, where
+the run completed and every artifact was internally self-consistent (the void `haiku-gate-sg`; the 0/7 to 0/8
+recount; the x3.81 refutation; FATH-B57's cache-blind fallback). No amount of buying or operating
+would surface any of them. What detects them is having **two independent derivations of the same
+fact** to reconcile - which is cheap, needs no spend, and is mechanized for exactly one fact today.
+
+So the corrective is not to spend more. It is B62/B63 (mechanize reconciliation) and B64/B65 (aim the
+authoring cycle at false negatives and at rails).
+
+**FATH-B58 - The runner logs a block's failure instead of honouring it as a dependency, and then
+spends money creating an invalid measurement.** *(S | [wave-4 triage])*
+
+- **Cause / evidence:** `run_matrix`'s execution loop is a flat iteration over a scenario-major plan;
+  there is no arm, group or dependency concept in `cli.py` or `scenario.py`, and the only early exit
+  is an infrastructure classification. Observed in the buy wave: a block died at staging (Windows
+  `git init`, `0xC0000142`) two trials into a ten-trial **comparator** arm, and the script continued
+  into the dependent **treatment** arm. The buy order was explicitly designed so comparators land
+  first; that discipline assumes a block either completes or halts. No orphan reached the report only
+  because the operator noticed and completed the comparator before reading any contrast.
+- **Why it outranks its x1 count:** every other row here describes a defect that wastes a run or hides
+  a signal. This one *purchases* a treatment arm against an incomplete comparator - the
+  silent-invalid-measurement class, arrived at by spending.
+- **Change:** halt the remaining arms of a scenario group when a comparator arm exits non-zero, or
+  make the dependency explicit in the plan so the runner can enforce it. Home: the run loop in
+  `src/fathom/cli.py`.
+
+**FATH-B59 - Nothing checks for an orphan process holding the venv, and the failure surfaces as an
+unrelated `uv sync` error.** *(S | [wave-4 triage])*
+
+- **Cause / evidence:** a stale `fathom.exe` orphan held the venv during the 0.2.0 release cut and
+  broke `uv sync`; recovery meant finding the process tree, killing it, re-syncing and re-running to a
+  fresh green before the PR could open. ~20 minutes and one amended verification, on a failure whose
+  message pointed somewhere else entirely.
+- **Change:** an orphan `fathom.exe`/`python` preflight in `fathom smoke`, which is already the
+  go/no-go gate before any paid matrix. Rides FATH-B64's check group rather than shipping alone.
+
+**FATH-B62 - A trial's `config_hash` is never checked against a committed scenario, so an
+unattributable arm is indistinguishable from a healthy one.** *(M | [wave-4 triage])*
+
+- **Cause / evidence:** the void `haiku-gate-sg` scored 9/10, was published, and was cited as keystone
+  contrast for a downstream programme while its probe never executed. It took **six weeks and a
+  ~170k-form hash-reconstruction sweep** to establish that its `config_hash` has no preimage - while
+  all fourteen sibling arms reconstruct exactly. The method is therefore already demonstrated; what is
+  missing is that nothing runs it.
+- **Change:** every completed trial's `config_hash` must reconstruct from a committed scenario file,
+  else the arm is flagged unattributable. `tools/ledger_index.py` + `tests/test_ledger_coverage.py`
+  are the working precedent for this shape - a reconciliation that turns the suite red and names what
+  moved. Expect a known-exception list on day one: `ablation-v2`'s void arm will not reconstruct, and
+  that is the point.
+
+**FATH-B63 - A ledger's cost is never reconciled against a recomputation, so the cache-blind fallback
+is a trap that has not sprung yet.** *(S | [wave-4 triage])*
+
+- **Cause / evidence:** FATH-B57 prices `tin` only and discards every cached token, understating the
+  arm with the largest `[context] inject` most - i.e. biased **toward the treatment** by construction.
+  It is latent: every committed ledger has 0 zero-cost rows, so no landed analysis is affected. A
+  latent bias in the treatment's favour is exactly what a reconciliation pass exists to catch before
+  it lands, not after.
+- **Change:** a recomputed-vs-reported cost ratio per ledger, flagging any run whose rows came from
+  the fallback path. The tested `routing.cost_from_usage` / `audit_ledger_costs` pair already exists.
+
+**FATH-B64 - `smoke` gates isolation and blindness and gates the operational surface not at all,
+which is what actually stops matrices.** *(M | [wave-4 triage])*
+
+- **Cause / evidence:** the empreitada wave lost **six of eight staged matrices** to operational
+  causes rather than to doubt about their design - the measurement discipline held, the operation did
+  not. Three deadlocks in 24h, two credential expiries in 24h, `--max-budget-usd` near-misses that
+  would have licensed ~$1,440, and a `verify-arming` false negative whose only documented escape is
+  `--skip-arming-check`. `smoke`'s eight assertions are isolation and blindness primitives only, and
+  `src/fathom/smoke.py` is byte-unchanged since 0.2.0.
+- **Change:** an operational check group - a rail actually refuses at a trivially low cap; a second
+  concurrent invocation is actually excluded; a `[gate]` command naming an unresolvable path refuses
+  at validate time; an MCP-served arm arms after a bounded wait. This is the row that converts
+  *sustained-operation* discoveries into *calibration-before-trust* ones, which is the whole point of
+  the refinement above. Carries FATH-B59.
+
+**FATH-B65 - The review cycle never asks what a change does when it fails silently, or which spawn
+path a rail actually reaches.** *(S | [wave-4 triage])*
+
+- **Cause / evidence:** `docs/method/review-checklist.md` (48 lines) and `definition-of-done.md` (34
+  lines) contain no such item. The corpus nonetheless contains two authoring-review catches - the
+  series `ERRORED` denominator bias, and `--max-budget-usd` being **inert on a series arm** - and both
+  happened because *spend was imminent*, not because the cycle asked. The question works; nothing
+  makes it get asked.
+- **Change:** three items. **Rails bind** - name the spawn path the value reaches and state what it
+  does *not* cap. **Gate failure direction** - state what a new or changed gate does on a false
+  negative and whether its documented escape is safe (a gate whose only escape is a blanket override
+  is a hazard, not a gap - FATH-B52's own framing). **Denominator effect** - state which trials leave
+  the denominator and which way that biases the arm.
+- **What it displaces:** nothing by deletion, so each line is justified by a defect that reached
+  production. If the checklist later needs trimming, these three carry named evidence and the older
+  generic items do not.
+
+**FATH-B66 - A cost term that appears in a comparison is modelled rather than purchased, and the error
+does not divide out.** *(S | [wave-4 triage])*
+
+- **Cause / evidence:** a forward token model predicted a decision cost of $0.085 where the
+  measurement found $0.298 - and, the part that matters, predicted the arm-to-arm **premium** at
+  $0.0800 where the measurement found $0.2252. A **2.8x miss on the contrast itself**, not merely on
+  the levels, so it does not cancel in a comparison. The principle is already mechanized for the one
+  term the wave burned on (`decision_cost_usd` is reported as `null`, never `0`), but it is nowhere in
+  the method: a grep over `docs/method/` for the rule returns nothing.
+- **Change:** state it in `docs/method/`, referenced from `definition-of-ready.md` - any term appearing
+  in a comparison must be purchased at the smallest n that resolves it before the comparison is
+  priced; a modelled term is admissible for budgeting only. Pairs with the cheap-tranche-first
+  discipline that paid for itself immediately this wave, making it a rule rather than a habit.
+
+**FATH-B67 - `validate` proves a bank *can* discriminate on its fixture, never that it *does* against
+a live bare arm.** *(M | [wave-4 triage], extends FATH-B08)*
+
+- **Cause / evidence:** the longest unbroken lineage in the corpus -
+  `2026-07-14-model-selection-design#6` -> `2026-08-11#1` (two blocked August decisions, including the
+  tier-threshold recalibration that correctly **refused** to move on saturated evidence) ->
+  `2026-08-12#5` (three more programmes blocked, **two of them after their banks passed `validate`
+  clean**). `src/fathom/validate.py:23-26` names the gap in its own docstring. A fifth, earlier member
+  the lineage never counted: the 2026-07-10 non-use report observed the same failure **from outside
+  fathom** - a null arm that measured nothing because the control already sufficed - four days before
+  the lineage's named head. That it reproduces in a hand-rolled instrument raises confidence the cause
+  is measurement design rather than a fathom quirk.
+- **Change:** FATH-B08 already owns the post-hoc half (the scorecard banner). This row is the
+  **pre-spend** half, which is the delta: the same warning belongs in `validate`, before the money,
+  phrased as the 2026-07-10 report phrased it - *warn when BARE and ARMED are predicted to tie*.
+  `validate` already implements the static half (`PROP_FIXTURE_FAILS`, this task cannot discriminate
+  between arms); this is the live half its docstring says is missing.
+
+**FATH-B68 - The worked recipe that would have won a dispatch was never written, and it is the one
+triage row that fell out rather than being declined.** *(S | [wave-4 triage], restores T7b)*
+
+- **Cause / evidence:** on 2026-07-10 a fresh-agent tool-effectiveness eval - squarely fathom's
+  charter - was **hand-rolled as a 72-agent bespoke Workflow** because the author could not quickly
+  tell whether fathom supported inject-exact-bytes-as-an-arm, a model-tier sweep, and blind free-text
+  grading. Settled against the tree: the first **is** supported and documented, the second is
+  expressible but not first-class (a 2x3 design costs six near-duplicate scenario files), and the
+  third is a real gap - `grading/judge.py` is dark-shipped with zero production callers. The dispatch
+  was lost on the one that was already supported. It self-corrected within 24 hours - the same eval
+  was rebuilt in fathom (`1d02de2`), ran 27 trials and reproduced the hand-rolled result's direction -
+  which is why that report's headline is declined as a promotion. What survives is the docs gap, and
+  that is v2's T7b, which has no successor anywhere in the tree: neither built, declined, nor carried.
+- **Change:** a worked A/B-a-guardrail-across-model-tiers, blind-graded recipe in
+  `skills/fathom-eval/`. `scenarios/tu-grounding/` is the worked example already sitting in the tree.
+
+---
 ## Later
 
 **FATH-B21 — `CLAUDE.md` duplicates the on-demand skill on an always-loaded surface.** *(S ·
