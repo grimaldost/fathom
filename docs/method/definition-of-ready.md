@@ -63,6 +63,8 @@ are stateless.
 
 - [ ] A pre-mortem pass has been run by a non-author reviewer, and the certification
       block records `Verdict: CERTIFIED`. *(`keel check-ready` enforces this — B1.)*
+- [ ] If the work's estimand contains a **cost term**, that term is purchased, not
+      modelled — see `measured-terms.md`. A modelled term is admissible for budgeting only.
 - [ ] Every invariant the work touches is named in "Invariants touched", each with an ADR.
 - [ ] Every concept maps to a module in the concept→module map.
 - [ ] Every non-obvious design choice has an ADR (alternatives recorded).
