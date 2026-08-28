@@ -1,5 +1,19 @@
 # The series engine value ablation v2 (brownfield) -- findings and evolution case
 
+> **CORRECTION (2026-08-28) -- the `haiku-gate-sg` arm is void, and it is load-bearing in this
+> report.** The arm's type probe shipped as a literal placeholder path
+> (`python /path/to/fathom/.../type_probe.py .`), handed to the shell verbatim, so the probe never
+> executed and the arm ran as its own control (`haiku-gate`). Its ledger `config_hash` has no
+> preimage across ~170k candidate command forms while all fourteen sibling arms reconstruct
+> exactly, so the configuration that produced those ten trials is **unattributable** -- unknown,
+> not merely biased. Every figure derived from that arm is marked **[VOID ARM]** below. This
+> affects the headline `38% -> 90%`, the defect-escape contrast, the F3 statistics, the
+> cost-per-success economy, and the **E-d escalation-ladder verdict**, whose `0/10 trigger fired`
+> is the expected reading of an arm running as its own control. Nothing in this report's
+> strong-tier findings depends on it. Full disclosure and the forked replacement arm
+> (`haiku-gate-sg2`, not yet re-run): `docs/reports/2026-08-11-ablation-v2-series-arm-authoring.md`
+> section 1.
+
 - **Date:** 2026-07-01/02 (matrix + M2 replication complete; blind-panel verdicts folded)
 - **Bank:** `tasks/ablation-v2/exprlang` -- brownfield, multi-file (lexer / parser /
   evaluator / errors) feature-add: comparison + boolean operators with short-circuit,
@@ -32,7 +46,7 @@
 2. **Weak tier: failures collapse onto a machine-checkable defect class the repo suite
    provably misses, and the suite-only gate catches none of it** (8/8 gates green,
    5/8 oracle escapes, 38% = 38% vs bare). A 10-case deterministic type-contract probe
-   added to the gate **coincided with 38% -> 90%** -- but the panel's decomposition
+   added to the gate **coincided with 38% -> 90%** **[VOID ARM -- see the correction above; the probe never executed]** -- but the panel's decomposition
    caps what the mechanism *demonstrably* earned: the probe fired in 2/10 trials
    (both rescued: red -> fix -> green -> oracle-pass), while 7/10 passed on first
    attempt in a batch whose first-attempt quality was anomalously high vs earlier
@@ -80,7 +94,7 @@ baseline is near-total rescue only.
 | haiku-authoring | Haiku 4.5 hi | + structured brief | 4/10 = 40% | 17-69% | 0.29 | 0.72 | 34 |
 | haiku-gate | Haiku 4.5 hi | + suite gate (blind to the defect) | 3/8 = 38% | 14-69% | 0.30 | 0.80 | 34 |
 | haiku-gate-review | Haiku 4.5 hi | + review | 5/10 = 50% | 24-76% | 0.34 | 0.68 | 40 |
-| **haiku-gate-sg** | Haiku 4.5 hi | + **strengthened** gate (suite + type probe) | **9/10 = 90%** | 60-98% | 0.33 | **0.36-0.37** | 40 |
+| **haiku-gate-sg** **[VOID ARM]** | Haiku 4.5 hi | + **strengthened** gate (suite + type probe) -- *probe never executed; ran as `haiku-gate`* | **9/10 = 90%** *(unattributable)* | 60-98% | 0.33 | **0.36-0.37** *(unattributable)* | 40 |
 
 \* batch-1 (arm-blocked) figures; §6 shows the interleaved replication -- bare's true
 adjacent-run cost is ~$0.75-0.83, and the Sonnet-arm cost differences vanish.
@@ -91,7 +105,7 @@ ledger and is counted failed via gate-subset logic; the `haiku-gate-review` tria
 predate the gate-`detail` ledger patch, so their per-trial gate/review telemetry is
 unrecoverable.)
 
-Defect-escape (gate green but oracle red): `haiku-gate` **5/8**; `haiku-gate-sg` 1/10
+Defect-escape (gate green but oracle red): `haiku-gate` **5/8**; `haiku-gate-sg` 1/10 **[VOID ARM -- with the probe inert this is `haiku-gate` at n=10, so 5/8 vs 1/10 compares one configuration with itself]**
 (the `not_op` residual -- gate-green, i.e. **undetected**); Sonnet gated arms 0.
 
 ## 4. Findings (panel-corrected)
@@ -177,7 +191,7 @@ model.
   with defined falsifiers; the effort half rests on one easy cell (F4). The
   conditional-review half follows from F1 (cost) + F5 (independence), with the FM-8
   ceiling caveat on the strong-tier evidence.
-- **E-d. Escalation ladder.** DOES NOT SURVIVE AS STATED. Its trigger
+- **E-d. Escalation ladder.** DOES NOT SURVIVE AS STATED -- **[VOID ARM: this verdict rests on the keystone arm, and a trigger that never fires is what an inert probe produces. The verdict is WITHDRAWN pending a `haiku-gate-sg2` replication; it is not refuted, it is unevidenced.]** Its trigger
   (gate-red-after-fixes) fired 0/10 in the keystone arm; the one real failure was
   gate-GREEN -- the ladder would have merged it silently, the worst outcome for a
   walk-away product. Inside this matrix the ladder is dominated by `sonnet-lo`
@@ -231,7 +245,7 @@ available** (`sonnet-lo` was the cheapest 100% cell); every in-session series-en
 feature measured +0 quality there, at cost that is neutral once interleaved. At the
 weak tier, failures collapsed onto one machine-checkable contract class the repo
 suite provably misses; the suite-only gate detected nothing; a hand-authored probe
-for that known class coincided with 38%->90%, of which +20pp is verified
+for that known class coincided with 38%->90% **[VOID ARM]**, of which +20pp is verified
 catch-and-rescue and the remainder is batch-confounded. The transferable finding is
 that **self-authored tests inherit the implementer's blind spots, so gate value
 tracks the independence and coverage of the deterministic oracle** -- whether

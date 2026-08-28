@@ -67,11 +67,20 @@ escapes to catch. The comparison set already exists in `ledger/ablation-v2.jsonl
 |---|---|
 | `haiku` (bare) | 3/8 |
 | `haiku-gate` | 3/8 |
-| `haiku-gate-sg` (strengthened gate) | 9/10 |
+| `haiku-gate-sg` (strengthened gate) | ~~9/10~~ **VOID** |
 | `haiku-gate-review` | 5/10 |
 | `haiku-authoring` | 4/10 |
 | `haiku-reprompt` | 4/8 |
 | **`series` (the engine)** | **does not exist** |
+
+> **CORRECTION (2026-08-28).** The `haiku-gate-sg` row above is **void** and must not be used as a
+> comparator. Its type probe shipped as a literal placeholder path, so the probe never executed and
+> the arm ran as its own control; its `config_hash` has no preimage, so the configuration is
+> unattributable. This matters here specifically because the table is framed as the comparison set a
+> future **paid** engine arm would be measured against -- FATH-B17 must not be priced against this
+> number. The weak-tier bar is `haiku` 3/8 and `haiku-gate` 3/8; the strengthened-gate cell is empty
+> until `haiku-gate-sg2` runs. See `docs/reports/2026-08-11-ablation-v2-series-arm-authoring.md`
+> section 1.
 
 ### Why it was not run — the blocker is authoring risk and wall-clock, not dollars
 
