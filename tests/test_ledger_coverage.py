@@ -127,6 +127,41 @@ class LedgerCoverageTests(unittest.TestCase):
             self.assertNotEqual(before, after, "the index does not move when a ledger does")
             self.assertIn("seeded:1", after)
 
+    def test_the_digest_is_of_canonical_lf_bytes_not_the_checkouts_line_endings(
+        self,
+    ) -> None:
+        """A CRLF checkout must not move the stamp: the digest is of the committed bytes.
+
+        `.gitattributes` pins `*.jsonl text eol=lf`, so what git stores is always LF —
+        but `ledger.py` appends through Python text mode, which writes CRLF on Windows.
+        Hashing the working tree raw bytes therefore stamped a platform, not a ledger:
+        the same committed data hashed differently on Windows than on Linux, and the
+        freshness gate went red with a message accusing an operator of appending to a
+        ledger without re-stamping. Counts identical, digest moved, nothing appended.
+        """
+        import shutil
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            mirror = Path(tmp) / "ledger"
+            shutil.copytree(LEDGER_DIR, mirror, ignore=shutil.ignore_patterns("archive"))
+            lf_render = ledger_index.render(mirror)
+
+            rewritten = 0
+            for path in sorted(mirror.glob("*.jsonl")):
+                canonical = path.read_bytes().replace(b"\r\n", b"\n")
+                path.write_bytes(canonical.replace(b"\n", b"\r\n"))
+                rewritten += 1
+            self.assertTrue(rewritten, "no ledgers mirrored — the test would be vacuous")
+
+            self.assertEqual(
+                lf_render,
+                ledger_index.render(mirror),
+                "converting every ledger to CRLF moved the index: the digest is being "
+                "taken over the checkout line endings rather than the canonical LF "
+                "bytes git stores",
+            )
+
     def test_the_check_can_actually_fail(self) -> None:
         """The gate is not satisfied by absence.
 

@@ -380,6 +380,27 @@ def test_per_bank_file_isolation():
         assert len(records_b) == 1 and records_b[0].task_id == "t-b"
 
 
+def test_appended_lines_are_lf_on_every_platform():
+    """The ledger is a hashed artifact, so its line endings are part of its identity.
+
+    `.gitattributes` pins `*.jsonl text eol=lf` and the ledger index stamps each file by
+    digest. Appending through Python text mode wrote CRLF on Windows: git normalised it
+    away on check-in, so the committed bytes stayed LF and nothing looked wrong in a
+    diff — while the working tree hashed differently from every other platform.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        d = pathlib.Path(tmpdir)
+        append_record("bank-eol", make_trial(bank="bank-eol", task_id="t-1"), ledger_dir=d)
+        append_record("bank-eol", make_trial(bank="bank-eol", task_id="t-2"), ledger_dir=d)
+
+        raw = (d / "bank-eol.jsonl").read_bytes()
+
+        assert b"\r" not in raw, (
+            "ledger written with CR bytes; the digest is now platform-dependent"
+        )
+        assert raw.count(b"\n") == 2, "expected one LF per appended record"
+
+
 def test_empty_bank_iter_returns_nothing():
     with tempfile.TemporaryDirectory() as tmpdir:
         d = pathlib.Path(tmpdir)
@@ -441,6 +462,7 @@ if __name__ == "__main__":
         test_unknown_kind_round_trips_as_dict,
         test_unknown_kind_interleaved_with_known,
         test_per_bank_file_isolation,
+        test_appended_lines_are_lf_on_every_platform,
         test_empty_bank_iter_returns_nothing,
         test_empty_bank_completed_keys_returns_empty_set,
         test_sort_keys_stable_serialization,

@@ -71,6 +71,20 @@ def _rows(path: Path) -> list[dict]:
     return out
 
 
+def canonical_bytes(path: Path) -> bytes:
+    """The ledger as git stores it: LF line endings, whatever the checkout has.
+
+    `.gitattributes` pins `*.jsonl text eol=lf`, so the committed bytes are always LF.
+    The working tree need not be: `ledger.py` appends through Python text mode, which
+    writes CRLF on Windows, and git normalises it away again on check-in. Hashing the
+    raw file therefore stamped the checkout's platform rather than the ledger, and the
+    freshness gate failed on Windows against an index stamped on LF — with a message
+    accusing an operator of appending to a ledger that had not moved. Normalising here
+    makes the digest equal to the one over the committed blob, on every platform.
+    """
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def summarise(path: Path) -> dict:
     rows = _rows(path)
     trials = [r for r in rows if r.get("kind") == "trial"]
@@ -80,7 +94,7 @@ def summarise(path: Path) -> dict:
     )
     return {
         "bank": path.stem,
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": hashlib.sha256(canonical_bytes(path)).hexdigest(),
         "completed": dict(sorted(completed.items())),
         "trial_rows": len(trials),
         "run_rows": len(runs),
