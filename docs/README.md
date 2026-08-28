@@ -71,6 +71,9 @@ The keel/convoy governed-series kit: [`method/README.md`](method/README.md) expl
 [`method/method-bindings.md`](method/method-bindings.md) binds each to a fathom mechanism (gates,
 DoR/DoD, pre-mortem, reflection sink). [`method/recalibration-playbook.md`](method/recalibration-playbook.md)
 is the recurring model-tier recalibration recipe (rerun it when a new Claude model ships).
+[`method/measured-terms.md`](method/measured-terms.md) is the rule that a cost term inside an
+estimand is purchased rather than modelled — a forward model missed an arm-to-arm premium by
+2.8x, so the error does not divide out of a contrast.
 
 ## plans/ — implementation plans
 

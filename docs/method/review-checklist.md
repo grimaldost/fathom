@@ -43,6 +43,35 @@ next time. That is how "a bug bites once" actually holds.
       argument is documented in `skills/fathom-eval/reference/authoring.md`
       (schemas) or the SKILL / `commands/*.md` (flags) in the SAME change.
 
+
+### Silent-failure items
+
+Three questions the cycle did not ask. The corpus contains two defects caught *by*
+asking them — the series `ERRORED` denominator bias, and `--max-budget-usd` being
+inert on a series arm — and both were caught only because spend was imminent, not
+because anything required the question. Everything the authoring cycle missed was a
+**false negative**: a gate that passed while never running, an arm that was absent
+while the plan looked clean, a probe that read unarmed on an arm the model used 4/4.
+Calibration catches false positives on its own; these three aim at the other half.
+*(Promoted by the 2026-08-28 triage delta, FATH-B65.)*
+
+- [ ] **Rails bind** — for any change touching a rail, budget or cap: name the spawn
+      path the value actually reaches, and state what it does **not** cap. A rail
+      whose name asserts a guarantee it does not make is the defect, not a weak
+      guard. *(`--max-budget-usd` is per-spawn and was inert on the series arm
+      entirely; an operator intending a $30 program rail licenses ~$1,440 across 48
+      trials.)*
+- [ ] **Gate failure direction** — for any new or changed gate: state what it does on
+      a **false negative**, and whether its documented escape is safe. A gate whose
+      only way out is a blanket override is a hazard, not a gap — the defect's own
+      pressure then points at disabling the check. *(FATH-B52: `verify-arming`
+      false-negatives on MCP mounts and the documented escape is
+      `--skip-arming-check`.)*
+- [ ] **Denominator effect** — for any change to trial status, scoring or
+      aggregation: state which trials leave the denominator, and which way that
+      biases the arm. *(The series executor mapped a blocking-gate exit to `ERRORED`,
+      so pass rate was conditioned on engine success.)*
+
 ---
 *Keep this file in version control with the project. Each promoted reflection
 should cite the round/PR that motivated it, in a comment.*
