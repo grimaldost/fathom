@@ -4,6 +4,11 @@ on:
   push:
   pull_request:
 
+# Both jobs only check out the tree and run local tooling; nothing calls a write API.
+# A July security sweep flagged unlimited workflow token permissions estate-wide.
+permissions:
+  contents: read
+
 jobs:
   gate:
     strategy:
