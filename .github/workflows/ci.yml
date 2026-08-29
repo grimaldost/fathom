@@ -36,6 +36,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the merge-base with the target branch has to exist locally
+      # Bare `python` is deliberate: the script is stdlib-only, and ubuntu-latest ships a
+      # python3 symlinked as python — a setup step would buy nothing but latency.
       - run: |
           git log --format=%B "origin/${{ github.base_ref }}..HEAD" > "$RUNNER_TEMP/messages.txt"
           git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
