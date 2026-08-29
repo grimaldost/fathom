@@ -91,16 +91,21 @@ class LedgerCoverageTests(unittest.TestCase):
         )
 
     def test_the_ledger_index_is_current(self) -> None:
-        """No verdict may be read against a ledger that has moved since it was stamped."""
-        rendered = ledger_index.render(LEDGER_DIR)
-        committed = (
-            ledger_index.INDEX_PATH.read_text(encoding="utf-8")
-            if ledger_index.INDEX_PATH.is_file()
-            else ""
-        )
+        """No verdict may be read against a ledger that has moved since it was stamped.
+
+        The comparison itself lives in :mod:`fathom.reconcile` — this is one reconciliation
+        among several now, and two implementations of the same check are exactly the drift
+        this module exists to catch.  The assertion is kept here because the coverage ratchet
+        and the freshness stamp are one argument: a verdict must exist, and it must have been
+        read against the ledger as committed.
+        """
+        sys.path.insert(0, str(REPO / "src"))
+        from fathom import reconcile
+
+        found = reconcile.check_ledger_index(REPO)
         self.assertEqual(
-            committed,
-            rendered,
+            [str(d) for d in found],
+            [],
             "docs/reports/LEDGER-INDEX.md disagrees with ledger/. A ledger was appended to "
             "without re-stamping. Re-render with `python tools/ledger_index.py --write`, read "
             "the diff — it names the arms whose n moved — and update every document that quotes "

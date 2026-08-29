@@ -24,6 +24,13 @@ class TrialRecord:
     pin_level: str  # "strong" | "series"
     verifier_results: dict[str, Any] | None = None
     detail: str = ""  # strategy note (gate first/final, fix count) for defect-escape recovery
+    config_preimage: str = ""  # the exact string config_hash digests; additive (ADR-0002).
+    # Recomputing a hash from scenarios/ is inference about the past: 45% of committed
+    # hashes cannot be reproduced that way, because config_hash embeds a plugin tree_sha
+    # globbed from a live filesystem and most mounts point at an external repo under
+    # active development. Stored here, the check is exact — sha256(preimage) either equals
+    # config_hash or the row is corrupt — and that answer does not change when the tree
+    # does. Empty on every line written before 0.4.0, which is reported, never guessed at.
     kind: str = dataclasses.field(default="trial", init=False)
 
 
@@ -48,6 +55,13 @@ class RunRecord:
     # additive default "" so legacy lines load unchanged. Was computed by the adapter
     # but dropped at the cli.py ledger boundary — the pin the design advertises but
     # never persisted until this field existed.
+    config_preimage: str = ""  # the exact string config_hash digests; additive (ADR-0002).
+    # Recomputing a hash from scenarios/ is inference about the past: 45% of committed
+    # hashes cannot be reproduced that way, because config_hash embeds a plugin tree_sha
+    # globbed from a live filesystem and most mounts point at an external repo under
+    # active development. Stored here, the check is exact — sha256(preimage) either equals
+    # config_hash or the row is corrupt — and that answer does not change when the tree
+    # does. Empty on every line written before 0.4.0, which is reported, never guessed at.
     kind: str = dataclasses.field(default="run", init=False)
 
 

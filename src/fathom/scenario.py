@@ -161,6 +161,10 @@ class ResolvedScenario:
     tool_repo_sha: str | None  # HEAD SHA of the tool repo (source="repo" only)
     tool_invocation_cmd: str | None  # e.g. "uv run --project <repo> convoy"
     config_hash: str  # SHA-256 over canonicalized resolved scenario
+    # The exact string config_hash digests, persisted to the ledger so a trial's identity
+    # can be verified without re-deriving it from a tree that has since moved.  Defaulted
+    # because it is not part of the hash: adding it shifts no resume key (ADR-0002).
+    config_preimage: str = ""
     context: ContextConfig = dataclasses.field(default_factory=ContextConfig)
     settings: SettingsConfig = dataclasses.field(default_factory=SettingsConfig)
     plugins: PluginsConfig = dataclasses.field(default_factory=PluginsConfig)
@@ -220,14 +224,27 @@ def resolve_repo_invocation_cmd(repo: str) -> str:
     return f"uv run --project {abs_repo} convoy"
 
 
+def canonical_config_json(d: dict) -> str:
+    """The exact string :func:`compute_config_hash` digests.
+
+    Persisting this alongside the digest is what turns a config_hash check into a real
+    reconciliation.  Recomputing the hash from ``scenarios/`` is an *inference about the
+    past*: it depends on the tree as it stands now, and 45% of committed hashes cannot be
+    reproduced that way because the hash embeds a plugin ``tree_sha`` globbed from a live
+    filesystem, with most mounts pointing at an actively-developed external repo.  A stored
+    preimage has no such dependency — sha256 of it either equals the stored digest or the
+    row is corrupt, and that answer never changes.
+    """
+    return json.dumps(d, sort_keys=True, ensure_ascii=False)
+
+
 def compute_config_hash(d: dict) -> str:
     """SHA-256 of the sorted-keys JSON serialization of *d*.
 
     Key order is irrelevant (sort_keys=True); every value change shifts the
     hash.  Accepts any JSON-serializable dict, including nested structures.
     """
-    canonical = json.dumps(d, sort_keys=True, ensure_ascii=False)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical_config_json(d).encode("utf-8")).hexdigest()
 
 
 def _resolved_to_dict(
@@ -445,6 +462,7 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
         env_vars=[list(p) for p in config.env.vars] or None,
         gate_extra=list(config.gate.extra) or None,
     )
+    config_preimage = canonical_config_json(hashable)
     config_hash = compute_config_hash(hashable)
 
     return ResolvedScenario(
@@ -459,6 +477,7 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
         tool_repo_sha=tool_repo_sha,
         tool_invocation_cmd=tool_invocation_cmd,
         config_hash=config_hash,
+        config_preimage=config_preimage,
         context=config.context,
         settings=config.settings,
         plugins=config.plugins,

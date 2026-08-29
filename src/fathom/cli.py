@@ -39,6 +39,7 @@ EXIT_OK = 0
 EXIT_INFRASTRUCTURE = 10
 EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
 EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
+EXIT_UNRECONCILED = 13  # two derivations of one fact disagree (FATH-B62/B63)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -175,6 +176,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory globbed (non-recursively) for arm *.toml (default: scenarios/).",
     )
 
+    rec_p = sub.add_parser(
+        "reconcile",
+        help="Check every fact this repo derives twice (free — no spawns)",
+    )
+    rec_p.add_argument(
+        "--check",
+        action="append",
+        dest="checks",
+        metavar="NAME",
+        help="Run only this reconciliation (repeatable). Default: all of them.",
+    )
+    rec_p.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_checks",
+        help="List the registered reconciliations and exit",
+    )
     smoke_p = sub.add_parser("smoke", help="Real-spawn isolation smoke gate (§11)")
     smoke_p.add_argument(
         "--force-fail",
@@ -541,6 +559,7 @@ def run_matrix(
                     pin_level=trial_result.pin_level,
                     cost_usd_est=run_rec.cost_usd_est,
                     model_id=run_rec.model_id,
+                    config_preimage=sc.config_preimage,
                 )
                 _ledger.append_record(bank.name, ledger_run, ledger_dir=_ledger_dir)
 
@@ -575,6 +594,7 @@ def run_matrix(
                 pin_level=trial_result.pin_level,
                 verifier_results=verifier_data,
                 detail=detail,
+                config_preimage=sc.config_preimage,
             )
             trial_dict = dataclasses.asdict(trial_rec)
             trial_dict["valid"] = valid
@@ -702,6 +722,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_smoke(args)
     if args.command == "verify-arming":
         return _cmd_verify_arming(args)
+    if args.command == "reconcile":
+        return _cmd_reconcile(args)
     if args.command == "validate":
         return _cmd_validate(args)
     parser.print_help()
@@ -865,6 +887,55 @@ def _cmd_report(args: argparse.Namespace) -> int:
     except Exception as exc:
         print(f"error rendering report: {exc}", file=sys.stderr)
         return 1
+
+
+def _cmd_reconcile(args: argparse.Namespace) -> int:
+    """Run the reconciliations; free, spawns nothing.
+
+    Two failure directions, and the second is the one that keeps the gate honest: an
+    unexcused discrepancy means two derivations of one fact disagree, and a *stale*
+    exception means an excuse outlived the thing it excused.
+    """
+    from fathom import reconcile as _reconcile
+
+    if getattr(args, "list_checks", False):
+        for check in _reconcile.CHECKS:
+            print(f"{check.name:<24} {check.describe}")
+        return EXIT_OK
+
+    try:
+        found = _reconcile.run_all(names=args.checks)
+    except KeyError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_UNRECONCILED
+
+    bad = _reconcile.unexpected(found)
+    stale = _reconcile.stale_exceptions(found)
+    excused = len(found) - len(bad)
+
+    for d in bad:
+        print(f"[DISAGREES] {d}")
+    for fp in stale:
+        print(
+            f"[STALE EXCEPTION] {fp} no longer excuses anything — delete it; an "
+            "exception that outlives its discrepancy silently widens the gate"
+        )
+
+    have, total = _reconcile.preimage_coverage(_reconcile.REPO)
+    pct = (100.0 * have / total) if total else 0.0
+    print(
+        f"preimage coverage: {have}/{total} ledger rows ({pct:.0f}%) carry the second "
+        "derivation the exact check needs. Rows written before 0.4.0 carry none; that is a "
+        "coverage gap, reported rather than excused, and it only shrinks as trials are bought."
+    )
+    checks = _reconcile.registry(args.checks)
+    print("")
+    print(
+        f"RECONCILE: {'OK' if not bad and not stale else 'FAILED'} "
+        f"({len(checks)} check(s), {len(bad)} disagreement(s), "
+        f"{excused} excused, {len(stale)} stale exception(s))"
+    )
+    return EXIT_OK if not bad and not stale else EXIT_UNRECONCILED
 
 
 def _cmd_smoke(args: argparse.Namespace) -> int:
