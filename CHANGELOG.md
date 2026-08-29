@@ -21,6 +21,13 @@ behind. Every rule that failed was prose; each entry here is the mechanism that 
   `src/`, `tools/`, `commands/` or `mcp/` fails CI unless `CHANGELOG.md` moves with it or a commit
   in the range carries a `Changelog: not needed (<reason>)` line.
 
+### Changed
+
+- **CI runs on ubuntu and windows, and checks the lock first.** 0.4.0's LF fix closed eight
+  ledger digests disagreeing on Windows — a class an ubuntu-only matrix can only see after merge,
+  on an estate developed on a Windows machine. `uv lock --check` runs before sync because no test
+  can guard lock staleness: `uv run` re-locks before pytest could read the file.
+
 ### Fixed
 
 - **`.claude-plugin/plugin.json` states the released version again.** The 0.4.0 release bumped

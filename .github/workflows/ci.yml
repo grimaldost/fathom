@@ -6,12 +6,19 @@ on:
 
 jobs:
   gate:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.12'
+      # First, before sync: no test can guard lock staleness, because `uv run` re-locks
+      # before pytest could read the file — only a pre-sync --check sees it.
+      - run: uv lock --check
       - run: uv sync
       - run: uv run ruff format --check .
       - run: uv run ruff check .
