@@ -1627,3 +1627,48 @@ def _capture_stderr(sink):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class SpendRailTests(unittest.TestCase):
+    """The per-invocation rail halts before buying the next trial.
+
+    It is deliberately NOT summed from the ledger: `fathom run` is resumable, so a
+    ledger-sourced total holds every prior invocation's spend and would trip at $0 of new
+    spend on a resume — the same shape as a per-spawn cap that reads like a program rail.
+    """
+
+    def setUp(self):
+        self.ledger_dir = pathlib.Path(tempfile.mkdtemp())
+        td = pathlib.Path(tempfile.mkdtemp())
+        self.bank = _make_bank("rail", [_make_task("t1", td), _make_task("t2", td)])
+        self.sc = _make_scenario("bare")
+
+    def test_a_reached_rail_halts_before_the_next_trial(self):
+        from fathom.cli import EXIT_RUN_BUDGET
+
+        class _Boom:
+            def run_trial(self, *a, **k):
+                raise AssertionError("a trial ran after the budget was already reached")
+
+        code, out = _run_matrix(
+            self.bank,
+            [self.sc],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            max_run_usd=0.0,
+            executor_factory=lambda sc: _Boom(),
+        )
+        self.assertEqual(code, EXIT_RUN_BUDGET)
+        self.assertIn("run budget reached", out)
+
+    def test_no_rail_means_no_halt(self):
+        """The rail must be opt-in; absent, the matrix runs to completion as before."""
+        code, _ = _run_matrix(self.bank, [self.sc], repeats=1, ledger_dir=self.ledger_dir)
+        self.assertEqual(code, 0)
+
+    def test_a_generous_rail_does_not_halt(self):
+        code, out = _run_matrix(
+            self.bank, [self.sc], repeats=1, ledger_dir=self.ledger_dir, max_run_usd=10_000.0
+        )
+        self.assertEqual(code, 0)
+        self.assertNotIn("run budget reached", out)

@@ -40,6 +40,7 @@ EXIT_INFRASTRUCTURE = 10
 EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
 EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
 EXIT_UNRECONCILED = 13  # two derivations of one fact disagree (FATH-B62/B63)
+EXIT_RUN_BUDGET = 14  # the per-invocation spend rail halted the matrix (FATH-B04)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -111,16 +112,43 @@ def _build_parser() -> argparse.ArgumentParser:
         "spend a holdout for a promotion decision — trials are marked holdout in the ledger.",
     )
     run_p.add_argument(
+        "--max-spawn-usd",
+        type=float,
+        default=None,
+        dest="max_spawn_usd",
+        metavar="USD",
+        help="PER-SPAWN budget cap (overrides the adapter default of 5.0). A value above "
+        "the default LOOSENS the only runaway guard there is; the printed ceiling is "
+        "trials x this cap, so the plan shows what it really buys. For a cap on what the "
+        "whole invocation may spend, use --max-run-usd.",
+    )
+    run_p.add_argument(
+        # The original spelling. It is kept working permanently, not deprecated on a
+        # timer: it appears in eleven published reports (which record what was actually
+        # run and must not be rewritten) and inside mounted plugin trees whose bytes are
+        # hashed into config_hash, where an edit would fork a committed ledger's resume
+        # key. Renaming the flag is cheap; renaming the string everywhere is not.
         "--max-budget-usd",
         type=float,
         default=None,
-        dest="max_budget_usd",
+        dest="legacy_max_budget_usd",
         metavar="USD",
-        help="PER-SPAWN budget cap, not a run total (overrides the adapter default of "
-        "5.0). A value above the default LOOSENS the only runaway guard there is; the "
-        "printed ceiling is trials x this cap, so the plan shows what it really buys. "
-        "fathom has no total-run cap — for that, read cumulative cost_usd_est out of "
-        "the ledger between stages.",
+        help="Deprecated spelling of --max-spawn-usd (still honoured; it was never a run "
+        "total, which is what the name kept implying).",
+    )
+    run_p.add_argument(
+        "--max-run-usd",
+        type=float,
+        default=None,
+        dest="max_run_usd",
+        metavar="USD",
+        help="Halt this INVOCATION once its own spend reaches USD. Checked between trials "
+        "from the costs this process has observed — never summed from the ledger, which "
+        "holds every prior invocation of a resumable matrix and would trip at $0 of new "
+        "spend on a resume. Because a trial's cost is only known once it is paid, the "
+        "realised total can exceed the rail by the last trial's own ceiling (up to "
+        "n_prs x (1 impl + fixes) spawns on a series arm). Resuming is safe: the ledger is "
+        "the checkpoint, so a halt costs nothing already bought.",
     )
 
     run_p.add_argument(
@@ -281,6 +309,7 @@ def run_matrix(
     task_ids: Sequence[str] | None = None,
     ledger_dir: pathlib.Path | None = None,
     max_budget_usd: float | None = None,
+    max_run_usd: float | None = None,
     include_holdout: bool = False,
     arming_probe: Any | None = None,
     skip_arming_check: bool = False,
@@ -489,8 +518,22 @@ def run_matrix(
         def _runner_factory(sc: ResolvedScenario) -> Any:
             return _default_runner_factory(sc, max_budget_usd=max_budget_usd)
 
+    # Spend this INVOCATION has observed. Deliberately not read back from the ledger:
+    # `fathom run` is resumable, so `<bank>.jsonl` holds every prior invocation's spend and
+    # a ledger-sourced rail would trip at $0 of new spend on the second call — the same
+    # shape as the per-spawn cap that read like a program rail and was not one.
+    spent_usd = 0.0
+
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
+        if max_run_usd is not None and spent_usd >= max_run_usd:
+            print(
+                f"run budget reached: ${spent_usd:.2f} of ${max_run_usd:.2f} spent this "
+                "invocation — halting before the next trial. Nothing already bought is "
+                "lost; re-invoke to continue from the ledger.",
+                file=_out,
+            )
+            return EXIT_RUN_BUDGET
         # Names the raw-stream file the adapter tees when FATHOM_STREAM_DIR is
         # set (opt-in post-hoc analysis); harmless otherwise.
         os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
@@ -501,6 +544,10 @@ def run_matrix(
             trial_result = executor.run_trial(task, workspace, sc, runner)
 
             if trial_result.is_infrastructure:
+                # The ledger is skipped here on purpose (it is the resume checkpoint), but
+                # the spawn was still paid for — so the tally must see it, or the rail
+                # silently undercounts exactly on the path that halts a matrix.
+                spent_usd += sum(r.cost_usd_est for r in trial_result.runs)
                 detail = trial_result.detail or "infrastructure error (auth or usage limit)"
                 print(
                     f"infrastructure error: {detail} — stopping matrix",
@@ -544,6 +591,7 @@ def run_matrix(
             for run_rec in trial_result.runs:
                 from fathom.adapters.base import ExitStatus
 
+                spent_usd += run_rec.cost_usd_est
                 ledger_run = _ledger.RunRecord(
                     bank=bank.name,
                     task_id=task.id,
@@ -771,6 +819,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
             )
         return 1
 
+    # Two spellings reach the same per-spawn cap. argparse cannot tell which the operator
+    # used from one action, and the last-parsed silently winning is exactly the class of
+    # quiet money bug this flag already caused once — so they are separate dests and the
+    # disagreement is an error rather than a coin toss.
+    spawn_cap = args.max_spawn_usd
+    if args.legacy_max_budget_usd is not None:
+        if spawn_cap is not None and spawn_cap != args.legacy_max_budget_usd:
+            print(
+                "error: --max-spawn-usd and --max-budget-usd both given with different "
+                f"values ({spawn_cap} vs {args.legacy_max_budget_usd}). They are the same "
+                "cap; pass one.",
+                file=sys.stderr,
+            )
+            return 1
+        if spawn_cap is None:
+            print(
+                "note: --max-budget-usd is the old spelling of --max-spawn-usd. It still "
+                "works and will keep working; the new name says what it caps.",
+                file=sys.stderr,
+            )
+            spawn_cap = args.legacy_max_budget_usd
+
     return run_matrix(
         bank,
         resolved_scenarios,
@@ -783,7 +853,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
             else None
         ),
         ledger_dir=ledger_dir,
-        max_budget_usd=args.max_budget_usd,
+        max_budget_usd=spawn_cap,
+        max_run_usd=args.max_run_usd,
         include_holdout=args.include_holdout,
         skip_arming_check=args.skip_arming_check,
         skip_bank_validation=args.skip_bank_validation,

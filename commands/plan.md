@@ -11,7 +11,7 @@ Plan a fathom eval matrix without spawning or spending anything.
 2. From that directory, run: `uv run python -m fathom run $ARGUMENTS --dry-run`
    (append `--dry-run` if the user did not).
 3. Report the trial count, the arm names the plan printed, the USD ceiling
-   (`trials × the per-spawn cap in force` — `--max-budget-usd` if given, else $5),
+   (`trials × the per-spawn cap in force` — `--max-spawn-usd` if given, else $5),
    and the resume state (how many trials are already done vs fresh).
 
 Guardrails to surface:
@@ -19,4 +19,4 @@ Guardrails to surface:
   `scenarios/skill-pyeng`), **`--scenarios-dir` is required** or the wrong arms
   are planned. Check `ls <checkout>/scenarios/` if unsure.
 - The USD ceiling is advisory, not a spend cap; the real per-spawn cap is
-  `--max-budget-usd` (used on the actual run).
+  `--max-spawn-usd` (used on the actual run).

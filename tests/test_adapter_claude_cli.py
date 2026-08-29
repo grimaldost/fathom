@@ -181,9 +181,25 @@ class TestBuildCommand(unittest.TestCase):
         self.assertIn("--allowed-tools", cmd)
         self.assertEqual(cmd[cmd.index("--allowed-tools") + 1], "")
 
-    def test_zero_budget_omits_flag(self):
+    def test_zero_budget_is_passed_through_not_dropped(self):
+        """0 means "spend nothing on this spawn", and it used to fall back to $5.
+
+        The guard was ``if max_budget_usd:``, so the single most restrictive cap an
+        operator can ask for was the one value that silently reached the adapter default
+        instead. ``None`` already spells "no cap" — the default — so truthiness gave two
+        spellings for "no cap" and none for "spend nothing".
+
+        This mirrors the default-deny convention two tests above: an empty allowlist is
+        passed explicitly rather than omitted, for the same reason. A restrictive value
+        must reach the spawn.
+
+        Not verified here: whether the real `claude` CLI accepts a 0 cap. If it rejects
+        one, a deliberate 0 now fails loudly at the spawn rather than quietly spending $5,
+        which is the better of the two failures.
+        """
         cmd = self._cmd(max_budget_usd=0)
-        self.assertNotIn("--max-budget-usd", cmd)
+        self.assertIn("--max-budget-usd", cmd)
+        self.assertEqual(cmd[cmd.index("--max-budget-usd") + 1], "0")
 
     def test_append_system_prompt_file_present_when_set(self):
         cmd = self._cmd(append_system_prompt_file="/abs/skill.md")

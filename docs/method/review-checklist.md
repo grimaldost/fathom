@@ -47,7 +47,7 @@ next time. That is how "a bug bites once" actually holds.
 ### Silent-failure items
 
 Three questions the cycle did not ask. The corpus contains two defects caught *by*
-asking them — the series `ERRORED` denominator bias, and `--max-budget-usd` being
+asking them — the series `ERRORED` denominator bias, and `--max-spawn-usd` being
 inert on a series arm — and both were caught only because spend was imminent, not
 because anything required the question. Everything the authoring cycle missed was a
 **false negative**: a gate that passed while never running, an arm that was absent
@@ -58,7 +58,7 @@ Calibration catches false positives on its own; these three aim at the other hal
 - [ ] **Rails bind** — for any change touching a rail, budget or cap: name the spawn
       path the value actually reaches, and state what it does **not** cap. A rail
       whose name asserts a guarantee it does not make is the defect, not a weak
-      guard. *(`--max-budget-usd` is per-spawn and was inert on the series arm
+      guard. *(`--max-spawn-usd` is per-spawn and was inert on the series arm
       entirely; an operator intending a $30 program rail licenses ~$1,440 across 48
       trials.)*
 - [ ] **Gate failure direction** — for any new or changed gate: state what it does on
