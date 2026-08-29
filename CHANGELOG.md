@@ -3,6 +3,84 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
+## [0.4.0] - 2026-08-28
+
+The reconciliation release. 0.2.0 made a *measurement* provable; 0.3.0 made a *bank* provable.
+This cut makes a **record** provable — that a trial's stored identity matches the configuration
+that produced it, that a published number still matches the ledger it was read from, and that a
+paid arm was ever committed at all.
+
+It comes out of counting how every defect since 0.2.0 was actually discovered: paid-measurement 6,
+sustained-operation 6, **post-hoc-audit 3**, authoring-review 2, calibration-before-trust 1. That
+third class shares one property — the run completed and every artifact was internally
+self-consistent — so no amount of buying or operating finds it. It is also the class that has
+already put wrong numbers into circulation. What finds it is holding two independent derivations of
+one fact against each other, and exactly one such check existed.
+
+### Added
+
+- **`fathom reconcile` — a registry of the facts this repo derives twice** (`src/fathom/reconcile.py`).
+  A reconciliation is a named function returning discrepancies, so the fourth check costs a function
+  rather than the bespoke tool-plus-test pair the first one cost. Free, spawns nothing, exit **13**
+  (`EXIT_UNRECONCILED`) when two derivations disagree **or when an exception has gone stale**. It is
+  in the gate list in `CLAUDE.md`.
+- **The `config_hash` preimage is recorded forward-only**, as an additive `config_preimage` field on
+  trial and run records. `scenario.py` already built the canonical hashable dict and threw it away;
+  it is now kept (`canonical_config_json`, which `compute_config_hash` also digests, so the two
+  cannot drift). **This is what makes the identity check exact**: `sha256(preimage)` either equals
+  the stored `config_hash` or the row is corrupt, with no dependence on the tree, an external repo,
+  or the process CWD. Empty on every line written before 0.4.0, so no committed line is rewritten and
+  no resume key moves (ADR-0002).
+- **Three reconciliations ship.** `ledger-index` (the committed stamp against a fresh render — moved
+  here from `tests/test_ledger_coverage.py`, which now delegates, because two implementations of one
+  comparison is the drift this module exists to catch); `config-hash-preimage` (exact from 0.4.0 on);
+  `scenario-known` (completed trials whose arm has no committed scenario).
+- **`--max-run-usd`, a rail on what one invocation may spend.** Halts between trials, exit **14**
+  (`EXIT_RUN_BUDGET`). There was previously no way to say "this matrix may not cost more than X": the
+  only cap was per-spawn, so an operator passing `30` as a program rail would have *raised* each
+  spawn's ceiling 6x and licensed ~$1,440 across 48 trials.
+- **`--max-spawn-usd`**, the honest name for the per-spawn cap. `--max-budget-usd` keeps working
+  **permanently** — it appears in eleven published reports and inside mounted plugin trees whose
+  bytes are hashed into `config_hash`, where an edit would fork a committed ledger's resume key.
+
+### Changed
+
+- **A cap of `0` now reaches the spawn.** `if max_budget_usd:` is false for zero, so "spend nothing
+  on this spawn" silently fell back to the adapter's $5 default — `None` already spells "no cap", so
+  truthiness gave two spellings for "no cap" and none for "spend nothing". This matches the
+  default-deny convention in the same function, where an empty allowlist is passed explicitly for the
+  same reason. **Not verified:** whether the real CLI accepts a `0` cap; if it does not, a deliberate
+  zero now fails loudly instead of quietly spending five dollars.
+- **`--max` and other abbreviations no longer parse.** With `--max-run-usd` and `--max-spawn-usd`
+  both present, argparse reports an ambiguous option. No committed runbook used an abbreviation, so
+  this is disclosure rather than repair.
+- The two spellings of the per-spawn cap have **distinct dests**, and passing both with different
+  values is an error. One argparse action cannot tell which the operator used, and
+  last-parsed-silently-wins is the same class of quiet money bug the rename exists to remove.
+
+### Not built, and why — the version of this release that was designed and then measured
+
+The obvious `config-hash-preimage` check was to recompute each ledger hash from the scenario TOMLs.
+It was probed against the real data before it was written, and **58 of 128 distinct
+`(bank, config_hash)` pairs — 45%, covering 31% of completed trials and every trial in 7 of 27 banks
+— cannot be reconstructed from the tree.** The cause is not authoring sloppiness: `config_hash`
+embeds a plugin `tree_sha` computed by globbing a live filesystem, and 79 of 215 mount entries point
+at an external repo under active development. That check would have been red-by-construction on the
+past *and* would drift red on correct future runs, behind an exception table churning in both
+directions — the vacuous gate this release is about. So it was not built, and the forward-only
+preimage was built instead.
+
+Deferred to 0.5.0 with the evidence that would justify each: the **run lock** (it needs a decision on
+the heartbeat seam and a lock path outside the committed `ledger/`, and its failure is multi-process
+on one seat, which this repo's gate cannot exercise); **`ledger-cost`** (downstream of preimage
+coverage, which is 0/2985 rows today); the **staging-failure exit code** (`stage_task` is a
+`@contextmanager`, so catching it correctly means restructuring the trial loop for a message on a
+path that already exits nonzero, and the incident it cites was cross-invocation); and the
+**orphan-process preflight** (Windows-specific, so CI could not exercise it).
+
+### Fixed
+
+- `tests/test_ledger_coverage.py` no longer carries its own copy of the freshness comparison.
 ## [0.3.0] - 2026-08-12
 
 The routing-and-evidence release, cut from a two-day measurement wave. 0.2.0 made a *measurement*

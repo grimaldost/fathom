@@ -115,6 +115,82 @@ ceiling was the *other* mode — tasks too easy, so every arm succeeds — which
 cannot detect and which a re-run would simply reproduce at full price. Re-running them would buy a
 known answer.
 
+## Shipped in the 0.4.0 reconciliation release
+
+Built from the v4 triage's structural finding, after a pre-mortem against the real code changed
+the design. What the pre-mortem changed is recorded here beside what shipped, because the
+measurement it produced is the reason several rows below are deferred rather than open.
+
+- **FATH-B62 — SHIPPED, in a different shape than proposed.** `src/fathom/reconcile.py` +
+  `fathom reconcile` + `EXIT_UNRECONCILED` (13). The proposed shape — recompute each ledger hash
+  from the scenario TOMLs — was measured before it was written: **58 of 128 distinct
+  `(bank, config_hash)` pairs (45%, 31% of completed trials, every trial in 7 of 27 banks) do not
+  reconstruct.** The cause is structural, not authoring hygiene: `config_hash` embeds a plugin
+  `tree_sha` globbed from a **live filesystem**, and **79 of 215 mount entries point at an external
+  repo under active development**, so the check would be red-by-construction on the past and drift
+  red on correct future runs. Its exception table would have needed ~58 entries churning in both
+  directions — the vacuous gate the row was written to prevent. **Shipped instead:** the
+  `config_hash` preimage is recorded forward-only as an additive ledger field, making the check
+  exact for every future trial and independent of the tree; and `scenario-known` hard-fails on the
+  decidable subclass — an arm whose scenario was **never committed at all**. That is 2 arms
+  (the void `haiku-gate-sg`, and `lazy-gate`), both declared with reasons, both stable.
+- **FATH-B04 — SHIPPED.** `--max-run-usd` (a genuine per-invocation rail, `EXIT_RUN_BUDGET` 14),
+  `--max-spawn-usd` as the honest name with `--max-budget-usd` kept permanently, and a cap of `0`
+  no longer silently falling back to $5. The rail is accumulated **in memory, never from the
+  ledger**: `run` is resumable, so a ledger-sourced total holds every prior invocation's spend and
+  would trip at $0 of new spend on a resume.
+- **FATH-B65 / B66 — SHIPPED earlier the same day** (PR #41): three silent-failure review-checklist
+  items, and `docs/method/measured-terms.md`.
+
+### Deferred out of 0.4.0, each with the evidence that would justify it
+
+These are **not** open rows waiting for someone to notice them. Each was designed, examined against
+the code, and deferred for a stated reason; the trigger is what would change the answer.
+
+- **FATH-B53 (run lock + heartbeat) — deferred to 0.5.0.** Two unresolved design questions and one
+  gate problem. The lock cannot live under `ledger/`: `.gitignore` has no ledger entry and `ledger/`
+  is tracked, so it would become a committed artifact the first time anyone runs `git add ledger/`
+  after a matrix. The heartbeat has no obviously right seam (per-spawn, per-trial) and no safe
+  staleness horizon. And its failure mode is multi-process on one authenticated seat, which this
+  repo's gate cannot exercise at all — so it would ship untested against the thing it is for.
+  **Trigger:** a decision on the heartbeat seam plus a lock path outside `ledger/` with its
+  `.gitignore` rule in the same change.
+- **FATH-B63 (cost reconciliation) — deferred to 0.5.0.** It is downstream of preimage coverage,
+  which is **0/2985 rows today** and only grows as trials are bought; and a recompute-vs-stored form
+  starts with ~129 day-one exceptions, which is the table size that makes a gate hollow.
+  **Trigger:** non-zero preimage coverage from at least one 0.4.0-era wave, plus a decision on
+  whether `Task`-tool subagent spend belongs in the parent's `usage`.
+- **FATH-B58 (staging failure as a clean exit) — deferred, and the row is re-scoped.** The premise
+  was wrong: there is no `try/except` in the trial loop, so a staging failure **already** aborts the
+  invocation. The incident it cites was **cross-invocation** — the operator's buy script continued
+  after a nonzero exit. Catching it correctly means restructuring the loop body, because `stage_task`
+  is a `@contextmanager` and the failure surfaces at `__enter__`, not at the call — a large diff for
+  a better message on a path that already exits nonzero. **Trigger:** the cross-invocation half
+  finding a carrier (the lock is the natural one), at which point the exit code is the seam a buy
+  script branches on.
+- **FATH-B59 (orphan-process preflight) — deferred.** The failure is Windows holding an open file;
+  CI runs ubuntu, where it is a non-issue, so the check would ship unexercised by the gate.
+  **Trigger:** it rides FATH-B64's operational check group, whenever that group has a way to be
+  exercised on CI.
+- **FATH-B64 (operational check group in `smoke`) — deferred, and the sequencing is corrected.**
+  The v4 plan had this group land *after* the mechanisms it gates. A gate written after the thing it
+  gates is a gate written to pass, which is the exact vacuity this release is about. **Trigger:**
+  each check ships in the same change as its mechanism, so this row dissolves into B53 and its
+  siblings rather than landing as a trailing part.
+
+### Measured and worth recording: the root cause behind the 45%
+
+Not yet a row, because it cannot gate today and a reported number that nobody can act on is noise.
+Of **215** `[plugins] mount` entries in the tree: **115** are in-repo and tracked; **79** point at an
+external, actively-developed repo by absolute path; **12** point at in-repo dirs that are partly or
+wholly untracked; **9** point at a directory that does not exist. Every one of those is a scenario
+whose `config_hash` depends on bytes outside this repo's history, which is why three of the seven
+zero-reconstruction banks are the three that mount the external collection. The stable form of the
+fix is an authoring rule — a mount or an inject must resolve inside the repo and be git-tracked —
+but it has 91 violations today, so it needs a migration before it can be a gate, not an exception
+table.
+
+---
 ## Shipped in the 2026-08-28 disclosure-and-stamp pass (triage v4)
 
 The v4 delta pass triaged four reports (2026-08-11 → 2026-08-12) against `origin/main` @ `ed80f45`,

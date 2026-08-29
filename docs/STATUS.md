@@ -10,7 +10,9 @@ v1 spine complete — vendor-abstract runner, two-level (trial/run) append-only 
 resume, scenario matrix with a named bare control, deterministic-verifier-first grading (swap-order
 pairwise judge behind it), scorecard report — plus the skill-effectiveness extension: per-scenario
 `[context] inject` system-prompt injection and the K7 injection smoke check, and `[plugins] mount`
-whole-plugin arming via `--plugin-dir`. **898** stdlib-runnable tests (the count moves as tests are
+whole-plugin arming via `--plugin-dir` — plus, from 0.4.0, `fathom reconcile`: the registry of
+facts this repo derives twice (the ledger stamp, a trial's `config_hash` against its own stored
+preimage, and whether a paid arm's scenario was ever committed). **921** stdlib-runnable tests (the count moves as tests are
 added — do not gate on it). Built with the keel/convoy governed-series method. Banks
 `humble-vs-super-v3` (correctness-trap) and `-v4` (non-local root-cause) add the harder instruments +
 their `verify.py` discrimination tests (see Analyses run).
