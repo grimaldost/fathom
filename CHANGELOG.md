@@ -18,8 +18,8 @@ behind. Every rule that failed was prose; each entry here is the mechanism that 
   and in `fathom reconcile`; red proofs replay the 0.4.0 slip.
 - **A changelog-currency gate on every PR** (`tools/changelog_currency.py`, ported from keel's —
   the estate's one mechanical enforcement of "record it or declare why not"): a diff touching
-  `src/`, `tools/`, `commands/` or `mcp/` fails CI unless `CHANGELOG.md` moves with it or a commit
-  in the range carries a `Changelog: not needed (<reason>)` line.
+  `src/`, `tools/`, `commands/`, `mcp/` or `skills/` fails CI unless `CHANGELOG.md` moves with it
+  or a commit in the range carries a `Changelog: not needed (<reason>)` line.
 - **A commit lane** (`.pre-commit-config.yaml`, tracked hooks in `tools/git-hooks/`, installed
   with `git config core.hooksPath tools/git-hooks`): ruff format + check via `uv run` (uv.lock's
   version, never a second pinned copy), `fathom reconcile` whenever `ledger/` or `docs/reports/`
@@ -151,6 +151,7 @@ path that already exits nonzero, and the incident it cites was cross-invocation)
   reversal follows. Every per-claim verdict stays unproven and `oracle_guard.py` stays unlicensed
   (a pre-registered escalation fires on its registered antecedent or not at all).
   `docs/reports/2026-08-11-data-discipline-vnext-proof.md`.
+
 ## [0.3.0] - 2026-08-12
 
 The routing-and-evidence release, cut from a two-day measurement wave. 0.2.0 made a *measurement*

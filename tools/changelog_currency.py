@@ -7,7 +7,7 @@ cut is the local demonstration that prose does not hold: two of the day's substa
 commits never reached the changelog, on the very day the release was assembled by hand.
 
 Reads a changed-file list (arguments, else stdin, one path per line) and exits 1 when it
-touches a harness path — ``src/``, ``tools/``, ``commands/``, ``mcp/`` — while
+touches a harness path — ``src/``, ``tools/``, ``commands/``, ``mcp/``, ``skills/`` — while
 ``CHANGELOG.md`` is untouched and no commit message in the range declares the exemption.
 The declaration is a line starting ``Changelog: not needed (<reason>)`` (``none`` also
 reads); pass the range's messages with ``--messages FILE``.
@@ -28,9 +28,11 @@ from collections.abc import Iterable
 from pathlib import Path
 
 # What a change to the harness looks like in a diff: the engine, the repo tooling, and the
-# plugin command/MCP surfaces. Docs, ledgers, scenarios and banks are records or data — a
-# ledger append is gated by the ledger-index reconciliation, not by prose currency.
-HARNESS_PREFIXES = ("src/", "tools/", "commands/", "mcp/")
+# plugin command/MCP/skill surfaces (SKILL.md is agent-facing behaviour, and historically its
+# edits only ever escaped this rule by riding commits that also touched src/ or commands/).
+# Docs, ledgers, scenarios and banks are records or data — a ledger append is gated by the
+# ledger-index reconciliation, not by prose currency.
+HARNESS_PREFIXES = ("src/", "tools/", "commands/", "mcp/", "skills/")
 RECORD = "CHANGELOG.md"
 
 # A declaration is a commit-message line, so it survives in history next to the change it

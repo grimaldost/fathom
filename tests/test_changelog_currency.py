@@ -34,6 +34,7 @@ class UnrecordedPathsTests(unittest.TestCase):
             "tools/ledger_index.py",
             "commands/run.md",
             "mcp/fathom_server.py",
+            "skills/fathom-eval/SKILL.md",
         ):
             self.assertEqual(changelog_currency.unrecorded_harness_paths([path]), [path])
 
