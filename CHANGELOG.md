@@ -3,6 +3,30 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
+## [Unreleased]
+
+Release-ritual guardrails, cut from a review of how the 0.4.0 release was actually performed: two
+of the day's commits never reached the changelog, and the plugin manifest shipped a release
+behind. Every rule that failed was prose; each entry here is the mechanism that replaces one.
+
+### Added
+
+- **`version-sites`, a fourth reconciliation** (`src/fathom/reconcile.py`): `pyproject.toml`,
+  `.claude-plugin/plugin.json` and the newest `## [X.Y.Z]` CHANGELOG heading must state the same
+  version. The 0.4.0 cut left the manifest at 0.3.0 — pyproject-vs-manifest is exactly a fact this
+  repo derives twice, and it was not in the registry the same release created. Runs in the suite
+  and in `fathom reconcile`; red proofs replay the 0.4.0 slip.
+- **A changelog-currency gate on every PR** (`tools/changelog_currency.py`, ported from keel's —
+  the estate's one mechanical enforcement of "record it or declare why not"): a diff touching
+  `src/`, `tools/`, `commands/` or `mcp/` fails CI unless `CHANGELOG.md` moves with it or a commit
+  in the range carries a `Changelog: not needed (<reason>)` line.
+
+### Fixed
+
+- **`.claude-plugin/plugin.json` states the released version again.** The 0.4.0 release bumped
+  every version site except the manifest, and the plugin runtime re-pulls an installed copy only
+  when the manifest's version moves — so installed consumers kept resolving the 0.3.0 tree.
+
 ## [0.4.0] - 2026-08-28
 
 The reconciliation release. 0.2.0 made a *measurement* provable; 0.3.0 made a *bank* provable.
