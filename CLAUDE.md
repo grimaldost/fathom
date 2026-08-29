@@ -17,7 +17,7 @@ uv run fathom smoke             # real-spawn isolation gate — spends a little;
 ```
 
 Core modules under `src/fathom/` and their `tests/test_*.py` import **stdlib only** and run without uv —
-e.g. `python tests/test_scenario.py`. `uv` manages dev tooling (ruff, pytest) only; the spawning/ledger
+e.g. `python tests/test_scenario.py`. `uv` manages dev tooling (ruff, pytest, pre-commit) only; the spawning/ledger
 core has zero third-party deps.
 
 ## Run an eval (the analysis)

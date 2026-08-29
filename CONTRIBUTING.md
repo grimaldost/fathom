@@ -10,7 +10,7 @@ uv run pytest
 ```
 
 The core under `src/fathom/` imports **stdlib only** — every `tests/test_*.py` also runs as
-plain `python tests/test_<name>.py`. uv manages dev tooling (ruff, pytest) only; do not add a
+plain `python tests/test_<name>.py`. uv manages dev tooling (ruff, pytest, pre-commit) only; do not add a
 third-party dependency to the core without an ADR.
 
 ## Gates (all must pass before any commit)

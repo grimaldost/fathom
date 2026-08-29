@@ -20,6 +20,12 @@ behind. Every rule that failed was prose; each entry here is the mechanism that 
   the estate's one mechanical enforcement of "record it or declare why not"): a diff touching
   `src/`, `tools/`, `commands/` or `mcp/` fails CI unless `CHANGELOG.md` moves with it or a commit
   in the range carries a `Changelog: not needed (<reason>)` line.
+- **A commit lane** (`.pre-commit-config.yaml`, tracked hooks in `tools/git-hooks/`, installed
+  with `git config core.hooksPath tools/git-hooks`): ruff format + check via `uv run` (uv.lock's
+  version, never a second pinned copy), `fathom reconcile` whenever `ledger/` or `docs/reports/`
+  is staged — main has arrived red on exactly that class twice — and a commit-msg stage enforcing
+  conventional subjects and rejecting AI-attribution trailers. pytest stays CI-owned: the suite
+  takes minutes, and the commit lane must not.
 
 ### Changed
 
