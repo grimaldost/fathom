@@ -95,6 +95,7 @@ without uv. All model calls additionally go through a vendor-abstract `Runner` (
 | `scenarios/` | Arm definitions (flat TOML), grouped per bank in subdirectories. |
 | `ledger/` | **Committed** append-only results; `ledger/archive/` holds invalidated runs (archived, never deleted). |
 | `ledger-rg2x2/`, `streams-rg2x2/`, `scripts-rg2x2/` | The rg-2x2 side study (registry × gate, 2×2) over the `e1-*` banks — arms in `scenarios/rg-{data,debug,verif}/`, with their mounted plugin snapshots and inject brief in `scenarios/rg-assets/`. Its ledgers sit outside `ledger/` (`--ledger-dir` is the flag that puts them there); the raw spawn streams are `FATHOM_STREAM_DIR` captures; the scripts render the post-hoc activation / gate-compliance / footprint tables. No findings report yet. |
+| `scripts-humble-v5/` | The humble-vs-super v5 power/spend analysis (`analysis.py`): recomputes the pre-registered power figures from the committed v1/v2 ledgers. Pinned by `tests/test_humble_v5_analysis.py`; consumed by `docs/STATUS.md` and the two 2026-08-11/12 v5 reports. |
 | `report/` | Generated scorecards — gitignored; regenerate with `uv run fathom report <bank>`. |
 | `docs/` | Specs, ADRs, method kit, per-analysis reports, status. Map: [`docs/README.md`](docs/README.md). |
 | `pr-series/` | PR briefs + series.toml of the governed series that built fathom itself (method artifacts). |
