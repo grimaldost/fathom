@@ -49,7 +49,7 @@ regardless.
 
 ### The changelog moves with the change
 
-A PR whose diff touches `src/`, `tools/`, `commands/` or `mcp/` fails CI unless
+A PR whose diff touches `src/`, `tools/`, `commands/`, `mcp/` or `skills/` fails CI unless
 `CHANGELOG.md` moves with it (an `[Unreleased]` entry) or a commit in the range carries a
 `Changelog: not needed (<reason>)` line (`tools/changelog_currency.py`).
 
