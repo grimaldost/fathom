@@ -61,7 +61,7 @@ one fact against each other, and exactly one such check existed.
 
 *Record completed 2026-08-29: the section as cut omitted two of the day's commits and the pilot
 below. All three describe content the 0.4.0 tree already contains; they were added the day after,
-and the omission is part of what motivated the changelog gate now under [Unreleased].*
+and the omission is part of what motivated the changelog gate shipped in [0.4.1].*
 
 ### Added
 
