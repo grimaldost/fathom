@@ -401,7 +401,10 @@ def build_command(
         cmd += ["--append-system-prompt-file", append_system_prompt_file]
     for plugin_dir in plugin_dirs:
         cmd += ["--plugin-dir", plugin_dir]
-    if max_budget_usd:
+    # `is not None`, not truthiness: a cap of 0 means "spend nothing on this spawn", and
+    # truthiness silently dropped it — so the single most restrictive cap an operator can
+    # ask for was the one value that fell back to the adapter's $5 default.
+    if max_budget_usd is not None:
         cmd += ["--max-budget-usd", str(max_budget_usd)]
     cmd += (
         ["--output-format", "stream-json", "--verbose"] if stream else ["--output-format", "json"]

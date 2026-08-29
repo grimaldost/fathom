@@ -6,7 +6,8 @@ that the tier map routes the cheapest-adequate model per task difficulty, on the
 **Owner disciplines:** fathom method (ADR/spec/blind-grade/append-only ledger) + the model-policy owner bound in Step 0.
 
 A zero-context operator can run this cold. Real spend is ≈ $0 under subscription auth (the numbers are
-token×price *estimates*); still pass `--max-budget-usd` as a hard stop.
+token×price *estimates*); still pass `--max-spawn-usd` as a hard stop, and `--max-run-usd`
+to bound what the whole invocation may spend.
 
 ---
 
@@ -52,7 +53,7 @@ the changed model costs.
 3. Dry-run: `uv run fathom run model-tier-v1 --scenarios-dir scenarios/model-tier --repeats 5 --dry-run`
    → confirm it plans ONLY the new arm's trials ("planned N (… already done)"). If it plans the cached
    arms too, a shared field changed the `config_hash` — inspect before spending.
-4. Run: `... --repeats 5 --max-budget-usd 75`. Resume-safe — re-run the same command to continue after
+4. Run: `... --repeats 5 --max-spawn-usd 75`. Resume-safe — re-run the same command to continue after
    any interruption (compaction/crash). Long: launch in the background.
 5. `uv run fathom report model-tier-v1` → `report/scorecard-model-tier-v1.md`.
 

@@ -65,3 +65,53 @@ if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromModule(sys.modules[__name__])
     sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)
+
+
+class TestZeroCapIsHonoured(unittest.TestCase):
+    """A cap of 0 is the most restrictive request there is, and it was the one dropped.
+
+    ``if max_budget_usd:`` is false for 0, so "spend nothing on this spawn" fell through
+    to the adapter's $5 default — the one value where a silent fallback costs money.
+    """
+
+    def _argv(self, cap):
+        from fathom.adapters.claude_cli import build_command
+
+        return build_command(
+            model="m", effort="high", max_turns=1, max_budget_usd=cap, allowed_tools=()
+        )
+
+    def test_a_zero_cap_reaches_the_spawn(self):
+        argv = self._argv(0)
+        self.assertIn("--max-budget-usd", argv, "a 0 cap was silently dropped")
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "0")
+
+    def test_an_ordinary_cap_still_reaches_the_spawn(self):
+        argv = self._argv(2.5)
+        self.assertEqual(argv[argv.index("--max-budget-usd") + 1], "2.5")
+
+
+class TestSpendRailFlags(unittest.TestCase):
+    """Two spellings for the per-spawn cap, and a separate per-invocation rail."""
+
+    def _parse(self, *argv):
+        from fathom.cli import _build_parser
+
+        return _build_parser().parse_args(["run", "b", *argv])
+
+    def test_the_rail_is_a_separate_flag_from_the_per_spawn_cap(self):
+        args = self._parse("--max-spawn-usd", "2", "--max-run-usd", "30")
+        self.assertEqual(args.max_spawn_usd, 2.0)
+        self.assertEqual(args.max_run_usd, 30.0)
+        self.assertIsNone(args.legacy_max_budget_usd)
+
+    def test_the_legacy_spelling_parses_into_its_own_dest(self):
+        """It must keep working: it appears in published reports and in hashed plugin trees,
+        where an edit would fork a committed ledger's resume key."""
+        args = self._parse("--max-budget-usd", "3")
+        self.assertEqual(args.legacy_max_budget_usd, 3.0)
+        self.assertIsNone(args.max_spawn_usd)
+
+    def test_both_spellings_land_in_distinct_dests_so_neither_silently_wins(self):
+        args = self._parse("--max-spawn-usd", "2", "--max-budget-usd", "9")
+        self.assertEqual((args.max_spawn_usd, args.legacy_max_budget_usd), (2.0, 9.0))
