@@ -17,6 +17,10 @@ self-consistent — so no amount of buying or operating finds it. It is also the
 already put wrong numbers into circulation. What finds it is holding two independent derivations of
 one fact against each other, and exactly one such check existed.
 
+*Record completed 2026-08-29: the section as cut omitted two of the day's commits and the pilot
+below. All three describe content the 0.4.0 tree already contains; they were added the day after,
+and the omission is part of what motivated the changelog gate now under [Unreleased].*
+
 ### Added
 
 - **`fathom reconcile` — a registry of the facts this repo derives twice** (`src/fathom/reconcile.py`).
@@ -42,6 +46,15 @@ one fact against each other, and exactly one such check existed.
 - **`--max-spawn-usd`**, the honest name for the per-spawn cap. `--max-budget-usd` keeps working
   **permanently** — it appears in eleven published reports and inside mounted plugin trees whose
   bytes are hashed into `config_hash`, where an edit would fork a committed ledger's resume key.
+- **The void-arm registry gate** (`tests/test_void_arms.py`): a registry of arms whose
+  configuration is unattributable, and the suite is red while any file under `docs/` quotes a void
+  arm's number without a qualifier on the line. The disclosure it mechanizes was six weeks old and
+  had not travelled — an audit of all 37 report files found the void `haiku-gate-sg` figures
+  unqualified at five load-bearing points of use, including one **negative product verdict**
+  (retire the escalation ladder) whose evidence — a trigger that "fired 0/10" — is precisely what
+  an inert probe produces. That verdict is **withdrawn as unevidenced** rather than refuted. No
+  number is rewritten and no ledger line is touched; the arm's figures stay visible, labelled void.
+  A correction that lives in one file is what already failed here.
 
 ### Changed
 
@@ -81,6 +94,26 @@ path that already exits nonzero, and the incident it cites was cross-invocation)
 ### Fixed
 
 - `tests/test_ledger_coverage.py` no longer carries its own copy of the freshness comparison.
+- **Ledgers are stamped by their canonical LF bytes, not the checkout's.** `append_record` wrote
+  platform newlines (CRLF on Windows, which git normalizes away on check-in, so no diff ever showed
+  it) and the index digested the working tree's bytes — together they made the freshness gate fail
+  on eight ledgers whose per-arm counts all matched, accusing the operator of an append that had
+  not happened. `append_record` now opens with `newline="\n"` and the index digests canonical
+  bytes, which equals the digest over the committed blob on every platform. The committed index
+  reproduces byte-for-byte: no published number moves, no ledger line is rewritten, and both guards
+  are proven non-vacuous — reverting either turns its test red.
+
+### Analyses published in this cut
+
+- **`e2-data-semantics`** (18-trial pilot, 18/18 completed, $5.12) — *the pre-registered pilot,
+  stopped by its own saturation gate.* `bare` was required to fail its subtle criterion on at least
+  2 of the 5 dev traps and failed on 0 of 5; the registered consequence was a stop, and it was
+  executed — the remaining 72 dev trials and the 30-trial holdout were not bought. What the stop
+  does not license: "the bank cannot discriminate" as a fact — zero failures in five single trials
+  is consistent with a true per-trap bare failure rate up to ~45%, so no cut, retirement or
+  reversal follows. Every per-claim verdict stays unproven and `oracle_guard.py` stays unlicensed
+  (a pre-registered escalation fires on its registered antecedent or not at all).
+  `docs/reports/2026-08-11-data-discipline-vnext-proof.md`.
 ## [0.3.0] - 2026-08-12
 
 The routing-and-evidence release, cut from a two-day measurement wave. 0.2.0 made a *measurement*
