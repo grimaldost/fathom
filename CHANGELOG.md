@@ -3,11 +3,16 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
-## [Unreleased]
+## [0.4.1] - 2026-08-29
 
-Release-ritual guardrails, cut from a review of how the 0.4.0 release was actually performed: two
-of the day's commits never reached the changelog, and the plugin manifest shipped a release
-behind. Every rule that failed was prose; each entry here is the mechanism that replaces one.
+The guardrail patch, cut from a review of how the 0.4.0 release was actually performed: two of
+the day's commits never reached the changelog, and the plugin manifest shipped a release behind.
+Every rule that failed was prose; each entry here is the mechanism that replaces one. Patch
+rather than minor: nothing an operator invokes changes shape — the new reconciliation rides the
+existing `fathom reconcile` command, and the rest is repo infrastructure (CI legs, a commit lane,
+a changelog gate). The cut itself is what delivers the corrected manifest: the plugin runtime
+re-pulls an installed copy only when the manifest's version moves, so without a release every
+installed consumer would keep resolving the 0.3.0 tree.
 
 ### Added
 
@@ -56,7 +61,7 @@ one fact against each other, and exactly one such check existed.
 
 *Record completed 2026-08-29: the section as cut omitted two of the day's commits and the pilot
 below. All three describe content the 0.4.0 tree already contains; they were added the day after,
-and the omission is part of what motivated the changelog gate now under [Unreleased].*
+and the omission is part of what motivated the changelog gate shipped in [0.4.1].*
 
 ### Added
 
