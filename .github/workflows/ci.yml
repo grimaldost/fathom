@@ -10,7 +10,14 @@ permissions:
   contents: read
 
 jobs:
-  gate:
+  # NAME THIS ANYTHING BUT `gate`. The branch ruleset on the default branch requires a
+  # status check whose context is exactly `gate`, and GitHub matches that name literally.
+  # A matrix job never reports under its bare name — it reports one context per leg,
+  # `gate (ubuntu-latest)` and `gate (windows-latest)` — so putting the matrix on `gate`
+  # itself means the required context never arrives: it does not fail, it simply never
+  # appears, and every PR sits MERGEABLE/BLOCKED forever behind a green checks list.
+  # The `gate` job below is the aggregator that keeps that contract while the legs vary.
+  gate-matrix:
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +35,25 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pytest
+
+  # The single context the ruleset requires. It exists so the matrix can grow, shrink or
+  # change OS without anyone remembering to edit a repository setting — the branch rule
+  # keeps pointing at `gate`, and `gate` keeps meaning "every leg passed".
+  #
+  # `if: always()` is what makes it a gate rather than a formality: without it this job
+  # would be SKIPPED when a leg fails, and a skipped required check reads as neutral, so
+  # a red matrix would merge. With it the job runs regardless, and the step fails on any
+  # result that is not success — including `cancelled` and `skipped`.
+  gate:
+    needs: gate-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every gate-matrix leg must have succeeded
+        run: |
+          result="${{ needs.gate-matrix.result }}"
+          echo "gate-matrix result: $result"
+          test "$result" = "success"
 
   changelog-currency:
     # Record the change or declare the exemption, machine-enforced (ported from keel's
