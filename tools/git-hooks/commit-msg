@@ -1,0 +1,9 @@
+#!/bin/sh
+# fathom's commit-msg hook — conventional subjects, and no AI-attribution trailers.
+# Same install and same shim-avoidance story as tools/git-hooks/pre-commit.
+HERE=$(dirname "$0")
+exec uv run python -m pre_commit hook-impl \
+	--config=.pre-commit-config.yaml \
+	--hook-type=commit-msg \
+	--hook-dir "$HERE" \
+	-- "$@"

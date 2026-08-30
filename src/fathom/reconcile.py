@@ -45,6 +45,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
+import re
 import tomllib
 from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
@@ -226,6 +228,90 @@ def check_scenario_known(repo: Path) -> list[Discrepancy]:
     ]
 
 
+def version_sites(repo: Path) -> dict[str, str | None]:
+    """The released version as each site states it; ``None`` where a site cannot be read.
+
+    Three files state the released version independently: ``pyproject.toml`` (what the
+    package says), ``.claude-plugin/plugin.json`` (what an installed plugin copy re-pulls
+    on — the runtime fetches a plugin again only when this value moves), and the newest
+    ``## [X.Y.Z]`` heading of ``CHANGELOG.md`` (what the record says shipped).
+    ``[Unreleased]`` is not a site: entries accumulate there between cuts while every
+    versioned site correctly stays at the previous release.
+    """
+    sites: dict[str, str | None] = {}
+
+    version: str | None = None
+    try:
+        data = tomllib.loads((repo / "pyproject.toml").read_text(encoding="utf-8"))
+        raw = data.get("project", {}).get("version")
+        version = raw if isinstance(raw, str) else None
+    except (OSError, tomllib.TOMLDecodeError):
+        version = None
+    sites["pyproject.toml"] = version
+
+    version = None
+    try:
+        raw = json.loads((repo / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+        found = raw.get("version")
+        version = found if isinstance(found, str) else None
+    except (OSError, json.JSONDecodeError):
+        version = None
+    sites[".claude-plugin/plugin.json"] = version
+
+    version = None
+    try:
+        text = (repo / "CHANGELOG.md").read_text(encoding="utf-8")
+        match = re.search(r"^## \[(\d+\.\d+\.\d+)\]", text, flags=re.MULTILINE)
+        version = match.group(1) if match else None
+    except OSError:
+        version = None
+    sites["CHANGELOG.md"] = version
+
+    return sites
+
+
+def check_version_sites(repo: Path) -> list[Discrepancy]:
+    """Every site's stated version against ``pyproject.toml``'s.
+
+    The 0.4.0 cut is the incident: the release commit moved ``pyproject.toml``, ``uv.lock``
+    and the changelog heading but left the plugin manifest at 0.3.0, so every installed
+    plugin copy kept resolving the old tree — and the only test looking at the manifest
+    asserted that *a* version exists, not that it means anything.  The bump was a hand-run
+    ritual step, and this is the fact-derived-twice check that replaces the ritual's memory.
+    """
+    sites = version_sites(repo)
+    reference = sites["pyproject.toml"]
+    found: list[Discrepancy] = []
+    for site, version in sites.items():
+        if version is None:
+            found.append(
+                Discrepancy(
+                    check="version-sites",
+                    subject=site,
+                    key="unreadable",
+                    detail=(
+                        "no released version could be read from this site, so it cannot be "
+                        "held against the others — restore the [project] version, the "
+                        "manifest's version field, or the newest `## [X.Y.Z]` heading"
+                    ),
+                )
+            )
+        elif reference is not None and version != reference:
+            found.append(
+                Discrepancy(
+                    check="version-sites",
+                    subject=site,
+                    key=version,
+                    detail=(
+                        f"states {version} while pyproject.toml states {reference} — a "
+                        "release moved one version site without the others; bump this site "
+                        "to match (the release ritual owns all three in one commit)"
+                    ),
+                )
+            )
+    return found
+
+
 def preimage_coverage(repo: Path) -> tuple[int, int]:
     """(rows carrying a preimage, rows total) — reported, never gated.
 
@@ -258,6 +344,14 @@ CHECKS: tuple[Reconciliation, ...] = (
         name="scenario-known",
         describe="every completed trial's arm against the scenarios committed in the tree",
         run=check_scenario_known,
+    ),
+    Reconciliation(
+        name="version-sites",
+        describe=(
+            "the released version in pyproject.toml, the plugin manifest, and the newest "
+            "CHANGELOG heading"
+        ),
+        run=check_version_sites,
     ),
 )
 

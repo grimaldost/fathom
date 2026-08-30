@@ -219,6 +219,69 @@ class ReconciliationTests(unittest.TestCase):
             len(names), 100, f"only {len(names)} arms discovered — the walk is not recursive"
         )
 
+    # -- version-sites --------------------------------------------------------
+
+    @staticmethod
+    def _version_repo(tmp: Path, *, package: str, manifest: str, heading: str) -> Path:
+        repo = tmp / "repo"
+        (repo / ".claude-plugin").mkdir(parents=True)
+        (repo / "pyproject.toml").write_text(
+            f'[project]\nname = "fathom"\nversion = "{package}"\n',
+            encoding="utf-8",
+            newline="\n",
+        )
+        (repo / ".claude-plugin" / "plugin.json").write_text(
+            json.dumps({"name": "fathom", "version": manifest}),
+            encoding="utf-8",
+            newline="\n",
+        )
+        (repo / "CHANGELOG.md").write_text(
+            f"# Changelog\n\n## [{heading}] - 2026-08-28\n\nEntries.\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        return repo
+
+    def test_version_sites_fires_when_the_manifest_lags_the_package(self) -> None:
+        """Recreate the 0.4.0 slip — pyproject moved, the plugin manifest did not."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._version_repo(Path(tmp), package="0.4.0", manifest="0.3.0", heading="0.4.0")
+            found = reconcile.check_version_sites(repo)
+            self.assertEqual(
+                [(d.subject, d.key) for d in found],
+                [(".claude-plugin/plugin.json", "0.3.0")],
+                "a manifest one release behind the package passed",
+            )
+
+    def test_version_sites_fires_when_the_changelog_heading_lags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._version_repo(Path(tmp), package="0.4.0", manifest="0.4.0", heading="0.3.0")
+            found = reconcile.check_version_sites(repo)
+            self.assertEqual([(d.subject, d.key) for d in found], [("CHANGELOG.md", "0.3.0")])
+
+    def test_version_sites_skips_unreleased_and_reads_the_newest_cut(self) -> None:
+        """Between cuts, [Unreleased] accumulates while every versioned site stays put."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._version_repo(Path(tmp), package="0.4.0", manifest="0.4.0", heading="0.4.0")
+            changelog = repo / "CHANGELOG.md"
+            changelog.write_text(
+                "# Changelog\n\n## [Unreleased]\n\n- pending\n\n## [0.4.0] - 2026-08-28\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            self.assertEqual(reconcile.check_version_sites(repo), [])
+
+    def test_version_sites_reports_an_unreadable_site_rather_than_skipping_it(self) -> None:
+        """A site that cannot state a version cannot silently sit the check out."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = self._version_repo(Path(tmp), package="0.4.0", manifest="0.4.0", heading="0.4.0")
+            (repo / ".claude-plugin" / "plugin.json").unlink()
+            found = reconcile.check_version_sites(repo)
+            self.assertEqual(
+                [(d.subject, d.key) for d in found],
+                [(".claude-plugin/plugin.json", "unreadable")],
+            )
+
     def test_unexpected_filters_only_declared_exceptions(self) -> None:
         d1 = Discrepancy(check="c", subject="s", key="k1", detail="")
         d2 = Discrepancy(check="c", subject="s", key="k2", detail="")

@@ -1,0 +1,71 @@
+# The commit lane — the fast half of CI, run before a commit lands instead of after a push.
+# Main has arrived red between merges at least twice (the LF stamping incident, the
+# verification-lift index), and both were exactly the fast, local, deterministic class this
+# lane catches.
+#
+# Install (one-off, per clone):
+#     git config core.hooksPath tools/git-hooks
+#
+# NOT `pre-commit install`: that writes a hook invoking the bare `pre-commit` executable
+# shim, which at least one machine this repo is developed on blocks (application control),
+# so the hook silently never runs. The tracked hooks in tools/git-hooks/ call this config
+# through `uv run python -m pre_commit`, pinned by uv.lock.
+#
+# ruff runs as a local `language: system` hook so the version is uv.lock's, never a second
+# pinned copy drifting from CI. pytest stays CI-owned: the suite takes minutes, and the
+# commit lane must not.
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format (check)
+        entry: uv run ruff format --check .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: reconcile
+        name: fathom reconcile (facts derived twice must agree)
+        entry: uv run fathom reconcile
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        files: ^(ledger/|docs/reports/)
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - docs
+          - style
+          - refactor
+          - perf
+          - test
+          - chore
+          - build
+          - ci
+          - release
+          - measure
+          - eval
+          - analysis
+          - record
+
+  - repo: local
+    hooks:
+      - id: no-ai-attribution
+        name: Reject AI attribution trailers in commit messages
+        entry: bash -c 'if grep -Ei "^(Co-Authored-By|Co-authored-by):.*(Claude|GPT|Anthropic|noreply@anthropic)" "$1"; then echo "Commit message contains a forbidden AI attribution trailer — the contribution guidelines forbid these. Remove the line and re-commit."; exit 1; fi' --
+        language: system
+        stages: [commit-msg]

@@ -4,15 +4,72 @@ on:
   push:
   pull_request:
 
+# Both jobs only check out the tree and run local tooling; nothing calls a write API.
+# A July security sweep flagged unlimited workflow token permissions estate-wide.
+permissions:
+  contents: read
+
 jobs:
-  gate:
-    runs-on: ubuntu-latest
+  # NAME THIS ANYTHING BUT `gate`. The branch ruleset on the default branch requires a
+  # status check whose context is exactly `gate`, and GitHub matches that name literally.
+  # A matrix job never reports under its bare name — it reports one context per leg,
+  # `gate (ubuntu-latest)` and `gate (windows-latest)` — so putting the matrix on `gate`
+  # itself means the required context never arrives: it does not fail, it simply never
+  # appears, and every PR sits MERGEABLE/BLOCKED forever behind a green checks list.
+  # The `gate` job below is the aggregator that keeps that contract while the legs vary.
+  gate-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.12'
+      # First, before sync: no test can guard lock staleness, because `uv run` re-locks
+      # before pytest could read the file — only a pre-sync --check sees it.
+      - run: uv lock --check
       - run: uv sync
       - run: uv run ruff format --check .
       - run: uv run ruff check .
       - run: uv run pytest
+
+  # The single context the ruleset requires. It exists so the matrix can grow, shrink or
+  # change OS without anyone remembering to edit a repository setting — the branch rule
+  # keeps pointing at `gate`, and `gate` keeps meaning "every leg passed".
+  #
+  # `if: always()` is what makes it a gate rather than a formality: without it this job
+  # would be SKIPPED when a leg fails, and a skipped required check reads as neutral, so
+  # a red matrix would merge. With it the job runs regardless, and the step fails on any
+  # result that is not success — including `cancelled` and `skipped`.
+  gate:
+    needs: gate-matrix
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every gate-matrix leg must have succeeded
+        run: |
+          result="${{ needs.gate-matrix.result }}"
+          echo "gate-matrix result: $result"
+          test "$result" = "success"
+
+  changelog-currency:
+    # Record the change or declare the exemption, machine-enforced (ported from keel's
+    # changelog-currency job): the 0.4.0 cut shipped with two of the day's commits
+    # unrecorded while the rule was prose. PR-only — the base ref is what makes the diff
+    # meaningful. Version-site agreement is the reconcile registry's job (version-sites),
+    # which pytest runs on every leg.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the merge-base with the target branch has to exist locally
+      # Bare `python` is deliberate: the script is stdlib-only, and ubuntu-latest ships a
+      # python3 symlinked as python — a setup step would buy nothing but latency.
+      - run: |
+          git log --format=%B "origin/${{ github.base_ref }}..HEAD" > "$RUNNER_TEMP/messages.txt"
+          git diff --name-only "origin/${{ github.base_ref }}...HEAD" \
+            | python tools/changelog_currency.py --messages "$RUNNER_TEMP/messages.txt"
