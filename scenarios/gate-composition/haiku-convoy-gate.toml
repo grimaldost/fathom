@@ -1,0 +1,31 @@
+name = "haiku-convoy-gate"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "high"
+
+# A3 of the gate-composition design (docs/specs/2026-09-01-convoy-gate-composition-design.md):
+# probe-THROUGH-CONVOY. Identical to haiku-gate-sg2 except the extra gate command routes
+# the same oracle content through convoy's standalone gate surface (`convoy gate`,
+# shipped in convoy 0.10.0): the driver materializes a per-trial gate spec (visible
+# suite as a blocking check + type_probe.py as a blocking independent=true check with an
+# out-of-tree asset), invokes the PINNED release via uvx, and exits with convoy's exit
+# code. The contrast against haiku-gate-sg2 isolates the framework's marginal
+# contribution at EQUAL oracle content: fail-closed isolation, the envelope, and the
+# failure `detail` + `repair_hint` the fix loop re-briefs with.
+#
+# The convoy pin lives in the driver (tasks/ablation-v2/exprlang/run_convoy_gate.py,
+# CONVOY_PIN) — a convoy improvement lands as a new tag there, which is a content change
+# to the driver the arm's own note requires versioning for: bump this scenario's name
+# (…-v2) when the pin moves, exactly as the sg2 note requires for probe edits.
+# NOTE: like sg2, the driver SCRIPT's content is not hashed (only this command template
+# is) — if run_convoy_gate.py is edited, version this scenario's name.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[gate]
+extra = ['python "${task_dir}/run_convoy_gate.py" "${task_dir}" "${workspace}"']
+
+[limits]
+trial_timeout_s = 1800
