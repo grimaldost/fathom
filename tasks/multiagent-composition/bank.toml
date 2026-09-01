@@ -1,0 +1,29 @@
+name = "multiagent-composition"
+dataset_version = "1"
+# Bank for the multiagent-dispatch composition pre-registration
+# (docs/specs/2026-09-01-multiagent-composition-preregistration.md).
+#
+# A NEW bank, not a mutation of ablation-v2: the arms here are orchestrator sessions
+# that dispatch one implementer subagent per PR, and the verifier carries six extra
+# `held_out` criteria the gate's checks never assert. Both changes would fork every
+# committed ablation-v2 resume key if they landed there, so the predecessor bank is
+# left untouched and its ledger stays readable as the record of what it measured.
+#
+# The task, fixtures, reference solution, five-PR decomposition and prompts are copied
+# from `ablation-v2/exprlang` unchanged. What is new:
+#
+#   verify.py       - the original 15 criteria (the `full` group) PLUS six `held_out`
+#                     criteria. The primary endpoint `held_out_clean` is the
+#                     conjunction of the six; nothing in any arm's gate asserts them.
+#   type_probe.py   - ten cases, de-overlapped from every graded expression, split
+#                     into an arithmetic group and a comparison group so the gate can
+#                     scope each to the phase that introduces the rule it checks.
+#   placebo_gate.py - a gate-shaped ceremony carrying zero information: red once per
+#                     workspace, green thereafter. The control for "extra iteration".
+#   run_convoy_gate.py - the arming-verified driver, now with `--phase` passthrough.
+#
+# The visible suite (tests/, the task's own gate) stays a PROPER SUBSET of the blind
+# oracle, and the held_out group is a proper subset of what no arm's gate can reach:
+# passing every gate in every arm does not imply passing the primary endpoint. That
+# is the whole design — the endpoint has to be one the treatment cannot teach to.
+holdout = []

@@ -11,8 +11,13 @@
 > cost-per-success economy, and the **E-d escalation-ladder verdict**, whose `0/10 trigger fired`
 > is the expected reading of an arm running as its own control. Nothing in this report's
 > strong-tier findings depends on it. Full disclosure and the forked replacement arm
-> (`haiku-gate-sg2`, not yet re-run): `docs/reports/2026-08-11-ablation-v2-series-arm-authoring.md`
-> section 1.
+> (`haiku-gate-sg2`): `docs/reports/2026-08-11-ablation-v2-series-arm-authoring.md`
+> section 1. **Re-run 2026-09-01** (n=8): the strengthened gate reaches 7/8 on
+> `type_bool_in_arith` against the visible-suite gate's 4/8 (one-sided Fisher p=0.141 --
+> the right direction, short of significance at that n). The withdrawn E-d verdict is not
+> reinstated by it — and note that the probe asserts three of the four strings that
+> criterion grades, so the 7/8 is repair-of-the-tested, not generalization. See
+> `docs/reports/2026-09-01-gate-composition-findings.md`, Retractions.
 
 - **Date:** 2026-07-01/02 (matrix + M2 replication complete; blind-panel verdicts folded)
 - **Bank:** `tasks/ablation-v2/exprlang` -- brownfield, multi-file (lexer / parser /

@@ -366,7 +366,19 @@ KNOWN: dict[tuple[str, str, str], str] = {
         "executed and the arm ran as its own control; a ~170k-form sweep found no preimage "
         "for its config_hash. The 10 trials are real spend and stay in the ledger, marked "
         "void wherever they are cited (tests/test_void_arms.py). Its replacement is the "
-        "forked haiku-gate-sg2, which is committed and has not yet run."
+        "forked haiku-gate-sg2, committed and run at n=8 on 2026-09-01."
+    ),
+    ("scenario-known", "ablation-v2", "haiku-convoy-gate"): (
+        "Historical, not void: 8 completed trials (2026-09-01, $2.97) whose gate driver "
+        "(tasks/ablation-v2/exprlang/run_convoy_gate.py) was edited AFTER they ran — a "
+        "stream-encoding fix — in the same commit as their findings report, without "
+        "bumping the arm name the scenario's own comment requires. The driver's content "
+        "is not in the config preimage, so the committed template would have resumed a "
+        "different arm under this hash. The scenario was forked to haiku-convoy-gate-v2 "
+        "(the fixed driver, n=0) and this name retired; the 8 trials stay attributed to "
+        "the pre-fix driver and are cited only as such in "
+        "docs/reports/2026-09-01-gate-composition-findings.md, whose headline over them "
+        "is retracted there for unrelated reasons."
     ),
     ("scenario-known", "ablation-v2", "lazy-gate"): (
         "A withdrawn stub, 2 trials, never part of the published matrix — "

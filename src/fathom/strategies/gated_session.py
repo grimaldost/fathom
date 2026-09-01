@@ -10,7 +10,10 @@ companion to ``single_session`` / ``series`` (spec 6).
 The gate the agent runs is the task's OWN visible suite (``task.gate["run"]``),
 distinct from the blind harness-side acceptance oracle (``verify.py``, ADR-0003)
 that grades every arm afterward. ``detail`` records the gate outcome (first/final,
-fix count) so the defect-escape metric is recoverable from the ledger.
+fix count) so the defect-escape metric is recoverable from the ledger, plus a
+bounded excerpt of whatever the scenario's ``[gate].extra`` commands printed — a
+bare verdict cannot say WHICH tool ran or what it found, and for an arm whose extra
+gate is an external tool that provenance is the thing being attested.
 
 Stdlib only.
 """
@@ -33,6 +36,19 @@ if TYPE_CHECKING:
 
 _GATE_TIMEOUT_S = 120
 
+# How much of the extra gate's output a trial row keeps, per recorded round, as a
+# whitespace-condensed head + tail. The task's own gate needs no excerpt — it is the
+# project's suite, and first/final says all a reader needs. An extra gate is a
+# harness-side augmentation, often an external tool: whether it ran at all, which
+# build of it ran, and what it reported are not recoverable from `red`/`green`, and
+# a run whose only record of them is the fix prompt keeps nothing once the trial ends.
+_EXTRA_HEAD_CHARS = 500
+_EXTRA_TAIL_CHARS = 500
+# An extra gate that never executed is a different fact from one that ran silently:
+# the task's own gate went red first and short-circuited the list.
+_EXTRA_NOT_REACHED = "<not run: the task's own gate was red>"
+_EXTRA_SILENT = "<ran, no output>"
+
 # Run-time path placeholders a scenario's ``[gate].extra`` command may carry.
 # A gate command runs with ``cwd`` = the trial workspace (a fresh temp dir), so a
 # harness-side probe living in the task directory is unreachable by any relative
@@ -52,6 +68,28 @@ _REVIEW_PROMPT = (
     "correct, reply with a line 'VERDICT: APPROVE'. Otherwise reply 'VERDICT: "
     "REQUEST_CHANGES' followed by the specific fixes needed."
 )
+
+
+def _describe_extra(output: str | None) -> str:
+    """A one-line, bounded view of an extra gate's output for the ledger's ``detail``.
+
+    ``None`` means the commands never ran. Long output keeps its head and its tail:
+    a driver prints its provenance and its verdict at opposite ends of the stream,
+    and the middle is the part a reader can afford to lose.
+    """
+    if output is None:
+        return _EXTRA_NOT_REACHED
+    condensed = " ".join(output.split())
+    if not condensed:
+        return _EXTRA_SILENT
+    budget = _EXTRA_HEAD_CHARS + _EXTRA_TAIL_CHARS
+    if len(condensed) <= budget:
+        return condensed
+    dropped = len(condensed) - budget
+    return (
+        f"{condensed[:_EXTRA_HEAD_CHARS]} ...[{dropped} chars omitted]... "
+        f"{condensed[len(condensed) - _EXTRA_TAIL_CHARS :]}"
+    )
 
 
 def _as_posix(path: Path) -> str:
@@ -116,11 +154,18 @@ class GatedSessionExecutor:
         notes: list[str] = []
         gate_ok = True
         if gate_cmds:
+            extra_from = 1 if gate_cmd else 0
             first_ok: bool | None = None
+            first_extra: str | None = None
+            extra_out: str | None = None
+            rounds = 0
             for attempt in range(self.max_fix_attempts + 1):
-                gate_ok, output = self._run_gates(gate_cmds, workspace)
+                gate_ok, output, extra_out = self._run_gates(
+                    gate_cmds, workspace, extra_from=extra_from
+                )
+                rounds += 1
                 if first_ok is None:
-                    first_ok = gate_ok
+                    first_ok, first_extra = gate_ok, extra_out
                 if gate_ok or attempt == self.max_fix_attempts:
                     break
                 fix = runner.execute(
@@ -136,6 +181,10 @@ class GatedSessionExecutor:
                 f"gate first={'green' if first_ok else 'red'} "
                 f"final={'green' if gate_ok else 'red'} fixes={len(runs) - 1}"
             )
+            if extra:
+                notes.append(f"extra-gate first: {_describe_extra(first_extra)}")
+                if rounds > 1:
+                    notes.append(f"extra-gate final: {_describe_extra(extra_out)}")
 
         if self.with_review and gate_ok:
             rev = runner.execute(_REVIEW_PROMPT, workspace, scenario, max_turns=max_turns)
@@ -174,17 +223,27 @@ class GatedSessionExecutor:
         )
 
     @classmethod
-    def _run_gates(cls, cmds: Sequence[str], workspace: Path) -> tuple[bool, str]:
+    def _run_gates(
+        cls, cmds: Sequence[str], workspace: Path, *, extra_from: int = 0
+    ) -> tuple[bool, str, str | None]:
         """Run *cmds* in order; first red short-circuits.
 
-        Returns ``(True, "")`` when every command exits 0, else ``(False, output)``
-        where output identifies the failing command (the fix prompt quotes it).
+        Returns ``(ok, output, extra_output)``. *output* is ``""`` when every command
+        exits 0 and otherwise identifies the failing command (the fix prompt quotes
+        it). *extra_output* is what the commands from index *extra_from* on — the
+        scenario's own gate augmentation — printed, green or red, and is ``None``
+        when none of them ran because an earlier command short-circuited the list.
         """
-        for cmd in cmds:
+        extra: list[str] = []
+        ran_extra = False
+        for index, cmd in enumerate(cmds):
             ok, output = cls._run_gate(cmd, workspace)
+            if index >= extra_from:
+                ran_extra = True
+                extra.append(output)
             if not ok:
-                return False, f"$ {cmd}\n{output}"
-        return True, ""
+                return False, f"$ {cmd}\n{output}", "\n".join(extra) if ran_extra else None
+        return True, "", "\n".join(extra) if ran_extra else None
 
     @staticmethod
     def _run_gate(cmd: str, workspace: Path) -> tuple[bool, str]:

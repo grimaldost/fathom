@@ -122,6 +122,7 @@ detail instead of being indistinguishable from a pinned one).
 | A3 driver, correct implementation | fixtures + reference `solution/` | both checks green, driver exit 0; the independent check's out-of-tree asset passed convoy's isolation guard rather than being skipped |
 | A3 driver, injected escape | same, with `_is_number`'s `and not isinstance(v, bool)` removed — the exact bool-is-int class the probe exists for | **visible suite 20/20 green** while `type-contract-probe` goes RED with the full 7-case diagnostic in `detail`; driver exit 1, which is what `gated-session` reads as a red gate and re-briefs the fix loop with |
 | A4 command shape | agent-authored `convoy-checks.toml` (visible suite only) + `convoy gate <file> -w .` | runs, exits 0, prints `completed` |
+| A3 driver, **un-overridden**, against the published release | the injected-escape workspace, `FATHOM_CONVOY_GATE_LOCAL` unset | provenance line reads `git+https://github.com/grimaldost/convoy@v0.10.0`; visible suite green, probe RED, driver exit 1 — the pinned build detects the escape (run after the tag existed; recorded here late, after a reviewer noted the table showed only override rows) |
 
 The second row is the whole bank's premise reproduced on demand: a defect that is
 invisible to the project's own suite and visible to an implementer-unreachable oracle.

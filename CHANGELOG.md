@@ -3,6 +3,19 @@
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
 
+## [Unreleased]
+
+### Changed
+
+- **A gated-session trial records what its extra gate actually said**
+  (`src/fathom/strategies/gated_session.py`): `detail` carried `gate first=… final=…
+  fixes=N` and nothing else, so a scenario whose `[gate].extra` runs an external tool
+  could not attest which build of that tool ran or what it found — the output was
+  discarded on green and reached only the fix prompt on red. It now also carries a
+  bounded, whitespace-condensed excerpt of the extra commands' output for the first and
+  final rounds, and distinguishes "the extra gate never ran because the task's own gate
+  reds first" from "it ran and said nothing".
+
 ## [0.4.1] - 2026-08-29
 
 The guardrail patch, cut from a review of how the 0.4.0 release was actually performed: two of
