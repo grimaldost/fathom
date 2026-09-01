@@ -4,7 +4,10 @@ name = "haiku-gate-sg2"
 # pool under one identity whichever directory invoked them. This copy exists so
 # `--scenarios-dir scenarios/gate-composition` can buy THIS arm without dragging a
 # re-glob of the whole ablation-v2 directory along (the series-arm precedent).
-# Comments are not config: verify hash equality with `fathom validate` before the run.
+# Comments are not config, so the hash is unaffected by this block -- but NOTHING
+# PRINTS a config_hash outside a ledger row, so that identity cannot be checked
+# before the spend; the first trial written under this name is what confirms it
+# pooled rather than forked. Reported as fathom feedback.
 adapter = "claude-cli"
 model = "claude-haiku-4-5"
 strategy = "gated-session"
