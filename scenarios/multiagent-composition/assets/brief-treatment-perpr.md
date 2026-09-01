@@ -96,9 +96,10 @@ It prints one JSON object on stdout. Read its `outcome` field.
   prompt, followed by the absolute path of the project root. When it returns, run the gate
   again with the same phase tag. Repeat until `outcome` is `completed`.
 
-The gate's checks are the project's own; a red is a real defect in the implementation, not
-a problem with the gate. Fix the implementation, never the checks. When the visible suite is
-green and the gate reports `completed`, move on to the next PR.
+The gate's checks are the project's own suite plus two type-contract checks supplied with
+the task; a red is a real defect in the implementation, not a problem with the gate. Fix
+the implementation, never the checks. When the visible suite is green and the gate reports
+`completed`, move on to the next PR.
 
 ## Step 4 — integrate and finish
 

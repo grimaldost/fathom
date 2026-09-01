@@ -199,3 +199,14 @@ would fork the T arms for no measurement gain, and both carry no task content. T
 docstring says each `repair_hint` states the rule "in the task statement's own words"; it
 does not. `brief-treatment-perpr.md` says "The gate's checks are the project's own"; six of
 the eight are, and the two type-contract probes are harness-authored.
+
+**7. The hint leak is removed, not carried (supersedes the "deferred" half of #6).** Before
+any trial: the two `repair_hint` strings restated the type rule *and* added "bool is a
+subclass of int in Python, so excluding it takes an explicit check" — an implementation
+tip that appears nowhere in the task statement or the PR prompts, so the treatment arms
+would have been told something the control arm could not know. That is an arm asymmetry in
+convoy's favor and the persona forbids it regardless of size. The hints now quote task rule
+4 and nothing else; the brief's "the project's own" wording and the driver docstring are
+corrected in the same commit. No ledger row exists under any of the eight hashes, so no arm
+is renamed. The `held_out_clean_independent` sensitivity endpoint (#4) is kept: the probes
+still exercise the same rule as two held-out criteria with different literals.

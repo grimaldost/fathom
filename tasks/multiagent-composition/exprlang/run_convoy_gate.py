@@ -27,8 +27,9 @@ trial. What this script does, in order:
    ``asset`` is the probe's own task-dir path (out-of-tree from the workspace, so
    convoy's fail-closed isolation guard passes them): the arithmetic group from the
    phase that introduces booleans onward, the comparison group from the phase that
-   introduces comparisons onward. Each carries a ``repair_hint`` stating the type
-   rule in the task statement's own words.
+   introduces comparisons onward. Each carries a ``repair_hint`` restating the type
+   rule the task statement gives (rule 4) — the rule only, never an implementation
+   tip, so the hint carries nothing the control arm was not also told.
 3. Invokes ``convoy gate <spec> -w <workspace> [--phase TAG ...] --json`` through the
    pinned release (``uvx --from git+...@<tag>``), so the measured artifact is the
    shipped surface.
@@ -68,17 +69,19 @@ _GATE_SPEC_ID = "multiagent-composition-gate"
 _ARITH_FROM = "bools"
 _COMPARE_FROM = "compare"
 
+# Verbatim from the task statement (task.toml, rule 4) and nothing more. An earlier draft
+# added "bool is a subclass of int in Python, so excluding it takes an explicit check" —
+# an implementation tip that appears nowhere in the task, i.e. information the treatment
+# arms would have had and the control arm could not. Removed before any trial ran.
 _ARITH_HINT = (
-    "the task statement's own type rule: the arithmetic operators + - * / % require "
-    "numeric operands and reject booleans (bool is a subclass of int in Python, so "
-    "excluding it takes an explicit check); the error is TypeMismatchError, a subclass "
-    "of ExprError"
+    "the task's stated type rule: arithmetic operators (+ - * / %) require numeric "
+    "operands and reject booleans; a wrong-type operand raises TypeMismatchError, a new "
+    "subclass of ExprError"
 )
 _COMPARE_HINT = (
-    "the task statement's own type rule: the comparison operators == != < <= > >= "
-    "require numeric operands and reject booleans (bool is a subclass of int in "
-    "Python, so excluding it takes an explicit check); the error is TypeMismatchError, "
-    "a subclass of ExprError"
+    "the task's stated type rule: comparison operators (== != < <= > >=) require numeric "
+    "operands and reject booleans; a wrong-type operand raises TypeMismatchError, a new "
+    "subclass of ExprError"
 )
 
 
