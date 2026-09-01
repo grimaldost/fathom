@@ -108,6 +108,30 @@ oracle, and must not leak into the implementer's context); A4 deliberately gets 
   the matrix; the sg2 lesson says the probe's own execution is asserted in the ledger
   `detail`, not assumed.
 
+## Arming verification (done, 2026-09-01, $0 — no spawns)
+
+The sg2 cell was voided because its probe never executed and nothing said so until the
+spend was gone. So the A3 and A4 mechanics were proven to **fire** before any trial is
+bought, by running the driver against hand-built workspaces with the convoy under test
+pointed at the local checkout (`FATHOM_CONVOY_GATE_LOCAL`, which the driver echoes to
+stderr on every call — a trial that ran under an override says so in its own ledger
+detail instead of being indistinguishable from a pinned one).
+
+| Probe | Workspace | Result |
+|---|---|---|
+| A3 driver, correct implementation | fixtures + reference `solution/` | both checks green, driver exit 0; the independent check's out-of-tree asset passed convoy's isolation guard rather than being skipped |
+| A3 driver, injected escape | same, with `_is_number`'s `and not isinstance(v, bool)` removed — the exact bool-is-int class the probe exists for | **visible suite 20/20 green** while `type-contract-probe` goes RED with the full 7-case diagnostic in `detail`; driver exit 1, which is what `gated-session` reads as a red gate and re-briefs the fix loop with |
+| A4 command shape | agent-authored `convoy-checks.toml` (visible suite only) + `convoy gate <file> -w .` | runs, exits 0, prints `completed` |
+
+The second row is the whole bank's premise reproduced on demand: a defect that is
+invisible to the project's own suite and visible to an implementer-unreachable oracle.
+The third row confirms A4's brief is executable as written — and that A4, by design,
+does **not** catch that escape (its gate is the visible suite only; A4 vs A1 is a
+loop-discipline contrast at equal oracle, not an oracle contrast).
+
+What this does not establish: that the weak-tier agent produces the escape at a useful
+rate, or that the fix loop repairs it — those are the measurement, not the arming.
+
 ## Gate commands
 
 fathom's own: `uv run fathom validate <bank>`, `uv run fathom smoke`, `uv run fathom run
@@ -145,7 +169,11 @@ in the same dry-run, decide after the composed arms read out.
 
 ## DoR gaps (why status = draft)
 
-- Convoy 0.10.0 is not yet tagged (PRs in flight). The `--from` pin cannot be written
-  until it is.
-- `checks-independent.toml` and the inject brief for the `-self` arm are unauthored.
-- The dry-run ceiling is unpriced.
+- **Convoy 0.10.0 is not yet tagged** (PRs in flight). `CONVOY_PIN` names it in advance;
+  the arm cannot run for real until the tag exists, and the first paid trial must be
+  preceded by one un-overridden invocation confirming the pinned release resolves.
+- **The dry-run ceiling is unpriced** at `--repeats 8` (the `--repeats 2` plan came back
+  at a $30 ceiling for 6 trials; the real number gates the spend and needs the operator's
+  explicit confirmation).
+- ~~The driver and the `-self` brief are unauthored~~ — authored and arming-verified
+  above.
