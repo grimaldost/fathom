@@ -1,0 +1,46 @@
+name = "haiku-gate-sg2"
+# MIRROR of scenarios/ablation-v2/haiku-gate-sg2.toml, byte-identical below this
+# comment block on purpose: same name + same config -> same config_hash, so trials
+# pool under one identity whichever directory invoked them. This copy exists so
+# `--scenarios-dir scenarios/gate-composition` can buy THIS arm without dragging a
+# re-glob of the whole ablation-v2 directory along (the series-arm precedent).
+# Comments are not config: verify hash equality with `fathom validate` before the run.
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "high"
+
+# E1 KEYSTONE arm: weak tier + STRENGTHENED deterministic gate. Identical to
+# haiku-gate except the harness's gate also runs the type-contract probe (the
+# bool-is-int class that dominates Haiku's failures and provably escapes the
+# visible suite). The probe is harness-side (never in the workspace); its failing
+# output feeds the ordinary fix loop. Tests the evolution thesis: a weak model + a
+# strong deterministic oracle rescues the defects the model cannot see itself, for
+# ~0 extra LLM tokens when green.
+#
+# WHY "sg2" -- a FORK, not a rename. The predecessor arm `haiku-gate-sg` holds 10
+# completed trials (9/10) in ledger/ablation-v2.jsonl under config_hash
+# 08c2f05f2b21. Neither the committed file nor its pre-genericize ancestor
+# (git 4041afa, an absolute machine path) resolves to that hash, and a ~170k-form
+# sweep over interpreter / path / argument / limit variants found no preimage: the
+# scenario that ran was never committed, so those trials are NOT reproducible and
+# are historical-only. Worse, the file as committed carried the literal
+# `/path/to/fathom/...` placeholder; the gate command is passed to the shell
+# verbatim (strategies/gated_session.py), so the probe never ran and the arm
+# silently degraded to plain `haiku-gate`. Re-running under the old name would
+# have pooled a repaired arm with an unreproducible one under one resume key.
+#
+# The probe path now uses the run-time `${task_dir}` placeholder (expanded per
+# trial by the executor), so the command is portable, committable, and hashed as a
+# template -- relocating the checkout does not fork history.
+# NOTE: the probe SCRIPT's content is still not hashed (only the command string
+# is) -- if type_probe.py is edited, version this scenario's name again.
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[gate]
+extra = ['python "${task_dir}/type_probe.py" "${workspace}"']
+
+[limits]
+trial_timeout_s = 1800

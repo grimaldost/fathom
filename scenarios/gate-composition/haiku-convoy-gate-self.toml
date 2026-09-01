@@ -1,0 +1,28 @@
+name = "haiku-convoy-gate-self"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "high"
+
+# A4 of the gate-composition design (docs/specs/2026-09-01-convoy-gate-composition-design.md):
+# the AGENT drives convoy's standalone gate — no harness loop. A single-session arm whose
+# injected brief hands the agent a ready gate-spec body (the task's VISIBLE suite only —
+# no probe: the agent stays blind to the acceptance oracle, and handing it the probe
+# would teach to the test) and instructs it to iterate `convoy gate` until exit 0. The
+# contrast against haiku-gate (harness-driven loop at the same oracle) reads adoption:
+# does the surface survive contact with a weak-tier agent — discoverability, loop
+# discipline, not weakening its own checks?
+#
+# The agent writes the gate spec itself in the workspace (fixtures stay untouched:
+# adding a fixture would fork the shared task for every arm in the ledger). Bash is
+# broadened relative to the other haiku arms — the agent must run `uvx` — which is part
+# of the treatment, not a leak: driving the gate IS the arm.
+[context]
+inject = "assets/convoy-gate-self-brief.md"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)", "Bash(uvx:*)"]
+
+[limits]
+trial_timeout_s = 1800
