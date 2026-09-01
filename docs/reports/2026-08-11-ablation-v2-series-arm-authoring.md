@@ -71,6 +71,13 @@ resting on an arm whose configuration is unknown.** The number is not wrong so m
 unattributable — it may be the probe arm, or it may be `haiku-gate` with n=10. Re-run
 `haiku-gate-sg2` before citing the strengthened-gate result again.
 
+**Done, 2026-09-01.** `haiku-gate-sg2` ran at n=8 under its repaired template, with
+arming verified rather than assumed: **7/8** on `type_bool_in_arith` against the
+visible-suite gate's 4/8 (one-sided Fisher p=0.141). The strengthened-gate result is
+now citable at that strength and no more — the direction the withdrawn arm claimed,
+without the effect size it claimed, and at n=8 short of significance. The unattributable
+9/10 stays unattributable. See `docs/reports/2026-09-01-gate-composition-findings.md`.
+
 ## 2. Two instrument defects that would have biased this arm
 
 Both were found while preparing the arm; both are committed separately from the

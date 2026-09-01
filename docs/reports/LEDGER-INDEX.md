@@ -12,7 +12,7 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | Bank | ledger sha256 | n by arm (completed) | trial rows | run rows |
 |---|---|---|---|---|
 | `ablation-v1` | `12bd4036ba70da1544af396f4b9e26f02fc581a5150983272443c56b82e252f3` | bare-sonnet5:5 | 5 | 5 |
-| `ablation-v2` | `157d38e2814b4c8f52269497a52ee520eed1a738428d5692dede6beba9f65ed7` | bare:17, bare-authoring:8, bare-gate:17, bare-gate-review:5, bare-reprompt:8, haiku:8, haiku-authoring:10, haiku-gate:8, haiku-gate-review:10, haiku-gate-sg:10, haiku-reprompt:8, lazy-gate:2, opus:8, orchestrated:17, sonnet-lo:8, sonnet-lo-gate:8 | 228 | 371 |
+| `ablation-v2` | `398cca699a97fa0a19d14136fbcd51c7f6698e940421bfd49ecc75f8d3914eaa` | bare:17, bare-authoring:8, bare-gate:17, bare-gate-review:5, bare-reprompt:8, haiku:8, haiku-authoring:10, haiku-convoy-gate:8, haiku-convoy-gate-self:8, haiku-gate:8, haiku-gate-review:10, haiku-gate-sg:10, haiku-gate-sg2:8, haiku-reprompt:8, lazy-gate:2, opus:8, orchestrated:17, sonnet-lo:8, sonnet-lo-gate:8 | 252 | 401 |
 | `context-size-v1` | `5312c95c4552d93da59689ebb7b18547af0ca127c489904e1702a3d0475bd79f` | haiku:40, opus:20 | 60 | 60 |
 | `dc-consumers-v1` | `4d4c36f0c19139ce33e0762afdaeac85c5f84e9b0ef5509ea46cb6dc3077332d` | product-haiku:30, product-sonnet:30 | 60 | 60 |
 | `dc-granularity-v1` | `d56b9fbbebd46c98b542a61831938e5e9a853bac8084c3486543bdb9e88504e8` | coarse-sonnet:9, fine-sonnet:9 | 18 | 18 |

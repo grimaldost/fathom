@@ -65,6 +65,19 @@ repair_hint = "the task statement's own type rules: arithmetic and comparison op
 
 
 def main() -> int:
+    # Force UTF-8 on our own streams before writing anything through. convoy's gate
+    # narration contains em-dashes; on Windows this process's stdout/stderr default to
+    # the console codepage (cp1252), which encodes U+2014 as the single byte 0x97 --
+    # invalid UTF-8. The harness reads this process's output with encoding="utf-8"
+    # (strict), so the reader thread raised UnicodeDecodeError and lost the captured
+    # output for that call. The exit code survives, so gate verdicts were unaffected;
+    # what is lost is the text a red gate's fix re-brief quotes. Same posture as the
+    # engine's own stream hardening.
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
     if len(sys.argv) != 3:
         print("usage: run_convoy_gate.py <task_dir> <workspace>", file=sys.stderr)
         return 3
