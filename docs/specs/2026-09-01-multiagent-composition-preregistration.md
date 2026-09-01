@@ -144,3 +144,58 @@ pilot; the driver pins that tag.
 
 No strong-tier arms this iteration; no new task bank; no `haiku-series` (convoy's runner
 is out of scope by the question's definition); no claim about tasks other than this one.
+
+## Addendum — 2026-09-01, before the pilot's first paid trial
+
+Cause: a blind review of the built bank and the eight arms. No trial has run and no
+money has been spent. Nothing below edits a brief, the driver, the probes, the placebo
+or `verify.py`, so no `config_hash` moves and no arm is renamed.
+
+**1. Run preconditions, now written down.** The two exports the attestation depends on
+(`FATHOM_TASK_DIR`, `FATHOM_STREAM_DIR`), the requirement that convoy 0.11.0 be tagged
+and its echo observed **without** the local override before the matrix starts, and the
+uv cache warm-up, are stated as a checklist in
+`scenarios/multiagent-composition/README.md`. The `perpr-*` invocation count and adoption
+rate are derivable only from the transcripts, and only if `FATHOM_STREAM_DIR` was set:
+a forgotten export is unrecoverable after the spend, not a nuisance.
+
+**2. A cold gate install must not read as a defect.** `gated-session` kills a gate command
+at `_GATE_TIMEOUT_S` = 120s and scores the timeout as a red, which on a `final-*` trial
+buys fix spawns for a defect that does not exist. The operator times one warm
+`run_convoy_gate.py` call before the matrix; if it is not comfortably inside the timeout,
+raising `_GATE_TIMEOUT_S` for this run is pre-approved and is recorded in the run log. It
+is harness config, not an arm field.
+
+**3. T-final's gate output lands in `detail`, and that is what makes the attestation
+sayable.** The `gated-session` executor now records the extra gate's own output — bounded,
+whitespace-condensed, first round and final round — beside the `first=/final=` verdict, so
+a `final-*` row says which convoy ran and what it reported, and distinguishes a
+visible-suite red (which short-circuits before convoy runs) from a convoy red. This is a
+harness change shipped through the repo's own process, not an arm change. Absent it, no
+T-final convoy-provenance claim is made.
+
+**4. A pre-registered sensitivity on the primary endpoint.** Two of the six `held_out`
+criteria are rule-adjacent to the treatment: the probes' `repair_hint` states the type rule
+(including that `bool` subclasses `int`, which appears nowhere in the task statement or the
+PR prompts), and the probe cases exercise the same rule as `type_bool_arith_heldout` and
+`type_compare_heldout` with different literals. The primary endpoint stays
+`held_out_clean`. Alongside it, and with the same contrasts, the same one-sided tests and
+the same Wilson intervals, the report also states
+`held_out_clean_independent` — the conjunction of the four criteria the hint and the probes
+do not touch: `env_bool_typing`, `not_precedence_heldout`, `error_type_is_typemismatch`,
+`short_circuit_heldout`. It is a sensitivity analysis, declared here before any data
+exists; it does not replace the primary and does not enter the Holm family. If the two
+disagree in direction, the report says so and leads with the disagreement.
+
+**5. Contrast (2) is reported with its dose.** T-perPR can go red on any of five phases and
+dispatches a fresh fix subagent each time; P reds exactly once per trial and fixes in the
+orchestrator itself. Both are faithful to the arm definitions above, but the pair is not
+iteration-matched, so per arm and per trial the report states the observed number of gate
+reds and the number of fix dispatches. If those counts diverge materially, T-perPR vs P is
+reported as dose-confounded rather than as the independent-information effect.
+
+**6. Two wording defects, deferred to the next arm-version bump** — editing either file now
+would fork the T arms for no measurement gain, and both carry no task content. The driver's
+docstring says each `repair_hint` states the rule "in the task statement's own words"; it
+does not. `brief-treatment-perpr.md` says "The gate's checks are the project's own"; six of
+the eight are, and the two type-contract probes are harness-authored.
