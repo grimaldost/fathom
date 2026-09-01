@@ -75,8 +75,12 @@ unattributable — it may be the probe arm, or it may be `haiku-gate` with n=10.
 arming verified rather than assumed: **7/8** on `type_bool_in_arith` against the
 visible-suite gate's 4/8 (one-sided Fisher p=0.141). The strengthened-gate result is
 now citable at that strength and no more — the direction the withdrawn arm claimed,
-without the effect size it claimed, and at n=8 short of significance. The unattributable
-9/10 stays unattributable. See `docs/reports/2026-09-01-gate-composition-findings.md`.
+without the effect size it claimed, and at n=8 short of significance. Two caveats the
+re-run surfaced: the probe's cases are string-identical to three of the four items the
+criterion grades (so the result is repair-of-the-tested), and the inert `haiku-gate-sg`
+arm itself reads 10/10 vs 4/8, p=0.023 — this bank yields "significant" contrasts from
+arms with no mechanism. The unattributable 9/10 stays unattributable. See
+`docs/reports/2026-09-01-gate-composition-findings.md`, Retractions.
 
 ## 2. Two instrument defects that would have biased this arm
 

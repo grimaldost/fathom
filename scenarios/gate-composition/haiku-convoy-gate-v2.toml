@@ -1,4 +1,12 @@
-name = "haiku-convoy-gate"
+name = "haiku-convoy-gate-v2"
+# VERSIONED 2026-09-01 — a FORK, not a rename, per this file's own rule below. The
+# predecessor `haiku-convoy-gate` (config_hash ae41ca33…) holds 8 completed trials in
+# ledger/ablation-v2.jsonl that ran the PRE-FIX driver: the one whose stdout/stderr were
+# not forced to UTF-8, so convoy's em-dash narration reached the harness as cp1252 and
+# at least one fix re-brief was blanked. The driver was then edited in the same commit
+# as the findings report without bumping this name — exactly the sg -> sg2 failure.
+# Those 8 trials stay attributed to the old name and the old driver; this name runs the
+# fixed driver from n=0. Never resume the old name.
 adapter = "claude-cli"
 model = "claude-haiku-4-5"
 strategy = "gated-session"
