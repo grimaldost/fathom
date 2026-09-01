@@ -172,6 +172,59 @@ def test_unexpanded_placeholder_would_fail_the_gate():
     assert "final=red" in res.detail
 
 
+# --- the extra gate's own output reaches the ledger ---------------------------
+#
+# `first=red` cannot say which tool produced the red, which build of it ran, or
+# whether it ran at all — and for an arm whose extra gate is an external tool that
+# provenance IS the attestation. On green the output used to be dropped entirely;
+# on red it went into the fix prompt and nowhere else.
+
+_ECHO_GATE = "python -c \"import sys; print('gate via: TESTPIN'); sys.exit(0)\""
+_LOUD_GATE = "python -c \"print('y' * 3000)\""
+
+
+def test_extra_gate_output_reaches_detail_on_green():
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        runner = _StubRunner(write_done_on_call=1)
+        ex = GatedSessionExecutor(extra_gate_cmds=[_ECHO_GATE])
+        res = ex.run_trial(_task(ws), ws, None, runner)
+    assert "first=green" in res.detail
+    assert "extra-gate first: gate via: TESTPIN" in res.detail
+
+
+def test_extra_gate_not_reached_when_the_task_gate_reds_first():
+    """The task's own gate short-circuits the list — say so, don't imply a silent run."""
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        runner = _StubRunner(write_done_on_call=99)  # task gate never greens
+        ex = GatedSessionExecutor(max_fix_attempts=0, extra_gate_cmds=[_ECHO_GATE])
+        res = ex.run_trial(_task(ws), ws, None, runner)
+    assert "final=red" in res.detail
+    assert "extra-gate first: <not run" in res.detail
+    assert "TESTPIN" not in res.detail
+
+
+def test_extra_gate_excerpt_is_bounded_and_marks_what_it_dropped():
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        runner = _StubRunner(write_done_on_call=1)
+        ex = GatedSessionExecutor(extra_gate_cmds=[_LOUD_GATE])
+        res = ex.run_trial(_task(ws), ws, None, runner)
+    assert "chars omitted" in res.detail
+    assert len(res.detail) < 1500
+
+
+def test_extra_gate_records_both_rounds_when_a_fix_ran():
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        runner = _StubRunner(write_done_on_call=1, files_by_call={2: "done2"})
+        ex = GatedSessionExecutor(max_fix_attempts=2, extra_gate_cmds=[_GATE2])
+        res = ex.run_trial(_task(ws), ws, None, runner)
+    assert "fixes=1" in res.detail
+    assert "extra-gate first:" in res.detail and "extra-gate final:" in res.detail
+
+
 def test_commands_without_placeholders_are_byte_identical():
     """No placeholder means no rewrite — committed resume keys and gates cannot move."""
     with tempfile.TemporaryDirectory() as d:
@@ -186,6 +239,10 @@ if __name__ == "__main__":
         test_gate_red_then_green_drives_one_fix,
         test_fix_attempts_are_capped_and_still_scored,
         test_no_gate_degrades_to_single_spawn,
+        test_extra_gate_output_reaches_detail_on_green,
+        test_extra_gate_not_reached_when_the_task_gate_reds_first,
+        test_extra_gate_excerpt_is_bounded_and_marks_what_it_dropped,
+        test_extra_gate_records_both_rounds_when_a_fix_ran,
         test_task_dir_placeholder_resolves_to_a_runnable_probe,
         test_unexpanded_placeholder_would_fail_the_gate,
         test_commands_without_placeholders_are_byte_identical,
