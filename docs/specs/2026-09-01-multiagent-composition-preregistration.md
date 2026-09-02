@@ -210,3 +210,103 @@ convoy's favor and the persona forbids it regardless of size. The hints now quot
 corrected in the same commit. No ledger row exists under any of the eight hashes, so no arm
 is renamed. The `held_out_clean_independent` sensitivity endpoint (#4) is kept: the probes
 still exercise the same rule as two held-out criteria with different literals.
+
+## Addendum — 2026-09-02, the pilot readout and the decision it forces
+
+**Pilot as run.** 24/24 trials completed, $56.02 est. (ledger `multiagent-composition`,
+readout by `tools/readout_multiagent.py`, transcripts in `streams-multiagent/2026-09-01-pilot`).
+Per the pre-registration, no inference is drawn from it. The numbers, for the record:
+
+| cell | held_out_clean | ho_independent | full15 | $/trial (median) | wall s (median) |
+|---|---|---|---|---|---|
+| control-haiku | 3/3 | 3/3 | 3/3 | 2.03 | 645 |
+| placebo-haiku | 3/3 | 3/3 | 3/3 | 2.15 | 992 |
+| perpr-haiku | 3/3 | 3/3 | 3/3 | 2.17 | 908 |
+| final-haiku | 3/3 | 3/3 | 3/3 | 1.81 | 784 |
+| control-sonnet | 3/3 | 3/3 | 3/3 | 2.41 | 645 |
+| placebo-sonnet | 3/3 | 3/3 | 3/3 | 2.64 | 653 |
+| perpr-sonnet | 3/3 | 3/3 | 3/3 | 2.80 | 792 |
+| final-sonnet | 3/3 | 3/3 | 3/3 | 2.43 | 684 |
+
+Every pre-registered contrast is 3/3 vs 3/3 (one-sided p = 1.0; Holm 1.0). The `final-*`
+harness gate went red in 0 of 6 trials.
+
+**Arming criteria — all met, with two notes.** Every `perpr-*` transcript shows the driver
+invoked (7–16 times per trial); every `placebo-*` transcript shows the placebo fired; all
+six `final-*` rows carry the convoy provenance line in `detail`. Mechanism attestation the
+pre-registration did not list but the transcripts give: 5–6 `Agent` dispatches per trial
+in every arm (two placebo trials show 5 — one dispatch fewer than PRs; the readout counts
+tool-use events, and a single dispatch may have covered two PRs or one may have failed
+and been retried in-orchestrator; the implementations still passed every criterion), the
+subagents requested at the pinned tier, orchestrator at Sonnet, and — a bonus the ledger
+lacks — the haiku subagents' **dated** snapshot `claude-haiku-4-5-20251001`. Sonnet events
+carry only the undated alias; that tier-set's snapshot remains unpinnable.
+
+**Two hygiene findings, disclosed.** (1) Arms ran as **blocks** (all repeats of one arm,
+then the next), not interleaved as promised: the run loop is scenario → task → repeat and
+I did not verify it before launching. Time drift is confounded with arm across a
+~2.5-hour window. Tolerable for a pilot that infers nothing; the main matrix runs as
+repeat passes (`--repeats k` for k = 1..n, each pass covering every arm once — verified to
+resume correctly mid-pilot). (2) Two non-treatment orchestrators (`final-sonnet` r0,
+`placebo-sonnet` r2) saw the driver's filename — via a directory listing of the task dir
+and via `series.toml`'s header comment, both readable because the brief points the
+orchestrator at that directory for the prompts. Neither **executed** it (no Bash tool-use
+carries it in either transcript). Not contamination; a leak of the arm structure that v2
+removes.
+
+**The decision, per the ceiling rule committed at trial 6 of 24 (before any treatment
+trial landed):** the control cell is 3/3 in **both** tier-sets, so this bank has no
+headroom on the primary endpoint at either tier. **No main matrix is bought on this bank
+version.** The round's finding, stated at the strength n=3 allows: *a five-PR decomposition
+whose prompts spell out the type-rule matrix per PR produces held-out-clean work from
+multiagent dispatch alone, at the weak tier as at the mid tier; the gate had nothing to
+catch, and the placebo ceremony and the per-PR gate loop cost wall-clock (+54% and +41%
+at haiku, +1% and +23% at sonnet) for no measurable quality.* The suspected cause is the
+prompts: they were authored as briefs for convoy's own runner, with the oracle written
+into them (PR01: "Arithmetic rejects booleans … raises `TypeMismatchError` … use the
+numeric guard"; PR05 restates the whole matrix as a conformance pass). Against a brief
+that explicit, even a weak implementer has nothing left to infer.
+
+## Pre-registration — bank v2 (`multiagent-composition-v2`), before its first paid trial
+
+**Hypothesis the v1 ceiling licenses:** the value of an independent gate under external
+orchestration scales with how much the implementer is left to infer. v2 makes the relay
+from orchestrator to subagent realistic and lossy: the task statement (which the
+orchestrator holds) keeps every rule; the per-PR prompts describe the behavior to build
+and stop restating the type-rule matrix and the guard recipe.
+
+**Bank v2 = v1 with exactly these changes**, so the primary endpoint, probes, placebo,
+driver, verify.py and arms stay byte-identical to v1:
+
+- `prompts/01..04`: remove the sentences that state the type rule or prescribe the guard
+  (PR01 items 3 and the guard bullet; PR02–04's "an operand of the wrong type raises
+  `TypeMismatchError` — use PR01's … guard" clauses and the "PR01 already landed: … the
+  arithmetic operators reject boolean operands, and the evaluator carries a numeric-operand
+  guard and a boolean-operand guard" recaps). Each PR keeps: what to add, the AST shape,
+  precedence placement, the test targets to run. PR01 keeps "add `TypeMismatchError` as a
+  new subclass of `ExprError`" (it is an artifact the later PRs import), but not what
+  raises it.
+- `prompts/05`: the conformance pass keeps "run the whole suite and close what is red";
+  the type-rule matrix restatement (its items 32–37 in v1) is removed.
+- A test asserts, for each v2 prompt, the absence of the removed phrases (`reject`,
+  `wrong type`, `numeric-operand guard`, `boolean-operand guard`, `require NUMERIC`,
+  `require BOOLEAN`), and that `task.toml`'s instruction is byte-identical to v1's.
+- Prompts move to `prompts/` under a directory the brief names as `$FATHOM_PROMPTS_DIR`
+  that contains **only** the five prompt files; the driver, probe, placebo and
+  `series.toml` stay in the task dir, which the briefs never name. `[env]` keys stay
+  identical across arms.
+- Scenarios: `scenarios/multiagent-composition-v2/`, same eight arms, same briefs except
+  the prompts-dir variable, new bank name ⇒ new `config_hash`es. Ledger
+  `ledger/multiagent-composition-v2.jsonl`.
+
+**Endpoints, contrasts, tests, corrections, attestation: unchanged from the v1
+pre-registration.** Tier-sets: both, at the pilot; the ceiling rule (control ≥ 2/3 in a
+tier-set ⇒ that tier-set not bought at scale) applies again. Pilot n = 3 per cell (24
+trials, ≤ $100). Main matrix: pre-registered in a further addendum from the v2 pilot's
+observed perpr − placebo gap on the tier-set with headroom, run as repeat passes, within
+the iteration's remaining budget ($400 − $56 pilot v1 − v2 pilot).
+
+**Prediction, pre-registered:** control-haiku held_out_clean falls below ceiling on v2;
+control-sonnet may not. If control-haiku stays at 3/3 on v2, the decomposition itself,
+not the prompts' explicitness, is what removes the defect class, and that is reported as
+the finding of the iteration.
