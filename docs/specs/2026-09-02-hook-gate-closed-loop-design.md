@@ -173,3 +173,34 @@ held-out oracle is there to catch, and which the cost-per-correct endpoint price
 3. **Task shape.** Single-PR tasks (orchestrator + one implementer + fix loop) are cheaper
    and match the operator's dispatch practice; multi-PR chains reintroduce integration
    effects and cost. Default: single-PR now, chains as a later factor.
+
+## As built — 2026-09-02 (convoy 0.12.0)
+
+Part 1 shipped as convoy 0.12.0 (PRs #72–#80), with two departures from the text above,
+both forced by evidence:
+
+1. **Two legs, not one.** A real `claude -p` smoke showed the Agent tool dispatching
+   asynchronously when `run_in_background` is unset: `PostToolUse` fires with
+   `tool_response.status = async_launched` before the subagent has done anything, so a
+   `PostToolUse` hook alone gates nothing on the default call shape. The hook now has a
+   judge (`SubagentStop`: a blocking red is handed to the subagent as the reason it may
+   not stop yet, one repair round, read-only subagents skipped) and a messenger
+   (`PostToolUse` on a synchronous dispatch, reusing the judge's verdict). The doctrine
+   sentence "the orchestrator never has to think about the gate" holds; what changed is
+   who repairs first — the implementer itself, the shape of convoy's own fix spawn. A
+   residual red after the judge's round reaches the orchestrator only on a synchronous
+   dispatch; on the default asynchronous one it reaches the log and the subagent's own
+   final message. Part 2's hook arms measure exactly this.
+2. **A trust switch.** The hooks fire automatically, so a cloned repository carrying a
+   `.convoy/gate.toml` would otherwise run its commands on the first dispatch. The hook
+   executes a project's spec only where the machine trusted it (`convoy gate --trust`,
+   which also pins the spec's hash so the implementer cannot rewrite the gate it is
+   judged by) or where the launching process vouches for the root
+   (`CONVOY_TRUSTED_ROOTS`, the harness case); `$CONVOY_GATE_SPEC` lets a harness keep
+   the spec outside the tree it judges. Two blind reviews (31 findings) ran on the
+   candidate before the cut; the residuals are documented in convoy's own changelog.
+
+Attestation as built: one JSON line per firing in the workspace's `.convoy/hook.log` —
+leg, event, verdict, exit code, the subagent's id, type and dated model, the phases, the
+retry flag, per-check facts, the gate's wall-clock, the spec's path and hash. The hook
+arms copy it into the stream dir per trial.
