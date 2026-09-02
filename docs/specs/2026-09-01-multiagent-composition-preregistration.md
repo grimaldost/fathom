@@ -310,3 +310,58 @@ the iteration's remaining budget ($400 − $56 pilot v1 − v2 pilot).
 control-sonnet may not. If control-haiku stays at 3/3 on v2, the decomposition itself,
 not the prompts' explicitness, is what removes the defect class, and that is reported as
 the finding of the iteration.
+
+## Addendum, 2026-09-02 — bank v2 as executed, before its first paid trial
+
+Written after the bank was built and blind-reviewed, before any v2 spend. It records where
+the artifact is a superset of, or narrower than, the section above. Nothing here changes a
+hypothesis, an endpoint, a contrast or a test; it makes the record match the files.
+
+**Six removals beyond the enumerated list.** Each is a pointer to, or a paraphrase of,
+content the section above orders removed, and each moves in the direction of less
+information — none restores a rule, and leaving any in would have left a prompt referencing
+a section it no longer has:
+
+- PR01's title tail `, and what the existing operators do with them`.
+- PR01's paragraph beginning "Because introducing a new value type changes what every
+  operator that already exists must do…", which announced that this PR settles the
+  arithmetic-meets-boolean question.
+- PR02's `requires TWO NUMERIC (int or float) operands` — the clause the held-out criterion
+  `type_compare_heldout` grades. The enumerated list named only the adjacent "wrong type …
+  use PR01's guard" clause; leaving this one would have stated the operand type for
+  comparisons while the mandated absences forced it out of PR03 and PR04, an asymmetry
+  nothing was pre-registered to create.
+- The `and reuse the guards — do not write a second copy of either` clause in PR02–04.
+- PR05's title tail ` and the type-rule matrix`.
+- PR05's intro, rewritten from "Two requirements … this PR owns both" to "One requirement …
+  this PR owns it", the numbering of its surviving section shifted accordingly.
+
+**One addition.** PR01 item 3 keeps its no-regression sentence (arithmetic on numbers must
+not change) under the new label `**Existing arithmetic is unchanged.**`. That label is the
+only prose written into any v2 prompt that is not v1's. It states nothing about booleans.
+
+**The type rule is not wholly absent from the prompts, and the readout must not say it is.**
+PR03 and PR04 still name the judged check
+`tests.test_feature.TestFeature.test_type_error_number_in_boolean_op`, whose name states
+that a number in a boolean operation is a type error. Keeping each PR's test targets is
+pre-registered, and the visible suite enforces that direction in every arm, so this is
+compliant — but it means v2's manipulation is specifically the **bool-in-arithmetic** and
+**bool-in-comparison** directions. That is what the primary endpoint grades: all six
+`_HELD_OUT` criteria cover bool-in-arithmetic, bool-in-comparison, booleans via `env`,
+`not` precedence, and the error class. None grades numbers-in-boolean-ops, so the headroom
+the manipulation is meant to create is intact.
+
+**"The task dir, which the briefs never name" is true of three briefs, not four.**
+`brief-treatment-perpr.md` still passes `$FATHOM_TASK_DIR` to the gate driver, because
+`run_convoy_gate.py` is byte-identical to v1's and takes the task dir as `argv[1]`. The
+asymmetry is structurally forced. What confines every arm is instead the do-not-read
+sentence, which v1 carried and v2 keeps in all three briefs, re-anchored to
+`FATHOM_PROMPTS_DIR` so it names no task-dir path: the prompts dir is a *child* of the task
+dir, and `Read`/`Glob`/`Grep` are unrestricted by path in every arm's tool allow-list, so
+moving the prompts is not by itself a fence.
+
+**Mechanism correction.** "New bank name ⇒ new `config_hash`es" is wrong as stated. The
+bank name does not enter the hashable (`src/fathom/scenario.py`; its `name` is the arm
+name). The hashes do fork, because the injected brief content and the `[env]` key set both
+changed; ledger separation is real and comes from the per-bank ledger path. The conclusion
+stands — no v2 row can resume or overwrite a v1 row — but the derivation was not checked.
