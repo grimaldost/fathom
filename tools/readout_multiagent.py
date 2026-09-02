@@ -38,7 +38,7 @@ HELD_OUT_INDEPENDENT = (
     "error_type_is_typemismatch",
     "short_circuit_heldout",
 )
-ARMS = ("control", "placebo", "perpr", "final")
+ARMS = ("control", "placebo", "perpr", "final", "hook")
 TIERS = ("haiku", "sonnet")
 # The four pre-registered contrasts, one-sided treatment > control, Holm within tier-set.
 CONTRASTS = (("perpr", "control"), ("perpr", "placebo"), ("final", "control"), ("final", "placebo"))

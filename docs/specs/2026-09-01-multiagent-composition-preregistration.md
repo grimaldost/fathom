@@ -515,3 +515,68 @@ stays pass-wise; the voided pass-4 and pass-5 trials are re-bought first (resume
 Should the operator raise the cap, n returns to 16 by the same passes; the record's
 `design.cells[].planned_n` stays 16 until the matrix closes and is then reconciled to the
 achieved n with this addendum as the reason.
+
+## Pre-registration — the hook arms (program 2, Part 2), before their first paid trial
+
+**Written 2026-09-02, after convoy 0.12.0 shipped and before any hook-arm trial is bought.**
+Two arms are added to bank `multiagent-composition-v2` in their own scenarios directory
+(`scenarios/multiagent-composition-v2-hook/`), joining the same ledger: `hook-haiku` and
+`hook-sonnet`. They are the mechanism arm the program-2 design (fathom
+`docs/specs/2026-09-02-hook-gate-closed-loop-design.md`, Part 2) called for, updated for
+what the build found.
+
+### The mechanism under test
+
+convoy 0.12.0's `convoy hook`, wired through user-scope settings injected into the spawn's
+isolated config directory (`[settings] inject`), on two Claude Code events:
+
+- `SubagentStop` — the judge. When an implementer subagent tries to stop, the project gate
+  (the decomposition's own `[[checks]]` plus the two independent type-contract probes —
+  the same composition the `perpr` driver builds, `assets/hook-gate.toml`) runs in the
+  workspace, scoped to the PR's phase by a `[convoy-phase: <tag>]` marker in the subagent's
+  brief. A blocking red is handed to the *subagent* as the reason it may not stop yet, with
+  the repair brief; one repair round, then it may stop.
+- `PostToolUse` on `Agent` — the messenger. On a synchronous dispatch, a residual red is
+  shown to the orchestrator; on the Agent tool's default asynchronous dispatch (observed
+  in the build's smoke: `async_launched`), nothing is shown at the tool call and the judge
+  is the only leg. The arm does not tell the orchestrator how to dispatch.
+
+The orchestrator's brief is control's with **one added instruction**: begin each subagent
+prompt with the PR's phase tag as `[convoy-phase: <tag>]` (`assets/brief-hook.md`; the diff
+against `brief-control.md` is that one numbered item). The marker is scope information for
+the gate, not knowledge of a gate: the brief mentions no gate, no check, no repair. The
+implementer's brief is the PR prompt verbatim, as in every arm.
+
+What differs from control, exhaustively: that one instruction; `[settings]`; three `[env]`
+keys (`CONVOY_GATE_SPEC`, `CONVOY_TRUSTED_ROOTS`, `CONVOY_ORACLES`). Same orchestrator
+model and effort, tools, limits, the five inherited `[env]` keys, the same staged harness
+directory outside the repository (the gate spec is selected by path and never copied into
+the tree; the probe is the asset under the harness dir).
+
+### Prediction and reading
+
+- Primary endpoint unchanged: `held_out_clean`. Prediction, declared: `hook` ≈ `perpr` on
+  `held_out_clean` (the same oracle and the same repair information reach the implementer),
+  at **control's orchestrator turn count and tokens** (the gate loop leaves the
+  orchestrator's context) — the cost claim of the design, tested against the cells that
+  already exist. A secondary reading: the `hook` arm's repair happens inside the subagent
+  (the judge blocks its stop), so `fixes` counted from the messenger are expected to be
+  near zero while `hook.log` shows the judge's blocks.
+- Contrasts, one-sided, Holm within the tier-set: (5) hook vs control, (6) hook vs placebo
+  — added to the family as exploratory (the record's frozen family is the four contrasts;
+  these two are reported beside it, labelled, not in the confirmatory Holm family of the
+  frozen record). Decision rule for the mechanism: hook vs control supported at 0.05 AND
+  hook's orchestrator turns within control's interquartile range → the hook mechanism is
+  adopted as the default recommendation over the `perpr` driver loop for iteration 2.
+- Attestation: per trial, `<tag>--hook.log` in the stream dir (copied by a `Stop` hook
+  from the workspace's `.convoy/hook.log`): every judge and messenger firing with the
+  verdict, the block, the model (dated), the spec hash and the workspace. A trial with no
+  `hook.log` copy is an arming failure and is voided, not scored.
+- An arming probe of one trial per cell (2 trials) precedes the passes: it is voided if
+  its `hook.log` copy is missing, and counts as repeat 0 otherwise.
+- n = 13 per cell, matching the re-declared main-matrix n; run as repeat passes after the
+  main matrix closes, ≈ $2.4 per trial, ≈ $62 for both cells — inside the iteration cap
+  only if the main matrix stops under its $286 bank ceiling; otherwise the hook arms run
+  in the next iteration with their own cap. Caps: $20 per spawn, the same $275 run cap.
+- Exclusion: the fixture integrity guard and the harness directory are in force; any drift
+  stops the matrix and voids the trial, as for the main matrix.

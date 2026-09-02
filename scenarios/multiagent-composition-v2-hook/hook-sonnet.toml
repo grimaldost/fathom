@@ -1,0 +1,34 @@
+name = "hook-sonnet"
+# Arm HOOK (treatment, program 2 / Part 2) — convoy's gate as a Claude Code hook, tier-set sonnet.
+#
+# Tier-set sonnet: implementer subagents run on claude-sonnet-5.
+#
+# Identical to hook-haiku except FATHOM_IMPL_MODEL; see hook-haiku.toml for the arm's
+# mechanism and what it shares with control.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+
+[context]
+inject = "assets/brief-hook.md"
+
+[settings]
+inject = "assets/hook-settings.json"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+CONVOY_GATE_SPEC = "${FATHOM_TASK_DIR}/hook-gate.toml"
+CONVOY_ORACLES = "${FATHOM_TASK_DIR}"
+CONVOY_TRUSTED_ROOTS = "${workspace}"
+FATHOM_IMPL_MODEL = "claude-sonnet-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400
