@@ -147,7 +147,7 @@ threats:
       convoy version; the v1 pilot showed the effect vanishes when the PR prompts spell out the
       rule, so the claim is scoped to briefs that leave the implementer something to infer.
 plan_frozen_at:
-  commit: REPLACE_WITH_FREEZE_COMMIT_SHA
+  commit: 66c0982abae9a373d564853d478d4724afb83eb3
   path: experiments/multiagent-composition-v2/record.yaml
   timestamp: 2026-09-02T13:00:00Z
 run:
