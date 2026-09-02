@@ -48,6 +48,10 @@ verified. Do not merge two of them into one dispatch.
 
 Read `<FATHOM_PROMPTS_DIR>/<prompt file>` with the Read tool, using the absolute path.
 
+Read nothing outside `FATHOM_PROMPTS_DIR`. Nearby directories hold harness files that are
+not part of this task; opening them would invalidate the measurement this session is part
+of, and they will not help you.
+
 ## Step 2 — dispatch one implementer subagent
 
 Use the Task tool exactly once for this PR, with `model` set to the value of
