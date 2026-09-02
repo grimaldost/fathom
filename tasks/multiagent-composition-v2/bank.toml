@@ -1,0 +1,39 @@
+name = "multiagent-composition-v2"
+dataset_version = "1"
+# Bank v2 for the multiagent-dispatch composition pre-registration
+# (docs/specs/2026-09-01-multiagent-composition-preregistration.md, section
+# "Pre-registration — bank v2").
+#
+# A NEW bank, not a mutation of `multiagent-composition`: the v1 pilot found the control
+# cell at 3/3 in BOTH tier-sets, so that bank version has no headroom on the primary
+# endpoint and no main matrix is bought on it. Its ledger stays readable as the record of
+# what it measured; nothing here edits it.
+#
+# `dataset_version` stays "1". The bank NAME is the identity — a new name means new
+# `config_hash`es and a separate ledger (`ledger/multiagent-composition-v2.jsonl`) — and
+# the task, fixtures, reference solution, decomposition and acceptance oracle are the v1
+# ones unchanged, so bumping the dataset version would claim a data change that did not
+# happen.
+#
+# Everything is copied from `multiagent-composition/exprlang` byte for byte —
+# task.toml (instruction, [gate], [verify], [limits]), fixtures/, solution/, series.toml,
+# verify.py, type_probe.py, placebo_gate.py, run_convoy_gate.py — except the five PR
+# prompts. What changed, and only this:
+#
+#   prompts/01..05  - the sentences that STATE the type rule or PRESCRIBE the guard are
+#                     removed. Each PR keeps what to add, the AST shape, the precedence
+#                     placement and its test targets. PR01 keeps `TypeMismatchError` as a
+#                     new subclass of `ExprError` (later PRs import it) but not what
+#                     raises it; PR05 keeps "run the whole suite and close what is red"
+#                     without restating the type-rule matrix.
+#
+# The task statement (task.toml) still carries every rule, and the orchestrator holds it.
+# The hypothesis this bank exists to test is that the value of an independent gate under
+# external orchestration scales with how much the implementer is left to infer: v2 makes
+# the relay from orchestrator to subagent realistic and lossy.
+#
+# The visible suite (tests/, the task's own gate) stays a PROPER SUBSET of the blind
+# oracle, and the held_out group is a proper subset of what no arm's gate can reach:
+# passing every gate in every arm does not imply passing the primary endpoint. That
+# is the whole design — the endpoint has to be one the treatment cannot teach to.
+holdout = []

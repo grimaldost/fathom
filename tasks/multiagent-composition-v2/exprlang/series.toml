@@ -1,0 +1,160 @@
+# The five-PR decomposition of this task, copied unchanged from the ablation-v2 bank.
+#
+# No arm of the multiagent-composition analysis runs `convoy run`, so nothing here is
+# executed as a series. Two things read this file instead:
+#
+#   * the orchestrator briefs, for the PR order, the prompt filenames and the phase
+#     tags they pass to the driver's `--phase`;
+#   * run_convoy_gate.py, which materializes its gate spec from the [[checks]] below
+#     plus two independent type-contract probes.
+#
+# Keeping the [[checks]] here rather than in the driver is what keeps the T arms
+# honest: the checks a convoy-gate arm runs are the ones this decomposition already
+# declared for per-PR gating, not a set authored to make the gate look good.
+#
+# The decomposition mirrors the task instruction's own structure — one PR per
+# numbered feature item, plus a final pass for the two requirements that span all of
+# them (the precedence table and the type-rule matrix). Each PR is gated on a
+# cumulative subset of the project's OWN visible suite. The blind acceptance verifier
+# (verify.py) is a strict superset of that suite, and its held_out group is out of
+# reach of every arm's gate alike.
+#
+# The [governance] and [paths] blocks below are inert here — they document what a
+# governed run of this decomposition would use, and fathom's series executor would
+# overwrite them if one were ever run.
+
+[series]
+id = "exprlang-comparison-and-boolean-ops"
+version = "1"
+
+[branches]
+# fathom stages every trial workspace as a git repo on `main` (cli.py
+# _DEFAULT_BASE_BRANCH), so `base` must be exactly that.
+base = "main"
+integration = "exprlang/integration"
+
+[paths]
+prompts = "prompts"
+outputs = "outputs"
+
+[governance]
+# Placeholders — every field here is overwritten per trial by fathom's series
+# executor (cross-arm parity, contract §6). The values match what the executor pins
+# for the haiku arm, so a hand-run of this template behaves like the measured one.
+model = "claude-haiku-4-5"
+effort = "high"
+permission_mode = "default"
+# NOT overwritten by fathom — the per-spawn ceiling is authored here. 900s against
+# observed weak-tier spawns of ~130s for the WHOLE task: a PR-sized spawn still
+# running after fifteen minutes is stuck, not slow.
+timeout_seconds = 900
+
+[governance.budgets]
+# Also overwritten (20 / 5 / 3 USD). All three roles are required by the engine even
+# though the v1 driver spawns only implementation and fix.
+implementation = 20.0
+review = 5.0
+fix = 3.0
+
+[governance.tools]
+# NOT overwritten, and therefore the arm's real tool parity control: this is the same
+# allow-list the single-session and gated arms declare in their scenario [tools].
+# The `review` role is reserved and unused by the v1 driver.
+implementation = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+review = ["Read", "Glob", "Grep"]
+fix = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[review]
+# `blocking` is the reserved LLM self-review flag the v1 driver does not run; the
+# deterministic [[checks]] gate is the sole arbiter. max_fix_attempts = 2 matches the
+# GatedSessionExecutor default the gate arms run under, so a PR gets the same repair
+# budget per gate as a gated single-session trial gets for the whole task.
+blocking = false
+max_fix_attempts = 2
+
+# --- the gate -----------------------------------------------------------------
+#
+# Checks are cumulative by phase: each PR is gated on its own level AND on every
+# level already landed, so a later PR cannot silently regress an earlier one. By
+# PR04 the selected checks are exactly the project's whole visible suite; PR05 runs
+# it as a whole. No check is `independent` — each runs the workspace's own tests, the
+# same ones the gated single-spawn arms run, so this arm gets no oracle they lack.
+
+[[checks]]
+name = "baseline-arithmetic"
+run = 'python -m unittest discover -s tests -t . -p "test_arithmetic.py"'
+blocking = true
+independent = false
+# No `phases`: the no-regression invariant is checked after every PR.
+
+[[checks]]
+name = "feature-bool-literals"
+run = "python -m unittest tests.test_feature.TestFeature.test_bool_literals"
+blocking = true
+independent = false
+phases = ["bools", "compare", "boolops", "notop"]
+
+[[checks]]
+name = "feature-comparisons"
+run = "python -m unittest tests.test_feature.TestFeature.test_comparisons tests.test_feature.TestFeature.test_precedence_compare_below_arithmetic"
+blocking = true
+independent = false
+phases = ["compare", "boolops", "notop"]
+
+[[checks]]
+name = "feature-and-or"
+run = "python -m unittest tests.test_feature.TestFeature.test_and_or_values tests.test_feature.TestFeature.test_and_short_circuits tests.test_feature.TestFeature.test_type_error_number_in_boolean_op tests.test_feature.TestFeature.test_precedence_bool_below_compare"
+blocking = true
+independent = false
+phases = ["boolops", "notop"]
+
+[[checks]]
+name = "feature-not"
+run = "python -m unittest tests.test_feature.TestFeature.test_not"
+blocking = true
+independent = false
+phases = ["notop"]
+
+[[checks]]
+name = "visible-suite"
+run = "python -m unittest discover -s tests -t ."
+blocking = true
+independent = false
+phases = ["conform"]
+
+# --- the decomposition --------------------------------------------------------
+
+[[prs]]
+id = "PR01-boolean-values"
+branch = "exprlang/pr01-boolean-values"
+prompt = "01-boolean-values.md"
+phase = "bools"
+depends_on = []
+
+[[prs]]
+id = "PR02-comparison-operators"
+branch = "exprlang/pr02-comparison-operators"
+prompt = "02-comparison-operators.md"
+phase = "compare"
+depends_on = ["PR01-boolean-values"]
+
+[[prs]]
+id = "PR03-and-or-short-circuit"
+branch = "exprlang/pr03-and-or-short-circuit"
+prompt = "03-and-or-short-circuit.md"
+phase = "boolops"
+depends_on = ["PR02-comparison-operators"]
+
+[[prs]]
+id = "PR04-not-operator"
+branch = "exprlang/pr04-not-operator"
+prompt = "04-not-operator.md"
+phase = "notop"
+depends_on = ["PR03-and-or-short-circuit"]
+
+[[prs]]
+id = "PR05-conformance-pass"
+branch = "exprlang/pr05-conformance-pass"
+prompt = "05-conformance-pass.md"
+phase = "conform"
+depends_on = ["PR04-not-operator"]
