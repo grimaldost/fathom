@@ -23,3 +23,6 @@ tasks/*/plugins/superpowers@*/
 
 # per-phase scenario staging dirs (copies of scenarios/ablation-v2 arms)
 scenarios/_p*/
+
+# per-run spawn transcripts (FATHOM_STREAM_DIR); attestation reads them, the repo does not carry them
+streams-multiagent/
