@@ -580,3 +580,27 @@ the tree; the probe is the asset under the harness dir).
   in the next iteration with their own cap. Caps: $20 per spawn, the same $275 run cap.
 - Exclusion: the fixture integrity guard and the harness directory are in force; any drift
   stops the matrix and voids the trial, as for the main matrix.
+
+## Correction — 2026-09-02 22:50Z, the incident addendum's budget arithmetic (before any trial beyond n = 13)
+
+The incident addendum states the program spend at the incident as $210.04 and the remaining
+budget as $189.96. Both are wrong by $57.46: the v2 pilot's spend was counted twice, once
+inside the bank's ledger total ($96.56, which already includes the pilot's $57.46) and once
+on its own. The correct figures at the incident: v1 pilot $56.02 + bank v2 $96.56 = **$152.58
+spent, $247.42 remaining**. At the observed $2.4 per trial that remainder buys 103 trials —
+exactly the 128 − 25 the frozen plan needs.
+
+Consequence, declared now, while the matrix is at 48 valid trials and $154.19 on the bank
+(pass 7 of the n = 13 schedule running): **n returns to the frozen 16 per cell.** The record's
+`design.cells[].planned_n` needs no amendment; the disposition will count 128 completed
+trials in the frozen cells, with the 16 voided rows outside the design as the incident
+addendum describes. The runner's bank cap moves from $286 to $343 (program cap $400 less
+the v1 pilot's $56.02) for passes 14–16, which at the observed rate end near the cap; if the
+cap stops the last pass short, the achieved n is reported per cell and the shortfall is
+the disclosed deviation, not a re-plan. The n = 13 power statement (0.532) is superseded by
+the frozen declaration (0.688 at n = 16).
+
+The hook arms pre-registered above no longer fit inside this iteration's cap once the main
+matrix takes its full n; they run at the start of the next iteration under its own cap, as
+their pre-registration already provides. The correction itself changes no arm, no brief,
+no endpoint and no contrast.
