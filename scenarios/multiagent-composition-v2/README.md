@@ -6,10 +6,11 @@ wrong arms. The design, the endpoints and the contrasts live in
 [`docs/specs/2026-09-01-multiagent-composition-preregistration.md`](../../docs/specs/2026-09-01-multiagent-composition-preregistration.md),
 section "Pre-registration — bank v2"; this file is the run procedure only.
 
-The eight arms carry the v1 names and the v1 definitions. The bank name is the
-identity: `multiagent-composition-v2` gives every arm a new `config_hash` and a
-separate ledger (`ledger/multiagent-composition-v2.jsonl`), so nothing here can
-resume or overwrite a v1 row.
+The eight arms carry the v1 names and the v1 definitions. The bank name gives this
+version its own ledger file (`ledger/multiagent-composition-v2.jsonl`), so nothing
+here can resume or overwrite a v1 row. The `config_hash`es fork for a separate
+reason — the bank name does not enter the hash — namely that two hashed inputs
+changed: the injected brief content and the `[env]` key set.
 
 | Arm | Brief | After each PR the orchestrator… | Harness adds |
 |---|---|---|---|

@@ -9,11 +9,14 @@ dataset_version = "1"
 # endpoint and no main matrix is bought on it. Its ledger stays readable as the record of
 # what it measured; nothing here edits it.
 #
-# `dataset_version` stays "1". The bank NAME is the identity — a new name means new
-# `config_hash`es and a separate ledger (`ledger/multiagent-composition-v2.jsonl`) — and
-# the task, fixtures, reference solution, decomposition and acceptance oracle are the v1
-# ones unchanged, so bumping the dataset version would claim a data change that did not
-# happen.
+# `dataset_version` stays "1". The bank NAME is the identity: it gives this version its own
+# ledger file (`ledger/multiagent-composition-v2.jsonl`), and that path is what keeps the
+# two runs from resuming into each other. It is NOT what forks the hashes — the bank name
+# does not enter the hashable at all (`src/fathom/scenario.py`, where `name` is the ARM
+# name). The arms' `config_hash`es fork because two hashed inputs changed: the injected
+# brief content (`inject_sha`) and the `[env]` key set. The task, fixtures, reference
+# solution, decomposition and acceptance oracle are the v1 ones unchanged, so bumping the
+# dataset version would claim a data change that did not happen.
 #
 # Everything is copied from `multiagent-composition/exprlang` byte for byte —
 # task.toml (instruction, [gate], [verify], [limits]), fixtures/, solution/, series.toml,
