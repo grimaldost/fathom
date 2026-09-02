@@ -153,7 +153,15 @@ held-out oracle is there to catch, and which the cost-per-correct endpoint price
 4. Pre-registration → pilot → main matrix → derived report → blind review →
    choosing-models recalibration through its own refresh process.
 
-## The operator's three decisions
+## Decisions taken — 2026-09-02
+
+1. Data boundary: **confirmed** — the bank is a private local tasks directory, never
+   committed to fathom; only the record, the scenarios and the derived report enter.
+2. Iteration-2 budget: **$600 cap**, the pilot prices the main matrix, both pre-registered
+   before the first paid trial of each stage.
+3. Task shape: **single-PR tasks** now; multi-PR chains as a later factor.
+
+## The operator's three decisions (as put)
 
 1. **Data boundary.** treasuryutils-dev's code will reach the model API in every trial —
    the same path the operator's daily Claude Code use already takes on that repo. Confirm
