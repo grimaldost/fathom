@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import dataclasses
 import os
 import pathlib
@@ -15,7 +16,15 @@ import fathom.arming as _arming
 import fathom.ledger as _ledger
 from fathom.grading.verifier import run_verifier
 from fathom.scenario import ResolvedScenario
-from fathom.taskbank import Bank, Task, load_bank, stage_task
+from fathom.taskbank import (
+    Bank,
+    Task,
+    fixture_drift,
+    fixture_fingerprint,
+    fixture_manifest,
+    load_bank,
+    stage_task,
+)
 
 _DEFAULT_REPEATS = 2
 _DEFAULT_BASE_BRANCH = "main"
@@ -168,6 +177,21 @@ def _build_parser() -> argparse.ArgumentParser:
         "arm once scored 100%% over 9 trials; skip it only to re-run a matrix whose "
         "arming was already verified this session.",
     )
+
+    void_p = sub.add_parser(
+        "void",
+        help=(
+            "Append a void row excluding one recorded trial (and its run rows) from every "
+            "reader; the trial is re-run on resume. Append-only: nothing is rewritten."
+        ),
+    )
+    void_p.add_argument("bank")
+    void_p.add_argument("--scenario", required=True, help="arm name as recorded on the trial row")
+    void_p.add_argument("--repeat", required=True, type=int)
+    void_p.add_argument("--task-id", default=None, help="defaults to the bank's only task")
+    void_p.add_argument("--reason", required=True, help="the instrument defect, one sentence")
+    void_p.add_argument("--evidence", default="", help="where a reader can verify it")
+    void_p.add_argument("--ledger-dir", default=None)
 
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
@@ -524,8 +548,26 @@ def run_matrix(
     # shape as the per-spawn cap that read like a program rail and was not one.
     spent_usd = 0.0
 
+    # --- Fixture integrity: the baseline every trial stages from must not move ---
+    # An agent that reaches the task directory can edit fixtures/ (it happened: two
+    # trials of one matrix wrote a solution and a test file into the fixture, and
+    # thirteen later trials staged from it). The manifest is taken once, before any
+    # spawn; every trial is checked before it stages and after it returns; drift stops
+    # the matrix as an infrastructure failure and never buys a trial against it.
+    fixture_expected = {task.id: fixture_manifest(task) for task in tasks_to_run}
+    fixture_shas = {task.id: fixture_fingerprint(task) for task in tasks_to_run}
+
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
+        drifted = fixture_drift(task, fixture_expected[task.id])
+        if drifted:
+            print(
+                f"infrastructure error: fixture drift for task {task.id!r} before staging "
+                f"({len(drifted)} path(s): {', '.join(drifted[:6])}) — the baseline is not the "
+                "committed one; restore fixtures/ and re-run — stopping matrix",
+                file=_out,
+            )
+            return EXIT_INFRASTRUCTURE
         if max_run_usd is not None and spent_usd >= max_run_usd:
             print(
                 f"run budget reached: ${spent_usd:.2f} of ${max_run_usd:.2f} spent this "
@@ -556,10 +598,20 @@ def run_matrix(
                 # Ledger is the resume checkpoint — no writes for this trial.
                 return EXIT_INFRASTRUCTURE
 
+            # A trial that reached into the task directory corrupted the baseline for
+            # every trial after it; its own result is not scored, and the matrix stops.
+            drifted_during = fixture_drift(task, fixture_expected[task.id])
+
             # Grade the trial while workspace is still live (§7)
             verifier_data: dict[str, Any] | None = None
             verifier_errored = False
             verifier_note = ""
+            if drifted_during:
+                verifier_errored = True
+                verifier_note = (
+                    f"fixture drift during trial ({len(drifted_during)} path(s): "
+                    f"{', '.join(drifted_during[:6])})"
+                )
             # FATH-B14: the verifier's own output is in hand here and used to be
             # dropped, so a failing criterion could not be diagnosed without
             # re-running the trial — and a crashed verifier took its error message
@@ -567,7 +619,7 @@ def run_matrix(
             # not put a megabyte of agent output into git history.
             verifier_stdout = ""
             verifier_stderr = ""
-            if trial_result.scored:
+            if trial_result.scored and not drifted_during:
                 verify_entry = task.task_dir / task.verify["entry"]
                 verify_timeout = int(task.verify.get("timeout_s", 60))
                 vr = _verifier(verify_entry, workspace, timeout_s=verify_timeout)
@@ -650,7 +702,17 @@ def run_matrix(
             trial_dict["verifier_stderr"] = verifier_stderr
             trial_dict["scenario"] = sc.name
             trial_dict["holdout"] = task.id in bank.holdout
+            trial_dict["fixture_sha"] = fixture_shas[task.id]
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
+
+            if drifted_during:
+                print(
+                    f"infrastructure error: fixture drift during trial {sc.name}/{task.id} "
+                    f"repeat={repeat} ({', '.join(drifted_during[:6])}) — recorded as errored; "
+                    "restore fixtures/ and re-run — stopping matrix",
+                    file=_out,
+                )
+                return EXIT_INFRASTRUCTURE
 
     return EXIT_OK
 
@@ -766,6 +828,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_run(args)
     if args.command == "report":
         return _cmd_report(args)
+    if args.command == "void":
+        return _cmd_void(args)
     if args.command == "smoke":
         return _cmd_smoke(args)
     if args.command == "verify-arming":
@@ -945,6 +1009,83 @@ def _warn_if_unpublished(bank: str) -> None:
             f"Write it up before the conclusion survives only in a commit message.",
             file=sys.stderr,
         )
+
+
+def void_trial(
+    bank: str,
+    scenario: str,
+    repeat: int,
+    reason: str,
+    *,
+    task_id: str | None = None,
+    evidence: str = "",
+    ledger_dir: pathlib.Path | None = None,
+) -> _ledger.VoidRecord:
+    """Append a void row for the latest recorded trial matching (scenario, repeat[, task]).
+
+    Raises ``LookupError`` when no such trial row exists — a void must name a recorded
+    trial, never a key that was never bought.
+    """
+    import datetime as _dt
+
+    _dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
+    target: dict[str, Any] | None = None
+    # Raw rows, not `iter_records`: the dataclass view drops the extra keys the run loop
+    # writes (`scenario`, `valid`, ...), and the arm name is exactly what is matched here.
+    path = _dir / f"{bank}.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    for line in lines:
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(row, dict) or row.get("kind") != "trial":
+            continue
+        if row.get("scenario") != scenario or int(row.get("repeat", -1)) != repeat:
+            continue
+        if task_id is not None and row.get("task_id") != task_id:
+            continue
+        target = row
+    if target is None:
+        raise LookupError(
+            f"no trial row for scenario={scenario!r} repeat={repeat}"
+            + (f" task={task_id!r}" if task_id else "")
+            + f" in ledger {bank!r}"
+        )
+    void = _ledger.VoidRecord(
+        bank=bank,
+        task_id=str(target.get("task_id", "")),
+        repeat=repeat,
+        dataset_version=str(target.get("dataset_version", "")),
+        config_hash=str(target.get("config_hash", "")),
+        scenario=scenario,
+        reason=reason,
+        evidence=evidence,
+        voided_at=_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+    )
+    _ledger.append_record(bank, void, ledger_dir=_dir)
+    return void
+
+
+def _cmd_void(args: argparse.Namespace) -> int:
+    ledger_dir = pathlib.Path(args.ledger_dir) if args.ledger_dir else None
+    try:
+        void = void_trial(
+            args.bank,
+            args.scenario,
+            args.repeat,
+            args.reason,
+            task_id=args.task_id,
+            evidence=args.evidence,
+            ledger_dir=ledger_dir,
+        )
+    except LookupError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"voided {void.scenario} repeat={void.repeat} task={void.task_id}: {void.reason}")
+    return EXIT_OK
 
 
 def _cmd_report(args: argparse.Namespace) -> int:

@@ -10,6 +10,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from fathom.taskbank import (
+    fixture_drift,
+    fixture_fingerprint,
+    fixture_manifest,
     Bank,
     DuplicateTaskIdError,
     InvalidHoldoutIdError,
@@ -458,3 +461,52 @@ if __name__ == "__main__":
         sys.exit(1)
     else:
         print(f"All {len(tests)} tests passed!")
+
+
+# ---------------------------------------------------------------------------
+# Fixture integrity: fingerprint, manifest, drift
+# ---------------------------------------------------------------------------
+
+
+def _task_with_fixture(root: Path) -> Task:
+    fixtures = root / "task-x" / "fixtures"
+    (fixtures / "pkg").mkdir(parents=True)
+    (fixtures / "pkg" / "a.py").write_text("print(1)\n", encoding="utf-8")
+    (fixtures / "README.md").write_text("# fixture\n", encoding="utf-8")
+    (fixtures / "pkg" / "__pycache__").mkdir()
+    (fixtures / "pkg" / "__pycache__" / "a.cpython-314.pyc").write_bytes(b"\x00cache")
+    return Task(
+        id="task-x",
+        instruction="x",
+        limits={},
+        verify={"entry": "verify.py"},
+        task_dir=root / "task-x",
+    )
+
+
+def test_fixture_fingerprint_is_stable_and_ignores_caches(tmp_path: Path):
+    task = _task_with_fixture(tmp_path)
+    first = fixture_fingerprint(task)
+    assert first == fixture_fingerprint(task)
+    (tmp_path / "task-x" / "fixtures" / "pkg" / "__pycache__" / "b.pyc").write_bytes(b"x")
+    assert fixture_fingerprint(task) == first
+    manifest = fixture_manifest(task)
+    assert set(manifest) == {"pkg/a.py", "README.md"}
+    assert fixture_drift(task, manifest) == []
+
+
+def test_fixture_drift_names_modified_added_and_removed_paths(tmp_path: Path):
+    task = _task_with_fixture(tmp_path)
+    manifest = fixture_manifest(task)
+    fixtures = tmp_path / "task-x" / "fixtures"
+    (fixtures / "pkg" / "a.py").write_text("print(2)\n", encoding="utf-8")
+    (fixtures / "tests_extra.py").write_text("assert True\n", encoding="utf-8")
+    (fixtures / "README.md").unlink()
+    assert fixture_drift(task, manifest) == ["README.md", "pkg/a.py", "tests_extra.py"]
+    assert fixture_fingerprint(task) != fixture_fingerprint(_task_with_fixture(tmp_path / "other"))
+
+
+def test_fixture_fingerprint_of_a_task_without_fixtures_is_defined(tmp_path: Path):
+    task = Task(id="bare", instruction="x", limits={}, verify={"entry": "v.py"}, task_dir=tmp_path)
+    assert fixture_fingerprint(task) == fixture_fingerprint(task)
+    assert fixture_manifest(task) == {}

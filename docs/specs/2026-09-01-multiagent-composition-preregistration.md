@@ -413,3 +413,105 @@ bank name does not enter the hashable (`src/fathom/scenario.py`; its `name` is t
 name). The hashes do fork, because the injected brief content and the `[env]` key set both
 changed; ledger separation is real and comes from the per-bank ledger path. The conclusion
 stands — no v2 row can resume or overwrite a v1 row — but the derivation was not checked.
+
+## Addendum, 2026-09-02 17:10Z — fixture contamination incident, exclusions, harness repair, and the resumed plan
+
+**Written after the event, before any further paid trial.** This addendum records a defect in
+the instrument, not in the arms, and the deviation it forces from the main-matrix
+pre-registration above (n = 16 per cell; no exclusion rule).
+
+### What happened
+
+During the main matrix the bank's *fixture* — the committed starting tree every trial stages
+its workspace from (`tasks/multiagent-composition-v2/exprlang/fixtures/`) — was modified by
+agents inside trials. `git status` at 16:55Z showed four modified files
+(`fixtures/exprlang/{errors,evaluator,lexer,parser}.py`, mtime 15:42:06Z, carrying an
+implementation of the feature under test) and one untracked file
+(`fixtures/tests/test_comparisons.py`, mtime 13:21:53Z, a visible-suite test for the
+feature). Every trial that staged after 13:21:53Z therefore started from a tree the bank never
+declared: an extra visible test at first, the solution's parser/evaluator changes later.
+
+Evidence, from the captured orchestrator streams (event timestamps; stream file names carry
+the *end* time of a spawn):
+
+- pilot-v2 `perpr-haiku` r1 (10:12:26–10:32:47Z): the orchestrator edited the four fixture
+  files, ran the probes and `verify.py` against the fixture path, ran `git -C <task_dir>
+  status` / `diff` (the diff listing included this pre-registration document), then ran
+  `git checkout -- fixtures/exprlang/*.py`, restoring those four files before it ended. It
+  reached the harness and the experiment's own documents; its result is unusable regardless
+  of what its workspace scored.
+- main-v2 `final-haiku` r3 (13:18:40–13:31:02Z): Edit calls on the four fixture files, a
+  Write of `fixtures/tests/test_comparisons.py`, `unittest discover` run inside the fixture,
+  and a `cp` of that test file into its staged workspace. It never restored the fixture.
+- The 15:42:06Z write to the four `.py` files falls inside main-v2 `perpr-haiku` r4
+  (15:30:35–15:42:37Z), whose orchestrator stream carries no fixture path: the write came
+  from a subagent, whose tool calls the captured stream does not include. Inferred from the
+  timestamp, not observed.
+
+Root cause: the task directory is reachable from what the arms hand the orchestrator. The
+perpr and placebo briefs pass `$FATHOM_TASK_DIR` explicitly (the driver's first argument);
+every arm's `$FATHOM_PROMPTS_DIR` is `<task dir>/prompts`, so the parent is one path segment
+away, and `fixtures/` looks like a project root (it holds `exprlang/` and `tests/`). The v1
+pilot had already flagged a "driver-name visibility leak" through the same path; the
+mitigation then (a prompts-only directory) hid the *listing*, not the *path*. Nothing checked
+the fixture's integrity between trials, and nothing could exclude a recorded trial without
+rewriting an append-only ledger.
+
+### Disposition — 16 trial rows voided (`kind: void` rows appended to the ledger)
+
+Voided, with the reason recorded on each void row:
+
+- pilot-v2 `perpr-haiku` r1 — reached the harness (edited the fixture; read the
+  pre-registration diff).
+- main-v2 `final-haiku` r3 — edited the fixture; wrote the visible-suite test into it.
+- every main-v2 trial that started after 13:21:53Z, i.e. staged from a modified fixture:
+  `final-sonnet` r3, `perpr-haiku` r3, `perpr-sonnet` r3, `placebo-haiku` r3,
+  `placebo-sonnet` r3, `control-haiku` r4, `control-sonnet` r4, `final-haiku` r4,
+  `final-sonnet` r4, `perpr-haiku` r4, `perpr-sonnet` r4, `placebo-haiku` r4,
+  `placebo-sonnet` r4, and `control-haiku` r5 (already `errored`: its verifier crashed when
+  the fixture was restored under it).
+
+Not voided: the 23 other pilot-v2 trials (all before 13:21:53Z; the pilot's `perpr-haiku` r1
+restored the four files it edited before the next trial staged, and no later pilot trial
+touched the fixture per its stream) and main-v2 `control-haiku` r3, `control-sonnet` r3.
+Valid trials after the disposition: 25 (control 5+5, placebo 3+3, perpr 2+3, final 3+3 by
+tier-set haiku+sonnet). Spend on the 16 voided rows ≈ $39; bank spend to date $96.56; program
+spend $210.04 of the $400 iteration cap.
+
+The exclusion is an *instrument* exclusion applied before any outcome of the affected trials
+was read into a contrast: the void list is defined by a timestamp and two stream facts, not
+by results. The `selection_exclusion` threat in the record moves from `controlled` to
+`residual` with this addendum as its statement.
+
+### Harness repair (before the first resumed trial)
+
+1. fathom `void` rows: an append-only exclusion (`fathom void <bank> --scenario --repeat
+   --reason --evidence`) that every reader honours in order (`ledger.apply_voids`): a voided
+   trial is re-run on resume and the re-run counts. Nothing in the ledger is rewritten.
+2. fathom fixture integrity guard: a manifest of the fixture tree is taken before any spawn;
+   every trial is checked before it stages and after it returns; drift stops the matrix as
+   an infrastructure failure, the trial that drifted is recorded `errored` (never scored),
+   and every trial row now carries `fixture_sha`.
+3. Harness directory: the runner script stages the five harness files (prompts, the driver,
+   the probe, the placebo, `series.toml`) into a directory outside the repository and points
+   `$FATHOM_TASK_DIR` / `$FATHOM_PROMPTS_DIR` there. No path an orchestrator or subagent is
+   given now leads to `fixtures/`, `solution/` or `verify.py`. The arms' `config_hash` is
+   unchanged: the `[env]` values are templates, resolved at spawn time by design.
+4. The fixture was restored to its committed state at 16:58Z (`git checkout` of the four
+   files, removal of the untracked test file and of `__pycache__` directories).
+
+### The resumed plan, declared now
+
+Budget remaining for this iteration: $189.96. At the pilot's $19.15 per pass, the voided
+trials plus the passes still owed cannot reach n = 16 (≈ $245). **n is re-declared as 13 per
+cell** (104 trials; 79 to buy ≈ $189; the runner stops at a bank spend of $286). The
+contrasts, endpoints, Holm family, tier-set separation and one-sidedness are unchanged. Exact
+power on the decisive contrast (perpr vs placebo, Laplace-shrunk pilot rates 0.875 vs 0.375,
+alpha 0.0125) at n = 13 is **0.532** (perpr vs control, 0.875 vs 0.0625: 0.992), computed
+with the same exact-Fisher script as the n = 16 declaration (0.688) before the first resumed
+trial; a non-significant decisive contrast is reported as underpowered at the achieved n. Interleaving
+stays pass-wise; the voided pass-4 and pass-5 trials are re-bought first (resume order).
+
+Should the operator raise the cap, n returns to 16 by the same passes; the record's
+`design.cells[].planned_n` stays 16 until the matrix closes and is then reconciled to the
+achieved n with this addendum as the reason.

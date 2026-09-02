@@ -21,6 +21,8 @@ from collections import defaultdict
 from math import comb
 from pathlib import Path
 
+from fathom.ledger import apply_voids
+
 HELD_OUT = (
     "type_bool_arith_heldout",
     "type_compare_heldout",
@@ -89,6 +91,8 @@ def load(ledger: Path) -> tuple[list[dict], list[dict]]:
     rows = [
         json.loads(line) for line in ledger.read_text(encoding="utf-8").splitlines() if line.strip()
     ]
+    # Voided trials and their runs are excluded as of the void row; a re-run counts.
+    rows = apply_voids(rows)
     trials = [r for r in rows if r.get("kind") == "trial" and split_scenario(r.get("scenario", ""))]
     runs = [r for r in rows if r.get("kind") == "run"]
     return trials, runs

@@ -8,6 +8,7 @@ All executors/runners/stage/verifier are stubbed — no real spawns.
 from __future__ import annotations
 
 import io
+import json
 import pathlib
 import shutil
 import sys
@@ -22,11 +23,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 import fathom.ledger as _ledger
 from fathom.adapters.base import ExitStatus
 from fathom.adapters.base import RunRecord as AdapterRunRecord
-from fathom.cli import EXIT_INFRASTRUCTURE, EXIT_OK, run_matrix
+from fathom.cli import EXIT_INFRASTRUCTURE, EXIT_OK, run_matrix, void_trial
 from fathom.grading.verifier import VerifierResult
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus
-from fathom.taskbank import Bank, Task
+from fathom.taskbank import Bank, Task, fixture_fingerprint
 
 
 # ---------------------------------------------------------------------------
@@ -1672,3 +1673,94 @@ class SpendRailTests(unittest.TestCase):
         )
         self.assertEqual(code, 0)
         self.assertNotIn("run budget reached", out)
+
+
+# ---------------------------------------------------------------------------
+# Fixture integrity guard and void rows in run_matrix
+# ---------------------------------------------------------------------------
+
+
+class FixtureGuardTests(_Base):
+    def _fixture_task(self, name: str = "fx") -> Task:
+        root = Path(self._tmp) / name
+        (root / "fixtures" / "pkg").mkdir(parents=True)
+        (root / "fixtures" / "pkg" / "a.py").write_text("print(1)\n", encoding="utf-8")
+        return Task(
+            id=name, instruction="x", limits={}, verify={"entry": "verify.py"}, task_dir=root
+        )
+
+    def test_every_trial_row_records_the_fixture_sha(self):
+        task = self._fixture_task()
+        code, _ = _run_matrix(
+            _make_bank("tb", [task]), [self.sc_a], repeats=1, ledger_dir=self.ledger_dir
+        )
+        self.assertEqual(code, EXIT_OK)
+        rows = [
+            json.loads(line)
+            for line in (self.ledger_dir / "tb.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        trial = next(r for r in rows if r["kind"] == "trial")
+        self.assertEqual(trial["fixture_sha"], fixture_fingerprint(task))
+
+    def test_drift_before_staging_stops_the_matrix_without_spend(self):
+        task = self._fixture_task()
+        mutating_stage = _mutating_stage_factory(task, when="before")
+        code, out = _run_matrix(
+            _make_bank("tb", [task]),
+            [self.sc_a],
+            repeats=2,
+            ledger_dir=self.ledger_dir,
+            stage_task_fn=mutating_stage,
+        )
+        self.assertEqual(code, EXIT_INFRASTRUCTURE)
+        self.assertIn("fixture drift", out)
+        rows = [
+            json.loads(line)
+            for line in (self.ledger_dir / "tb.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        # The first trial ran and was recorded; the mutation happened during it, so it
+        # is errored (not scored) and nothing after it was bought.
+        trials = [r for r in rows if r["kind"] == "trial"]
+        self.assertEqual(len(trials), 1)
+        self.assertEqual(trials[0]["status"], "errored")
+        self.assertIn("fixture drift during trial", trials[0]["detail"])
+        self.assertFalse(trials[0]["valid"])
+
+    def test_a_voided_trial_is_planned_again_and_its_rerun_counts(self):
+        task = self._fixture_task()
+        bank = _make_bank("tb", [task])
+        code, _ = _run_matrix(bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        self.assertEqual(code, EXIT_OK)
+        code, out = _run_matrix(bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        self.assertIn("planned:  0 trials (1 already done)", out)
+        void = void_trial(
+            "tb", "bare", 0, "fixture drift", evidence="test", ledger_dir=self.ledger_dir
+        )
+        self.assertEqual(void.config_hash, "a" * 64)
+        code, out = _run_matrix(bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        self.assertIn("planned:  1 trials (0 already done)", out)
+        self.assertEqual(code, EXIT_OK)
+        code, out = _run_matrix(bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        self.assertIn("planned:  0 trials (1 already done)", out)
+        with self.assertRaises(LookupError):
+            void_trial("tb", "nope", 0, "r", ledger_dir=self.ledger_dir)
+
+
+def _mutating_stage_factory(task: Task, when: str):
+    """A stage stub that edits the task's fixture while the first trial is live."""
+    state = {"count": 0}
+
+    @contextmanager
+    def _stage(t, base_branch):
+        d = tempfile.mkdtemp(prefix="fathom-stub-ws-")
+        try:
+            state["count"] += 1
+            if state["count"] == 1:
+                (task.task_dir / "fixtures" / "pkg" / "a.py").write_text(
+                    "print('solution')\n", encoding="utf-8"
+                )
+            yield Path(d)
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+    return _stage
