@@ -311,6 +311,54 @@ control-sonnet may not. If control-haiku stays at 3/3 on v2, the decomposition i
 not the prompts' explicitness, is what removes the defect class, and that is reported as
 the finding of the iteration.
 
+*Run log, 2026-09-02 ~00:10 — the v2 pilot stopped at 7 of 24 trials by the harness on
+`authentication_failed` (the seat's refresh failed again ~4 h after login; $14.81 spent; the
+seven completed trials are in the ledger, the failing eighth was not written). Recorded
+here as a log line, drawing nothing: control-haiku 0/3, control-sonnet 0/3 on
+`held_out_clean` (and 0/3 on the original 15); the single completed `final-haiku` trial
+went first-gate red, repaired once, and reads 1/1 on every endpoint. The pilot resumes with
+the same command once the seat is re-authenticated; the readout and the ceiling rule apply
+to the completed 24, not to this fragment.*
+
+## Addendum — 2026-09-02, the v2 pilot readout and the main-matrix pre-registration
+
+**v2 pilot as run:** 24/24 completed, $57.46. `held_out_clean` — control 0/3 (haiku) and
+0/3 (sonnet); placebo 1/3 and 1/3; per-PR convoy gate 3/3 and 3/3; final convoy gate 3/3
+and 2/3. The sensitivity endpoint and the original 15 read identically. Every `final-*`
+first harness gate went red (6/6; 5 repaired). Arming criteria met in every trial
+(`perpr-*` driver invocations 8–19, placebo fired 6/6, provenance 6/6). No inference is
+drawn from these 24; they are the pilot the pre-registration describes.
+
+**The ceiling rule:** control is 0/3 in both tier-sets — headroom in both. Neither tier-set
+is dropped; the v1 prediction that Sonnet might stay at ceiling was wrong, and that is
+recorded as the v1→v2 finding: the prompts' explicitness, not the tier, produced the v1
+ceiling.
+
+**Main matrix, pre-registered before its first trial:**
+
+- **n.** The pre-registered calculation (exact one-sided Fisher, α = 0.0125 = Holm's
+  strictest step over the four contrasts, Laplace-shrunk pilot rates 0.875 vs 0.375 for
+  T-perPR vs P) asks **n = 20 per cell for power 0.80**. The remaining budget ($400 −
+  $56.02 − $57.46 = $286.52) buys 13 further repeat passes over eight arms at the pilot's
+  observed $19.15 per pass with a 10% margin. **n = 16 per cell** (3 pilot + 13 main) is
+  therefore the budget-bound n; its exact power on the decisive contrast is **0.69** per
+  tier-set, and 0.99 on T-perPR vs C. Declared now: a non-significant decisive contrast at
+  n = 16 is reported as *underpowered at the achieved n*, not as a null.
+- **Pooling.** The pilot's 3 repeats per arm are the first three of the 16 — same arms,
+  same `config_hash`es, contemporaneous, resumed by the run loop as already done. They
+  were block-ordered (disclosed above); passes 4–16 are arm-interleaved by pass.
+- **Order.** `--repeats k` for k = 4..16, each pass covering every arm once; the loop's
+  within-pass order is fixed (alphabetical by arm), so drift is bounded to one pass
+  (~25 min) rather than the matrix.
+- **Caps.** `--max-spawn-usd 20`, `--max-run-usd 275`. Seat death stops the pass script;
+  the same command resumes.
+- **Endpoints, contrasts, tests, corrections, attestation: unchanged.** The report leads
+  with T-perPR vs P per tier-set (Holm over four), then T-perPR vs C, T-final vs C,
+  T-final vs P; the sensitivity endpoint beside each; Wilson intervals on every cell;
+  dose counts (gate reds, fix dispatches) per arm; cost and wall-clock per trial. Any
+  other reading is exploratory and labeled.
+- **Blind review before any claim leaves the repo.**
+
 ## Addendum, 2026-09-02 — bank v2 as executed, before its first paid trial
 
 Written after the bank was built and blind-reviewed, before any v2 spend. It records where
