@@ -26,3 +26,6 @@ scenarios/_p*/
 
 # per-run spawn transcripts (FATHOM_STREAM_DIR); attestation reads them, the repo does not carry them
 streams-multiagent/
+
+# operator-local runner scripts (machine paths); not part of the tool
+local/
