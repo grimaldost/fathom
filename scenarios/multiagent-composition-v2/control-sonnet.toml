@@ -1,0 +1,54 @@
+name = "control-sonnet"
+# Arm C (control) — multiagent dispatch alone, tier-set sonnet.
+#
+# Tier-set sonnet: implementer subagents run on claude-sonnet-5 — what the
+# choosing-models rubric assigns to all five PRs and the tier the operator actually
+# dispatches. The corpus predicts saturation here, which is itself a pre-registered
+# prediction.
+#
+# The orchestrator dispatches one implementer subagent per PR, in dependency order, and
+# after each PR verifies with the project's own visible suite. Nothing else: no gate
+# ceremony, no independent check. This is the baseline every other arm is read against.
+#
+# Differs from control: nothing — this IS control.
+#
+# Shared by all eight arms of this bank and byte-identical in each: orchestrator model
+# (claude-sonnet-5) and effort, the tool allow-list, `trial_timeout_s`, and the five
+# `[env]` keys. `${FATHOM_TASK_DIR}` and `${FATHOM_PROMPTS_DIR}` are TEMPLATES — they
+# enter config_hash unresolved and are substituted from the invoking shell's environment
+# at spawn time, so the arm's identity does not move when the checkout does. Export
+# FATHOM_TASK_DIR to tasks/multiagent-composition-v2/exprlang and FATHOM_PROMPTS_DIR to
+# that directory's `prompts/` before running.
+#
+# FATHOM_PROMPTS_DIR is what v2 adds. The briefs point the orchestrator at it, and it
+# holds the five PR prompts and nothing else, so no arm's orchestrator has a brief-given
+# path to the task dir — which also holds the driver, the probes, the placebo and
+# series.toml. In the v1 pilot two non-treatment orchestrators saw the driver's filename
+# through that path; neither executed it, but the arm structure was visible where it
+# should not have been.
+#
+# The brief's CONTENT is hashed, not its path: editing a brief forks longitudinal
+# history, and per the pre-registration any edit to a brief, the driver, the probes, the
+# placebo or verify.py bumps the affected arm names. The scripts a command or an [env]
+# value points at are NOT hashed — that is why the rule is a naming rule.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+
+[context]
+inject = "assets/brief-control.md"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+FATHOM_IMPL_MODEL = "claude-sonnet-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

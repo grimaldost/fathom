@@ -82,11 +82,63 @@ class GradingRecord:
     kind: str = dataclasses.field(default="grading", init=False)
 
 
+@dataclasses.dataclass
+class VoidRecord:
+    """Append-only exclusion of one recorded trial (and its run rows).
+
+    A void names a (bank, dataset_version, task_id, config_hash, repeat) key and the
+    reason its recorded outcome must not be read — an instrument defect discovered after
+    the fact (a mutated fixture, an agent that reached the harness), never a result the
+    reader dislikes. Order matters: a void applies to the trial and run rows written
+    BEFORE it, so the same key can be re-run afterwards and the re-run counts. The
+    original rows stay in the file, as the append-only invariant requires; every reader
+    goes through :func:`apply_voids` or :func:`completed_keys`, which honour the order.
+    """
+
+    bank: str
+    task_id: str
+    repeat: int
+    dataset_version: str
+    config_hash: str
+    scenario: str
+    reason: str
+    evidence: str = ""
+    voided_at: str = ""
+    kind: str = dataclasses.field(default="void", init=False)
+
+
 _KIND_MAP: dict[str, type] = {
     "trial": TrialRecord,
     "run": RunRecord,
     "grading": GradingRecord,
+    "void": VoidRecord,
 }
+
+
+def _row_key(row: dict[str, Any]) -> tuple[str, str, str, str, int]:
+    return (
+        str(row.get("bank", "")),
+        str(row.get("dataset_version", "")),
+        str(row.get("task_id", "")),
+        str(row.get("config_hash", "")),
+        int(row.get("repeat", 0) or 0),
+    )
+
+
+def apply_voids(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The rows a reader may use: trial and run rows voided by a later void row are dropped.
+
+    A void row drops every ``trial`` and ``run`` row with its key that precedes it; rows
+    with that key appended after the void (a re-run) survive. Void rows themselves are
+    kept, so a report can say what was excluded and why. Pure; order-preserving.
+    """
+    kept: list[dict[str, Any]] = []
+    for row in rows:
+        if row.get("kind") == "void":
+            key = _row_key(row)
+            kept = [r for r in kept if r.get("kind") not in ("trial", "run") or _row_key(r) != key]
+        kept.append(row)
+    return kept
 
 
 def _from_dict(data: dict[str, Any]) -> TrialRecord | RunRecord | GradingRecord | dict[str, Any]:
@@ -137,12 +189,24 @@ def completed_keys(
 ) -> set[tuple[str, str, str, str, int]]:
     """Return completed resume keys: {(bank, dataset_version, task_id, config_hash, repeat)}.
 
-    Errored trials are excluded — only status=='completed' contributes.
+    Errored trials are excluded — only status=='completed' contributes — and a void
+    row removes the key it names from the set as of its position, so a voided trial is
+    re-run on resume and its re-run, appended later, is done.
     """
     keys: set[tuple[str, str, str, str, int]] = set()
     for record in iter_records(bank, ledger_dir=ledger_dir):
         if isinstance(record, TrialRecord) and record.status == "completed":
             keys.add(
+                (
+                    record.bank,
+                    record.dataset_version,
+                    record.task_id,
+                    record.config_hash,
+                    record.repeat,
+                )
+            )
+        elif isinstance(record, VoidRecord):
+            keys.discard(
                 (
                     record.bank,
                     record.dataset_version,

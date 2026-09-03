@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx --from git+https://github.com/grimaldost/convoy@v0.12.0 convoy hook",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uvx --from git+https://github.com/grimaldost/convoy@v0.12.0 convoy hook",
+            "timeout": 900
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import os, shutil, pathlib; src = pathlib.Path('.convoy/hook.log'); dst = pathlib.Path(os.environ['FATHOM_STREAM_DIR']) / (os.environ.get('FATHOM_STREAM_TAG', 'untagged') + '--hook.log'); shutil.copy(src, dst) if src.exists() else None\"",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

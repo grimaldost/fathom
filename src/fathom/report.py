@@ -199,6 +199,10 @@ def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
     this render and the exclusion is surfaced, never silent. A single-version bank is
     unaffected — nothing is excluded and the output is byte-identical.
     """
+    # Voided trials (and their runs) are excluded as of the void row: the re-run counts.
+    from fathom.ledger import apply_voids as _apply_voids
+
+    raw = _apply_voids(raw)
     trial_dvs = [r.get("dataset_version") for r in raw if r.get("kind") == "trial"]
     trial_dvs = [dv for dv in trial_dvs if dv is not None]
     if not trial_dvs:

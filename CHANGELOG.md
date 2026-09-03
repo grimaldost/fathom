@@ -5,6 +5,26 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
+### Added
+
+- **Void rows** (`src/fathom/ledger.py`, `fathom void`): an append-only `kind: void` row
+  names one recorded trial (bank, dataset version, task, config hash, repeat) and the
+  instrument defect that excludes it; every reader (`completed_keys`, the ledger index,
+  `fathom report`) goes through `apply_voids`, which drops the trial and run rows that
+  precede the void and keeps a later re-run. Nothing is rewritten, so the excluded rows
+  stay in the ledger for the disposition to count.
+- **Fixture integrity guard** (`src/fathom/taskbank.py`, `fathom run`): the fixture
+  tree's manifest is taken once before any spawn and checked before each trial stages and
+  after it returns; drift stops the matrix as an infrastructure failure, and every trial
+  row carries `fixture_sha`. Two trials of one matrix had edited the fixture through a
+  path the harness exposed and fourteen later trials staged from it.
+- **Readout tools for the multiagent-composition banks**: `tools/readout_multiagent.py`
+  (per-cell rates with Wilson intervals, the pre-registered contrasts with Holm, cost and
+  wall-clock medians, voids applied) and `tools/stream_facts.py` (per-trial facts read from
+  the `tool_use` events of each counted trial's surviving stream: Agent dispatches,
+  executed gate calls and reds, task-directory exposure, model snapshots, a per-cell dose
+  table, and `--fail-on-exposure` as a close gate).
+
 ### Changed
 
 - **A gated-session trial records what its extra gate actually said**

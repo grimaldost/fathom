@@ -173,3 +173,73 @@ def stage_task(task: Task, base_branch: str) -> Generator[Path, None, None]:
         yield workspace
     finally:
         _remove_tree(tmp_dir)
+
+
+# ---------------------------------------------------------------------------
+# Fixture integrity — the staged baseline must be the committed baseline
+# ---------------------------------------------------------------------------
+
+_FINGERPRINT_IGNORED_DIRS = frozenset({"__pycache__", ".git"})
+_FINGERPRINT_IGNORED_SUFFIXES = (".pyc", ".pyo")
+
+
+def _fixture_files(task: Task) -> dict[str, Path]:
+    fixtures_dir = task.task_dir / "fixtures"
+    files: dict[str, Path] = {}
+    if not fixtures_dir.exists():
+        return files
+    for path in sorted(fixtures_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(fixtures_dir)
+        if any(part in _FINGERPRINT_IGNORED_DIRS for part in rel.parts):
+            continue
+        if path.suffix in _FINGERPRINT_IGNORED_SUFFIXES:
+            continue
+        files[rel.as_posix()] = path
+    return files
+
+
+def fixture_fingerprint(task: Task) -> str:
+    """sha256 over the fixture tree's relative paths and bytes (caches and .git ignored).
+
+    Every trial stages its workspace from ``fixtures/``; an agent that reaches the task
+    directory can edit it, and from then on every trial starts from a baseline the bank
+    never declared. The fingerprint is recorded on each trial row (``fixture_sha``) and
+    compared before and after every trial by ``run_matrix``, which stops the matrix on
+    drift instead of buying trials against a corrupted instrument.
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    for rel, path in _fixture_files(task).items():
+        digest.update(rel.encode("utf-8") + b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def fixture_drift(task: Task, expected_files: dict[str, str]) -> list[str]:
+    """Paths whose content differs from *expected_files* ({rel path: sha256}), added or removed."""
+    import hashlib
+
+    current = {
+        rel: hashlib.sha256(path.read_bytes()).hexdigest()
+        for rel, path in _fixture_files(task).items()
+    }
+    changed = [
+        rel
+        for rel in sorted(set(current) | set(expected_files))
+        if current.get(rel) != expected_files.get(rel)
+    ]
+    return changed
+
+
+def fixture_manifest(task: Task) -> dict[str, str]:
+    """{relative posix path: sha256} for the fixture tree — the basis of :func:`fixture_drift`."""
+    import hashlib
+
+    return {
+        rel: hashlib.sha256(path.read_bytes()).hexdigest()
+        for rel, path in _fixture_files(task).items()
+    }

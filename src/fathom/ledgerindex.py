@@ -92,6 +92,9 @@ def canonical_bytes(path: Path) -> bytes:
 def summarise(path: Path) -> dict:
     """One index row's facts for a single ledger."""
     parsed = rows(path)
+    from fathom.ledger import apply_voids as _apply_voids
+
+    parsed = _apply_voids(parsed)
     trials = [r for r in parsed if r.get("kind") == "trial"]
     runs = [r for r in parsed if r.get("kind") == "run"]
     completed: collections.Counter[str] = collections.Counter(

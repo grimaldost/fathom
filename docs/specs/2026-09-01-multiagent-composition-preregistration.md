@@ -210,3 +210,501 @@ convoy's favor and the persona forbids it regardless of size. The hints now quot
 corrected in the same commit. No ledger row exists under any of the eight hashes, so no arm
 is renamed. The `held_out_clean_independent` sensitivity endpoint (#4) is kept: the probes
 still exercise the same rule as two held-out criteria with different literals.
+
+## Addendum — 2026-09-02, the pilot readout and the decision it forces
+
+**Pilot as run.** 24/24 trials completed, $56.02 est. (ledger `multiagent-composition`,
+readout by `tools/readout_multiagent.py`, transcripts in `streams-multiagent/2026-09-01-pilot`).
+Per the pre-registration, no inference is drawn from it. The numbers, for the record:
+
+| cell | held_out_clean | ho_independent | full15 | $/trial (median) | wall s (median) |
+|---|---|---|---|---|---|
+| control-haiku | 3/3 | 3/3 | 3/3 | 2.03 | 645 |
+| placebo-haiku | 3/3 | 3/3 | 3/3 | 2.15 | 992 |
+| perpr-haiku | 3/3 | 3/3 | 3/3 | 2.17 | 908 |
+| final-haiku | 3/3 | 3/3 | 3/3 | 1.81 | 784 |
+| control-sonnet | 3/3 | 3/3 | 3/3 | 2.41 | 645 |
+| placebo-sonnet | 3/3 | 3/3 | 3/3 | 2.64 | 653 |
+| perpr-sonnet | 3/3 | 3/3 | 3/3 | 2.80 | 792 |
+| final-sonnet | 3/3 | 3/3 | 3/3 | 2.43 | 684 |
+
+Every pre-registered contrast is 3/3 vs 3/3 (one-sided p = 1.0; Holm 1.0). The `final-*`
+harness gate went red in 0 of 6 trials.
+
+**Arming criteria — all met, with two notes.** Every `perpr-*` transcript shows the driver
+invoked (7–16 times per trial); every `placebo-*` transcript shows the placebo fired; all
+six `final-*` rows carry the convoy provenance line in `detail`. Mechanism attestation the
+pre-registration did not list but the transcripts give: 5–6 `Agent` dispatches per trial
+in every arm (two placebo trials show 5 — one dispatch fewer than PRs; the readout counts
+tool-use events, and a single dispatch may have covered two PRs or one may have failed
+and been retried in-orchestrator; the implementations still passed every criterion), the
+subagents requested at the pinned tier, orchestrator at Sonnet, and — a bonus the ledger
+lacks — the haiku subagents' **dated** snapshot `claude-haiku-4-5-20251001`. Sonnet events
+carry only the undated alias; that tier-set's snapshot remains unpinnable.
+
+**Two hygiene findings, disclosed.** (1) Arms ran as **blocks** (all repeats of one arm,
+then the next), not interleaved as promised: the run loop is scenario → task → repeat and
+I did not verify it before launching. Time drift is confounded with arm across a
+~2.5-hour window. Tolerable for a pilot that infers nothing; the main matrix runs as
+repeat passes (`--repeats k` for k = 1..n, each pass covering every arm once — verified to
+resume correctly mid-pilot). (2) Two non-treatment orchestrators (`final-sonnet` r0,
+`placebo-sonnet` r2) saw the driver's filename — via a directory listing of the task dir
+and via `series.toml`'s header comment, both readable because the brief points the
+orchestrator at that directory for the prompts. Neither **executed** it (no Bash tool-use
+carries it in either transcript). Not contamination; a leak of the arm structure that v2
+removes.
+
+**The decision, per the ceiling rule committed at trial 6 of 24 (before any treatment
+trial landed):** the control cell is 3/3 in **both** tier-sets, so this bank has no
+headroom on the primary endpoint at either tier. **No main matrix is bought on this bank
+version.** The round's finding, stated at the strength n=3 allows: *a five-PR decomposition
+whose prompts spell out the type-rule matrix per PR produces held-out-clean work from
+multiagent dispatch alone, at the weak tier as at the mid tier; the gate had nothing to
+catch, and the placebo ceremony and the per-PR gate loop cost wall-clock (+54% and +41%
+at haiku, +1% and +23% at sonnet) for no measurable quality.* The suspected cause is the
+prompts: they were authored as briefs for convoy's own runner, with the oracle written
+into them (PR01: "Arithmetic rejects booleans … raises `TypeMismatchError` … use the
+numeric guard"; PR05 restates the whole matrix as a conformance pass). Against a brief
+that explicit, even a weak implementer has nothing left to infer.
+
+## Pre-registration — bank v2 (`multiagent-composition-v2`), before its first paid trial
+
+**Hypothesis the v1 ceiling licenses:** the value of an independent gate under external
+orchestration scales with how much the implementer is left to infer. v2 makes the relay
+from orchestrator to subagent realistic and lossy: the task statement (which the
+orchestrator holds) keeps every rule; the per-PR prompts describe the behavior to build
+and stop restating the type-rule matrix and the guard recipe.
+
+**Bank v2 = v1 with exactly these changes**, so the primary endpoint, probes, placebo,
+driver, verify.py and arms stay byte-identical to v1:
+
+- `prompts/01..04`: remove the sentences that state the type rule or prescribe the guard
+  (PR01 items 3 and the guard bullet; PR02–04's "an operand of the wrong type raises
+  `TypeMismatchError` — use PR01's … guard" clauses and the "PR01 already landed: … the
+  arithmetic operators reject boolean operands, and the evaluator carries a numeric-operand
+  guard and a boolean-operand guard" recaps). Each PR keeps: what to add, the AST shape,
+  precedence placement, the test targets to run. PR01 keeps "add `TypeMismatchError` as a
+  new subclass of `ExprError`" (it is an artifact the later PRs import), but not what
+  raises it.
+- `prompts/05`: the conformance pass keeps "run the whole suite and close what is red";
+  the type-rule matrix restatement (its items 32–37 in v1) is removed.
+- A test asserts, for each v2 prompt, the absence of the removed phrases (`reject`,
+  `wrong type`, `numeric-operand guard`, `boolean-operand guard`, `require NUMERIC`,
+  `require BOOLEAN`), and that `task.toml`'s instruction is byte-identical to v1's.
+- Prompts move to `prompts/` under a directory the brief names as `$FATHOM_PROMPTS_DIR`
+  that contains **only** the five prompt files; the driver, probe, placebo and
+  `series.toml` stay in the task dir, which the briefs never name. `[env]` keys stay
+  identical across arms.
+- Scenarios: `scenarios/multiagent-composition-v2/`, same eight arms, same briefs except
+  the prompts-dir variable, new bank name ⇒ new `config_hash`es. Ledger
+  `ledger/multiagent-composition-v2.jsonl`.
+
+**Endpoints, contrasts, tests, corrections, attestation: unchanged from the v1
+pre-registration.** Tier-sets: both, at the pilot; the ceiling rule (control ≥ 2/3 in a
+tier-set ⇒ that tier-set not bought at scale) applies again. Pilot n = 3 per cell (24
+trials, ≤ $100). Main matrix: pre-registered in a further addendum from the v2 pilot's
+observed perpr − placebo gap on the tier-set with headroom, run as repeat passes, within
+the iteration's remaining budget ($400 − $56 pilot v1 − v2 pilot).
+
+**Prediction, pre-registered:** control-haiku held_out_clean falls below ceiling on v2;
+control-sonnet may not. If control-haiku stays at 3/3 on v2, the decomposition itself,
+not the prompts' explicitness, is what removes the defect class, and that is reported as
+the finding of the iteration.
+
+*Run log, 2026-09-02 ~00:10 — the v2 pilot stopped at 7 of 24 trials by the harness on
+`authentication_failed` (the seat's refresh failed again ~4 h after login; $14.81 spent; the
+seven completed trials are in the ledger, the failing eighth was not written). Recorded
+here as a log line, drawing nothing: control-haiku 0/3, control-sonnet 0/3 on
+`held_out_clean` (and 0/3 on the original 15); the single completed `final-haiku` trial
+went first-gate red, repaired once, and reads 1/1 on every endpoint. The pilot resumes with
+the same command once the seat is re-authenticated; the readout and the ceiling rule apply
+to the completed 24, not to this fragment.*
+
+## Addendum — 2026-09-02, the v2 pilot readout and the main-matrix pre-registration
+
+**v2 pilot as run:** 24/24 completed, $57.46. `held_out_clean` — control 0/3 (haiku) and
+0/3 (sonnet); placebo 1/3 and 1/3; per-PR convoy gate 3/3 and 3/3; final convoy gate 3/3
+and 2/3. The sensitivity endpoint and the original 15 read identically. Every `final-*`
+first harness gate went red (6/6; 5 repaired). Arming criteria met in every trial
+(`perpr-*` driver invocations 8–19, placebo fired 6/6, provenance 6/6). No inference is
+drawn from these 24; they are the pilot the pre-registration describes.
+
+**The ceiling rule:** control is 0/3 in both tier-sets — headroom in both. Neither tier-set
+is dropped; the v1 prediction that Sonnet might stay at ceiling was wrong, and that is
+recorded as the v1→v2 finding: the prompts' explicitness, not the tier, produced the v1
+ceiling.
+
+**Main matrix, pre-registered before its first trial:**
+
+- **n.** The pre-registered calculation (exact one-sided Fisher, α = 0.0125 = Holm's
+  strictest step over the four contrasts, Laplace-shrunk pilot rates 0.875 vs 0.375 for
+  T-perPR vs P) asks **n = 20 per cell for power 0.80**. The remaining budget ($400 −
+  $56.02 − $57.46 = $286.52) buys 13 further repeat passes over eight arms at the pilot's
+  observed $19.15 per pass with a 10% margin. **n = 16 per cell** (3 pilot + 13 main) is
+  therefore the budget-bound n; its exact power on the decisive contrast is **0.69** per
+  tier-set, and 0.99 on T-perPR vs C. Declared now: a non-significant decisive contrast at
+  n = 16 is reported as *underpowered at the achieved n*, not as a null.
+- **Pooling.** The pilot's 3 repeats per arm are the first three of the 16 — same arms,
+  same `config_hash`es, contemporaneous, resumed by the run loop as already done. They
+  were block-ordered (disclosed above); passes 4–16 are arm-interleaved by pass.
+- **Order.** `--repeats k` for k = 4..16, each pass covering every arm once; the loop's
+  within-pass order is fixed (alphabetical by arm), so drift is bounded to one pass
+  (~25 min) rather than the matrix.
+- **Caps.** `--max-spawn-usd 20`, `--max-run-usd 275`. Seat death stops the pass script;
+  the same command resumes.
+- **Endpoints, contrasts, tests, corrections, attestation: unchanged.** The report leads
+  with T-perPR vs P per tier-set (Holm over four), then T-perPR vs C, T-final vs C,
+  T-final vs P; the sensitivity endpoint beside each; Wilson intervals on every cell;
+  dose counts (gate reds, fix dispatches) per arm; cost and wall-clock per trial. Any
+  other reading is exploratory and labeled.
+- **Blind review before any claim leaves the repo.**
+
+## Addendum, 2026-09-02 — bank v2 as executed, before its first paid trial
+
+Written after the bank was built and blind-reviewed, before any v2 spend. It records where
+the artifact is a superset of, or narrower than, the section above. Nothing here changes a
+hypothesis, an endpoint, a contrast or a test; it makes the record match the files.
+
+**Six removals beyond the enumerated list.** Each is a pointer to, or a paraphrase of,
+content the section above orders removed, and each moves in the direction of less
+information — none restores a rule, and leaving any in would have left a prompt referencing
+a section it no longer has:
+
+- PR01's title tail `, and what the existing operators do with them`.
+- PR01's paragraph beginning "Because introducing a new value type changes what every
+  operator that already exists must do…", which announced that this PR settles the
+  arithmetic-meets-boolean question.
+- PR02's `requires TWO NUMERIC (int or float) operands` — the clause the held-out criterion
+  `type_compare_heldout` grades. The enumerated list named only the adjacent "wrong type …
+  use PR01's guard" clause; leaving this one would have stated the operand type for
+  comparisons while the mandated absences forced it out of PR03 and PR04, an asymmetry
+  nothing was pre-registered to create.
+- The `and reuse the guards — do not write a second copy of either` clause in PR02–04.
+- PR05's title tail ` and the type-rule matrix`.
+- PR05's intro, rewritten from "Two requirements … this PR owns both" to "One requirement …
+  this PR owns it", the numbering of its surviving section shifted accordingly.
+
+**One addition.** PR01 item 3 keeps its no-regression sentence (arithmetic on numbers must
+not change) under the new label `**Existing arithmetic is unchanged.**`. That label is the
+only prose written into any v2 prompt that is not v1's. It states nothing about booleans.
+
+**The type rule is not wholly absent from the prompts, and the readout must not say it is.**
+PR03 and PR04 still name the judged check
+`tests.test_feature.TestFeature.test_type_error_number_in_boolean_op`, whose name states
+that a number in a boolean operation is a type error. Keeping each PR's test targets is
+pre-registered, and the visible suite enforces that direction in every arm, so this is
+compliant — but it means v2's manipulation is specifically the **bool-in-arithmetic** and
+**bool-in-comparison** directions. That is what the primary endpoint grades: all six
+`_HELD_OUT` criteria cover bool-in-arithmetic, bool-in-comparison, booleans via `env`,
+`not` precedence, and the error class. None grades numbers-in-boolean-ops, so the headroom
+the manipulation is meant to create is intact.
+
+**"The task dir, which the briefs never name" is true of three briefs, not four.**
+`brief-treatment-perpr.md` still passes `$FATHOM_TASK_DIR` to the gate driver, because
+`run_convoy_gate.py` is byte-identical to v1's and takes the task dir as `argv[1]`. The
+asymmetry is structurally forced. What confines every arm is instead the do-not-read
+sentence, which v1 carried and v2 keeps in all three briefs, re-anchored to
+`FATHOM_PROMPTS_DIR` so it names no task-dir path: the prompts dir is a *child* of the task
+dir, and `Read`/`Glob`/`Grep` are unrestricted by path in every arm's tool allow-list, so
+moving the prompts is not by itself a fence.
+
+**Mechanism correction.** "New bank name ⇒ new `config_hash`es" is wrong as stated. The
+bank name does not enter the hashable (`src/fathom/scenario.py`; its `name` is the arm
+name). The hashes do fork, because the injected brief content and the `[env]` key set both
+changed; ledger separation is real and comes from the per-bank ledger path. The conclusion
+stands — no v2 row can resume or overwrite a v1 row — but the derivation was not checked.
+
+## Addendum, 2026-09-02 17:10Z — fixture contamination incident, exclusions, harness repair, and the resumed plan
+
+**Written after the event, before any further paid trial.** This addendum records a defect in
+the instrument, not in the arms, and the deviation it forces from the main-matrix
+pre-registration above (n = 16 per cell; no exclusion rule).
+
+### What happened
+
+During the main matrix the bank's *fixture* — the committed starting tree every trial stages
+its workspace from (`tasks/multiagent-composition-v2/exprlang/fixtures/`) — was modified by
+agents inside trials. `git status` at 16:55Z showed four modified files
+(`fixtures/exprlang/{errors,evaluator,lexer,parser}.py`, mtime 15:42:06Z, carrying an
+implementation of the feature under test) and one untracked file
+(`fixtures/tests/test_comparisons.py`, mtime 13:21:53Z, a visible-suite test for the
+feature). Every trial that staged after 13:21:53Z therefore started from a tree the bank never
+declared: an extra visible test at first, the solution's parser/evaluator changes later.
+
+Evidence, from the captured orchestrator streams (event timestamps; stream file names carry
+the *end* time of a spawn):
+
+- pilot-v2 `perpr-haiku` r1 (10:12:26–10:32:47Z): the orchestrator edited the four fixture
+  files, ran the probes and `verify.py` against the fixture path, ran `git -C <task_dir>
+  status` / `diff` (the diff listing included this pre-registration document), then ran
+  `git checkout -- fixtures/exprlang/*.py`, restoring those four files before it ended. It
+  reached the harness and the experiment's own documents; its result is unusable regardless
+  of what its workspace scored.
+- main-v2 `final-haiku` r3 (13:18:40–13:31:02Z): Edit calls on the four fixture files, a
+  Write of `fixtures/tests/test_comparisons.py`, `unittest discover` run inside the fixture,
+  and a `cp` of that test file into its staged workspace. It never restored the fixture.
+- The 15:42:06Z write to the four `.py` files falls inside main-v2 `perpr-haiku` r4
+  (15:30:35–15:42:37Z), whose orchestrator stream carries no fixture path: the write came
+  from a subagent, whose tool calls the captured stream does not include. Inferred from the
+  timestamp, not observed.
+
+Root cause: the task directory is reachable from what the arms hand the orchestrator. The
+perpr and placebo briefs pass `$FATHOM_TASK_DIR` explicitly (the driver's first argument);
+every arm's `$FATHOM_PROMPTS_DIR` is `<task dir>/prompts`, so the parent is one path segment
+away, and `fixtures/` looks like a project root (it holds `exprlang/` and `tests/`). The v1
+pilot had already flagged a "driver-name visibility leak" through the same path; the
+mitigation then (a prompts-only directory) hid the *listing*, not the *path*. Nothing checked
+the fixture's integrity between trials, and nothing could exclude a recorded trial without
+rewriting an append-only ledger.
+
+### Disposition — 16 trial rows voided (`kind: void` rows appended to the ledger)
+
+Voided, with the reason recorded on each void row:
+
+- pilot-v2 `perpr-haiku` r1 — reached the harness (edited the fixture; read the
+  pre-registration diff).
+- main-v2 `final-haiku` r3 — edited the fixture; wrote the visible-suite test into it.
+- every main-v2 trial that started after 13:21:53Z, i.e. staged from a modified fixture:
+  `final-sonnet` r3, `perpr-haiku` r3, `perpr-sonnet` r3, `placebo-haiku` r3,
+  `placebo-sonnet` r3, `control-haiku` r4, `control-sonnet` r4, `final-haiku` r4,
+  `final-sonnet` r4, `perpr-haiku` r4, `perpr-sonnet` r4, `placebo-haiku` r4,
+  `placebo-sonnet` r4, and `control-haiku` r5 (already `errored`: its verifier crashed when
+  the fixture was restored under it).
+
+Not voided: the 23 other pilot-v2 trials (all before 13:21:53Z; the pilot's `perpr-haiku` r1
+restored the four files it edited before the next trial staged, and no later pilot trial
+touched the fixture per its stream) and main-v2 `control-haiku` r3, `control-sonnet` r3.
+Valid trials after the disposition: 25 (control 5+5, placebo 3+3, perpr 2+3, final 3+3 by
+tier-set haiku+sonnet). Spend on the 16 voided rows ≈ $39; bank spend to date $96.56; program
+spend $210.04 of the $400 iteration cap.
+
+The exclusion is an *instrument* exclusion applied before any outcome of the affected trials
+was read into a contrast: the void list is defined by a timestamp and two stream facts, not
+by results. The `selection_exclusion` threat in the record moves from `controlled` to
+`residual` with this addendum as its statement.
+
+### Harness repair (before the first resumed trial)
+
+1. fathom `void` rows: an append-only exclusion (`fathom void <bank> --scenario --repeat
+   --reason --evidence`) that every reader honours in order (`ledger.apply_voids`): a voided
+   trial is re-run on resume and the re-run counts. Nothing in the ledger is rewritten.
+2. fathom fixture integrity guard: a manifest of the fixture tree is taken before any spawn;
+   every trial is checked before it stages and after it returns; drift stops the matrix as
+   an infrastructure failure, the trial that drifted is recorded `errored` (never scored),
+   and every trial row now carries `fixture_sha`.
+3. Harness directory: the runner script stages the five harness files (prompts, the driver,
+   the probe, the placebo, `series.toml`) into a directory outside the repository and points
+   `$FATHOM_TASK_DIR` / `$FATHOM_PROMPTS_DIR` there. No path an orchestrator or subagent is
+   given now leads to `fixtures/`, `solution/` or `verify.py`. The arms' `config_hash` is
+   unchanged: the `[env]` values are templates, resolved at spawn time by design.
+4. The fixture was restored to its committed state at 16:58Z (`git checkout` of the four
+   files, removal of the untracked test file and of `__pycache__` directories).
+
+### The resumed plan, declared now
+
+Budget remaining for this iteration: $189.96. At the pilot's $19.15 per pass, the voided
+trials plus the passes still owed cannot reach n = 16 (≈ $245). **n is re-declared as 13 per
+cell** (104 trials; 79 to buy ≈ $189; the runner stops at a bank spend of $286). The
+contrasts, endpoints, Holm family, tier-set separation and one-sidedness are unchanged. Exact
+power on the decisive contrast (perpr vs placebo, Laplace-shrunk pilot rates 0.875 vs 0.375,
+alpha 0.0125) at n = 13 is **0.532** (perpr vs control, 0.875 vs 0.0625: 0.992), computed
+with the same exact-Fisher script as the n = 16 declaration (0.688) before the first resumed
+trial; a non-significant decisive contrast is reported as underpowered at the achieved n. Interleaving
+stays pass-wise; the voided pass-4 and pass-5 trials are re-bought first (resume order).
+
+Should the operator raise the cap, n returns to 16 by the same passes; the record's
+`design.cells[].planned_n` stays 16 until the matrix closes and is then reconciled to the
+achieved n with this addendum as the reason.
+
+## Pre-registration — the hook arms (program 2, Part 2), before their first paid trial
+
+**Written 2026-09-02, after convoy 0.12.0 shipped and before any hook-arm trial is bought.**
+Two arms are added to bank `multiagent-composition-v2` in their own scenarios directory
+(`scenarios/multiagent-composition-v2-hook/`), joining the same ledger: `hook-haiku` and
+`hook-sonnet`. They are the mechanism arm the program-2 design (fathom
+`docs/specs/2026-09-02-hook-gate-closed-loop-design.md`, Part 2) called for, updated for
+what the build found.
+
+### The mechanism under test
+
+convoy 0.12.0's `convoy hook`, wired through user-scope settings injected into the spawn's
+isolated config directory (`[settings] inject`), on two Claude Code events:
+
+- `SubagentStop` — the judge. When an implementer subagent tries to stop, the project gate
+  (the decomposition's own `[[checks]]` plus the two independent type-contract probes —
+  the same composition the `perpr` driver builds, `assets/hook-gate.toml`) runs in the
+  workspace, scoped to the PR's phase by a `[convoy-phase: <tag>]` marker in the subagent's
+  brief. A blocking red is handed to the *subagent* as the reason it may not stop yet, with
+  the repair brief; one repair round, then it may stop.
+- `PostToolUse` on `Agent` — the messenger. On a synchronous dispatch, a residual red is
+  shown to the orchestrator; on the Agent tool's default asynchronous dispatch (observed
+  in the build's smoke: `async_launched`), nothing is shown at the tool call and the judge
+  is the only leg. The arm does not tell the orchestrator how to dispatch.
+
+The orchestrator's brief is control's with **one added instruction**: begin each subagent
+prompt with the PR's phase tag as `[convoy-phase: <tag>]` (`assets/brief-hook.md`; the diff
+against `brief-control.md` is that one numbered item). The marker is scope information for
+the gate, not knowledge of a gate: the brief mentions no gate, no check, no repair. The
+implementer's brief is the PR prompt verbatim, as in every arm.
+
+What differs from control, exhaustively: that one instruction; `[settings]`; three `[env]`
+keys (`CONVOY_GATE_SPEC`, `CONVOY_TRUSTED_ROOTS`, `CONVOY_ORACLES`). Same orchestrator
+model and effort, tools, limits, the five inherited `[env]` keys, the same staged harness
+directory outside the repository (the gate spec is selected by path and never copied into
+the tree; the probe is the asset under the harness dir).
+
+### Prediction and reading
+
+- Primary endpoint unchanged: `held_out_clean`. Prediction, declared: `hook` ≈ `perpr` on
+  `held_out_clean` (the same oracle and the same repair information reach the implementer),
+  at **control's orchestrator turn count and tokens** (the gate loop leaves the
+  orchestrator's context) — the cost claim of the design, tested against the cells that
+  already exist. A secondary reading: the `hook` arm's repair happens inside the subagent
+  (the judge blocks its stop), so `fixes` counted from the messenger are expected to be
+  near zero while `hook.log` shows the judge's blocks.
+- Contrasts, one-sided, Holm within the tier-set: (5) hook vs control, (6) hook vs placebo
+  — added to the family as exploratory (the record's frozen family is the four contrasts;
+  these two are reported beside it, labelled, not in the confirmatory Holm family of the
+  frozen record). Decision rule for the mechanism: hook vs control supported at 0.05 AND
+  hook's orchestrator turns within control's interquartile range → the hook mechanism is
+  adopted as the default recommendation over the `perpr` driver loop for iteration 2.
+- Attestation: per trial, `<tag>--hook.log` in the stream dir (copied by a `Stop` hook
+  from the workspace's `.convoy/hook.log`): every judge and messenger firing with the
+  verdict, the block, the model (dated), the spec hash and the workspace. A trial with no
+  `hook.log` copy is an arming failure and is voided, not scored.
+- An arming probe of one trial per cell (2 trials) precedes the passes: it is voided if
+  its `hook.log` copy is missing, and counts as repeat 0 otherwise.
+- n = 13 per cell, matching the re-declared main-matrix n; run as repeat passes after the
+  main matrix closes, ≈ $2.4 per trial, ≈ $62 for both cells — inside the iteration cap
+  only if the main matrix stops under its $286 bank ceiling; otherwise the hook arms run
+  in the next iteration with their own cap. Caps: $20 per spawn, the same $275 run cap.
+- Exclusion: the fixture integrity guard and the harness directory are in force; any drift
+  stops the matrix and voids the trial, as for the main matrix.
+
+## Correction — 2026-09-02 22:50Z, the incident addendum's budget arithmetic (before any trial beyond n = 13)
+
+The incident addendum states the program spend at the incident as $210.04 and the remaining
+budget as $189.96. Both are wrong by $57.46: the v2 pilot's spend was counted twice, once
+inside the bank's ledger total ($96.56, which already includes the pilot's $57.46) and once
+on its own. The correct figures at the incident: v1 pilot $56.02 + bank v2 $96.56 = **$152.58
+spent, $247.42 remaining**. At the observed $2.4 per trial that remainder buys 103 trials —
+exactly the 128 − 25 the frozen plan needs.
+
+Consequence, declared now, while the matrix is at 48 valid trials and $154.19 on the bank
+(pass 7 of the n = 13 schedule running): **n returns to the frozen 16 per cell.** The record's
+`design.cells[].planned_n` needs no amendment; the disposition will count 128 completed
+trials in the frozen cells, with the 16 voided rows outside the design as the incident
+addendum describes. The runner's bank cap moves from $286 to $343 (program cap $400 less
+the v1 pilot's $56.02) for passes 14–16, which at the observed rate end near the cap; if the
+cap stops the last pass short, the achieved n is reported per cell and the shortfall is
+the disclosed deviation, not a re-plan. The n = 13 power statement (0.532) is superseded by
+the frozen declaration (0.688 at n = 16).
+
+The hook arms pre-registered above no longer fit inside this iteration's cap once the main
+matrix takes its full n; they run at the start of the next iteration under its own cap, as
+their pre-registration already provides. The correction itself changes no arm, no brief,
+no endpoint and no contrast.
+
+## Run log — 2026-09-03 19:21Z, the main matrix closed
+
+128 of 128 trials in the frozen cells completed (16 per cell, the frozen n); the ledger
+carries 144 trial rows, the 16 voided at the incident among them. Bank spend $352.02,
+program $408.04. The runner's bank cap ($343) is checked between passes and fired only
+after the last one: pass 16 as a whole was projected at ~$352 before it started, about
+$8 over the $400 iteration cap, and the user authorized the overage on 2026-09-03 at
+18:08Z with three of its eight trials done (bank $338.66 at that moment). Two further
+seat expirations stopped the runner — at the start of pass 12 (08:50Z) and at the start
+of pass 16 (17:17Z) — both refused by the arming probe before any spawn; nothing was
+lost or re-bought. No arm, brief, endpoint or contrast changed after the correction
+above. Readout: `tools/readout_multiagent.py` (voids applied); typed record and derived
+report: `experiments/multiagent-composition-v2/record.yaml` and `report.md`; findings:
+`docs/reports/2026-09-03-multiagent-composition-findings.md`.
+
+## Correction — 2026-09-03, after the blind review of the closed matrix
+
+Two blind reviewers (methodology; decision relevance) read the closed record, its derived
+report and the findings with no access to the authors, and ten of their fourteen serious
+findings were adversarially verified by a third pass. The confirmatory numbers reproduced
+to four decimals; the following statements in this document and its addenda do not stand
+as written and are corrected here, in the dated form this file uses. Nothing below changes
+an arm, a brief, an endpoint, a contrast or the frozen n.
+
+1. **The sensitivity endpoint (addendum no. 4) is not what its definition says.** It was
+   defined as "the conjunction of the four held-out criteria the hint and the probes do not
+   touch". Two of the four grade the probes' own rule (`env_bool_typing` asks bool-in-
+   arithmetic and bool-in-comparison through the environment; `error_type_is_typemismatch`
+   grades the exception class the repair hint names verbatim, `TypeMismatchError`), and the
+   other two (`not_precedence_heldout`, `short_circuit_heldout`) are at 16/16 in seven cells
+   and 15/16 in placebo-haiku, so they carry no information. On the 128 counted trials the
+   endpoint is numerically identical to `env_bool_typing` alone in every cell, and the primary
+   endpoint equals the conjunction of the four bool-rule criteria in every cell. The
+   experiment measures one defect class — booleans are not numbers — and cannot show that the
+   gate's benefit extends to work independent of the rule it teaches. The disjointness the
+   record cites (`tests/test_multiagent_bank.py::TestProbeDeOverlap`) asserts string
+   non-overlap only. The record's verdict on the sensitivity endpoint is `inconclusive`.
+
+2. **"No path an orchestrator or subagent is given now leads to `fixtures/`, `solution/` or
+   `verify.py`" (incident addendum, harness repair item 3) is false for one arm.** The staged
+   harness directory covered every arm's orchestrator and the whole of control, placebo and
+   perpr from the first resumed trial. The `final-*` arms' `[gate].extra` command is expanded
+   by the gated-session strategy from the bank's `task.task_dir` — the repository directory —
+   and the fix prompt hands it to the fix spawn verbatim; it reached an agent whenever the
+   gate went red (26 of the 32 counted final trials, 20 of the 26 after the repair). A scan of
+   every post-repair final stream finds no read of `solution/` or of the real `verify.py`; the
+   one realised traversal is final-haiku r3's fix spawn reading `run_convoy_gate.py` and
+   `type_probe.py`. Subagent tool calls are not fully captured, so this bounds the residual
+   without eliminating it. Threat `custom_harness_containment` in the record.
+
+3. **The void rule was under-inclusive relative to its own root cause, and four counted
+   trials touched the task directory.** The exclusion keyed on fixture mtime (13:21:53Z) and
+   two named streams; it does not reach oracle reads through the same exposed path earlier
+   that morning. `tools/stream_facts.py --exposure` over every counted trial's surviving
+   stream finds four: perpr-sonnet r0 and r1 (an implementer subagent read `verify.py`; both
+   held-out-clean), placebo-haiku r1 (read `verify.py`, `type_probe.py`, `run_convoy_gate.py`
+   and the whole reference solution, implemented PR01 in the task directory, declared its own
+   measurement compromised and ended after 2 of 5 dispatches; not held-out-clean) and
+   final-haiku r3 (item 2). They are retained — voiding them now would be an exclusion chosen
+   after their outcomes entered the contrasts — and reported with the sensitivity: dropping
+   the first three leaves perpr > placebo at Holm 0.0007 (Haiku) and 0.0106 (Sonnet, 12/14 vs
+   5/16) and moves final > placebo at Haiku from 0.0366 to 0.0531; dropping all four gives
+   0.0697 (and final > control 0.0183). Scoring the two perpr-sonnet successes as failures
+   leaves perpr > placebo at 0.0350. The per-PR conclusions survive every version; the
+   final-vs-placebo Haiku contrast does not. Every count in this item is the output of
+   `tools/stream_facts.py`, committed with this correction.
+
+4. **The dose report addendum no. 5 requires was not produced at the readout; it is now.**
+   From tool_use events on the surviving stream of each counted trial: gate reds per trial
+   perpr 1.19 (Haiku; 13 trials at 1, 3 at 2) and 1.06 (Sonnet), placebo 0.94 and 1.06 (one
+   red per fresh workspace by construction; the aborted placebo-haiku r1 never reached it);
+   `Agent` dispatches per trial perpr 7.19 and 7.12, control 6.00 and 6.06, placebo 5.75 and
+   5.94, final 6.00 and 6.00; executed driver calls per perpr trial 6 in 27 and 7 in 5. The
+   counts do not diverge materially on reds, so the decisive contrast is reported as
+   matched on gate-red count, not dose-confounded; on the other dose measures perpr still
+   does more work than the placebo (about 1.2 more dispatches, about 10% more spend, 13–19%
+   more wall-clock per trial on medians), so the extra-work channel is bounded, not
+   eliminated. What the placebo does not match is the repair actor — perpr dispatches a
+   fresh implementer subagent carrying the `repair_brief` (one extra dispatch per trial),
+   placebo repairs inside the orchestrator — and the brief's content (perpr's block states
+   that the gate adds type-contract checks the visible suite lacks; placebo's does not).
+   Both are declared residual threats. In every one of the 26 final-arm loop firings the
+   trigger was convoy's red with the task's own gate green on the first round (32 of 32);
+   the visible suite went red only on the last round of four trials, after the fix spawns. The earlier mechanism
+   figures ("7–8 dispatches, 8–9 driver invocations") were substring counts over
+   concatenated stream files and are withdrawn.
+
+5. **The tool allow-list the scenarios declare was not the instrument that ran.** Every
+   stream's init lists the platform's registered tools — about thirty, including unrestricted
+   Bash and PowerShell — identically across arms; `Bash(python:*)` was not enforced. That is
+   the root cause of the fixture incident and of item 3, not only "a path the harness
+   exposed". Iteration 2 verifies enforcement before its first paid trial.
+
+6. **Smaller corrections.** The correction addendum above is headed 22:50Z; its commit
+   (f2ff474) is 22:46:16Z. The record's `plan_frozen_at.timestamp` now carries the commit's
+   own time (13:41:47Z). The typed record's void breakdown read "2 control … 5 final"; the
+   ledger's is 3 control, 4 placebo, 5 perpr, 4 final. The per-trial cost and wall-clock
+   figures in the findings are medians and are labelled so; cost per held-out-clean trial is
+   the cell's total spend divided by its clean trials. The pooled pilot's 24 ran arm-blocked
+   and 25 counted trials predate the fixture guard (no `fixture_sha`); both are listed among
+   the deviations. `full15_clean` was pre-registered as the secondary endpoint and is
+   recorded as exploratory; it is not the implementer's visible suite and is no longer
+   described as such.

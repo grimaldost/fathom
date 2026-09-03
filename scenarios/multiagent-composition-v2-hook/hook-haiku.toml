@@ -1,0 +1,54 @@
+name = "hook-haiku"
+# Arm HOOK (treatment, program 2 / Part 2) — convoy's gate as a Claude Code hook, tier-set haiku.
+#
+# Tier-set haiku: implementer subagents run on claude-haiku-4-5.
+#
+# The orchestrator is told nothing about gates. Its brief is control's, plus one sentence:
+# begin each subagent prompt with the PR's phase tag as `[convoy-phase: <tag>]` — a marker,
+# not gate knowledge (assets/brief-hook.md; the diff against brief-control.md is that one
+# sentence). The gate arrives through user-scope settings injected into the spawn's isolated
+# config dir ([settings] inject): convoy 0.12.0's `SubagentStop` judge blocks a subagent's
+# stop once with the repair brief when the project gate is red, and its `PostToolUse`
+# messenger reports a residual red to the orchestrator on a synchronous dispatch. The gate
+# spec (assets/hook-gate.toml — the decomposition's own [[checks]] plus the two independent
+# type-contract probes, composed exactly as run_convoy_gate.py composes them for perpr) is
+# selected by $CONVOY_GATE_SPEC from the staged harness dir and never copied into the tree;
+# the workspace is vouched for by $CONVOY_TRUSTED_ROOTS; the probe is the asset under
+# $CONVOY_ORACLES. A Stop hook copies the workspace's .convoy/hook.log into
+# $FATHOM_STREAM_DIR as <tag>--hook.log — the mechanism attestation.
+#
+# Differs from control: the one-sentence marker instruction in the brief; [settings]; three
+# [env] keys (CONVOY_GATE_SPEC, CONVOY_TRUSTED_ROOTS, CONVOY_ORACLES). Everything else —
+# orchestrator model and effort, the tool allow-list, trial_timeout_s, the five inherited
+# [env] keys — is control's byte for byte.
+#
+# `${FATHOM_TASK_DIR}` / `${FATHOM_PROMPTS_DIR}` are TEMPLATES resolved from the invoking
+# shell at spawn time (the run script points them at a staged harness dir outside the
+# repository); `${workspace}` is resolved by fathom per trial.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+
+[context]
+inject = "assets/brief-hook.md"
+
+[settings]
+inject = "assets/hook-settings.json"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+CONVOY_GATE_SPEC = "${FATHOM_TASK_DIR}/hook-gate.toml"
+CONVOY_ORACLES = "${FATHOM_TASK_DIR}"
+CONVOY_TRUSTED_ROOTS = "${workspace}"
+FATHOM_IMPL_MODEL = "claude-haiku-4-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

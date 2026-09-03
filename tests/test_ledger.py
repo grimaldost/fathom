@@ -15,7 +15,9 @@ from fathom.ledger import (
     GradingRecord,
     RunRecord,
     TrialRecord,
+    VoidRecord,
     append_record,
+    apply_voids,
     completed_keys,
     iter_records,
 )
@@ -479,3 +481,65 @@ if __name__ == "__main__":
     print(f"\n{len(tests) - len(failed)}/{len(tests)} passed")
     if failed:
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# Void rows: append-only exclusion, order-aware
+# ---------------------------------------------------------------------------
+
+
+def _void_for(trial: TrialRecord, reason: str = "fixture drift") -> VoidRecord:
+    return VoidRecord(
+        bank=trial.bank,
+        task_id=trial.task_id,
+        repeat=trial.repeat,
+        dataset_version=trial.dataset_version,
+        config_hash=trial.config_hash,
+        scenario="arm",
+        reason=reason,
+        evidence="streams/x.ndjson",
+        voided_at="2026-09-02T17:00:00+00:00",
+    )
+
+
+def test_void_round_trips_and_keeps_its_kind():
+    with tempfile.TemporaryDirectory() as tmp:
+        ledger_dir = pathlib.Path(tmp)
+        trial = make_trial(repeat=3)
+        append_record("test-bank", trial, ledger_dir=ledger_dir)
+        append_record("test-bank", _void_for(trial), ledger_dir=ledger_dir)
+        records = list(iter_records("test-bank", ledger_dir=ledger_dir))
+        assert isinstance(records[-1], VoidRecord)
+        assert records[-1].kind == "void"
+        assert records[-1].reason == "fixture drift"
+
+
+def test_a_void_removes_the_key_from_the_resume_set_until_it_is_rerun():
+    with tempfile.TemporaryDirectory() as tmp:
+        ledger_dir = pathlib.Path(tmp)
+        trial = make_trial(repeat=3)
+        key = (trial.bank, trial.dataset_version, trial.task_id, trial.config_hash, trial.repeat)
+        append_record("test-bank", trial, ledger_dir=ledger_dir)
+        assert key in completed_keys("test-bank", ledger_dir=ledger_dir)
+        append_record("test-bank", _void_for(trial), ledger_dir=ledger_dir)
+        assert key not in completed_keys("test-bank", ledger_dir=ledger_dir)
+        # The re-run, appended after the void, counts again.
+        append_record("test-bank", make_trial(repeat=3), ledger_dir=ledger_dir)
+        assert key in completed_keys("test-bank", ledger_dir=ledger_dir)
+
+
+def test_apply_voids_drops_earlier_trial_and_run_rows_only():
+    base = dict(bank="b", dataset_version="v1", task_id="t", config_hash="c" * 64, repeat=2)
+    earlier_trial = {"kind": "trial", "status": "completed", **base}
+    earlier_run = {"kind": "run", "cost_usd_est": 1.0, **base}
+    other = {"kind": "trial", "status": "completed", **{**base, "repeat": 5}}
+    void = {"kind": "void", "reason": "r", **base}
+    rerun_trial = {"kind": "trial", "status": "completed", **base}
+    rerun_run = {"kind": "run", "cost_usd_est": 2.0, **base}
+    kept = apply_voids([earlier_run, earlier_trial, other, void, rerun_run, rerun_trial])
+    assert kept == [other, void, rerun_run, rerun_trial]
+
+
+def test_apply_voids_without_voids_is_identity():
+    rows = [{"kind": "trial", "status": "completed", "bank": "b", "repeat": 0}]
+    assert apply_voids(rows) == rows
