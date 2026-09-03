@@ -30,7 +30,7 @@ for one of these banks is quoting *this* row; if it disagrees, the document is s
 | `model-tier-effort` | `f76b52e777a473e7d1b041aa147c192b52ca585be33f3ca216715e7d0fd3f39b` | haiku-xhigh:5, sonnet-xhigh:5 | 10 | 10 |
 | `model-tier-v1` | `7cd5f4fcdb2b62da2e1b2c14decf86d87a7867c9491eea70ab0b81421c0198f5` | haiku:35, opus:35, opus5:35, sonnet:35, sonnet5:35 | 175 | 175 |
 | `model-tier-v2` | `040a9f8a1b9a218cf107dd1b140dc9923318787ef3ef10f2c0d892067febba33` | haiku:33, opus5:33, sonnet5:23 | 89 | 89 |
-| `multiagent-composition-v2` | `adfbae8f1e91fd8441ce602503368789c1a66b66d4f19173d50fd7d2c494e485` | control-haiku:11, control-sonnet:11, final-haiku:11, final-sonnet:11, perpr-haiku:11, perpr-sonnet:11, placebo-haiku:11, placebo-sonnet:11 | 88 | 113 |
+| `multiagent-composition-v2` | `a0b13fd6e83447ad7cf79906b1682210c5825af6b23a0d603fb15c57fc624919` | control-haiku:16, control-sonnet:16, final-haiku:16, final-sonnet:16, perpr-haiku:16, perpr-sonnet:16, placebo-haiku:16, placebo-sonnet:16 | 128 | 161 |
 | `multiagent-composition` | `6eb7a92669400f4038498a6cc6444032480a50a5bb50a3627757a55de128491a` | control-haiku:3, control-sonnet:3, final-haiku:3, final-sonnet:3, perpr-haiku:3, perpr-sonnet:3, placebo-haiku:3, placebo-sonnet:3 | 24 | 24 |
 | `premortem-ablation-v1` | `3dba0503c78f49ec8170e7b00b8dd3da013d69ba4cf2d333c3178435ec120d21` | arm-a-full:6, arm-b-core:6, bare:6 | 18 | 18 |
 | `routing-decision-v1` | `14218522af2e2efb20b3abb3ea520a243cf1f75d0269e019c594587444ffeb8d` | none-mid:6, none-strong:6, none-weak:6, rubric-mid:6, rubric-strong:5, rubric-weak:6, shortcuts-mid:6, shortcuts-strong:6, shortcuts-weak:6 | 54 | 54 |

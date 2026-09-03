@@ -138,9 +138,17 @@ threats:
       the pilot); the placebo arm carries a comparable ceremony block and is the length/iteration
       control, but no equal-length no-information brief beyond it was run.
   selection_exclusion:
-    status: controlled
-    statement: no exclusion rule; every launched trial is in the disposition; an infrastructure
-      stop leaves the failing trial unwritten and resumed, never dropped.
+    status: residual
+    statement: the frozen plan had no exclusion rule. After the 2026-09-02 fixture-contamination
+      incident (agents inside two trials edited the bank fixture through a path the harness
+      exposed; thirteen later trials staged from it) sixteen launched trial rows were voided by an
+      instrument exclusion defined on timestamp and stream facts and declared in the
+      pre-registration addendum before any resumed trial; the fixture was restored, the harness
+      repaired (staged harness dir outside the repository, a fixture integrity guard, fixture_sha
+      on every later row) and every voided key re-bought, so the disposition counts 128 completed
+      trials in the frozen cells and run.n counts all 144 rows. The exclusion is blind to outcome
+      (it removed 2 control, 4 placebo, 5 perpr, 5 final rows by the clock, not by result) but it
+      is an exclusion the plan did not foresee, so this threat is residual, not controlled.
   generalization:
     status: residual
     statement: one bank, one task family, two implementer tiers, one orchestrator model, one
@@ -152,8 +160,235 @@ plan_frozen_at:
   timestamp: 2026-09-02T13:00:00Z
 run:
   source: fathom
-  ledger_path: ledger/multiagent-composition-v2.jsonl
-  first_run_at: 2026-09-02T00:00:00Z
-  attestation: per-trial transcripts under streams-multiagent/2026-09-02-pilot-v2 and
-    streams-multiagent/2026-09-02-main-v2 (FATHOM_STREAM_DIR); readout by
-    tools/readout_multiagent.py, written before the first pilot trial completed.
+  ledger_path: ../../ledger/multiagent-composition-v2.jsonl
+  n: 144
+  cost_usd_est: 352.02
+  first_run_at: '2026-09-02T05:51:34Z'
+  attestation: 'per-trial transcripts under streams-multiagent/2026-09-02-pilot-v2 and streams-multiagent/2026-09-02-main-v2
+    (FATHOM_STREAM_DIR); fixture_sha on every row written after the fixture-contamination incident; readout
+    by tools/readout_multiagent.py (voids applied). run.n counts every trial row in the ledger including
+    the 16 voided ones; the disposition counts the frozen cells. Freeze chronology, disclosed: this typed
+    record was committed at 66c0982 on 2026-09-02 13:41:47Z, after the pooled pilot''s first trial (05:51:34Z)
+    and the main matrix''s first trial (12:47:29Z), so ER-ANCHOR fails on this record and is left failing
+    rather than re-pointed. The prose pre-registration the record transcribes was committed before each
+    wave it governs: 60ee721 (04:59:50Z; the eight cells, the endpoints, the four contrasts and Holm family,
+    the pilot n) and ea2cd11 (12:45:49Z; n=16 per cell, the pass schedule, the caps). The frozen subset
+    here reconciles against 66c0982 (ER-PREREG clean).'
+disposition:
+  completed: 128
+  excluded: 0
+  total: 128
+results:
+  held_out_clean:
+    paired: false
+    unclustered_reason: 'one shared task and the trial is the randomization unit: every trial is an independent
+      session in a fresh workspace with no prompt-cluster structure to pair on, so per-arm Wilson intervals
+      over independent trials are the right unit and there is no clustered SE to state'
+    arms:
+      control-haiku:
+        numerator: 4
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1018
+          high: 0.495
+      placebo-haiku:
+        numerator: 6
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1848
+          high: 0.6136
+      perpr-haiku:
+        numerator: 16
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.8064
+          high: 1.0
+      final-haiku:
+        numerator: 12
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.505
+          high: 0.8982
+      control-sonnet:
+        numerator: 2
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.035
+          high: 0.3602
+      placebo-sonnet:
+        numerator: 5
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1416
+          high: 0.556
+      perpr-sonnet:
+        numerator: 14
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6398
+          high: 0.965
+      final-sonnet:
+        numerator: 9
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.3318
+          high: 0.769
+    verdict: confirmatory_supported
+  held_out_clean_independent:
+    paired: false
+    unclustered_reason: 'one shared task and the trial is the randomization unit: every trial is an independent
+      session in a fresh workspace with no prompt-cluster structure to pair on, so per-arm Wilson intervals
+      over independent trials are the right unit and there is no clustered SE to state'
+    arms:
+      control-haiku:
+        numerator: 4
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1018
+          high: 0.495
+      placebo-haiku:
+        numerator: 7
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.231
+          high: 0.6682
+      perpr-haiku:
+        numerator: 16
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.8064
+          high: 1.0
+      final-haiku:
+        numerator: 13
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.5699
+          high: 0.9341
+      control-sonnet:
+        numerator: 2
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.035
+          high: 0.3602
+      placebo-sonnet:
+        numerator: 5
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1416
+          high: 0.556
+      perpr-sonnet:
+        numerator: 14
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6398
+          high: 0.965
+      final-sonnet:
+        numerator: 10
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.3864
+          high: 0.8152
+    verdict: exploratory_signal
+  full15_clean:
+    paired: false
+    unclustered_reason: 'one shared task and the trial is the randomization unit: every trial is an independent
+      session in a fresh workspace with no prompt-cluster structure to pair on, so per-arm Wilson intervals
+      over independent trials are the right unit and there is no clustered SE to state'
+    arms:
+      control-haiku:
+        numerator: 4
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1018
+          high: 0.495
+      placebo-haiku:
+        numerator: 6
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1848
+          high: 0.6136
+      perpr-haiku:
+        numerator: 16
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.8064
+          high: 1.0
+      final-haiku:
+        numerator: 14
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6398
+          high: 0.965
+      control-sonnet:
+        numerator: 2
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.035
+          high: 0.3602
+      placebo-sonnet:
+        numerator: 5
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.1416
+          high: 0.556
+      perpr-sonnet:
+        numerator: 14
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.6398
+          high: 0.965
+      final-sonnet:
+        numerator: 12
+        denominator: 16
+        ci:
+          method: wilson
+          alpha: 0.05
+          low: 0.505
+          high: 0.8982
+    verdict: exploratory_signal

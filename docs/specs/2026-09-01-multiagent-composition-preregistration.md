@@ -604,3 +604,18 @@ The hook arms pre-registered above no longer fit inside this iteration's cap onc
 matrix takes its full n; they run at the start of the next iteration under its own cap, as
 their pre-registration already provides. The correction itself changes no arm, no brief,
 no endpoint and no contrast.
+
+## Run log — 2026-09-03 19:21Z, the main matrix closed
+
+128 of 128 trials in the frozen cells completed (16 per cell, the frozen n); the ledger
+carries 144 trial rows, the 16 voided at the incident among them. Bank spend $352.02,
+program $408.04. The runner's bank cap ($343) is checked between passes and fired only
+after the last one: pass 16 as a whole was projected at ~$352 before it started, about
+$8 over the $400 iteration cap, and the user authorized the overage on 2026-09-03 at
+18:08Z with three of its eight trials done (bank $338.66 at that moment). Two further
+seat expirations stopped the runner — at the start of pass 12 (08:50Z) and at the start
+of pass 16 (17:17Z) — both refused by the arming probe before any spawn; nothing was
+lost or re-bought. No arm, brief, endpoint or contrast changed after the correction
+above. Readout: `tools/readout_multiagent.py` (voids applied); typed record and derived
+report: `experiments/multiagent-composition-v2/record.yaml` and `report.md`; findings:
+`docs/reports/2026-09-03-multiagent-composition-findings.md`.
