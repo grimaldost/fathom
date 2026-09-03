@@ -551,7 +551,7 @@ def run_matrix(
     # --- Fixture integrity: the baseline every trial stages from must not move ---
     # An agent that reaches the task directory can edit fixtures/ (it happened: two
     # trials of one matrix wrote a solution and a test file into the fixture, and
-    # thirteen later trials staged from it). The manifest is taken once, before any
+    # fourteen later trials staged from it). The manifest is taken once, before any
     # spawn; every trial is checked before it stages and after it returns; drift stops
     # the matrix as an infrastructure failure and never buys a trial against it.
     fixture_expected = {task.id: fixture_manifest(task) for task in tasks_to_run}
