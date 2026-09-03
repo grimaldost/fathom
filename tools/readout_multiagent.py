@@ -42,6 +42,9 @@ ARMS = ("control", "placebo", "perpr", "final", "hook")
 TIERS = ("haiku", "sonnet")
 # The four pre-registered contrasts, one-sided treatment > control, Holm within tier-set.
 CONTRASTS = (("perpr", "control"), ("perpr", "placebo"), ("final", "control"), ("final", "placebo"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import stream_facts  # noqa: E402
+
 DRIVER_MARKER = "run_convoy_gate.py"
 PLACEBO_MARKER = "transient check failed"
 
@@ -130,27 +133,18 @@ def per_trial_duration(runs: list[dict]) -> dict[tuple[str, int], float]:
     return dur
 
 
-def transcripts_by_trial(streams: Path | None) -> dict[str, list[str]]:
-    """Raw transcript text keyed by the stream tag prefix (before '--a')."""
-    out: dict[str, list[str]] = defaultdict(list)
-    if not streams or not streams.is_dir():
-        return out
-    for f in streams.glob("*.ndjson"):
-        tag = f.name.split("--a")[0]
-        out[tag].append(f.read_text(encoding="utf-8", errors="replace"))
-    return out
-
-
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--ledger", default="ledger/multiagent-composition.jsonl")
-    ap.add_argument("--streams", default=None)
+    ap.add_argument("--streams", action="append", default=None, help="repeatable")
+    ap.add_argument("--task-dir-name", default=None, help="defaults to the ledger stem")
     args = ap.parse_args(argv)
 
     trials, runs = load(Path(args.ledger))
     cost = per_trial_cost(runs)
     dur = per_trial_duration(runs)
-    streams = transcripts_by_trial(Path(args.streams)) if args.streams else {}
+    stream_dirs = [Path(s) for s in args.streams] if args.streams else []
+    task_dir_name = args.task_dir_name or Path(args.ledger).stem
 
     cells: dict[tuple[str, str], list[dict]] = defaultdict(list)
     for t in trials:
@@ -162,13 +156,15 @@ def main(argv: list[str]) -> int:
         f"trials: {len(trials)}  (completed: {sum(1 for t in trials if t.get('status') == 'completed')})"
     )
     print()
-    hdr = f"{'cell':16} {'n':>2} {'held_out':>9} {'ho_indep':>9} {'full15':>7} {'1st-red':>7} {'fixes':>6} {'$/trial':>8} {'wall_s':>7}"
+    hdr = f"{'cell':16} {'n':>2} {'held_out':>9} {'ho_indep':>9} {'full15':>7} {'1st-red':>7} {'fixes':>6} {'med$/tr':>8} {'med_s':>7}"
     print(hdr)
     stats: dict[tuple[str, str], dict] = {}
     for tier in TIERS:
         for arm in ARMS:
             ts = [t for t in cells.get((arm, tier), []) if t.get("status") == "completed"]
             n = len(ts)
+            if n == 0:
+                continue  # an arm pre-registered on this bank but not bought in this matrix
             ho = sum(1 for t in ts if all(t.get("verifier_results", {}).get(c) for c in HELD_OUT))
             hoi = sum(
                 1
@@ -232,32 +228,46 @@ def main(argv: list[str]) -> int:
                 print(line)
         print()
 
-    print("ARMING (pre-registered pilot criteria) + mechanism attestation from transcripts:")
-    if streams:
-        import re
-
-        dated = re.compile(r'"model":\s*"(claude-[a-z0-9-]+-20\d{6})"')
-        agent_marker = '"name":"Agent"'
-        for tag, texts in sorted(streams.items()):
-            blob = "\n".join(texts)
-            found = sorted({m.split("claude-", 1)[1] for m in dated.findall(blob)})
-            # Sonnet events carry only the undated alias, so its snapshot is NOT pinnable
-            # from transcripts; say so rather than print an empty field.
-            models = ",".join(found) if found else "undated-alias-only"
-            short = tag.replace("multiagent-composition--", "").replace("--exprlang", "")
+    print("ARMING (pre-registered pilot criteria) + mechanism attestation from transcripts")
+    print(
+        "  (tool_use events on the surviving stream of each counted trial; tools/stream_facts.py)"
+    )
+    if stream_dirs:
+        facts = stream_facts.all_facts(Path(args.ledger), stream_dirs, task_dir_name)
+        for (scenario, repeat), f in facts.items():
+            models = ",".join(sorted(f.models)) or "undated-alias-only"
             print(
-                f"  {short:24} agent_dispatches={blob.count(agent_marker):>2}  "
-                f"driver={blob.count(DRIVER_MARKER):>2}  "
-                f"placebo={'y' if PLACEBO_MARKER in blob else 'n'}  models={models}"
+                f"  {scenario:16} r{repeat:<3} dispatches={f.agent_dispatches:>2} "
+                f"driver={f.driver_calls:>2} reds={f.driver_reds} "
+                f"placebo={f.placebo_calls}/{f.placebo_reds} spawn_driver={f.spawn_driver_calls} "
+                f"exposed={len(f.exposure):>2} models={models}"
             )
+        print()
+        print(
+            "DOSE (pre-registration addendum 5): gate reds and fix dispatches per trial, per cell"
+        )
+        print("\n".join(stream_facts.dose_table(facts)))
+        exposed = sorted(k for k, f in facts.items() if f.exposure)
+        print()
+        print(
+            f"EXPOSURE: {len(exposed)} counted trial(s) touched the task dir outside prompts/: "
+            + (", ".join(f"{s} r{r}" for s, r in exposed) or "none")
+        )
     else:
-        print("  (no --streams given: perpr invocation counts and placebo firing are NOT attested)")
+        print("  (no --streams given: dose, dispatches and exposure are NOT attested)")
     finals = [t for t in trials if split_scenario(t["scenario"])[0] == "final"]
     attested = sum(1 for t in finals if "convoy gate via:" in (t.get("detail") or ""))
-    print(f"  final-* rows carrying the convoy provenance line in detail: {attested}/{len(finals)}")
+    print(
+        f"  final-* rows carrying the convoy provenance line in detail: {attested}/{len(finals)} "
+        "(the line is recorded only when the last gate round completed green: a logging "
+        "consequence of the verdict, not evidence of which binary ran)"
+    )
     print()
-    print("NOTE: the pilot draws no inference (pre-registration, Endpoints). The p-values above")
-    print("are printed so the main-matrix power calculation and its addendum can cite them.")
+    if all(s["n"] <= 3 for s in stats.values()):
+        print(
+            "NOTE: the pilot draws no inference (pre-registration, Endpoints). The p-values above"
+        )
+        print("are printed so the main-matrix power calculation and its addendum can cite them.")
     return 0
 
 

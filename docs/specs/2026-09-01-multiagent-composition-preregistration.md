@@ -619,3 +619,92 @@ lost or re-bought. No arm, brief, endpoint or contrast changed after the correct
 above. Readout: `tools/readout_multiagent.py` (voids applied); typed record and derived
 report: `experiments/multiagent-composition-v2/record.yaml` and `report.md`; findings:
 `docs/reports/2026-09-03-multiagent-composition-findings.md`.
+
+## Correction — 2026-09-03, after the blind review of the closed matrix
+
+Two blind reviewers (methodology; decision relevance) read the closed record, its derived
+report and the findings with no access to the authors, and ten of their fourteen serious
+findings were adversarially verified by a third pass. The confirmatory numbers reproduced
+to four decimals; the following statements in this document and its addenda do not stand
+as written and are corrected here, in the dated form this file uses. Nothing below changes
+an arm, a brief, an endpoint, a contrast or the frozen n.
+
+1. **The sensitivity endpoint (addendum no. 4) is not what its definition says.** It was
+   defined as "the conjunction of the four held-out criteria the hint and the probes do not
+   touch". Two of the four grade the probes' own rule (`env_bool_typing` asks bool-in-
+   arithmetic and bool-in-comparison through the environment; `error_type_is_typemismatch`
+   grades the exception class the repair hint names verbatim, `TypeMismatchError`), and the
+   other two (`not_precedence_heldout`, `short_circuit_heldout`) are at 16/16 in seven cells
+   and 15/16 in placebo-haiku, so they carry no information. On the 128 counted trials the
+   endpoint is numerically identical to `env_bool_typing` alone in every cell, and the primary
+   endpoint equals the conjunction of the four bool-rule criteria in every cell. The
+   experiment measures one defect class — booleans are not numbers — and cannot show that the
+   gate's benefit extends to work independent of the rule it teaches. The disjointness the
+   record cites (`tests/test_multiagent_bank.py::TestProbeDeOverlap`) asserts string
+   non-overlap only. The record's verdict on the sensitivity endpoint is `inconclusive`.
+
+2. **"No path an orchestrator or subagent is given now leads to `fixtures/`, `solution/` or
+   `verify.py`" (incident addendum, harness repair item 3) is false for one arm.** The staged
+   harness directory covered every arm's orchestrator and the whole of control, placebo and
+   perpr from the first resumed trial. The `final-*` arms' `[gate].extra` command is expanded
+   by the gated-session strategy from the bank's `task.task_dir` — the repository directory —
+   and the fix prompt hands it to the fix spawn verbatim; it reached an agent whenever the
+   gate went red (26 of the 32 counted final trials, 20 of the 26 after the repair). A scan of
+   every post-repair final stream finds no read of `solution/` or of the real `verify.py`; the
+   one realised traversal is final-haiku r3's fix spawn reading `run_convoy_gate.py` and
+   `type_probe.py`. Subagent tool calls are not fully captured, so this bounds the residual
+   without eliminating it. Threat `custom_harness_containment` in the record.
+
+3. **The void rule was under-inclusive relative to its own root cause, and four counted
+   trials touched the task directory.** The exclusion keyed on fixture mtime (13:21:53Z) and
+   two named streams; it does not reach oracle reads through the same exposed path earlier
+   that morning. `tools/stream_facts.py --exposure` over every counted trial's surviving
+   stream finds four: perpr-sonnet r0 and r1 (an implementer subagent read `verify.py`; both
+   held-out-clean), placebo-haiku r1 (read `verify.py`, `type_probe.py`, `run_convoy_gate.py`
+   and the whole reference solution, implemented PR01 in the task directory, declared its own
+   measurement compromised and ended after 2 of 5 dispatches; not held-out-clean) and
+   final-haiku r3 (item 2). They are retained — voiding them now would be an exclusion chosen
+   after their outcomes entered the contrasts — and reported with the sensitivity: dropping
+   the first three leaves perpr > placebo at Holm 0.0007 (Haiku) and 0.0106 (Sonnet, 12/14 vs
+   5/16) and moves final > placebo at Haiku from 0.0366 to 0.0531; dropping all four gives
+   0.0697 (and final > control 0.0183). Scoring the two perpr-sonnet successes as failures
+   leaves perpr > placebo at 0.0350. The per-PR conclusions survive every version; the
+   final-vs-placebo Haiku contrast does not. Every count in this item is the output of
+   `tools/stream_facts.py`, committed with this correction.
+
+4. **The dose report addendum no. 5 requires was not produced at the readout; it is now.**
+   From tool_use events on the surviving stream of each counted trial: gate reds per trial
+   perpr 1.19 (Haiku; 13 trials at 1, 3 at 2) and 1.06 (Sonnet), placebo 0.94 and 1.06 (one
+   red per fresh workspace by construction; the aborted placebo-haiku r1 never reached it);
+   `Agent` dispatches per trial perpr 7.19 and 7.12, control 6.00 and 6.06, placebo 5.75 and
+   5.94, final 6.00 and 6.00; executed driver calls per perpr trial 6 in 27 and 7 in 5. The
+   counts do not diverge materially on reds, so the decisive contrast is reported as
+   matched on gate-red count, not dose-confounded; on the other dose measures perpr still
+   does more work than the placebo (about 1.2 more dispatches, about 10% more spend, 13–19%
+   more wall-clock per trial on medians), so the extra-work channel is bounded, not
+   eliminated. What the placebo does not match is the repair actor — perpr dispatches a
+   fresh implementer subagent carrying the `repair_brief` (one extra dispatch per trial),
+   placebo repairs inside the orchestrator — and the brief's content (perpr's block states
+   that the gate adds type-contract checks the visible suite lacks; placebo's does not).
+   Both are declared residual threats. In every one of the 26 final-arm loop firings the
+   trigger was convoy's red with the task's own gate green on the first round (32 of 32);
+   the visible suite went red only on the last round of four trials, after the fix spawns. The earlier mechanism
+   figures ("7–8 dispatches, 8–9 driver invocations") were substring counts over
+   concatenated stream files and are withdrawn.
+
+5. **The tool allow-list the scenarios declare was not the instrument that ran.** Every
+   stream's init lists the platform's registered tools — about thirty, including unrestricted
+   Bash and PowerShell — identically across arms; `Bash(python:*)` was not enforced. That is
+   the root cause of the fixture incident and of item 3, not only "a path the harness
+   exposed". Iteration 2 verifies enforcement before its first paid trial.
+
+6. **Smaller corrections.** The correction addendum above is headed 22:50Z; its commit
+   (f2ff474) is 22:46:16Z. The record's `plan_frozen_at.timestamp` now carries the commit's
+   own time (13:41:47Z). The typed record's void breakdown read "2 control … 5 final"; the
+   ledger's is 3 control, 4 placebo, 5 perpr, 4 final. The per-trial cost and wall-clock
+   figures in the findings are medians and are labelled so; cost per held-out-clean trial is
+   the cell's total spend divided by its clean trials. The pooled pilot's 24 ran arm-blocked
+   and 25 counted trials predate the fixture guard (no `fixture_sha`); both are listed among
+   the deviations. `full15_clean` was pre-registered as the secondary endpoint and is
+   recorded as exploratory; it is not the implementer's visible suite and is no longer
+   described as such.
