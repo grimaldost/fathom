@@ -780,10 +780,17 @@ the `[settings]` injection plus the three `CONVOY_*` keys the hook needs. A test
   before a pass whose forecast cost (the mean of the completed passes on these cells)
   would take the iteration's bank spend past $385, and exits without starting it.
   Iteration 1's cap was checked after the pass that crossed it.
-- **Exposure is a per-pass gate.** After every pass `tools/stream_facts.py
-  --fail-on-exposure` scans the pass's streams for any read, write or command naming the
-  bank's task directory outside `prompts/`; a hit stops the runner before the next pass.
-- **Arming is checked on pass 1, per arm**, from the streams and the hook log (below).
+- **Exposure is a gate at every pass boundary.** After every pass `tools/stream_facts.py
+  --fail-on-exposure` scans every counted iteration-2 stream so far (cumulative, not the
+  pass alone) for any read, write or command naming the bank's task directory outside
+  `prompts/` or the staged harness directory (`--task-dir`); a hit stops the runner before
+  the next pass and stays blocking until the flagged trial is voided.
+- **The staged harness directory is attested.** The runner writes a sha256 manifest of
+  what it staged on its first invocation and refuses to run on any later invocation whose
+  staging differs, so no driver, probe, prompt or gate spec can change between passes.
+- **Arming is checked on pass 1, per arm**, from the streams and the hook log (below);
+  pass 1's two `hook2` trials are the mechanism's first paid exercise, and the arming
+  check gates pass 2 on them.
 
 ### Endpoints
 
@@ -796,7 +803,9 @@ the `[settings]` injection plus the three `CONVOY_*` keys the hook needs. A test
   executed driver calls and reds (`perpr2`), placebo reds (`placebo2`), judge firings and
   blocks (`hook2`, from `<tag>--hook.log` copied by the Stop hook), orchestrator turns
   (run rows), cost per trial, wall-clock, cost per held-out-clean trial (cell spend over
-  clean trials).
+  clean trials). Cost and turns per trial are read from the run rows whose `started_at`
+  matches the counted trial row, so the run rows of an errored re-bought key are reported
+  as instrument overhead, not pooled into the cell.
 
 ### Contrasts
 
@@ -819,10 +828,12 @@ two-sided on the per-trial values with medians and interquartile ranges.
 
 - **Mechanism (contrast 3).** Supported at both tiers: the gate's information causes the
   gain beyond the brief's content and the repair actor, and iteration 1's claim stands
-  with that channel closed. Not supported at a tier with `placebo2`'s rate within 0.15 of
-  `perpr2`'s: the brief's content and the fresh repair explain iteration 1's win at that
-  tier, and the "independent information" claim is withdrawn there — published as such.
-  Not supported with a larger gap: underpowered at n = 16, reported as such.
+  with that channel closed. Not supported at a tier where `placebo2`'s rate is at or above
+  `perpr2`'s minus 0.15 (a placebo2 that matches or beats perpr2 is evidence against the
+  mechanism, never folded into "underpowered"): the brief's content and the fresh repair
+  explain iteration 1's win at that tier, and the "independent information" claim is
+  withdrawn there — published as such. Not supported with `perpr2` more than 0.15 above
+  `placebo2`: underpowered at n = 16, reported as such.
 - **Hook adoption (contrasts 1 and 2 plus dose).** Both supported at both tiers, and
   `hook2`'s median orchestrator turns at or below `control2`'s upper quartile, and
   `hook2`'s median cost per trial at or below `perpr2`'s: the hook form becomes convoy's
@@ -830,8 +841,10 @@ two-sided on the per-trial values with medians and interquartile ranges.
   Any of these failing: the driver loop stays the recommendation and the hook's result is
   reported at its weight.
 - **Replication (contrast 4).** Supported at both tiers: iteration 1 replicated on
-  contemporaneous cells under the enforced registry. Not supported: reported beside
-  iteration 1's cells with the two harness differences named.
+  contemporaneous cells under the enforced registry; contrast 4 replicates the design, not
+  the binary. Not supported: reported beside iteration 1's cells with the three harness
+  differences named (the registry restriction, the convoy release v0.11.0 to v0.12.0, the
+  staged-harness exposure gate).
 
 ### n, power, passes, budget
 
@@ -839,7 +852,10 @@ n = 16 per cell, 128 trials. Exact power for a one-sided Fisher test at alpha 0.
 (Holm's strictest step), computed with `local/power_n.py` before the first trial: at
 Laplace-shrunk iteration-1 rates 0.94 vs 0.39 (perpr vs placebo) the decisive
 mechanism contrast has power 0.855 (0.809 at 0.90 vs 0.35); `hook2` > `control2` at 0.90
-vs 0.20 has 0.968; `hook2` > `placebo2` at 0.90 vs 0.39 has 0.737.
+vs 0.20 has 0.968; `hook2` > `placebo2` at 0.90 vs 0.39 has 0.737. These figures use
+iteration 1's placebo rate; `placebo2` is built to be stronger than that placebo, so if its
+rate rises toward `perpr2`'s the decisive contrast is underpowered by design and the
+reading declared above for that case applies.
 A non-supported contrast at n = 16 is reported as underpowered at the achieved n, never
 as a null. Passes `k = 1..16` with `--repeats k`, each covering the eight cells once, so
 arms are interleaved by pass and time is not confounded with arm. Forecast cost per pass
@@ -847,7 +863,7 @@ $19.7 from iteration 1's medians (control $1.93 and $2.28; the three gated arms 
 at perpr's $2.31 and $2.85), 16 passes about $315; arming probes under $1. The runner's
 forecast rule stops before the pass that would take the iteration's bank spend past
 $385; the operator's cap is $400. If the cap stops the matrix short of 16, the achieved
-n is reported with a `design.amendments` entry and no cell is topped up afterwards.
+n is reported with an `analysis_plan.amendments` entry and no cell is topped up afterwards.
 
 ### Arming, exclusions, chronology
 
@@ -855,21 +871,24 @@ n is reported with a `design.amendments` entry and no cell is topped up afterwar
   `tools/stream_facts.py` and the hook log: `control2` — zero driver calls, zero placebo
   calls, no hook log; `placebo2` — at least one placebo red and zero driver calls;
   `perpr2` — at least five executed driver calls and zero placebo calls; `hook2` — a
-  `hook.log` copy present in the stream dir and zero driver calls at the orchestrator.
+  `hook.log` copy present in the stream dir with at least five judge firings (one per
+  PR) and zero driver calls at the orchestrator; every arm — the orchestrator's init
+  event registers no tool outside Read, Write, Edit, Glob, Grep, Task, Agent, Bash.
   A failed criterion stops the runner; the trial is voided (`fathom void`, reason
   recorded), the defect is fixed in the harness, and the key is re-bought. An arm whose
-  mechanism cannot be armed is dropped by a `design.amendments` entry, never mutated.
-- **Exclusions, mechanical:** a trial the per-pass exposure scan flags (any read, write
-  or command naming the task directory outside `prompts/`) is voided before the next pass
-  and re-bought; a `hook2` trial without a `hook.log` copy is voided and re-bought; an
+  mechanism cannot be armed is dropped by an `analysis_plan.amendments` entry, never mutated.
+- **Exclusions, mechanical:** a trial the cumulative exposure scan flags (any read, write
+  or command naming the task directory outside `prompts/` or the staged harness directory)
+  is voided before the next pass and re-bought; a `hook2` trial without a `hook.log` copy is voided and re-bought; an
   `errored` row is not counted and its key is re-bought by the next pass; fixture drift
   stops the runner and voids the trials the guard names. Seat expiry stops the runner at
   a trial boundary and the same command resumes; nothing is excluded for it.
 - **Chronology:** this addendum and the typed record
   `experiments/multiagent-composition-v2-iter2/record.yaml` are committed before the
   first trial, with `plan_frozen_at.commit` pointing at the record's own commit, so the
-  chronology gate (ER-ANCHOR) is expected to pass; the first trial's `started_at` on its
-  ledger row is the check.
+  chronology gate (ER-ANCHOR) is expected to pass; `run.first_run_at` is filled at readout
+  from the minimum `started_at` over the iteration-2 trial rows, and that row is the check.
+  The runner used is committed beside the record as `run-iter2.sh`.
 - **Readout and review:** `tools/readout_multiagent.py --family iter2` prints the cells,
   the four contrasts with Holm, the labelled extras, the dose table and the exposure line;
   the record is filled from it, validated and rendered; two blind reviewers read the

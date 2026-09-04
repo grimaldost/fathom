@@ -58,8 +58,16 @@ ITER2_CONTRASTS = (
     ("perpr2", "control2"),
 )
 FAMILIES = {
-    "iter1": {"arms": ARMS, "contrasts": CONTRASTS},
-    "iter2": {"arms": ITER2_ARMS, "contrasts": ITER2_CONTRASTS},
+    "iter1": {
+        "arms": ARMS,
+        "contrasts": CONTRASTS,
+        "ledger": "ledger/multiagent-composition.jsonl",
+    },
+    "iter2": {
+        "arms": ITER2_ARMS,
+        "contrasts": ITER2_CONTRASTS,
+        "ledger": "ledger/multiagent-composition-v2.jsonl",
+    },
 }
 # Outside the Holm family (iter2): the treatment-vs-treatment contrast and the placebo check.
 ITER2_HOOK_VS_PERPR = ("hook2", "perpr2")
@@ -261,7 +269,12 @@ def _fmt_iqr(xs: list[float], digits: int) -> str:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--ledger", default="ledger/multiagent-composition.jsonl")
+    ap.add_argument(
+        "--ledger",
+        default=None,
+        help="defaults to the family's own ledger (see FAMILIES); always pass explicitly "
+        "for anything other than the default family's canonical ledger",
+    )
     ap.add_argument("--streams", action="append", default=None, help="repeatable")
     ap.add_argument("--task-dir-name", default=None, help="defaults to the ledger stem")
     ap.add_argument(
@@ -273,6 +286,8 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
     arms: tuple[str, ...] = FAMILIES[args.family]["arms"]
     contrasts: tuple[tuple[str, str], ...] = FAMILIES[args.family]["contrasts"]
+    if args.ledger is None:
+        args.ledger = FAMILIES[args.family]["ledger"]
 
     trials, runs = load(Path(args.ledger), arms)
     cost = per_trial_cost(runs)
@@ -357,10 +372,14 @@ def main(argv: list[str]) -> int:
         lo, hi = wilson(s["ho"], s["n"])
         print(f"  {arm + '-' + tier:16} {s['ho']}/{s['n']}  [{lo:.2f}, {hi:.2f}]")
     print()
-    for endpoint, key in (
-        ("PRIMARY held_out_clean", "ho"),
-        ("SENSITIVITY held_out_clean_independent (not in the Holm family)", "hoi"),
-    ):
+    # held_out_clean_independent is iteration 1's addendum-4 sensitivity endpoint, ruled
+    # inconclusive by the 2026-09-03 blind review; iteration 2's pre-registration and typed
+    # record declare exactly two outcomes (held_out_clean, full15_clean) and do not declare
+    # this one, so it is shown only for the iter1 family, never as an iter2 endpoint.
+    endpoints: list[tuple[str, str]] = [("PRIMARY held_out_clean", "ho")]
+    if args.family == "iter1":
+        endpoints.append(("SENSITIVITY held_out_clean_independent (not in the Holm family)", "hoi"))
+    for endpoint, key in endpoints:
         print(endpoint)
         for tier in TIERS:
             raw: dict[str, float] = {}
@@ -462,6 +481,20 @@ def _print_iter2_extras(stats: dict[tuple[str, str], dict]) -> None:
             print(
                 f"  {arm + '-' + tier:16} {s['n']:>2}  {_fmt_iqr(s['costs'], 2):24} "
                 f"{_fmt_iqr(s['walls'], 0):24} {_fmt_iqr(s['turns'], 0):20}"
+            )
+    print()
+    print(
+        "COST PER HELD-OUT-CLEAN TRIAL (cell spend over clean trials; dash when ho == 0, "
+        "descriptive)"
+    )
+    for tier in TIERS:
+        for arm in ITER2_ARMS:
+            s = stats.get((arm, tier))
+            if not s:
+                continue
+            per_clean = f"{sum(s['costs']) / s['ho']:.2f}" if s["ho"] else "-"
+            print(
+                f"  {arm + '-' + tier:16} spend=${sum(s['costs']):.2f}  ho={s['ho']}  ${per_clean}/clean"
             )
     print("  Mann-Whitney U, two-sided (exact when no ties; else normal, tie-corrected):")
     for tier in TIERS:

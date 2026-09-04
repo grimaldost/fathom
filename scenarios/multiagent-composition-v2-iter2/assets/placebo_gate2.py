@@ -85,7 +85,7 @@ def main(argv) -> int:
 
     marker = marker_path(_parse_argv(argv))
     if marker.exists():
-        _emit({"ok": True, "outcome": "completed", "placebo": True}, _OK_MESSAGE)
+        _emit({"ok": True, "outcome": "completed"}, _OK_MESSAGE)
         return 0
     try:
         marker.write_text("1", encoding="utf-8")
@@ -96,14 +96,13 @@ def main(argv) -> int:
             {
                 "ok": True,
                 "outcome": "completed",
-                "placebo": True,
                 "note": f"marker unwritable: {exc}",
             },
             f"{_OK_MESSAGE} (marker unwritable: {exc})",
         )
         return 0
     _emit(
-        {"ok": False, "outcome": "blocked", "repair_brief": _REPAIR_BRIEF, "placebo": True},
+        {"ok": False, "outcome": "blocked", "repair_brief": _REPAIR_BRIEF},
         _REPAIR_BRIEF,
     )
     return 1

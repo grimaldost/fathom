@@ -48,6 +48,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import yaml
+
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
 
@@ -63,6 +65,7 @@ ITER2 = REPO / "scenarios" / "multiagent-composition-v2-iter2"
 ASSETS = ITER2 / "assets"
 LEDGER = REPO / "ledger" / "multiagent-composition-v2.jsonl"
 RECORD = REPO / "experiments" / "multiagent-composition-v2" / "record.yaml"
+ITER2_RECORD = REPO / "experiments" / "multiagent-composition-v2-iter2" / "record.yaml"
 
 KINDS = ("control2", "placebo2", "perpr2", "hook2")
 TIERS = {"haiku": "claude-haiku-4-5", "sonnet": "claude-sonnet-5"}
@@ -353,7 +356,7 @@ class TestPlaceboGate2Envelope(unittest.TestCase):
         envelope = json.loads(lines[0])
         self.assertEqual(envelope["ok"], False)
         self.assertEqual(envelope["outcome"], "blocked")
-        self.assertEqual(envelope["placebo"], True)
+        self.assertNotIn("placebo", envelope)
         brief = envelope["repair_brief"]
         self.assertIn(PLACEBO_MARKER, brief)
         for word in FORBIDDEN_IN_REPAIR_BRIEF:
@@ -366,7 +369,7 @@ class TestPlaceboGate2Envelope(unittest.TestCase):
             envelope = json.loads(proc.stdout.strip())
             self.assertEqual(envelope["ok"], True)
             self.assertEqual(envelope["outcome"], "completed")
-            self.assertEqual(envelope["placebo"], True)
+            self.assertNotIn("placebo", envelope)
             self.assertNotIn("repair_brief", envelope)
 
     def test_marker_is_keyed_by_workspace_and_lives_outside_it(self):
@@ -509,6 +512,40 @@ class TestDriverPinIsOverridable(unittest.TestCase):
                 if not stripped or stripped.startswith(("#", '"""')):
                     continue
                 self.assertIn("pin", stripped.lower(), f"driver change outside the pin: {line!r}")
+
+
+class TestRecordMatchesTheArms(unittest.TestCase):
+    """Binds the frozen design.cells to the eight scenario TOMLs actually run.
+
+    ER-RECON only checks internal arithmetic; nothing else asserts that
+    ``design.cells`` in the typed record names the same eight arms as the
+    scenario directory that will actually be run.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if not ITER2_RECORD.exists():
+            raise unittest.SkipTest(f"no iteration-2 record at {ITER2_RECORD}")
+        cls.record = yaml.safe_load(ITER2_RECORD.read_text(encoding="utf-8"))
+
+    def test_design_cells_are_the_eight_scenario_names(self):
+        cells = {c["name"] for c in self.record["design"]["cells"]}
+        toml_names = {p.stem for p in sorted(ITER2.glob("*.toml"))}
+        self.assertEqual(cells, toml_names)
+        self.assertEqual(cells, set(ARMS))
+
+    def test_every_cell_plans_sixteen(self):
+        cells = self.record["design"]["cells"]
+        for cell in cells:
+            self.assertEqual(cell["planned_n"], 16, cell["name"])
+        self.assertEqual(sum(c["planned_n"] for c in cells), 128)
+
+    def test_verifier_hash_matches_the_bank(self):
+        verify_hash = hashlib.sha256((TASK_DIR / "verify.py").read_bytes()).hexdigest()
+        outcomes = self.record["outcomes"]
+        self.assertGreaterEqual(len(outcomes), 1)
+        for outcome in outcomes:
+            self.assertEqual(outcome["verifier"]["hash"], verify_hash, outcome["name"])
 
 
 if __name__ == "__main__":

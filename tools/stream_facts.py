@@ -35,7 +35,8 @@ tells the orchestrator from its spawns, and counts tool_use events:
 CLI (from the fathom repo):
     uv run python tools/stream_facts.py --ledger ledger/<bank>.jsonl \
         --streams streams-multiagent/<pilot> --streams streams-multiagent/<main> \
-        [--task-dir-name multiagent-composition-v2] [--exposure] [--dose] [--fail-on-exposure]
+        [--task-dir-name multiagent-composition-v2] [--task-dir <extra forbidden prefix>]... \
+        [--exposure] [--dose] [--fail-on-exposure]
         [--per-trial] [--arming-check [--repeat N]]
 """
 
@@ -52,7 +53,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
+from fathom.arming import registry_violations  # noqa: E402
 from fathom.ledger import apply_voids  # noqa: E402
+from fathom.streams import find_init, init_tools  # noqa: E402
 
 DRIVER_MARKER = "run_convoy_gate.py"
 PLACEBO_MARKER = "placebo_gate.py"
@@ -102,6 +105,7 @@ class TrialFacts:
     hook_log_stops: int = 0  # judge-leg records (SubagentStop firings)
     hook_log_firings: int = 0  # judge-leg records whose gate was red (outcome blocked)
     hook_log_file: str = ""
+    registered_tools: tuple[str, ...] = ()  # orchestrator's own init event's ``tools`` list
 
 
 def parse_tag(name: str) -> tuple[str, int, int] | None:
@@ -271,11 +275,28 @@ def surviving_streams(ledger: Path, stream_dirs: list[Path]) -> dict[tuple[str, 
     return out
 
 
-def _mentions_task_dir(text: str, task_dir_name: str) -> str | None:
-    """The first path-like token naming the bank task dir outside prompts/, else None."""
+def _mentions_task_dir(
+    text: str, task_dir_name: str, extra_dirs: tuple[str, ...] = ()
+) -> str | None:
+    """The first path-like token naming the bank task dir outside prompts/, else None.
+
+    ``extra_dirs`` names forbidden prefixes beyond ``tasks/<task_dir_name>`` — e.g. a
+    staged harness directory outside the repository that mirrors the bank's own driver,
+    probes and gate specs. Iteration 2 stages exactly such a directory (see
+    ``local/run-iter2.sh``); the ``tasks/<name>`` substring test alone cannot see a read
+    of the staged copy, so a forbidden-prefix match is required too. Both sides are
+    normalised to forward slashes and casefolded so a Windows path (backslashes, drive
+    letter case) still matches.
+    """
+    norm_extra = [d.replace("\\", "/").rstrip("/").casefold() for d in extra_dirs if d]
     for m in re.finditer(r"[A-Za-z]:[\\/][^\s\"']+|/[^\s\"']+", text):
         tok = m.group(0).replace("\\\\", "/").replace("\\", "/")
-        if f"tasks/{task_dir_name}" in tok and "/prompts" not in tok:
+        if "/prompts" in tok:
+            continue
+        if f"tasks/{task_dir_name}" in tok:
+            return tok
+        tok_cf = tok.casefold()
+        if any(tok_cf.startswith(d) for d in norm_extra):
             return tok
     return None
 
@@ -286,6 +307,7 @@ def trial_facts(
     files: list[Path],
     task_dir_name: str,
     hook_log: Path | None = None,
+    extra_task_dirs: tuple[str, ...] = (),
 ) -> TrialFacts:
     orchestrator = files[0]  # earliest end time in the cluster is the orchestrator
     facts = TrialFacts(scenario, repeat, [f.name for f in files], orchestrator.name)
@@ -297,7 +319,14 @@ def trial_facts(
         is_orch = f is orchestrator
         pending: dict[str, tuple[str, bool]] = {}  # tool_use id -> (kind, orchestrator-level)
         saw_result = False
-        for e in events(f):
+        # Materialize as a list only for the orchestrator: find_init/init_tools need to
+        # scan the same sequence the main loop below also iterates.
+        stream_events = list(events(f)) if is_orch else events(f)
+        if is_orch:
+            init = find_init(stream_events)
+            if init is not None:
+                facts.registered_tools = tuple(init_tools(stream_events))
+        for e in stream_events:
             if e.get("type") == "result":
                 saw_result = True
             level_orch = e.get("parent_tool_use_id") in (None, "")
@@ -319,7 +348,11 @@ def trial_facts(
                         mandated = name in ("Bash", "PowerShell") and (
                             DRIVER_MARKER in raw or any(m in raw for m in PLACEBO_MARKERS)
                         )
-                        hit = None if mandated else _mentions_task_dir(raw, task_dir_name)
+                        hit = (
+                            None
+                            if mandated
+                            else _mentions_task_dir(raw, task_dir_name, extra_task_dirs)
+                        )
                         if hit:
                             facts.exposure.append(
                                 Exposure(
@@ -350,12 +383,15 @@ def trial_facts(
 
 
 def all_facts(
-    ledger: Path, stream_dirs: list[Path], task_dir_name: str
+    ledger: Path,
+    stream_dirs: list[Path],
+    task_dir_name: str,
+    extra_task_dirs: tuple[str, ...] = (),
 ) -> dict[tuple[str, int], TrialFacts]:
     _, void_at = ledger_keys(ledger)
     logs = hook_logs(stream_dirs, void_at)
     return {
-        key: trial_facts(key[0], key[1], files, task_dir_name, logs.get(key))
+        key: trial_facts(key[0], key[1], files, task_dir_name, logs.get(key), extra_task_dirs)
         for key, files in sorted(surviving_streams(ledger, stream_dirs).items())
     }
 
@@ -393,8 +429,17 @@ def dose_table(facts: dict[tuple[str, int], TrialFacts]) -> list[str]:
 # control2 must show no gate of any kind; placebo2 must have run the placebo to a red and
 # never the driver; perpr2 must have driven the gate at least once per PR (five PRs) and
 # never the placebo; hook2's gate lives in the hook, so the copied hook.log is the
-# attestation and the driver must not have been run by the orchestrator.
+# attestation, at least one judge firing per PR dispatch must be recorded (a log carrying
+# only messenger records with no judge leg is not evidence the mechanism ran), and the
+# driver must not have been run by the orchestrator.
 ITER2_ARMS = ("control2", "placebo2", "perpr2", "hook2")
+
+# The registry restriction every iteration-2 arm declares: registered built-in tool names
+# (mcp__* excluded — see registry_violations) must be a subset of this set. This is the
+# same check `--arming-check` runs at pass 1's probe spawn, applied here to the real
+# trial's own init event, which can diverge from the probe in model, effort, max-turns
+# and budget.
+ITER2_EXPECTED_TOOLS = ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Agent", "Bash")
 
 
 def arming_verdicts(
@@ -409,10 +454,15 @@ def arming_verdicts(
         seen = (
             f"driver={f.driver_calls} placebo={f.placebo_calls}/{f.placebo_reds} "
             f"hook_log={'present' if f.hook_log_present else 'absent'}"
-            f"({f.hook_log_stops} stops, {f.hook_log_firings} red)"
+            f"({f.hook_log_stops} stops, {f.hook_log_firings} red) "
+            f"tools={len(f.registered_tools)}"
             f"{' TRUNCATED' if f.truncated else ''}"
         )
         failures: list[str] = []
+        if arm in ITER2_ARMS:
+            extra = registry_violations(f.registered_tools, ITER2_EXPECTED_TOOLS)
+            if extra:
+                failures.append(f"registered tools outside the allow-list: {sorted(extra)}")
         if arm == "control2":
             if f.driver_calls != 0:
                 failures.append("driver_calls != 0")
@@ -435,6 +485,8 @@ def arming_verdicts(
         elif arm == "hook2":
             if not f.hook_log_present:
                 failures.append("hook_log absent")
+            if f.hook_log_stops < 5:
+                failures.append("hook_log_stops < 5 (judge leg never fired)")
             if f.driver_calls != 0:
                 failures.append("driver_calls != 0 (orchestrator)")
         else:
@@ -452,6 +504,17 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--ledger", required=True)
     ap.add_argument("--streams", action="append", required=True, help="repeatable")
     ap.add_argument("--task-dir-name", default="multiagent-composition-v2")
+    ap.add_argument(
+        "--task-dir",
+        action="append",
+        default=[],
+        help=(
+            "repeatable: an additional forbidden path prefix beyond tasks/<task-dir-name> — "
+            "e.g. a staged harness directory outside the repo that mirrors the bank's driver, "
+            "probes and gate specs. Normalised to forward slashes and casefolded before "
+            "comparison; a token under it counts as exposure unless it also names /prompts."
+        ),
+    )
     ap.add_argument("--dose", action="store_true", help="print the per-cell dose table")
     ap.add_argument("--exposure", action="store_true", help="list trials that touched the task dir")
     ap.add_argument("--per-trial", action="store_true", help="print one line per counted trial")
@@ -468,7 +531,12 @@ def main(argv: list[str]) -> int:
     )
     args = ap.parse_args(argv)
 
-    facts = all_facts(Path(args.ledger), [Path(s) for s in args.streams], args.task_dir_name)
+    facts = all_facts(
+        Path(args.ledger),
+        [Path(s) for s in args.streams],
+        args.task_dir_name,
+        tuple(args.task_dir),
+    )
     print(f"counted trials with a surviving stream: {len(facts)}")
     if args.per_trial:
         for (scenario, repeat), f in facts.items():

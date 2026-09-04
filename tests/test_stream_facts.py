@@ -389,6 +389,65 @@ class HookLogTests(unittest.TestCase):
             self.assertEqual((f.placebo_calls, f.placebo_reds), (2, 1))
             self.assertEqual(f.exposure, [])
 
+    def test_reads_of_the_staged_harness_dir_are_flagged_via_task_dir(self):
+        """A read of a harness-staged oracle-adjacent file, outside tasks/<bank>, is exposure.
+
+        The literal ``tasks/<task_dir_name>`` substring test alone cannot see this: iteration
+        2 stages the driver/probe/gate material at a directory outside the repo (see
+        local/run-iter2.sh), so the exposure gate needs an explicit forbidden-prefix too.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            harness = "C:/Users/x/AppData/Local/Temp/fathom-harness-bank-v2-iter2"
+            evs = [
+                _init("C:/stage"),
+                _use("Read", {"file_path": f"{harness}/type_probe.py"}, "r1"),
+            ]
+            orch = _write(d, "o.ndjson", evs)
+
+            # Without the extra forbidden prefix, the harness-staged read is invisible.
+            f_blind = sf.trial_facts("perpr2-haiku", 0, [orch], "bank-v2")
+            self.assertEqual(f_blind.exposure, [])
+
+            # With it named, the same read is flagged.
+            f_seen = sf.trial_facts(
+                "perpr2-haiku", 0, [orch], "bank-v2", extra_task_dirs=(harness,)
+            )
+            self.assertEqual(
+                [(x.tool, x.level) for x in f_seen.exposure], [("Read", "orchestrator")]
+            )
+            self.assertIn("type_probe.py", f_seen.exposure[0].path)
+
+    def test_prompts_under_the_extra_dir_are_still_excluded(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            harness = "C:/harness"
+            evs = [
+                _init("C:/stage"),
+                _use("Read", {"file_path": f"{harness}/prompts/pr01.md"}, "r1"),
+            ]
+            orch = _write(d, "o.ndjson", evs)
+            f = sf.trial_facts("perpr2-haiku", 0, [orch], "bank-v2", extra_task_dirs=(harness,))
+            self.assertEqual(f.exposure, [])
+
+    def test_registered_tools_come_from_the_orchestrators_own_init_event(self):
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            evs = [
+                {
+                    "type": "system",
+                    "subtype": "init",
+                    "cwd": "C:/stage",
+                    "session_id": "s",
+                    "tools": ["Read", "Write", "Bash", "mcp__foo__bar"],
+                },
+                _use("Bash", {"command": "echo hi"}, "b1"),
+                _result("b1", "hi"),
+            ]
+            orch = _write(d, "o.ndjson", evs)
+            f = sf.trial_facts("control2-haiku", 0, [orch], "bank-v2")
+            self.assertEqual(f.registered_tools, ("Read", "Write", "Bash", "mcp__foo__bar"))
+
 
 class ArmingVerdictTests(unittest.TestCase):
     @staticmethod
@@ -479,7 +538,7 @@ class ArmingVerdictTests(unittest.TestCase):
             _write_hook_log(
                 d,
                 f"{BANK}--hook2-haiku--exprlang--r0--hook.log",
-                [_hook_record("SubagentStop", "completed")],
+                [_hook_record("SubagentStop", "completed")] * 5,
             )
             self.assertEqual(sf.main(argv + ["--arming-check"]), 0)
             self.assertEqual(

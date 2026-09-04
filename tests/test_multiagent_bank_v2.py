@@ -89,9 +89,12 @@ IDENTICAL_FILES = (
     "verify.py",
     "type_probe.py",
     "placebo_gate.py",
-    "run_convoy_gate.py",
     "series.toml",
 )
+# run_convoy_gate.py is EXCLUDED here: iteration 2 gave it a FATHOM_CONVOY_PIN override (the
+# scenario env can pin a different convoy release for the gate driver). The line-level
+# constraint -- v2 differs from v1 only in the pin lines, nothing else -- is asserted by
+# tests/test_multiagent_iter2.py::TestDriverPinIsOverridable, not here.
 IDENTICAL_TREES = ("fixtures", "solution")
 
 # 15 `full` criteria + 6 `held_out`.

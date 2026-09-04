@@ -47,23 +47,33 @@ outcomes:
     hash: 78d0e86ddeead4fa3da1188d9bd34550590a0fda892dc607891f7853cd8fe241
 analysis_plan:
   ci_method: wilson
-  comparison: four pre-registered one-sided contrasts per implementer tier-set, Fisher exact on
+  comparison: >-
+    four pre-registered one-sided contrasts per implementer tier-set, Fisher exact on
     held_out_clean counts, Holm-corrected within the tier-set's family of four at alpha 0.05,
     tier-sets never pooled — (1) hook2 vs control2, (2) hook2 vs placebo2, (3) perpr2 vs placebo2
     [the mechanism-independence test], (4) perpr2 vs control2 [the replication]. Outside the
     family, labelled as such — hook2 vs perpr2 on held_out_clean (two-sided Fisher, Newcombe 95%
     on the rate difference; descriptive at n=16), placebo2 vs control2 (one-sided), and cost per
     trial and orchestrator turns for hook2 vs perpr2 and hook2 vs control2 (Mann-Whitney U
-    two-sided, medians and interquartile ranges). Wilson 95% on every cell.
+    two-sided, medians and interquartile ranges). Wilson 95% on every cell. The Newcombe
+    interval is outside this record's typed CI vocabulary (wilson, clopper_pearson,
+    beta_binomial) and is reported only in readout text, never as a typed ci block; its
+    recomputable source is newcombe() in tools/readout_multiagent.py, pinned by test against
+    the 56/70 vs 48/80 example (0.0524 to 0.3339). shared_tasks is true with one task, so
+    n_clusters is 1, no clustered contrast is computable, and every interval and p-value is
+    conditional on the one task (exprlang), an upper bound on precision and not a cross-task
+    estimate.
   decision_rule:
     metric: rate_difference
     comparison: gt
     threshold: 0.0
     direction: higher
-  prior_data_collected: yes — iteration 1 on this bank (128 counted trials in eight cells, ledger
+  prior_data_collected: >-
+    yes — iteration 1 on this bank (128 counted trials in eight cells, ledger
     ledger/multiagent-composition-v2.jsonl, record experiments/multiagent-composition-v2/record.yaml)
     set the rates the power statement uses; none of its trials enters any cell here.
-  question_hypothesis: on the same bank and fixture, (a) is the per-PR gate's gain the gate's
+  question_hypothesis: >-
+    on the same bank and fixture, (a) is the per-PR gate's gain the gate's
     information rather than the treatment brief's content and the fresh-subagent repair it
     prescribes (perpr2 > placebo2, where placebo2 carries perpr2's brief byte for byte except the
     gate command and an envelope-shaped placebo gate); (b) does convoy 0.12.0's gate keep its
@@ -71,19 +81,21 @@ analysis_plan:
     control2, hook2 > placebo2), and at what orchestrator cost; (c) does iteration 1 replicate on
     contemporaneous cells under a registry-level tool restriction (perpr2 > control2). Convoy's
     orchestration appears in no arm.
-  dv_operationalization: held_out_clean as above; secondary full15_clean; mechanism and dose from
+  dv_operationalization: >-
+    held_out_clean as above; secondary full15_clean; mechanism and dose from
     the streams and the hook log via tools/stream_facts.py — Agent dispatches, executed driver
     calls and reds (perpr2), placebo reds (placebo2), judge firings and blocks (hook2), task-dir
     exposure — and from run rows — orchestrator turns, cost per trial (sum of run rows per
     config_hash+repeat), wall-clock; cost per held-out-clean trial as cell spend over clean trials.
-  conditions_factors: arm x implementer tier. Arms — control2 (iteration 1's control brief, the
+  conditions_factors: >-
+    arm x implementer tier. Arms — control2 (iteration 1's control brief, the
     visible suite only), placebo2 (the per-PR treatment brief with the gate command swapped for
     placebo_gate2.py, which returns outcome blocked once per workspace with a repair_brief naming
     no check, file, type or rule, then completed; the orchestrator dispatches a fresh fix subagent
     with that repair_brief verbatim), perpr2 (the per-PR treatment brief; run_convoy_gate.py
     --phase <pr> --json with convoy pinned at v0.12.0 through FATHOM_CONVOY_PIN; fresh fix subagent
     with the envelope's repair_brief), hook2 (control's brief plus one numbered item — begin each
-    subagent prompt with the PR's phase tag; convoy 0.12.0's SubagentStop judge and PostToolUse
+    subagent prompt with the literal marker `[convoy-phase: <tag>]`, the PR's phase tag; convoy 0.12.0's SubagentStop judge and PostToolUse
     messenger armed through injected user-scope settings; the gate spec assets/hook-gate.toml is
     the decomposition's own checks plus the two independent type-contract probes, the composition
     perpr2's driver builds). Tier — implementer subagents at claude-haiku-4-5 or claude-sonnet-5
@@ -93,29 +105,42 @@ analysis_plan:
     directory outside the repository identical across arms; the documented differences are the
     brief, the gate command, and for hook2 the settings injection plus CONVOY_GATE_SPEC,
     CONVOY_ORACLES and CONVOY_TRUSTED_ROOTS (asserted by tests/test_multiagent_iter2.py).
-  exclusion_rules: mechanical, declared before the first trial — (a) a trial the per-pass exposure
-    scan flags (tools/stream_facts.py --fail-on-exposure; any read, write or command naming the
-    bank's task directory outside prompts/) is voided before the next pass and its key re-bought;
+  exclusion_rules: >-
+    mechanical, declared before the first trial — (a) a trial the exposure scan
+    flags (tools/stream_facts.py --fail-on-exposure, run cumulatively over every counted
+    iteration-2 stream after each pass: any Read, Glob, Grep, Write, Edit or Bash whose path or
+    command names the bank's task directory `tasks/multiagent-composition-v2` outside prompts/,
+    or names the staged harness directory passed with --task-dir, whose driver and placebo
+    sources explain the experiment; a path relative to a cwd the scan cannot resolve is the
+    residual gap) is voided before the next pass and its key re-bought, and the hit stays
+    blocking until the void is written;
     (b) a hook2 trial with no hook.log copy in the stream dir is voided and re-bought; (c) an
     errored row is not counted and its key is re-bought by the next pass; (d) fixture drift stops
     the runner and voids the trials the guard names; (e) seat expiry stops the runner at a trial
     boundary and the same command resumes, nothing excluded. Arming criteria evaluated on pass 1
     per arm (control2 zero driver and placebo calls and no hook log; placebo2 at least one placebo
     red and zero driver calls; perpr2 at least five executed driver calls and zero placebo calls;
-    hook2 a hook.log copy present and zero driver calls at the orchestrator) — a failed criterion
-    voids the trial, the harness is fixed, the key re-bought; an arm that cannot be armed is
-    dropped by a design amendment, never mutated. Every void is an append-only void row in the ledger with its
+    hook2 a hook.log copy present with at least five judge firings, one per PR, and zero driver
+    calls at the orchestrator; every arm the orchestrator's init event registering no tool
+    outside Read, Write, Edit, Glob, Grep, Task, Agent, Bash) — a failed criterion voids the
+    trial, the harness is fixed, the key re-bought; an arm that cannot be armed is dropped by
+    an analysis_plan.amendments entry, never mutated. Every void is an append-only void row in the ledger with its
     reason.
-  n_and_rationale: 16 per cell, 128 trials. Exact one-sided Fisher power at n=16 and alpha 0.0125
+  n_and_rationale: >-
+    16 per cell, 128 trials. Exact one-sided Fisher power at n=16 and alpha 0.0125
     (Holm's strictest step), from iteration 1's Laplace-shrunk rates — perpr2 vs placebo2 at 0.94
     vs 0.39 is 0.855 (0.809 at 0.90 vs 0.35), hook2 vs control2 at 0.90 vs 0.20 is 0.968, hook2
     vs placebo2 at 0.90 vs 0.39 is 0.737 — computed with local/power_n.py before the first trial. A non-supported contrast at n=16 is reported as
     underpowered at the achieved n, never as a null. Budget — forecast $19.7 per pass from
     iteration 1's medians, about $315 for 16 passes; the runner stops before any pass whose
     forecast would take the iteration's bank spend past $385 (the operator's cap is $400); if it
-    stops short of 16, the achieved n is reported with a design amendment and no cell is topped
-    up afterwards.
-  other: trials run as repeat passes (--repeats k, k=1..16), each covering the eight cells once,
+    stops short of 16, the achieved n is reported with an analysis_plan.amendments entry and no
+    cell is topped up afterwards. The power figures are computed at iteration 1's placebo rate;
+    placebo2 is built to be stronger than that placebo, so if its rate rises toward perpr2's the
+    decisive contrast is underpowered by design and the pre-stated reading for that case, not a
+    null, applies.
+  other: >-
+    trials run as repeat passes (--repeats k, k=1..16), each covering the eight cells once,
     arm-interleaved by pass; pass 1 doubles as the arming pass. Caps $20 per spawn, $300 per run
     invocation. Seat lifetime about 4h — the runner stops on authentication failure and the same
     command resumes. Readout by tools/readout_multiagent.py --family iter2; two blind reviewers
@@ -125,8 +150,9 @@ threats:
     status: residual
     statement: same bank as iteration 1 — synthetic package, a well-known Python idiom (bool
       subclasses int) the models may carry from pretraining. Isolation is the staged harness
-      directory outside the repository plus the registry-level tool restriction and the per-pass
-      exposure scan, whose hits are voided and re-bought by rule; the fixture's visible test
+      directory outside the repository plus the registry-level tool restriction and the cumulative
+      exposure scan over the task directory and the staged harness directory, whose hits are
+      voided and re-bought by rule; the fixture's visible test
       docstring still names verify.py by filename, identically in every arm.
   prompt_format_sensitivity:
     status: controlled
@@ -157,6 +183,9 @@ threats:
       on this bank is one defect class; the hook and mechanism questions are answered within that
       class. One task shape, one orchestrator model, two implementer tiers; the claim is about
       convoy's standalone gate under external orchestration, in two forms, not about its runner.
+      The hook2 marker names convoy, so that orchestrator receives a tooling-identifying token
+      while being told nothing about gates; the marker is the same in every hook2 trial and
+      absent from the other three arms.
   token_length_confound:
     status: controlled
     statement: placebo2 carries perpr2's brief byte for byte except the gate command, forces the
@@ -181,9 +210,9 @@ plan_frozen_at:
 run:
   source: fathom
   ledger_path: ../../ledger/multiagent-composition-v2.jsonl
-  first_run_at: '2026-09-03T23:00:00Z'
-  attestation: to be written at readout — per-trial transcripts under
-    streams-multiagent/2026-09-03-iter2 (FATHOM_STREAM_DIR), hook logs as <tag>--hook.log in the
+  attestation: to be written at readout; first_run_at is filled then from the minimum
+    started_at over the iteration-2 trial rows — per-trial transcripts under
+    streams-multiagent/2026-09-04-iter2 (FATHOM_STREAM_DIR), hook logs as <tag>--hook.log in the
     same directory, fixture_sha and started_at/ended_at on every row, the effective convoy pin
     echoed on every driver call, readout by tools/readout_multiagent.py --family iter2 and
     tools/stream_facts.py over the iteration-2 stream directory.
