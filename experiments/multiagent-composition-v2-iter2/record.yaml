@@ -204,9 +204,9 @@ threats:
       forms); generalization to a real repository is the inhouse-lib bank's question, pre-registered
       separately.
 plan_frozen_at:
-  commit: REPLACE_WITH_FREEZE_COMMIT_SHA
+  commit: f30c2ab37b504880ce8935403dc91d46d9c3048d
   path: experiments/multiagent-composition-v2-iter2/record.yaml
-  timestamp: '2026-09-03T21:30:00Z'
+  timestamp: '2026-09-04T21:39:42Z'
 run:
   source: fathom
   ledger_path: ../../ledger/multiagent-composition-v2.jsonl
