@@ -700,6 +700,45 @@ class TestLedgerWrites(_Base):
         for r in run_recs:
             self.assertEqual(r.cost_usd_est, 0.05)
 
+    def test_trial_and_run_rows_carry_utc_timestamps(self):
+        """Every trial and run row the loop writes says when it happened.
+
+        The iteration-1 multiagent review found no timestamp on any ledger row, so a
+        matrix that ran across several days could not be ordered or dated except by
+        the stream file names. `started_at` is taken when the trial's spawn begins and
+        `ended_at` when the row is written — ISO-8601 UTC at second resolution with a
+        `Z` suffix, so any reader can parse and compare them.
+        """
+        import datetime as _dt
+        import re
+
+        run_matrix(
+            self.bank,
+            [self.sc_a],
+            1,
+            executor_factory=lambda sc: StubExecutor(),
+            runner_factory=lambda sc: StubRunner(),
+            stage_task_fn=_stub_stage,
+            verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
+            ledger_dir=self.ledger_dir,
+        )
+        rows = [
+            r
+            for r in _ledger.iter_records(self.bank.name, ledger_dir=self.ledger_dir)
+            if isinstance(r, (_ledger.TrialRecord, _ledger.RunRecord))
+        ]
+        self.assertEqual(len(rows), 4, "2 tasks x (1 run row + 1 trial row)")
+        stamp = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+        for r in rows:
+            self.assertRegex(r.started_at, stamp)
+            self.assertRegex(r.ended_at, stamp)
+            started = _dt.datetime.fromisoformat(r.started_at)
+            ended = _dt.datetime.fromisoformat(r.ended_at)
+            self.assertEqual(started.utcoffset(), _dt.timedelta(0))
+            self.assertEqual(ended.utcoffset(), _dt.timedelta(0))
+            self.assertGreaterEqual(ended, started)
+
     def test_second_run_over_full_ledger_spawns_nothing(self):
         """A second identical run must see all trials as already done."""
         kw = dict(
@@ -853,6 +892,37 @@ class TestRunnerFactoryInjection(unittest.TestCase):
         with contextlib.redirect_stderr(buf):
             _default_runner_factory(self._resolved("/no/such/skill.md"))
         self.assertIn("UN-SKILLED", buf.getvalue())
+
+
+class TestRunnerFactoryToolRegistry(unittest.TestCase):
+    """A `[tools] registry = "allowed"` arm spawns with `--tools` naming the bare
+    allow-list; a default arm spawns as every committed row did."""
+
+    def _resolved(self, registry: str) -> ResolvedScenario:
+        return _make_scenario(
+            name="restricted",
+            tools=ToolsConfig(
+                source="none",
+                allowed=("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"),
+                registry=registry,
+            ),
+        )
+
+    def test_allowed_registry_reaches_the_runner(self):
+        from fathom.cli import _default_runner_factory
+
+        runner = _default_runner_factory(self._resolved("allowed"))
+        self.assertEqual(
+            runner.registry_tools,
+            ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash", "Agent"),
+        )
+        # The pre-approval list is untouched: it still carries the Bash specifier.
+        self.assertIn("Bash(python:*)", runner.allowed_tools)
+
+    def test_default_registry_leaves_the_runner_unrestricted(self):
+        from fathom.cli import _default_runner_factory
+
+        self.assertIsNone(_default_runner_factory(self._resolved("default")).registry_tools)
 
 
 class TestRunnerFactoryMountPlumbing(unittest.TestCase):

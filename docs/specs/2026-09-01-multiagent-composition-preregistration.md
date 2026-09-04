@@ -708,3 +708,169 @@ an arm, a brief, an endpoint, a contrast or the frozen n.
    the deviations. `full15_clean` was pre-registered as the secondary endpoint and is
    recorded as exploratory; it is not the implementer's visible suite and is no longer
    described as such.
+
+## Pre-registration — iteration 2 on bank v2: contemporaneous cells, the equal-content placebo, the gate as a hook
+
+**Written 2026-09-03, before any iteration-2 trial is bought.** The operator authorized a
+new cap of $400 for this iteration on 2026-09-03, after the iteration-1 readout and its
+blind review. Iteration 1's cells are not reused as comparison cells here: every contrast
+below is between cells bought in the same interleaved passes.
+
+### What iteration 1 left open, and which of it this iteration answers
+
+The blind review of iteration 1 narrowed its claim to what was shown: the per-PR gate
+restored the one rule bank v2 withholds, the placebo matched the gate's red count but not
+the repair actor (perpr dispatches a fresh implementer with the `repair_brief`; placebo
+repaired inside the orchestrator) nor the brief's content (perpr's block says the gate
+adds two type-contract checks the visible suite lacks; placebo's says nothing of the
+kind), and the tool allow-list the scenarios declared was not enforced at the registry
+level. Iteration 2 answers three questions on the same bank and fixture:
+
+1. **Is the gate's information the cause, beyond the brief's content and the repair
+   actor?** An equal-content placebo (`placebo2`) whose brief is the per-PR treatment
+   brief byte for byte except the gate command, and whose gate returns the same envelope
+   shape with no information, forces the same fresh fix-subagent dispatch.
+2. **Does the gate keep its effect when the orchestrator is told nothing about it?**
+   The hook arms (`hook2`): convoy 0.12.0's `SubagentStop` judge and `PostToolUse`
+   messenger, armed through injected settings; the orchestrator's brief is control's plus
+   the one-line phase marker.
+3. **Does the iteration-1 result replicate on contemporaneous cells under an enforced
+   tool registry?** `perpr2` against `control2`.
+
+Not done here, deliberately: a second defect class on exprlang (the inhouse-lib bank,
+pre-registered separately, is the generalization test); the fixture's test docstring
+naming `verify.py` stays as it is (the fixture's identity is the bank's; the exposure scan
+is the guard); the `${task_dir}` expansion of the final arm's gate command is moot (no
+final arm here).
+
+### Cells
+
+Eight, bought in interleaved repeat passes, n = 16 each, all on `tasks/multiagent-composition-v2/exprlang`
+with `dataset_version` unchanged and the fixture byte-identical to iteration 1
+(`fixture_sha` on every row). Scenario TOMLs under `scenarios/multiagent-composition-v2-iter2/`.
+
+| cell | orchestrator brief | gate | who repairs a red |
+|---|---|---|---|
+| `control2-{haiku,sonnet}` | iteration 1's control brief, byte for byte | the project's visible suite only | the orchestrator, as it sees fit |
+| `placebo2-{haiku,sonnet}` | the per-PR treatment brief with the gate command swapped for `placebo_gate2.py` — every other byte equal, including the sentence about two type-contract checks | an envelope-shaped placebo: `blocked` once per workspace with a `repair_brief` naming no check, no file, no type, no rule; `completed` afterwards | a fresh fix subagent dispatched with that `repair_brief` verbatim, as in perpr |
+| `perpr2-{haiku,sonnet}` | iteration 1's per-PR treatment brief, byte for byte | `run_convoy_gate.py --phase <pr> --json` — the decomposition's own checks plus the two independent type-contract probes, convoy pinned at `v0.12.0` | a fresh fix subagent dispatched with the envelope's `repair_brief` verbatim |
+| `hook2-{haiku,sonnet}` | control's brief plus one numbered item: begin each subagent prompt with `[convoy-phase: <tag>]` | the same gate spec (`assets/hook-gate.toml`) run by convoy 0.12.0's hook: the judge blocks the implementer's stop once with the repair brief; the messenger reports a residual red to the orchestrator on a synchronous dispatch | the implementer itself, inside its own dispatch; the orchestrator only on a residual red it is shown |
+
+Implementer tier is the second factor: `FATHOM_IMPL_MODEL` = `claude-haiku-4-5` or
+`claude-sonnet-5`. Orchestrator `claude-sonnet-5`, effort high, in every cell. Tools,
+limits, the shared `[env]` keys and the staged harness directory are identical across
+the eight; the documented differences are the brief, the gate command, and for `hook2`
+the `[settings]` injection plus the three `CONVOY_*` keys the hook needs. A test
+(`tests/test_multiagent_iter2.py`) asserts the byte-identities and the exact diffs.
+
+### What changed in the harness since iteration 1, for every cell alike
+
+- **Registry-level tool restriction.** Each scenario sets `[tools] registry = "allowed"`,
+  which makes fathom pass `--tools` with the allow-list's bare names (Read, Write, Edit,
+  Glob, Grep, Agent/Task, Bash) beside the unchanged `--allowedTools` pre-approval
+  (`Bash(python:*)`). The arming probe asserts the init event's registry is that set;
+  iteration 1's streams listed about thirty tools.
+- **Timestamps.** Trial and run rows carry `started_at` and `ended_at` (UTC), so the
+  chronology below is read from the ledger, not from stream file names.
+- **One convoy release for both treatment forms.** `run_convoy_gate.py` reads
+  `FATHOM_CONVOY_PIN` (default unchanged, `v0.11.0`; iteration-1 rows are reproducible)
+  and every iteration-2 cell sets it to `v0.12.0`, the release whose hook the `hook2`
+  arms run. The effective pin is echoed on every call, so each trial's stream attests it.
+- **The cap is a forecast, not a post-mortem.** The runner (`local/run-iter2.sh`) stops
+  before a pass whose forecast cost (the mean of the completed passes on these cells)
+  would take the iteration's bank spend past $385, and exits without starting it.
+  Iteration 1's cap was checked after the pass that crossed it.
+- **Exposure is a per-pass gate.** After every pass `tools/stream_facts.py
+  --fail-on-exposure` scans the pass's streams for any read, write or command naming the
+  bank's task directory outside `prompts/`; a hit stops the runner before the next pass.
+- **Arming is checked on pass 1, per arm**, from the streams and the hook log (below).
+
+### Endpoints
+
+- **Primary, confirmatory:** `held_out_clean` — the conjunction of the six held-out
+  criteria of `verify.py` (hash `78d0e86d…`, unchanged), graded blind to arm on the
+  executed workspace. As iteration 1 established, on this bank it measures one defect
+  class (booleans are not numbers); this iteration does not claim otherwise.
+- **Secondary, exploratory:** `full15_clean`.
+- **Mechanism and dose, from the streams and `hook.log`:** Agent dispatches per trial,
+  executed driver calls and reds (`perpr2`), placebo reds (`placebo2`), judge firings and
+  blocks (`hook2`, from `<tag>--hook.log` copied by the Stop hook), orchestrator turns
+  (run rows), cost per trial, wall-clock, cost per held-out-clean trial (cell spend over
+  clean trials).
+
+### Contrasts
+
+Fisher exact, one-sided treatment > comparison, Holm within each tier-set's family of
+four at alpha 0.05, tier-sets never pooled:
+
+1. `hook2` > `control2`
+2. `hook2` > `placebo2`
+3. `perpr2` > `placebo2` — the mechanism-independence test
+4. `perpr2` > `control2` — the replication
+
+Outside the family, labelled as such wherever printed: `hook2` vs `perpr2` on
+`held_out_clean` (two-sided Fisher and a Newcombe 95% interval on the rate difference;
+descriptive at n = 16, no non-inferiority claim is licensed at this n); `placebo2` >
+`control2` (one-sided; the brief-content and fresh-repair channels alone); cost per trial
+and orchestrator turns, `hook2` vs `perpr2` and `hook2` vs `control2`, Mann-Whitney U
+two-sided on the per-trial values with medians and interquartile ranges.
+
+### Readings, declared now
+
+- **Mechanism (contrast 3).** Supported at both tiers: the gate's information causes the
+  gain beyond the brief's content and the repair actor, and iteration 1's claim stands
+  with that channel closed. Not supported at a tier with `placebo2`'s rate within 0.15 of
+  `perpr2`'s: the brief's content and the fresh repair explain iteration 1's win at that
+  tier, and the "independent information" claim is withdrawn there — published as such.
+  Not supported with a larger gap: underpowered at n = 16, reported as such.
+- **Hook adoption (contrasts 1 and 2 plus dose).** Both supported at both tiers, and
+  `hook2`'s median orchestrator turns at or below `control2`'s upper quartile, and
+  `hook2`'s median cost per trial at or below `perpr2`'s: the hook form becomes convoy's
+  recommended default over the driver loop, in convoy's own docs through its own process.
+  Any of these failing: the driver loop stays the recommendation and the hook's result is
+  reported at its weight.
+- **Replication (contrast 4).** Supported at both tiers: iteration 1 replicated on
+  contemporaneous cells under the enforced registry. Not supported: reported beside
+  iteration 1's cells with the two harness differences named.
+
+### n, power, passes, budget
+
+n = 16 per cell, 128 trials. Exact power for a one-sided Fisher test at alpha 0.0125
+(Holm's strictest step), computed with `local/power_n.py` before the first trial: at
+Laplace-shrunk iteration-1 rates 0.94 vs 0.39 (perpr vs placebo) the decisive
+mechanism contrast has power 0.855 (0.809 at 0.90 vs 0.35); `hook2` > `control2` at 0.90
+vs 0.20 has 0.968; `hook2` > `placebo2` at 0.90 vs 0.39 has 0.737.
+A non-supported contrast at n = 16 is reported as underpowered at the achieved n, never
+as a null. Passes `k = 1..16` with `--repeats k`, each covering the eight cells once, so
+arms are interleaved by pass and time is not confounded with arm. Forecast cost per pass
+$19.7 from iteration 1's medians (control $1.93 and $2.28; the three gated arms taken
+at perpr's $2.31 and $2.85), 16 passes about $315; arming probes under $1. The runner's
+forecast rule stops before the pass that would take the iteration's bank spend past
+$385; the operator's cap is $400. If the cap stops the matrix short of 16, the achieved
+n is reported with a `design.amendments` entry and no cell is topped up afterwards.
+
+### Arming, exclusions, chronology
+
+- **Arming criteria, evaluated on pass 1 per arm before pass 2 starts**, from
+  `tools/stream_facts.py` and the hook log: `control2` — zero driver calls, zero placebo
+  calls, no hook log; `placebo2` — at least one placebo red and zero driver calls;
+  `perpr2` — at least five executed driver calls and zero placebo calls; `hook2` — a
+  `hook.log` copy present in the stream dir and zero driver calls at the orchestrator.
+  A failed criterion stops the runner; the trial is voided (`fathom void`, reason
+  recorded), the defect is fixed in the harness, and the key is re-bought. An arm whose
+  mechanism cannot be armed is dropped by a `design.amendments` entry, never mutated.
+- **Exclusions, mechanical:** a trial the per-pass exposure scan flags (any read, write
+  or command naming the task directory outside `prompts/`) is voided before the next pass
+  and re-bought; a `hook2` trial without a `hook.log` copy is voided and re-bought; an
+  `errored` row is not counted and its key is re-bought by the next pass; fixture drift
+  stops the runner and voids the trials the guard names. Seat expiry stops the runner at
+  a trial boundary and the same command resumes; nothing is excluded for it.
+- **Chronology:** this addendum and the typed record
+  `experiments/multiagent-composition-v2-iter2/record.yaml` are committed before the
+  first trial, with `plan_frozen_at.commit` pointing at the record's own commit, so the
+  chronology gate (ER-ANCHOR) is expected to pass; the first trial's `started_at` on its
+  ledger row is the check.
+- **Readout and review:** `tools/readout_multiagent.py --family iter2` prints the cells,
+  the four contrasts with Holm, the labelled extras, the dose table and the exposure line;
+  the record is filled from it, validated and rendered; two blind reviewers read the
+  findings before any claim is made; a loss is published as a loss.

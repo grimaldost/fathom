@@ -1,0 +1,35 @@
+name = "placebo2-sonnet"
+# Arm placebo2 (placebo, iteration 2) — the equal-content placebo, tier-set sonnet.
+#
+# Tier-set sonnet: implementer subagents run on claude-sonnet-5.
+#
+# Identical to placebo2-haiku except FATHOM_IMPL_MODEL; see placebo2-haiku.toml for the
+# arm's mechanism and control2-haiku.toml for what iteration 2 changes against
+# iteration 1.
+#
+# Differs from control2: the injected brief (assets/brief-placebo2.md). Everything else
+# — orchestrator model and effort, `[tools]`, `trial_timeout_s`, the six `[env]` keys
+# and their values — is control2's byte for byte.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-placebo2.md"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-sonnet-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

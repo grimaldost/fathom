@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import dataclasses
+import datetime as _dt
 import os
 import pathlib
 import sys
@@ -15,7 +16,7 @@ from typing import Any, Callable, TextIO
 import fathom.arming as _arming
 import fathom.ledger as _ledger
 from fathom.grading.verifier import run_verifier
-from fathom.scenario import ResolvedScenario
+from fathom.scenario import ResolvedScenario, registry_tool_names
 from fathom.taskbank import (
     Bank,
     Task,
@@ -50,6 +51,11 @@ EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
 EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
 EXIT_UNRECONCILED = 13  # two derivations of one fact disagree (FATH-B62/B63)
 EXIT_RUN_BUDGET = 14  # the per-invocation spend rail halted the matrix (FATH-B04)
+
+
+def _utc_now() -> str:
+    """The ledger's timestamp spelling: ISO-8601 UTC at second resolution, ``Z`` suffix."""
+    return _dt.datetime.now(_dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -583,6 +589,9 @@ def run_matrix(
         runner = _runner_factory(sc)
 
         with _stage_fn(task, _DEFAULT_BASE_BRANCH) as workspace:
+            # Wall-clock for the rows below: when this trial's spawn began. Every row
+            # the trial writes carries it, with its own write time as `ended_at`.
+            started_at = _utc_now()
             trial_result = executor.run_trial(task, workspace, sc, runner)
 
             if trial_result.is_infrastructure:
@@ -660,6 +669,8 @@ def run_matrix(
                     cost_usd_est=run_rec.cost_usd_est,
                     model_id=run_rec.model_id,
                     config_preimage=sc.config_preimage,
+                    started_at=started_at,
+                    ended_at=_utc_now(),
                 )
                 _ledger.append_record(bank.name, ledger_run, ledger_dir=_ledger_dir)
 
@@ -695,6 +706,8 @@ def run_matrix(
                 verifier_results=verifier_data,
                 detail=detail,
                 config_preimage=sc.config_preimage,
+                started_at=started_at,
+                ended_at=_utc_now(),
             )
             trial_dict = dataclasses.asdict(trial_rec)
             trial_dict["valid"] = valid
@@ -812,6 +825,7 @@ def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | 
     return ClaudeCliRunner(
         allowed_tools=scenario.tools.allowed,
         disallowed_tools=scenario.tools.disallowed,
+        registry_tools=registry_tool_names(scenario.tools),
         append_system_prompt_file=inject,
         plugin_dirs=scenario.plugins.mount,
         settings_file=settings_file,

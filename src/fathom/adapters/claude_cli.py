@@ -371,6 +371,7 @@ def build_command(
     append_system_prompt_file: str | None = None,
     plugin_dirs: Sequence[str] = (),
     stream: bool = True,
+    registry_tools: Sequence[str] | None = None,
 ) -> list[str]:
     """Assemble the ``claude -p`` argv.  Pure — no I/O.
 
@@ -381,6 +382,16 @@ def build_command(
     headless default-deny plus the explicit allowlist is the real boundary, with
     ``--disallowed-tools`` as belt-and-braces.  ``--effort`` gives cross-arm
     parity with the engine (which always passes it; spec §5).
+
+    ``registry_tools`` is a second, narrower boundary: ``--tools`` restricts what
+    the CLI REGISTERS, where ``--allowed-tools`` only pre-approves calls.  A
+    spawn with the default registry offers the model every built-in tool (30 on
+    2.1.259) and refuses the unlisted ones per call — the iteration-1 multiagent
+    review found PowerShell calls in arms whose allow-list said ``Bash(python:*)``.
+    ``None`` keeps the default registry; a list (an empty one included — ``""``
+    is the CLI's spelling of "no tools") is passed explicitly, like an empty
+    allow-list under default-deny.  ``--allowed-tools`` is untouched either way:
+    it still carries the pattern-level pre-approval a bare registry name cannot.
     """
     cmd = [
         "claude",
@@ -397,6 +408,8 @@ def build_command(
     ]
     if disallowed_tools:
         cmd += ["--disallowed-tools", ",".join(disallowed_tools)]
+    if registry_tools is not None:
+        cmd += ["--tools", ",".join(registry_tools)]
     if append_system_prompt_file:
         cmd += ["--append-system-prompt-file", append_system_prompt_file]
     for plugin_dir in plugin_dirs:
@@ -589,9 +602,14 @@ class ClaudeCliRunner:
         spawn: Spawn = _subprocess_spawn,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        registry_tools: Sequence[str] | None = None,
     ) -> None:
         self.allowed_tools = tuple(allowed_tools)
         self.disallowed_tools = tuple(disallowed_tools)
+        # The registry restriction (`--tools`), or None for the CLI's default set. The
+        # factory derives it from the scenario (`fathom.scenario.registry_tool_names`);
+        # the adapter only carries it, as it carries the allow-list.
+        self.registry_tools = None if registry_tools is None else tuple(registry_tools)
         self.append_system_prompt_file = append_system_prompt_file
         self.plugin_dirs = tuple(plugin_dirs)
         self.settings_file = settings_file
@@ -662,6 +680,7 @@ class ClaudeCliRunner:
             append_system_prompt_file=self.append_system_prompt_file,
             plugin_dirs=self.plugin_dirs,
             stream=self.stream,
+            registry_tools=self.registry_tools,
         )
         env = make_spawn_env(config_dir)
         if env_template:

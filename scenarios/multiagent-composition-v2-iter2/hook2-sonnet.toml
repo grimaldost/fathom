@@ -1,0 +1,42 @@
+name = "hook2-sonnet"
+# Arm hook2 (treatment, iteration 2) — convoy's gate as a Claude Code hook, tier-set sonnet.
+#
+# Tier-set sonnet: implementer subagents run on claude-sonnet-5.
+#
+# Identical to hook2-haiku except FATHOM_IMPL_MODEL; see hook2-haiku.toml for the arm's
+# mechanism and control2-haiku.toml for what iteration 2 changes against iteration 1.
+#
+# Differs from control2: the one-sentence marker instruction in the brief
+# (assets/brief-hook2.md); [settings]; three [env] keys (CONVOY_GATE_SPEC,
+# CONVOY_TRUSTED_ROOTS, CONVOY_ORACLES). Everything else — orchestrator model and
+# effort, `[tools]`, `trial_timeout_s`, the six inherited `[env]` keys and their values
+# — is control2's byte for byte.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-hook2.md"
+
+[settings]
+inject = "assets/hook-settings.json"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+CONVOY_GATE_SPEC = "${FATHOM_TASK_DIR}/hook-gate.toml"
+CONVOY_ORACLES = "${FATHOM_TASK_DIR}"
+CONVOY_TRUSTED_ROOTS = "${workspace}"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-sonnet-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

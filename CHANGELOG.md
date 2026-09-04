@@ -7,6 +7,25 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ### Added
 
+- **Timestamps on ledger rows** (`src/fathom/ledger.py`, `src/fathom/cli.py`): every trial
+  and run row now carries `started_at` (when the trial's spawn began) and `ended_at` (when
+  the row was written), ISO-8601 UTC at second resolution. The blind review of the
+  iteration-1 multiagent-composition findings could not order or date the rows of a matrix
+  that ran across several days — nothing on a row said when it happened, and the only dates
+  were in stream file names. Additive with empty defaults, so every earlier row loads
+  unchanged and reports the fields as absent; `config_hash` and its preimage do not move.
+- **Registry-level tool restriction** (`[tools] registry = "allowed"`; `src/fathom/scenario.py`,
+  `src/fathom/adapters/claude_cli.py`, `src/fathom/arming.py`): the same review found 30
+  tools in every spawn's init event against a 7-name allow-list, and PowerShell calls in the
+  streams of arms whose list said `Bash(python:*)` — `--allowed-tools` pre-approves calls but
+  removes nothing, so the model is still offered every built-in tool and refused per call.
+  An arm that sets the new key also spawns with `--tools` naming the bare allow-list
+  (specifiers stripped; naming `Task` or `Agent` registers both, since the CLI answers to
+  both), while `--allowed-tools` keeps carrying the pattern-level pre-approval. The mode
+  enters `config_hash` only when set, so no committed hash moves, and `fathom verify-arming`
+  gains a `tools` axis: the flag must be in the real argv and the init event may register no
+  built-in tool outside the list (ambient `mcp__*` connectors are not charged to the arm).
+
 - **Void rows** (`src/fathom/ledger.py`, `fathom void`): an append-only `kind: void` row
   names one recorded trial (bank, dataset version, task, config hash, repeat) and the
   instrument defect that excludes it; every reader (`completed_keys`, the ledger index,

@@ -1,0 +1,58 @@
+name = "control2-haiku"
+# Arm control2 (control, iteration 2) — multiagent dispatch alone, tier-set haiku.
+#
+# Tier-set haiku: implementer subagents run on claude-haiku-4-5 — the regime with
+# measured headroom, where iteration 1 found the per-PR gate's effect.
+#
+# Iteration 2 of the multiagent-composition pre-registration: eight NEW contemporaneous
+# cells on the SAME bank and fixture as iteration 1 (bank multiagent-composition-v2,
+# ledger ledger/multiagent-composition-v2.jsonl), under new arm names so no row resumes
+# into an iteration-1 cell. The orchestrator dispatches one implementer subagent per PR,
+# in dependency order, and after each PR verifies with the project's own visible suite.
+# Nothing else: no gate ceremony, no independent check. The brief is iteration 1's
+# control brief byte for byte (assets/brief-control2.md).
+#
+# Differs from control2: nothing — this IS control2.
+#
+# Shared by all eight iteration-2 arms and byte-identical in each: orchestrator model
+# (claude-sonnet-5) and effort, `[tools]` (the allow-list and `registry = "allowed"`),
+# `trial_timeout_s`, and the six `[env]` keys below with their values (FATHOM_IMPL_MODEL
+# excepted, which names the tier-set). What iteration 2 changes for every arm alike,
+# against iteration 1's arms:
+#   * `[tools].registry = "allowed"` — the allow-list is applied to the set of tools the
+#     spawn registers, not only as a permission rule. Iteration 1's streams listed the
+#     platform's ~30 registered tools identically across arms, unrestricted Bash and
+#     PowerShell among them, and `Bash(python:*)` was not the instrument that ran.
+#   * `FATHOM_CONVOY_PIN` — the convoy release the gate driver runs, set to v0.12.0 so
+#     perpr2 and hook2 measure the same release (hook2's hook is pinned at v0.12.0 in
+#     assets/hook-settings.json). Iteration-1 rows keep the driver's default, v0.11.0.
+#   * `FATHOM_PLACEBO_GATE` names `placebo_gate2.py`, the placebo in envelope form, in
+#     every arm; only placebo2's brief runs it.
+#
+# `${FATHOM_TASK_DIR}` / `${FATHOM_PROMPTS_DIR}` are TEMPLATES resolved from the invoking
+# shell at spawn time (the run script points them at a staged harness dir outside the
+# repository, which must also hold placebo_gate2.py and hook-gate.toml). The brief's
+# CONTENT is hashed, not its path.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-control2.md"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-haiku-4-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

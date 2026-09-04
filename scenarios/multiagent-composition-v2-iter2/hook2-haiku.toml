@@ -1,0 +1,64 @@
+name = "hook2-haiku"
+# Arm hook2 (treatment, iteration 2) — convoy's gate as a Claude Code hook, tier-set haiku.
+#
+# Tier-set haiku: implementer subagents run on claude-haiku-4-5 — the regime with
+# measured headroom, where iteration 1 found the per-PR gate's effect.
+#
+# The orchestrator is told nothing about gates. Its brief is control2's, plus one
+# sentence: begin each subagent prompt with the PR's phase tag as `[convoy-phase: <tag>]`
+# — a marker, not gate knowledge (assets/brief-hook2.md, iteration 1's hook brief byte
+# for byte; the diff against brief-control2.md is that one sentence). The gate arrives
+# through user-scope settings injected into the spawn's isolated config dir ([settings]
+# inject, assets/hook-settings.json, iteration 1's byte for byte): convoy 0.12.0's
+# `SubagentStop` judge blocks a subagent's stop once with the repair brief when the
+# project gate is red, and its `PostToolUse` messenger reports a residual red to the
+# orchestrator on a synchronous dispatch. The gate spec (assets/hook-gate.toml,
+# iteration 1's byte for byte — the decomposition's own [[checks]] plus the two
+# independent type-contract probes, composed exactly as run_convoy_gate.py composes them
+# for perpr2) is selected by $CONVOY_GATE_SPEC from the staged harness dir and never
+# copied into the tree; the workspace is vouched for by $CONVOY_TRUSTED_ROOTS; the probe
+# is the asset under $CONVOY_ORACLES. A Stop hook copies the workspace's .convoy/hook.log
+# into $FATHOM_STREAM_DIR as <tag>--hook.log — the mechanism attestation.
+#
+# The hook is pinned at convoy v0.12.0 in hook-settings.json, the same release
+# $FATHOM_CONVOY_PIN hands the driver in perpr2, so the two mechanisms measure one convoy.
+#
+# Differs from control2: the one-sentence marker instruction in the brief
+# (assets/brief-hook2.md); [settings]; three [env] keys (CONVOY_GATE_SPEC,
+# CONVOY_TRUSTED_ROOTS, CONVOY_ORACLES). Everything else — orchestrator model and
+# effort, `[tools]`, `trial_timeout_s`, the six inherited `[env]` keys and their values
+# — is control2's byte for byte. See control2-haiku.toml for what iteration 2 changes
+# against iteration 1.
+#
+# `${FATHOM_TASK_DIR}` / `${FATHOM_PROMPTS_DIR}` are TEMPLATES resolved from the invoking
+# shell at spawn time (the run script points them at a staged harness dir outside the
+# repository); `${workspace}` is resolved by fathom per trial.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-hook2.md"
+
+[settings]
+inject = "assets/hook-settings.json"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+CONVOY_GATE_SPEC = "${FATHOM_TASK_DIR}/hook-gate.toml"
+CONVOY_ORACLES = "${FATHOM_TASK_DIR}"
+CONVOY_TRUSTED_ROOTS = "${workspace}"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-haiku-4-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

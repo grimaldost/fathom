@@ -13,6 +13,7 @@ import dataclasses
 import hashlib
 import json
 import tomllib
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
@@ -20,6 +21,13 @@ from typing import Protocol
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
+
+
+TOOL_REGISTRY_MODES = ("default", "allowed")
+
+# The CLI (2.1.x) registers the subagent tool as ``Agent`` and accepts ``Task`` as its
+# alias; an allow-list naming either means the spawn needs both registered.
+_SUBAGENT_TOOL_ALIASES = ("Agent", "Task")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -32,6 +40,49 @@ class ToolsConfig:
     # unarmed, not evaluated (root cause of the invalidated first matrix run).
     allowed: tuple[str, ...] = ()
     disallowed: tuple[str, ...] = ()
+    # What the spawn REGISTERS, as distinct from what it is pre-approved to call.
+    # "default" leaves the CLI's whole built-in set registered (30 tools on 2.1.259)
+    # and relies on `allowed` alone, which pre-approves per call but removes nothing:
+    # a tool outside the list is still offered to the model and refused when used.
+    # The iteration-1 multiagent review saw exactly that — PowerShell calls in the
+    # streams of arms whose allow-list named Bash(python:*). "allowed" also passes
+    # `--tools` with the bare names of `allowed`, so nothing else is registered.
+    registry: str = "default"
+
+    def __post_init__(self) -> None:
+        if self.registry not in TOOL_REGISTRY_MODES:
+            # Reject loudly: a typo running as "default" under the treatment's name is
+            # the silent-fall-through class the strategy field already refuses.
+            raise ValueError(
+                f"unknown tools.registry {self.registry!r}; "
+                f"known modes: {', '.join(TOOL_REGISTRY_MODES)}"
+            )
+
+
+def bare_tool_names(allowed: Sequence[str]) -> tuple[str, ...]:
+    """The registry names an allow-list implies: specifiers stripped, deduped, in order.
+
+    ``Bash(python:*)`` pre-approves a pattern of one tool, ``Bash``; the registry
+    knows only the tool.  Naming the subagent tool under either of its names
+    (``Agent``, ``Task``) registers both, because the CLI answers to both and an arm
+    that says ``Task`` means the subagent tool, not one spelling of it.
+    """
+    names: list[str] = []
+    for rule in allowed:
+        base = rule.split("(", 1)[0].strip()
+        if base and base not in names:
+            names.append(base)
+    if any(alias in names for alias in _SUBAGENT_TOOL_ALIASES):
+        names.extend(alias for alias in _SUBAGENT_TOOL_ALIASES if alias not in names)
+    return tuple(names)
+
+
+def registry_tool_names(tools: ToolsConfig) -> tuple[str, ...] | None:
+    """What ``--tools`` should carry for *tools*: ``None`` (no flag) under the default
+    registry, else the bare allow-list — possibly empty, which is "no tools at all"."""
+    if tools.registry != "allowed":
+        return None
+    return bare_tool_names(tools.allowed)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -323,6 +374,11 @@ def _tools_to_dict(tools: ToolsConfig) -> dict:
         d["allowed"] = list(tools.allowed)
     if tools.disallowed:
         d["disallowed"] = list(tools.disallowed)
+    if tools.registry != "default":
+        # Same rule: an absent key and the default mode are one effective config, so
+        # every committed hash stays where it is; a restricted registry changes what
+        # the arm can do and forks its history.
+        d["registry"] = tools.registry
     return d
 
 
@@ -345,6 +401,7 @@ def load_scenario(path: Path) -> ScenarioConfig:
         repo=tools_raw.get("repo"),
         allowed=tuple(tools_raw.get("allowed", ())),
         disallowed=tuple(tools_raw.get("disallowed", ())),
+        registry=str(tools_raw.get("registry", "default")),
     )
 
     limits_raw = data.get("limits", {})

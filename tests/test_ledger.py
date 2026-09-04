@@ -173,6 +173,57 @@ def test_run_cost_usd_est_defaults_zero_for_legacy_line():
         assert records[0].cost_usd_est == 0.0
 
 
+def test_trial_and_run_timestamps_round_trip():
+    """started_at / ended_at (ISO-8601 UTC, seconds) survive the round-trip on both
+    row kinds. The iteration-1 multiagent review could not order or date the rows of
+    a matrix that ran across several days: nothing on a row said when it happened."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        d = pathlib.Path(tmpdir)
+        stamps = dict(started_at="2026-09-03T21:05:07Z", ended_at="2026-09-03T21:41:52Z")
+        append_record("test-bank", make_trial(**stamps), ledger_dir=d)
+        append_record("test-bank", make_run(**stamps), ledger_dir=d)
+        trial, run = list(iter_records("test-bank", ledger_dir=d))
+        assert isinstance(trial, TrialRecord) and isinstance(run, RunRecord)
+        for rec in (trial, run):
+            assert rec.started_at == "2026-09-03T21:05:07Z"
+            assert rec.ended_at == "2026-09-03T21:41:52Z"
+
+
+def test_legacy_lines_without_timestamps_load_with_empty_strings():
+    """Append-only: rows written before the timestamp fields existed still load,
+    with both fields empty — reported as absent, never guessed at."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        d = pathlib.Path(tmpdir)
+        base = {
+            "bank": "test-bank",
+            "task_id": "t1",
+            "repeat": 0,
+            "dataset_version": "v1",
+            "config_hash": "abc123",
+            "tool_git_sha": "def456",
+            "cli_version": "1.0.0",
+            "pin_level": "strong",
+        }
+        legacy_trial = {"kind": "trial", "status": "completed", **base}
+        legacy_run = {
+            "kind": "run",
+            "usage": {},
+            "turns": 1,
+            "duration": 1.0,
+            "exit_code": 0,
+            **base,
+        }
+        path = d / "test-bank.jsonl"
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(json.dumps(legacy_trial, sort_keys=True) + "\n")
+            f.write(json.dumps(legacy_run, sort_keys=True) + "\n")
+        trial, run = list(iter_records("test-bank", ledger_dir=d))
+        assert isinstance(trial, TrialRecord) and isinstance(run, RunRecord)
+        for rec in (trial, run):
+            assert rec.started_at == ""
+            assert rec.ended_at == ""
+
+
 def test_grading_round_trip():
     with tempfile.TemporaryDirectory() as tmpdir:
         d = pathlib.Path(tmpdir)
@@ -450,6 +501,8 @@ if __name__ == "__main__":
         test_run_round_trip,
         test_run_cost_usd_est_round_trips,
         test_run_cost_usd_est_defaults_zero_for_legacy_line,
+        test_trial_and_run_timestamps_round_trip,
+        test_legacy_lines_without_timestamps_load_with_empty_strings,
         test_grading_round_trip,
         test_multiple_appends_preserve_order,
         test_mixed_record_kinds_append,

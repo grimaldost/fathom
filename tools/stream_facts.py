@@ -22,11 +22,21 @@ tells the orchestrator from its spawns, and counts tool_use events:
   carry ``parent_tool_use_id``). Brief-mandated Bash executions of the driver or the placebo
   gate are not exposure; a Read of the driver is.
 - ``models``: the dated model snapshots seen in assistant events.
+- ``hook_log_present`` / ``hook_log_stops`` / ``hook_log_firings``: the hook arms' gate runs
+  inside convoy's ``SubagentStop`` hook, not as a tool call, so it leaves no tool_use event.
+  Their Stop hook copies the workspace's ``.convoy/hook.log`` into the stream dir as
+  ``<bank>--<scenario>--<task>--r<repeat>--hook.log`` (one JSON record per firing; convoy
+  0.12.0 ``interface/hook.py``). ``stops`` counts the judge leg's records (``event ==
+  "SubagentStop"``), ``firings`` those whose ``outcome`` is ``blocked`` — a red gate, whether
+  it held the subagent (``blocked_stop: true``) or recorded a residual red on the retry.
+- ``arming_verdicts``: per-arm arming criteria for the iteration-2 arms, evaluated on the
+  facts above (``--arming-check``; exit 2 on any FAIL).
 
 CLI (from the fathom repo):
     uv run python tools/stream_facts.py --ledger ledger/<bank>.jsonl \
         --streams streams-multiagent/<pilot> --streams streams-multiagent/<main> \
         [--task-dir-name multiagent-composition-v2] [--exposure] [--dose] [--fail-on-exposure]
+        [--per-trial] [--arming-check [--repeat N]]
 """
 
 from __future__ import annotations
@@ -46,11 +56,21 @@ from fathom.ledger import apply_voids  # noqa: E402
 
 DRIVER_MARKER = "run_convoy_gate.py"
 PLACEBO_MARKER = "placebo_gate.py"
-PLACEBO_RED = "transient check failed"
+PLACEBO2_MARKER = "placebo_gate2.py"  # iteration 2's equal-content placebo
+PLACEBO_MARKERS = (PLACEBO_MARKER, PLACEBO2_MARKER)
+PLACEBO_RED = "transient check failed"  # shared by placebo_gate.py and placebo_gate2.py
+# A hook.log record whose gate was red: convoy's judge writes outcome "blocked" (blocking_red).
+HOOK_RED_OUTCOMES = {"blocked"}
+HOOK_JUDGE_EVENT = "SubagentStop"
 EXPOSURE_TOOLS = {"Read", "Glob", "Grep", "Write", "Edit", "NotebookEdit", "Bash", "PowerShell"}
 DISPATCH_TOOLS = {"Agent", "Task"}
 _TAG = re.compile(
     r"^(?P<bank>.+?)--(?P<scenario>[^-]+-[^-]+)--(?P<task>[^-]+)--r(?P<repeat>\d+)--a\d+--(?P<epoch>\d+)\.ndjson$"
+)
+# The Stop hook writes ``<FATHOM_STREAM_TAG>--hook.log`` (tag = bank--scenario--task--rN);
+# a stem carrying the adapter's ``--aN--<epoch>`` suffix is accepted too.
+_HOOK_LOG = re.compile(
+    r"^(?P<bank>.+?)--(?P<scenario>[^-]+-[^-]+)--(?P<task>[^-]+)--r(?P<repeat>\d+)(?:--.*)?--hook\.log$"
 )
 _DATED = re.compile(r"claude-[a-z0-9-]+-20\d{6}")
 
@@ -78,6 +98,10 @@ class TrialFacts:
     exposure: list[Exposure] = field(default_factory=list)
     models: set[str] = field(default_factory=set)
     truncated: bool = False  # no result event in the orchestrator stream
+    hook_log_present: bool = False  # the arm's Stop hook copied a .convoy/hook.log
+    hook_log_stops: int = 0  # judge-leg records (SubagentStop firings)
+    hook_log_firings: int = 0  # judge-leg records whose gate was red (outcome blocked)
+    hook_log_file: str = ""
 
 
 def parse_tag(name: str) -> tuple[str, int, int] | None:
@@ -86,6 +110,50 @@ def parse_tag(name: str) -> tuple[str, int, int] | None:
     if not m:
         return None
     return m.group("scenario"), int(m.group("repeat")), int(m.group("epoch"))
+
+
+def parse_hook_log_name(name: str) -> tuple[str, int] | None:
+    """(scenario, repeat) from a copied hook.log file name, or None."""
+    m = _HOOK_LOG.match(name)
+    if not m:
+        return None
+    return m.group("scenario"), int(m.group("repeat"))
+
+
+def hook_logs(
+    stream_dirs: list[Path], void_at: dict[tuple[str, int], int] | None = None
+) -> dict[tuple[str, int], Path]:
+    """The copied hook.log per (scenario, repeat); the newest file wins across dirs.
+
+    A file older than the key's void (mtime before ``voided_at``) belongs to the voided
+    trial and is ignored — the Stop hook overwrites the same name on a re-buy, so a stale
+    file survives only when the re-bought trial's hook never wrote a log.
+    """
+    out: dict[tuple[str, int], tuple[float, Path]] = {}
+    for d in stream_dirs:
+        for f in sorted(d.glob("*--hook.log")):
+            key = parse_hook_log_name(f.name)
+            if key is None:
+                continue
+            mtime = f.stat().st_mtime
+            cut = (void_at or {}).get(key)
+            if cut is not None and mtime * 1000 <= cut:
+                continue
+            if key not in out or mtime > out[key][0]:
+                out[key] = (mtime, f)
+    return {k: f for k, (_, f) in out.items()}
+
+
+def read_hook_log(path: Path) -> tuple[int, int]:
+    """(judge-leg records, judge-leg records whose gate was red) from one hook.log."""
+    stops = reds = 0
+    for rec in events(path):
+        if not isinstance(rec, dict) or rec.get("event") != HOOK_JUDGE_EVENT:
+            continue
+        stops += 1
+        if rec.get("outcome") in HOOK_RED_OUTCOMES:
+            reds += 1
+    return stops, reds
 
 
 def events(path: Path):
@@ -212,9 +280,19 @@ def _mentions_task_dir(text: str, task_dir_name: str) -> str | None:
     return None
 
 
-def trial_facts(scenario: str, repeat: int, files: list[Path], task_dir_name: str) -> TrialFacts:
+def trial_facts(
+    scenario: str,
+    repeat: int,
+    files: list[Path],
+    task_dir_name: str,
+    hook_log: Path | None = None,
+) -> TrialFacts:
     orchestrator = files[0]  # earliest end time in the cluster is the orchestrator
     facts = TrialFacts(scenario, repeat, [f.name for f in files], orchestrator.name)
+    if hook_log is not None:
+        facts.hook_log_present = True
+        facts.hook_log_file = hook_log.name
+        facts.hook_log_stops, facts.hook_log_firings = read_hook_log(hook_log)
     for f in files:
         is_orch = f is orchestrator
         pending: dict[str, tuple[str, bool]] = {}  # tool_use id -> (kind, orchestrator-level)
@@ -235,11 +313,11 @@ def trial_facts(scenario: str, repeat: int, files: list[Path], task_dir_name: st
                     if name in ("Bash", "PowerShell"):
                         if DRIVER_MARKER in raw:
                             pending[str(c.get("id"))] = ("driver", level_orch and is_orch)
-                        elif PLACEBO_MARKER in raw:
+                        elif any(m in raw for m in PLACEBO_MARKERS):
                             pending[str(c.get("id"))] = ("placebo", level_orch and is_orch)
                     if name in EXPOSURE_TOOLS:
                         mandated = name in ("Bash", "PowerShell") and (
-                            DRIVER_MARKER in raw or PLACEBO_MARKER in raw
+                            DRIVER_MARKER in raw or any(m in raw for m in PLACEBO_MARKERS)
                         )
                         hit = None if mandated else _mentions_task_dir(raw, task_dir_name)
                         if hit:
@@ -274,8 +352,10 @@ def trial_facts(scenario: str, repeat: int, files: list[Path], task_dir_name: st
 def all_facts(
     ledger: Path, stream_dirs: list[Path], task_dir_name: str
 ) -> dict[tuple[str, int], TrialFacts]:
+    _, void_at = ledger_keys(ledger)
+    logs = hook_logs(stream_dirs, void_at)
     return {
-        key: trial_facts(key[0], key[1], files, task_dir_name)
+        key: trial_facts(key[0], key[1], files, task_dir_name, logs.get(key))
         for key, files in sorted(surviving_streams(ledger, stream_dirs).items())
     }
 
@@ -286,14 +366,16 @@ def dose_table(facts: dict[tuple[str, int], TrialFacts]) -> list[str]:
     for (scenario, _), f in facts.items():
         cells[scenario].append(f)
     lines = [
-        f"{'cell':16} {'n':>3}  {'reds/trial':>10}  {'distribution':22} {'dispatches/trial':>16}  distribution   driver calls (orch)  truncated"
+        f"{'cell':16} {'n':>3}  {'reds/trial':>10}  {'distribution':22} {'dispatches/trial':>16}  distribution   driver calls (orch)  hook            truncated"
     ]
     for scenario in sorted(cells):
         fs = [f for f in cells[scenario] if not f.truncated]
         n = len(fs)
-        reds = [f.driver_reds + f.placebo_reds for f in fs]
+        # a red is a red whichever actor ran the gate: the driver, the placebo, or the hook
+        reds = [f.driver_reds + f.placebo_reds + f.hook_log_firings for f in fs]
         disp = [f.agent_dispatches for f in fs]
         drv = [f.driver_calls for f in fs]
+        hook = [f.hook_log_firings for f in fs if f.hook_log_present]
         trunc = sum(1 for f in cells[scenario] if f.truncated)
 
         def dist(xs: list[int]) -> str:
@@ -301,9 +383,68 @@ def dose_table(facts: dict[tuple[str, int], TrialFacts]) -> list[str]:
 
         lines.append(
             f"{scenario:16} {n:>3}  {statistics.mean(reds) if reds else 0:>10.2f}  {dist(reds):22} "
-            f"{statistics.mean(disp) if disp else 0:>16.2f}  {dist(disp):14} {dist(drv):20} {trunc}"
+            f"{statistics.mean(disp) if disp else 0:>16.2f}  {dist(disp):14} {dist(drv):20} "
+            f"{(dist(hook) if hook else '-'):15} {trunc}"
         )
     return lines
+
+
+# Iteration-2 arming criteria, per arm (the scenario name's prefix before its tier).
+# control2 must show no gate of any kind; placebo2 must have run the placebo to a red and
+# never the driver; perpr2 must have driven the gate at least once per PR (five PRs) and
+# never the placebo; hook2's gate lives in the hook, so the copied hook.log is the
+# attestation and the driver must not have been run by the orchestrator.
+ITER2_ARMS = ("control2", "placebo2", "perpr2", "hook2")
+
+
+def arming_verdicts(
+    facts: dict[tuple[str, int], TrialFacts], repeat: int | None = None
+) -> list[tuple[str, int, str, str]]:
+    """(scenario, repeat, PASS|FAIL|SKIP, reason) per trial; SKIP for arms without criteria."""
+    out: list[tuple[str, int, str, str]] = []
+    for (scenario, rep), f in sorted(facts.items()):
+        if repeat is not None and rep != repeat:
+            continue
+        arm = scenario.rsplit("-", 1)[0]
+        seen = (
+            f"driver={f.driver_calls} placebo={f.placebo_calls}/{f.placebo_reds} "
+            f"hook_log={'present' if f.hook_log_present else 'absent'}"
+            f"({f.hook_log_stops} stops, {f.hook_log_firings} red)"
+            f"{' TRUNCATED' if f.truncated else ''}"
+        )
+        failures: list[str] = []
+        if arm == "control2":
+            if f.driver_calls != 0:
+                failures.append("driver_calls != 0")
+            if f.placebo_calls != 0:
+                failures.append("placebo_calls != 0")
+            if f.hook_log_firings != 0:
+                failures.append("hook_log_firings != 0")
+            if f.hook_log_present:
+                failures.append("hook_log present")
+        elif arm == "placebo2":
+            if f.placebo_reds < 1:
+                failures.append("placebo_reds < 1")
+            if f.driver_calls != 0:
+                failures.append("driver_calls != 0")
+        elif arm == "perpr2":
+            if f.driver_calls < 5:
+                failures.append("driver_calls < 5")
+            if f.placebo_calls != 0:
+                failures.append("placebo_calls != 0")
+        elif arm == "hook2":
+            if not f.hook_log_present:
+                failures.append("hook_log absent")
+            if f.driver_calls != 0:
+                failures.append("driver_calls != 0 (orchestrator)")
+        else:
+            out.append((scenario, rep, "SKIP", f"no arming criteria for arm {arm!r}; {seen}"))
+            continue
+        if failures:
+            out.append((scenario, rep, "FAIL", "; ".join(failures) + f"; {seen}"))
+        else:
+            out.append((scenario, rep, "PASS", seen))
+    return out
 
 
 def main(argv: list[str]) -> int:
@@ -317,6 +458,14 @@ def main(argv: list[str]) -> int:
     ap.add_argument(
         "--fail-on-exposure", action="store_true", help="exit 1 if any counted trial is exposed"
     )
+    ap.add_argument(
+        "--arming-check",
+        action="store_true",
+        help="evaluate the iteration-2 per-arm arming criteria; exit 2 on any FAIL",
+    )
+    ap.add_argument(
+        "--repeat", type=int, default=None, help="restrict --arming-check to this repeat index"
+    )
     args = ap.parse_args(argv)
 
     facts = all_facts(Path(args.ledger), [Path(s) for s in args.streams], args.task_dir_name)
@@ -327,6 +476,7 @@ def main(argv: list[str]) -> int:
                 f"  {scenario:16} r{repeat:<3} files={len(f.files)} dispatches={f.agent_dispatches:>2} "
                 f"driver={f.driver_calls:>2} reds={f.driver_reds} placebo={f.placebo_calls}/{f.placebo_reds} "
                 f"spawn_driver={f.spawn_driver_calls} exposed={len(f.exposure)} "
+                f"hook={(f'{f.hook_log_firings}/{f.hook_log_stops}' if f.hook_log_present else '-')} "
                 f"models={','.join(sorted(f.models)) or 'undated-alias-only'}{' TRUNCATED' if f.truncated else ''}"
             )
     if args.dose:
@@ -352,6 +502,19 @@ def main(argv: list[str]) -> int:
     if args.fail_on_exposure and exposed:
         print(f"FAIL: {len(exposed)} counted trial(s) exposed to the task dir", file=sys.stderr)
         return 1
+    if args.arming_check:
+        print()
+        print("ARMING CHECK (iteration-2 criteria; hook = red/stops from the copied hook.log)")
+        verdicts = arming_verdicts(facts, args.repeat)
+        for scenario, repeat, verdict, reason in verdicts:
+            print(f"  {verdict:4} {scenario:16} r{repeat:<3} {reason}")
+        failed = sum(1 for v in verdicts if v[2] == "FAIL")
+        if not verdicts:
+            print("FAIL: no counted trial matched the arming check", file=sys.stderr)
+            return 2
+        if failed:
+            print(f"FAIL: {failed} trial(s) failed the arming check", file=sys.stderr)
+            return 2
     return 0
 
 

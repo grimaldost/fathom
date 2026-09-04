@@ -53,6 +53,13 @@ from pathlib import Path
 # fields the T-perPR brief reads.
 CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.11.0"
 
+# An arm's [env] may name a different pin here; the default above is unchanged. Iteration
+# 2 of the pre-registration sets it to @v0.12.0 in every arm so perpr2 and hook2 measure
+# the same convoy release (hook2's hook is pinned at v0.12.0 in its settings.json);
+# iteration-1 rows keep the default. The effective pin is echoed to stderr on every call,
+# in the same line that already records the invocation.
+_PIN_ENV = "FATHOM_CONVOY_PIN"
+
 # Arming-verification escape hatch: point the driver at a local convoy checkout so the
 # whole path (spec materialization -> gate invocation -> exit propagation) can be proven
 # to FIRE before any paid trial, and before the pinned tag exists. Never set during a
@@ -169,6 +176,11 @@ def build_spec(series: dict, probe: str, workspace: str) -> str:
     return "\n\n".join(blocks) + "\n"
 
 
+def effective_pin() -> str:
+    """The convoy release to run: ``$FATHOM_CONVOY_PIN`` when set, else ``CONVOY_PIN``."""
+    return os.environ.get(_PIN_ENV, "").strip() or CONVOY_PIN
+
+
 def _parse_argv(argv):
     """Return (task_dir, workspace, phases) from the script's own ``argv[1:]``.
 
@@ -238,6 +250,7 @@ def main() -> int:
         return 3
 
     local = os.environ.get(_OVERRIDE_ENV, "").strip()
+    pin = effective_pin()
     with tempfile.TemporaryDirectory(prefix="convoy-gate-") as tmp:
         spec_path = Path(tmp) / "gate-spec.toml"
         spec_path.write_text(spec_text, encoding="utf-8")
@@ -245,8 +258,8 @@ def main() -> int:
             launcher = ["uv", "run", "--project", local, "convoy"]
             provenance = f"LOCAL CHECKOUT {local} (arming verification, not a measured run)"
         else:
-            launcher = ["uvx", "--from", CONVOY_PIN, "convoy"]
-            provenance = CONVOY_PIN
+            launcher = ["uvx", "--from", pin, "convoy"]
+            provenance = pin
         # Echoed on every call so the arm's ledger detail records WHICH convoy ran.
         print(f"convoy gate via: {provenance}", file=sys.stderr)
         phase_args = [a for tag in phases for a in ("--phase", tag)]

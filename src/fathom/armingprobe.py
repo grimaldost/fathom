@@ -28,7 +28,7 @@ from typing import Any, Protocol
 from fathom import streams
 from fathom.adapters.base import ExitStatus
 from fathom.arming import ArmingObservation, file_sha256
-from fathom.scenario import ResolvedScenario
+from fathom.scenario import ResolvedScenario, registry_tool_names
 
 # Cheap defaults — the probe reads pre-turn events, so capability is irrelevant.
 PROBE_MODEL = "claude-haiku-4-5"
@@ -120,11 +120,13 @@ class RealArmingProbe:
             stdout_parts.append(result.stdout or "")
             return result
 
-        # Scenario-faithful wiring: the arm's own mount, allow-list, injected
-        # context/settings and env template.  Only model/effort/turns/budget differ.
+        # Scenario-faithful wiring: the arm's own mount, allow-list, registry
+        # restriction, injected context/settings and env template.  Only
+        # model/effort/turns/budget differ.
         runner = ClaudeCliRunner(
             allowed_tools=scenario.tools.allowed,
             disallowed_tools=scenario.tools.disallowed,
+            registry_tools=registry_tool_names(scenario.tools),
             real_config_dir=self.real_config_dir,
             append_system_prompt_file=scenario.context.inject,
             plugin_dirs=scenario.plugins.mount,

@@ -1,0 +1,43 @@
+name = "perpr2-haiku"
+# Arm perpr2 (treatment, iteration 2) — convoy's gate between PRs, agent-driven,
+# tier-set haiku.
+#
+# Tier-set haiku: implementer subagents run on claude-haiku-4-5 — the regime with
+# measured headroom, where iteration 1 found the per-PR gate's effect.
+#
+# Identical to control2 except that after each PR the orchestrator also runs the convoy
+# gate driver scoped to that PR's phase tag and, on a `blocked` envelope, dispatches a
+# fix subagent with the envelope's `repair_brief` verbatim, re-running until
+# `completed`. The gate's checks are the decomposition's own [[checks]] plus two
+# independent type-contract probes whose assets live outside the workspace. The agent
+# drives the loop; the harness does not. The brief is iteration 1's perpr brief byte for
+# byte (assets/brief-perpr2.md). The driver runs convoy at $FATHOM_CONVOY_PIN (v0.12.0),
+# the release hook2's hook runs, so the two treatment mechanisms measure one convoy.
+#
+# Differs from control2: the injected brief (assets/brief-perpr2.md). Everything else
+# — orchestrator model and effort, `[tools]`, `trial_timeout_s`, the six `[env]` keys
+# and their values — is control2's byte for byte. See control2-haiku.toml for what
+# iteration 2 changes against iteration 1.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-perpr2.md"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-haiku-4-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

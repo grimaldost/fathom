@@ -1,0 +1,67 @@
+# Gate spec for the hook arms (hook-haiku / hook-sonnet): the decomposition's own
+# [[checks]] from series.toml plus the two independent type-contract probes, exactly as
+# run_convoy_gate.py composes them for the perpr arm (build_spec), with the probe named
+# through ${CONVOY_ORACLES} (the harness dir) and the workspace as `.` (the hook runs the
+# gate with the workspace as cwd). Selected by $CONVOY_GATE_SPEC; never copied into a tree.
+
+[series]
+id = "multiagent-composition-gate"
+
+[[checks]]
+name = "baseline-arithmetic"
+run = "python -m unittest discover -s tests -t . -p \"test_arithmetic.py\""
+blocking = true
+independent = false
+
+[[checks]]
+name = "feature-bool-literals"
+run = "python -m unittest tests.test_feature.TestFeature.test_bool_literals"
+blocking = true
+independent = false
+phases = ["bools", "compare", "boolops", "notop"]
+
+[[checks]]
+name = "feature-comparisons"
+run = "python -m unittest tests.test_feature.TestFeature.test_comparisons tests.test_feature.TestFeature.test_precedence_compare_below_arithmetic"
+blocking = true
+independent = false
+phases = ["compare", "boolops", "notop"]
+
+[[checks]]
+name = "feature-and-or"
+run = "python -m unittest tests.test_feature.TestFeature.test_and_or_values tests.test_feature.TestFeature.test_and_short_circuits tests.test_feature.TestFeature.test_type_error_number_in_boolean_op tests.test_feature.TestFeature.test_precedence_bool_below_compare"
+blocking = true
+independent = false
+phases = ["boolops", "notop"]
+
+[[checks]]
+name = "feature-not"
+run = "python -m unittest tests.test_feature.TestFeature.test_not"
+blocking = true
+independent = false
+phases = ["notop"]
+
+[[checks]]
+name = "visible-suite"
+run = "python -m unittest discover -s tests -t ."
+blocking = true
+independent = false
+phases = ["conform"]
+
+[[checks]]
+name = "type-contract-probe-arithmetic"
+run = "python \"${CONVOY_ORACLES}/type_probe.py\" \".\" --group arith"
+blocking = true
+independent = true
+phases = ["bools", "compare", "boolops", "notop", "conform"]
+asset = "${CONVOY_ORACLES}/type_probe.py"
+repair_hint = "the task's stated type rule: arithmetic operators (+ - * / %) require numeric operands and reject booleans; a wrong-type operand raises TypeMismatchError, a new subclass of ExprError"
+
+[[checks]]
+name = "type-contract-probe-comparison"
+run = "python \"${CONVOY_ORACLES}/type_probe.py\" \".\" --group compare"
+blocking = true
+independent = true
+phases = ["compare", "boolops", "notop", "conform"]
+asset = "${CONVOY_ORACLES}/type_probe.py"
+repair_hint = "the task's stated type rule: comparison operators (== != < <= > >=) require numeric operands and reject booleans; a wrong-type operand raises TypeMismatchError, a new subclass of ExprError"

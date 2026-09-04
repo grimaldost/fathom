@@ -100,6 +100,13 @@ effort = "high"               # required — low | medium | high | xhigh
 source = "none"               # "none" | "repo"  (default "none")
 allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]   # empty under default-deny == UNARMED
 # disallowed = [...]          # optional belt-and-braces
+# registry = "allowed"        # "default" | "allowed" (default "default"). `allowed` pre-approves calls
+                              # but removes nothing: the spawn still registers the CLI's whole
+                              # built-in set (30 tools on 2.1.259) and refuses the unlisted ones per
+                              # call. "allowed" also passes `--tools` with the bare names of `allowed`
+                              # (specifiers stripped; naming Task or Agent registers both), so nothing
+                              # else is registered. Enters config_hash only when set; verify-arming
+                              # then checks the init event's tools against the list.
 # repo = "C:/…/convoy"        # required when source = "repo" (the series engine)
 
 [context]                     # optional treatment arm — appends this file's body to the spawn's

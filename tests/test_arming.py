@@ -294,6 +294,112 @@ class MisarmedAllowlistTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# The tools axis — the registry restriction, against a recorded init event
+# ---------------------------------------------------------------------------
+
+
+class ToolRegistryArmingTests(unittest.TestCase):
+    """The iteration-1 multiagent review, reproduced: every spawn's init event listed
+    30 registered tools against a 7-name allow-list, and PowerShell calls appeared in
+    the streams. `--allowed-tools` pre-approves; it does not remove. An arm that
+    declares `registry = "allowed"` must be observed with only its own tools
+    registered, or it is not the arm it claims to be."""
+
+    ALLOWLIST = ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)")
+    EXPECTED_ARGV = "Read,Write,Edit,Glob,Grep,Task,Bash,Agent"
+    # Verbatim from a 2026-09-02 multiagent-composition-v2 stream (claude 2.1.259).
+    RECORDED_30 = (
+        "Task",
+        "Artifact",
+        "Bash",
+        "CronCreate",
+        "CronDelete",
+        "CronList",
+        "DesignSync",
+        "Edit",
+        "EnterWorktree",
+        "ExitWorktree",
+        "Glob",
+        "Grep",
+        "ListAgents",
+        "Monitor",
+        "NotebookEdit",
+        "PowerShell",
+        "PushNotification",
+        "Read",
+        "RemoteTrigger",
+        "ReportFindings",
+        "ScheduleWakeup",
+        "SendMessage",
+        "Skill",
+        "TaskOutput",
+        "TaskStop",
+        "ToolSearch",
+        "WebFetch",
+        "WebSearch",
+        "Workflow",
+        "Write",
+    )
+    SEVEN = ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash")
+
+    def _scenario(self, registry: str = "allowed") -> ResolvedScenario:
+        return make_scenario(
+            tools=ToolsConfig(source="none", allowed=self.ALLOWLIST, registry=registry)
+        )
+
+    def _argv_with_tools(self) -> tuple[str, ...]:
+        return (
+            "claude",
+            "-p",
+            "--allowed-tools",
+            ",".join(self.ALLOWLIST),
+            "--tools",
+            self.EXPECTED_ARGV,
+        )
+
+    def test_a_restricted_registry_declares_the_tools_axis(self) -> None:
+        self.assertEqual(arming.declared_axes(self._scenario()), ("tools",))
+        self.assertTrue(arming.needs_verification(self._scenario()))
+
+    def test_the_default_registry_declares_nothing(self) -> None:
+        self.assertEqual(arming.declared_axes(self._scenario("default")), ())
+
+    def test_the_recorded_30_tool_init_event_FAILS(self) -> None:
+        obs = make_obs(tools=self.RECORDED_30, argv=self._argv_with_tools())
+        checks = arming.verify_arming(self._scenario(), obs)
+        self.assertFalse(arming.all_ok(checks), "30 registered tools is not a 7-name registry")
+        bad = " ".join(c.detail for c in checks if not c.ok)
+        self.assertIn("PowerShell", bad)
+
+    def test_the_seven_expected_tools_PASS_as_verified(self) -> None:
+        obs = make_obs(tools=self.SEVEN, argv=self._argv_with_tools())
+        checks = arming.verify_arming(self._scenario(), obs)
+        self.assertTrue(arming.all_ok(checks), [c.detail for c in checks if not c.ok])
+        self.assertIn("verified", {c.level for c in checks if c.axis == "tools"})
+
+    def test_the_alias_pair_is_permitted(self) -> None:
+        # The CLI may register the subagent tool as Agent, Task, or both.
+        obs = make_obs(tools=self.SEVEN + ("Agent",), argv=self._argv_with_tools())
+        self.assertTrue(arming.all_ok(arming.verify_arming(self._scenario(), obs)))
+
+    def test_ambient_mcp_tools_are_not_charged_to_the_registry(self) -> None:
+        # Account-level connectors register mcp__* tools in every spawn; `--tools`
+        # governs the built-in set, and default-deny already refuses the rest.
+        obs = make_obs(
+            tools=self.SEVEN + ("mcp__claude_ai_Context7__query-docs",),
+            argv=self._argv_with_tools(),
+        )
+        self.assertTrue(arming.all_ok(arming.verify_arming(self._scenario(), obs)))
+
+    def test_the_flag_missing_from_the_real_argv_FAILS(self) -> None:
+        # Seven tools observed by luck is not a restriction that reached the spawn.
+        obs = make_obs(tools=self.SEVEN, argv=("claude", "-p"))
+        checks = arming.verify_arming(self._scenario(), obs)
+        self.assertFalse(arming.all_ok(checks))
+        self.assertIn("--tools", " ".join(c.detail for c in checks if not c.ok))
+
+
+# ---------------------------------------------------------------------------
 # The settings axis
 # ---------------------------------------------------------------------------
 

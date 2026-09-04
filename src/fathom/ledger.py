@@ -31,6 +31,12 @@ class TrialRecord:
     # active development. Stored here, the check is exact — sha256(preimage) either equals
     # config_hash or the row is corrupt — and that answer does not change when the tree
     # does. Empty on every line written before 0.4.0, which is reported, never guessed at.
+    started_at: str = ""  # ISO-8601 UTC, seconds ("2026-09-03T21:05:07Z"); additive (ADR-0002).
+    ended_at: str = ""
+    # `started_at` is when the trial's spawn began, `ended_at` when this row was written.
+    # A matrix that ran across several days had nothing on a row saying when it happened;
+    # the iteration-1 multiagent review had to date trials from stream file names. Empty
+    # on every line written before the fields existed — reported, never back-filled.
     kind: str = dataclasses.field(default="trial", init=False)
 
 
@@ -62,6 +68,8 @@ class RunRecord:
     # active development. Stored here, the check is exact — sha256(preimage) either equals
     # config_hash or the row is corrupt — and that answer does not change when the tree
     # does. Empty on every line written before 0.4.0, which is reported, never guessed at.
+    started_at: str = ""  # ISO-8601 UTC, seconds; additive (ADR-0002). Same meaning as on
+    ended_at: str = ""  # TrialRecord: the owning trial's spawn start, and this row's write.
     kind: str = dataclasses.field(default="run", init=False)
 
 

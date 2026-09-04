@@ -1,0 +1,48 @@
+name = "placebo2-haiku"
+# Arm placebo2 (placebo, iteration 2) — the equal-content placebo, tier-set haiku.
+#
+# Tier-set haiku: implementer subagents run on claude-haiku-4-5 — the regime with
+# measured headroom, where iteration 1 found the per-PR gate's effect.
+#
+# Identical to control2 except that after each PR the orchestrator runs
+# `placebo_gate2.py` — the placebo in ENVELOPE form — under a brief that is perpr2's
+# byte for byte except for the command it runs and the variable that names it
+# (assets/brief-placebo2.md; the diff against brief-perpr2.md is those two lines). The
+# same claim about the gate's checks, the same envelope reading (`outcome` completed /
+# blocked, `repair_brief`), the same fresh fix-subagent dispatch with the repair brief
+# pasted verbatim. The placebo reds exactly once per workspace with a repair brief that
+# names no check, no expression, no file, no type and no rule, then greens.
+#
+# Iteration 1's placebo matched the gate's reds but not its repair actor (perpr
+# dispatched a fresh fix subagent; the placebo repaired inside the orchestrator) nor
+# the brief's content. placebo2 equals perpr2 in both and differs only in what the gate
+# returns: if perpr2 beats control2 by no more than placebo2 does, the gate's value was
+# the iteration and the dispatch, not the information.
+#
+# Differs from control2: the injected brief (assets/brief-placebo2.md). Everything else
+# — orchestrator model and effort, `[tools]`, `trial_timeout_s`, the six `[env]` keys
+# and their values — is control2's byte for byte. See control2-haiku.toml for what
+# iteration 2 changes against iteration 1.
+adapter = "claude-cli"
+model = "claude-sonnet-5"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+registry = "allowed"
+
+[context]
+inject = "assets/brief-placebo2.md"
+
+[env]
+CONVOY_GATE_DRIVER = "${FATHOM_TASK_DIR}/run_convoy_gate.py"
+FATHOM_CONVOY_PIN = "git+https://github.com/grimaldost/convoy@v0.12.0"
+FATHOM_IMPL_MODEL = "claude-haiku-4-5"
+FATHOM_PLACEBO_GATE = "${FATHOM_TASK_DIR}/placebo_gate2.py"
+FATHOM_PROMPTS_DIR = "${FATHOM_PROMPTS_DIR}"
+FATHOM_TASK_DIR = "${FATHOM_TASK_DIR}"
+
+[limits]
+trial_timeout_s = 5400

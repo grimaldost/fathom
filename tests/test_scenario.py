@@ -414,6 +414,160 @@ class TestToolAllowlists(unittest.TestCase):
         self.assertEqual(bare.tools.allowed, sls.tools.allowed)
 
 
+class TestToolRegistry(unittest.TestCase):
+    """The [tools] registry field: `"allowed"` restricts the spawn's tool REGISTRY to
+    the allow-list, not just its permissions.
+
+    The iteration-1 multiagent review found 30 tools in every spawn's init event
+    against a 7-name allow-list, and PowerShell calls in the streams: `--allowed-tools`
+    pre-approves, it does not remove, so a tool outside the list is still offered to
+    the model and refused per call. Absent key == "default" (hash-stable against every
+    committed ledger); "allowed" enters config_hash because it changes what the arm
+    can do."""
+
+    MULTIAGENT_ALLOWLIST = ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)")
+
+    def _write(self, tmp: Path, tools_block: str) -> Path:
+        p = tmp / "s.toml"
+        p.write_text(
+            'name = "s"\n'
+            'adapter = "claude-cli"\n'
+            'model = "m"\n'
+            'strategy = "single-session"\n'
+            'effort = "high"\n'
+            f"{tools_block}\n",
+            encoding="utf-8",
+        )
+        return p
+
+    def test_registry_defaults_to_default(self):
+        self.assertEqual(ToolsConfig(source="none").registry, "default")
+
+    def test_registry_parsed_from_the_tools_table(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = load_scenario(
+                self._write(
+                    Path(td), '[tools]\nsource = "none"\nallowed = ["Read"]\nregistry = "allowed"'
+                )
+            )
+            self.assertEqual(cfg.tools.registry, "allowed")
+
+    def test_an_unknown_registry_value_is_rejected(self):
+        # A typo must not run as "default" under the treatment's name — the same
+        # silent-fall-through class the strategy field refuses.
+        with self.assertRaises(ValueError):
+            ToolsConfig(source="none", registry="alowed")
+
+    def test_absent_and_explicit_default_hash_identically(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            r = StubResolver()
+            absent = resolve_scenario(
+                load_scenario(self._write(tmp, '[tools]\nsource = "none"\nallowed = ["Read"]')), r
+            )
+            explicit = resolve_scenario(
+                load_scenario(
+                    self._write(
+                        tmp, '[tools]\nsource = "none"\nallowed = ["Read"]\nregistry = "default"'
+                    )
+                ),
+                r,
+            )
+            self.assertEqual(absent.config_hash, explicit.config_hash)
+            self.assertNotIn("registry", absent.config_preimage)
+
+    def test_allowed_registry_changes_hash(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            r = StubResolver()
+            default = resolve_scenario(
+                load_scenario(self._write(tmp, '[tools]\nsource = "none"\nallowed = ["Read"]')), r
+            )
+            restricted = resolve_scenario(
+                load_scenario(
+                    self._write(
+                        tmp, '[tools]\nsource = "none"\nallowed = ["Read"]\nregistry = "allowed"'
+                    )
+                ),
+                r,
+            )
+            self.assertNotEqual(default.config_hash, restricted.config_hash)
+            self.assertIn('"registry": "allowed"', restricted.config_preimage)
+
+    def test_bare_tool_names_strip_specifiers_dedupe_and_pair_the_subagent_tool(self):
+        from fathom.scenario import bare_tool_names
+
+        self.assertEqual(
+            bare_tool_names(self.MULTIAGENT_ALLOWLIST),
+            ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash", "Agent"),
+        )
+        # Two specifiers of one tool are one registry entry, first position kept.
+        self.assertEqual(
+            bare_tool_names(("Bash(python:*)", "Read", "Bash(git:*)")), ("Bash", "Read")
+        )
+        # The CLI registry names the subagent tool Agent and takes Task as its alias;
+        # naming either registers both, in the order given.
+        self.assertEqual(bare_tool_names(("Agent", "Read")), ("Agent", "Read", "Task"))
+        self.assertEqual(bare_tool_names(("Task", "Agent")), ("Task", "Agent"))
+        # No subagent tool named: none added.
+        self.assertEqual(bare_tool_names(("Read", "Write")), ("Read", "Write"))
+        self.assertEqual(bare_tool_names(()), ())
+
+    def test_registry_tool_names_is_none_for_default_and_the_bare_list_for_allowed(self):
+        from fathom.scenario import registry_tool_names
+
+        self.assertIsNone(
+            registry_tool_names(ToolsConfig(source="none", allowed=self.MULTIAGENT_ALLOWLIST))
+        )
+        self.assertEqual(
+            registry_tool_names(
+                ToolsConfig(source="none", allowed=self.MULTIAGENT_ALLOWLIST, registry="allowed")
+            ),
+            ("Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash", "Agent"),
+        )
+        # An empty allow-list under "allowed" is an empty registry, not "no restriction".
+        self.assertEqual(registry_tool_names(ToolsConfig(source="none", registry="allowed")), ())
+
+    def test_control_haiku_config_hash_is_unchanged_against_the_committed_ledger(self):
+        """The registry key's absence must not have moved a single committed hash.
+
+        `control-haiku.toml` sets no `registry` key, so its config_hash must still equal
+        the one every already-recorded trial row in `ledger/multiagent-composition-v2.jsonl`
+        carries. Resolved with the real (non-stub) resolver, the way the run loop resolves
+        it — this scenario's `[tools] source = "none"` and local `[context] inject` need no
+        network or git lookups, so the real resolver is exact here, not merely faithful.
+        """
+        import json
+
+        from fathom.cli import _DefaultResolver
+
+        repo = Path(__file__).parent.parent
+        path = repo / "scenarios" / "multiagent-composition-v2" / "control-haiku.toml"
+        resolved = resolve_scenario(load_scenario(path), _DefaultResolver())
+
+        ledger_path = repo / "ledger" / "multiagent-composition-v2.jsonl"
+        recorded_hashes = {
+            row["config_hash"]
+            for line in ledger_path.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+            for row in [json.loads(line)]
+            if row.get("kind") == "trial" and row.get("scenario") == "control-haiku"
+        }
+        self.assertTrue(recorded_hashes, "no control-haiku trial rows found in the ledger")
+        self.assertEqual(
+            recorded_hashes,
+            {resolved.config_hash},
+            "control-haiku.toml's config_hash no longer matches its committed ledger rows — "
+            "the registry key must not enter the preimage when unset",
+        )
+
+
 class TestContextInjection(unittest.TestCase):
     """The [context] inject field: a treatment scenario appends a file's body to
     the spawn's system prompt. Absent inject == no context (hash-stable vs any

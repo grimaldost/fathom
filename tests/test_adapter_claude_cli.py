@@ -228,6 +228,29 @@ class TestBuildCommand(unittest.TestCase):
         cmd = self._cmd(plugin_dirs=[])
         self.assertNotIn("--plugin-dir", cmd)
 
+    def test_registry_tools_absent_by_default(self):
+        """No `--tools` unless the arm restricts the registry: existing arms keep
+        offering the CLI's full built-in set, as every committed ledger row did."""
+        self.assertNotIn("--tools", self._cmd())
+
+    def test_registry_tools_add_the_tools_flag_and_leave_allowed_tools_alone(self):
+        """`--tools` restricts what the CLI REGISTERS; `--allowed-tools` still carries
+        the pattern-level pre-approval (the iteration-1 review: 30 tools registered
+        against a 7-name allow-list, because pre-approval does not remove a tool)."""
+        cmd = self._cmd(
+            allowed_tools=["Read", "Task", "Bash(python:*)"],
+            registry_tools=["Read", "Task", "Bash", "Agent"],
+        )
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "Read,Task,Bash,Agent")
+        self.assertEqual(cmd[cmd.index("--allowed-tools") + 1], "Read,Task,Bash(python:*)")
+
+    def test_empty_registry_tools_disables_every_tool(self):
+        """`--tools ""` is the CLI's spelling of "no tools"; an empty restricted
+        registry is passed explicitly, like an empty allow-list under default-deny."""
+        cmd = self._cmd(allowed_tools=[], registry_tools=[])
+        self.assertIn("--tools", cmd)
+        self.assertEqual(cmd[cmd.index("--tools") + 1], "")
+
 
 # ---------------------------------------------------------------------------
 # Isolation — credential-only temp CLAUDE_CONFIG_DIR
@@ -431,6 +454,27 @@ class TestExecuteArgv(AdapterTestBase):
         runner.execute("p", self.workspace, _scenario())
         argv = spawn.calls[0].argv
         self.assertNotIn("--plugin-dir", argv)
+
+    def test_registry_tools_reach_argv_alongside_the_allow_list(self):
+        from fathom.scenario import bare_tool_names
+
+        allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Task", "Bash(python:*)"]
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(
+            spawn, allowed_tools=allowed, registry_tools=bare_tool_names(allowed)
+        )
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertEqual(
+            argv[argv.index("--tools") + 1], "Read,Write,Edit,Glob,Grep,Task,Bash,Agent"
+        )
+        self.assertEqual(argv[argv.index("--allowed-tools") + 1], ",".join(allowed))
+
+    def test_registry_tools_absent_from_argv_by_default(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, allowed_tools=["Read", "Task"])
+        runner.execute("p", self.workspace, _scenario())
+        self.assertNotIn("--tools", spawn.calls[0].argv)
 
 
 # ---------------------------------------------------------------------------

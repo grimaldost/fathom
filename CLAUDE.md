@@ -105,6 +105,8 @@ effort = "high"
 source = "none"               # "none" | "repo"
 allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]   # empty under default-deny == UNARMED
 # disallowed = [...]          # optional belt-and-braces
+# registry = "allowed"        # also pass --tools with the bare names of `allowed`, so nothing else is
+                              # REGISTERED (pre-approval alone removes nothing); enters config_hash when set
 
 [context]                     # optional — a treatment arm: this file's body is appended to the spawn's
 inject = "assets/python-engineering.md"   # system prompt (--append-system-prompt-file). Path is relative

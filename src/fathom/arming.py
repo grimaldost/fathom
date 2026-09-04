@@ -13,9 +13,14 @@ evidence; an axis that cannot be observed reports ``present`` (the treatment
 demonstrably reached the spawn boundary) rather than ``verified``, and an axis
 that was expected to announce itself and did not is a hard FAIL.
 
-Four axes, each with its own live observation:
+Five axes, each with its own live observation:
 
 ===========  ================================================================
+``tools``    with ``[tools] registry = "allowed"``, ``--tools`` is in the real
+             argv naming the bare allow-list, and the init event registers no
+             built-in tool outside it (the iteration-1 multiagent review: 30
+             tools registered against a 7-name allow-list, PowerShell calls
+             in the streams — pre-approval removes nothing)
 ``plugins``  every declared mount appears in the init event's ``plugins``
              array; any MCP server the mount serves is healthy AND at least
              one of its registered ``mcp__*`` tools is permitted by the arm's
@@ -47,11 +52,11 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from fathom.scenario import ResolvedScenario
+from fathom.scenario import ResolvedScenario, registry_tool_names
 from fathom.streams import MCP_TOOL_PREFIX
 
 # Axes whose treatment must be proven live before a paid matrix starts.
-ARMING_AXES = ("plugins", "settings", "env", "context")
+ARMING_AXES = ("tools", "plugins", "settings", "env", "context")
 
 # Hook events that fire unprompted in any live spawn.  A settings arm declaring
 # one of these has no excuse for silence, so silence is a FAIL.  Everything else
@@ -150,6 +155,7 @@ def plugin_name_of(mount_dir: str) -> str | None:
 def declared_axes(scenario: ResolvedScenario) -> tuple[str, ...]:
     """The arming axes *scenario* declares, in :data:`ARMING_AXES` order."""
     present = {
+        "tools": registry_tool_names(scenario.tools) is not None,
         "plugins": bool(scenario.plugins.mount),
         "settings": bool(scenario.settings.inject),
         "env": bool(scenario.env.vars),
@@ -233,6 +239,62 @@ def _argv_value(argv: Sequence[str], flag: str) -> str | None:
 # ---------------------------------------------------------------------------
 # Per-axis assertions
 # ---------------------------------------------------------------------------
+
+
+def registry_violations(observed_tools: Sequence[str], expected: Sequence[str]) -> list[str]:
+    """Built-in tools the spawn registered that a restricted registry does not name.
+
+    Pure.  ``mcp__*`` entries are excluded: ``--tools`` governs the built-in set,
+    ambient account-level connectors register their own tools in every spawn, and
+    the plugins axis already judges the ones an arm actually mounts.  Charging
+    them here would fail a correctly restricted arm for a connector it never asked
+    for — the false positive that trains an operator to pass the override.
+    """
+    allowed = set(expected)
+    return [t for t in observed_tools if not t.startswith(MCP_TOOL_PREFIX) and t not in allowed]
+
+
+def _check_tools(sc: ResolvedScenario, obs: ArmingObservation) -> list[ArmingCheck]:
+    expected = registry_tool_names(sc.tools) or ()
+    in_argv = _argv_value(obs.argv, "--tools")
+    reached = in_argv is not None and in_argv == ",".join(expected)
+    detail = f"argv_tools={in_argv!r} expected={','.join(expected)!r}"
+    if in_argv is None:
+        detail += " — --tools absent from the real argv; the registry was never restricted"
+    elif not reached:
+        detail += " — argv names a DIFFERENT registry than the arm declares"
+    checks = [
+        ArmingCheck(
+            "tools",
+            "registry restriction reaches the spawn argv",
+            reached,
+            detail,
+        )
+    ]
+    if not reached:
+        return checks
+
+    extra = registry_violations(obs.tools, expected)
+    ok = not extra
+    detail = f"registered={len(obs.tools)} expected<={len(expected)}"
+    if not ok:
+        # Every offender by name: the list is bounded by the CLI's built-in set, and
+        # a truncated one would hide exactly the tool the review saw called.
+        detail += (
+            f"; {len(extra)} registered tool(s) outside the arm's registry: "
+            f"{', '.join(extra)} — the spawn still offers the model tools the arm "
+            "does not name; pre-approval alone removes nothing"
+        )
+    checks.append(
+        ArmingCheck(
+            "tools",
+            "init event registers only the arm's own tools",
+            ok,
+            detail,
+            level="verified" if ok else "present",
+        )
+    )
+    return checks
 
 
 def _check_plugins(sc: ResolvedScenario, obs: ArmingObservation) -> list[ArmingCheck]:
@@ -455,6 +517,7 @@ def _check_context(sc: ResolvedScenario, obs: ArmingObservation) -> list[ArmingC
 
 
 _AXIS_CHECKERS = {
+    "tools": _check_tools,
     "plugins": _check_plugins,
     "settings": _check_settings,
     "env": _check_env,
