@@ -14,6 +14,7 @@ import sys
 import tempfile
 import types
 import unittest
+import warnings
 from pathlib import Path
 
 # Allow `python tests/test_adapter_claude_cli.py` from the project root.
@@ -24,7 +25,9 @@ from fathom.adapters.claude_cli import (
     ClaudeCliRunner,
     build_command,
     cleanup_dir,
-    estimate_cost_usd,
+    COST_SOURCE_NONE,
+    COST_SOURCE_REPORTED,
+    cost_and_source,
     make_isolated_config,
     parse_stream,
 )
@@ -524,41 +527,32 @@ class TestParseStreamUnit(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 
-class TestEstimateCostUsd(unittest.TestCase):
-    """The pure token×price helper used when the CLI reports total_cost_usd == 0."""
+class TestCostAndSource(unittest.TestCase):
+    """The pure helper that labels a cost instead of inventing one.
 
-    def test_opus_strong_rate(self):
-        # 1000/1k × $0.005 (in) + 1000/1k × $0.025 (out) = 0.030
-        self.assertAlmostEqual(estimate_cost_usd("claude-opus-4-8", 1000, 1000), 0.030, places=6)
+    It replaces a token x price estimator whose premise expired: the adapter used to
+    substitute a local-table figure whenever the provider reported 0.0, on the belief
+    that subscription auth reports no cost. This adapter's own stream logs falsify
+    that from 2026-07-31 on, so the substitution is gone and the gap is labelled.
+    """
 
-    def test_sonnet_mid_rate(self):
-        self.assertAlmostEqual(estimate_cost_usd("claude-sonnet-4-6", 1000, 1000), 0.018, places=6)
+    def test_a_reported_cost_is_reported(self):
+        self.assertEqual(cost_and_source(0.031, 1000, 1000), (0.031, COST_SOURCE_REPORTED))
 
-    def test_haiku_weak_rate(self):
-        self.assertAlmostEqual(estimate_cost_usd("claude-haiku-4-5", 1000, 1000), 0.006, places=6)
+    def test_zero_tokens_means_zero_is_the_true_cost(self):
+        # An errored spawn that ran nothing. Every zero-cost row in the committed
+        # stream logs is this shape, which is why it must not read as a gap.
+        self.assertEqual(cost_and_source(0.0, 0, 0), (0.0, COST_SOURCE_REPORTED))
 
-    def test_fable_frontier_rate(self):
-        self.assertAlmostEqual(estimate_cost_usd("claude-fable-5", 1000, 1000), 0.060, places=6)
-
-    def test_dated_snapshot_matches_family(self):
-        # The CLI reports an exact dated id; family match must still resolve it.
-        self.assertAlmostEqual(
-            estimate_cost_usd("claude-opus-4-8-20260115", 1000, 1000), 0.030, places=6
-        )
-
-    def test_unknown_model_defaults_to_strong(self):
-        # An empty/unknown model id falls back to the strong (opus) rate — fathom's
-        # default model — so the estimate is conservative rather than zero.
-        self.assertAlmostEqual(estimate_cost_usd("", 1000, 1000), 0.030, places=6)
-        self.assertAlmostEqual(estimate_cost_usd("mystery-model", 1000, 1000), 0.030, places=6)
-
-    def test_zero_tokens_zero_cost(self):
-        self.assertEqual(estimate_cost_usd("claude-opus-4-8", 0, 0), 0.0)
+    def test_tokens_with_no_cost_is_a_labelled_gap_not_an_estimate(self):
+        cost, source = cost_and_source(0.0, 1000, 1000)
+        self.assertEqual(cost, 0.0)
+        self.assertEqual(source, COST_SOURCE_NONE)
 
 
-class TestCostFallback(AdapterTestBase):
-    """End-to-end: a parsed run reporting total_cost_usd == 0 (subscription) still
-    yields a non-zero cost_usd_est from the token×price fallback (D2 / §11)."""
+class TestCostSourceEndToEnd(AdapterTestBase):
+    """End-to-end: a run reporting total_cost_usd == 0 on non-zero tokens records a
+    labelled gap, never a price-table figure standing in for a measurement."""
 
     def _zero_cost_stream(self) -> str:
         return (
@@ -587,13 +581,21 @@ class TestCostFallback(AdapterTestBase):
             + "\n"
         )
 
-    def test_fallback_estimate_when_reported_cost_zero(self):
+    def test_a_missing_cost_on_real_tokens_is_recorded_as_missing(self):
         spawn = RecordingSpawn(lambda i: _cp(0, self._zero_cost_stream()))
         runner = self.make_runner(spawn)
-        rec = runner.execute("p", self.workspace, _scenario())
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            rec = runner.execute("p", self.workspace, _scenario())
         self.assertEqual(rec.status, ExitStatus.OK)
-        # opus rate on 1000 in + 1000 out = 0.030; D2 would have left this 0.0.
-        self.assertAlmostEqual(rec.cost_usd_est, 0.030, places=6)
+        # Until 2026-09-05 this asserted 0.030 from a local opus rate. The number was
+        # never measured, and nothing downstream could tell it from one that was.
+        self.assertEqual(rec.cost_usd_est, 0.0)
+        self.assertEqual(rec.cost_source, COST_SOURCE_NONE)
+        self.assertTrue(
+            any("cost_source=none" in str(w.message) for w in caught),
+            "a gap must be announced, not only labelled",
+        )
 
     def test_reported_cost_preferred_over_fallback(self):
         # When the CLI DOES report a cost, it wins — the fallback never overrides.

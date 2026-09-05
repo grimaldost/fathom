@@ -39,6 +39,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+import warnings
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol
@@ -288,38 +289,39 @@ def _tokens(usage: Mapping[str, Any]) -> tuple[int, int, int]:
     return tin, tout, tcache
 
 
-# Per-1k-token (input, output) USD prices by model family, from the canonical
-# model-tier rates (haiku=weak, sonnet=mid, opus=strong, fable=frontier).
-# Used ONLY as a fallback when the CLI reports ``total_cost_usd == 0`` — the
-# subscription-auth case behind defect D2.  The CLI's own ``total_cost_usd`` is
-# always preferred when present (it also prices cache reads/writes, which this
-# input+output approximation deliberately omits for lack of a published rate).
-_PRICE_PER_1K: dict[str, tuple[float, float]] = {
-    "haiku": (0.001, 0.005),
-    "sonnet": (0.003, 0.015),
-    "opus": (0.005, 0.025),
-    "fable": (0.010, 0.050),
-}
-# Unknown/empty model id → strong (opus), fathom's default model: a conservative
-# non-zero estimate beats silently reporting $0.
-_DEFAULT_PRICE = _PRICE_PER_1K["opus"]
+# The per-family price table that lived here is gone (2026-09-05). It backed a
+# token x price fallback for the case where the CLI reports ``total_cost_usd == 0``
+# under subscription auth (defect D2, recorded 2026-07-04). That case no longer
+# occurs, measured on this adapter's own output: ``streams-rg2x2`` (2026-07-31) holds
+# 96 result events and none with zero cost; ``streams-multiagent`` (through
+# 2026-09-04) holds 478, of which 13 are zero — every one an ``is_error`` event with
+# zero input, output and cache tokens, where zero is the true cost. Every init event
+# reports ``apiKeySource: "none"``, i.e. subscription. That is the confirmation
+# FATH-B16's cross-review required before removing anything.
+#
+# What replaces it is not another estimate. An absent cost is REPORTED as absent
+# (``cost_source``), because a plausible number wearing no label is worse than a gap
+# that says so — the whole point of the economy axis. fathom's remaining price table
+# is ``routing.PRICE_PER_1K``, which exists to audit a reported figure against the
+# raw cache buckets.
+
+COST_SOURCE_REPORTED = "reported"
+COST_SOURCE_NONE = "none"
 
 
-def estimate_cost_usd(model_id: str, tokens_in: int, tokens_out: int) -> float:
-    """Token×price USD estimate (canonical model-tier rates).
+def cost_and_source(cost_usd: float, tokens_in: int, tokens_out: int) -> tuple[float, str]:
+    """``(cost, source)`` for one spawn, never inventing a number.
 
-    Resolves the per-1k input/output price from the model family named in
-    ``model_id`` (substring match, robust to dated snapshots like
-    ``claude-opus-4-8-20260115``); an unrecognized id falls back to the strong
-    (opus) rate.  Returns 0.0 for zero tokens.
+    A spawn that consumed no tokens genuinely cost nothing, so zero there is
+    ``reported``. A spawn that consumed tokens and reports zero is a GAP: the source
+    says so and the caller warns, instead of a price table filling it in and every
+    downstream sum reading as measured.
     """
-    lower = model_id.lower()
-    rate_in, rate_out = _DEFAULT_PRICE
-    for family, rate in _PRICE_PER_1K.items():
-        if family in lower:
-            rate_in, rate_out = rate
-            break
-    return tokens_in / 1000 * rate_in + tokens_out / 1000 * rate_out
+    if cost_usd:
+        return cost_usd, COST_SOURCE_REPORTED
+    if tokens_in or tokens_out:
+        return 0.0, COST_SOURCE_NONE
+    return 0.0, COST_SOURCE_REPORTED
 
 
 def _classify_infrastructure(text: str) -> bool:
@@ -741,9 +743,14 @@ class ClaudeCliRunner:
         tin, tout, tcache = _tokens(parsed.usage)
         duration_s = parsed.duration_ms / 1000.0 if parsed.duration_ms else (self._clock() - start)
         result_text = parsed.result_text or (fallback_stderr or "")[:500]
-        # Prefer the CLI's reported cost; fall back to a token×price estimate when
-        # it is 0 (subscription auth reports total_cost_usd == 0 — defect D2).
-        cost_usd_est = parsed.cost_usd or estimate_cost_usd(parsed.model_id, tin, tout)
+        cost_usd_est, cost_source = cost_and_source(parsed.cost_usd, tin, tout)
+        if cost_source == COST_SOURCE_NONE:
+            warnings.warn(
+                f"no cost reported for a spawn that consumed {tin} in / {tout} out tokens "
+                f"on {parsed.model_id or 'an unnamed model'}; recorded as "
+                "cost_source=none rather than estimated from a local price table",
+                stacklevel=2,
+            )
         return RunRecord(
             status=status,
             tokens_in=tin,
@@ -752,6 +759,7 @@ class ClaudeCliRunner:
             num_turns=parsed.num_turns,
             duration_s=duration_s,
             cost_usd_est=cost_usd_est,
+            cost_source=cost_source,
             model_id=parsed.model_id,
             cli_version=parsed.cli_version or self.cli_version,
             result_text=result_text,

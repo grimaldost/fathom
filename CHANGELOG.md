@@ -5,7 +5,59 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
+### Removed
+
+- **The adapter's token x price cost fallback** (`_PRICE_PER_1K`, `_DEFAULT_PRICE`,
+  `estimate_cost_usd` in `adapters/claude_cli.py`). It substituted a local-table
+  figure whenever the CLI reported `total_cost_usd == 0`, on defect D2's premise that
+  subscription auth reports no cost. **The premise expired and this adapter's own
+  stream logs are the proof**: `streams-rg2x2` (2026-07-31) holds 96 `result` events
+  with no zero-cost row, and `streams-multiagent` (through 2026-09-04) holds 478 of
+  which 13 are zero, every one an `is_error` event with zero input, output and cache
+  tokens, where zero is the true cost. Every init event reports
+  `apiKeySource: "none"`, i.e. subscription. That is the confirmation on this repo's
+  own adapter path that FATH-B16's cross-review required before deleting anything,
+  and it cost nothing to obtain. The D2 entry in `docs/STATUS.md` is **dated, not
+  deleted**: it was true when written, and a claim that expires should read as one.
+
 ### Added
+
+- **`cost_source` on the adapter record and the ledger row** (`"reported" | "none"`,
+  additive; legacy lines load unchanged and default to `"reported"`, which is what
+  they were). A spawn that consumed no tokens genuinely cost nothing, so zero there is
+  reported; a spawn that consumed tokens and reports no cost is a **gap**, recorded as
+  one and warned about, rather than filled in. Without this, a row's USD could be
+  measured or invented with nothing to tell them apart, which is why "no zero-cost
+  rows in any ledger" was uninformative rather than reassuring.
+
+### Fixed
+
+- **The `sonnet` rate in `routing.PRICE_PER_1K` was Sonnet 4.6's** `(0.003, 0.015)`
+  while the mid tier has run Sonnet 5 at `(0.002, 0.010)` since 2026-08-11 — every
+  mid-tier recomputation was 50% high for three weeks. This table is now fathom's
+  only price table, dated (`PRICE_REVIEWED_ON` / `PRICE_REVIEW_BY`) and registered as
+  a family-vocabulary mirror site. It had been in **no** registry: a grep for an
+  outgoing *model id* passes straight over a family-keyed table, which is exactly how
+  it went unnoticed.
+- **The cache-multiplier comment was false.** It said the multipliers are "not
+  prices, so a family repricing does not touch them". A model may read cache at a
+  different fraction of its own input rate than its predecessor (Fable 5.1 at 2.5%
+  against the 10% coded here), so a lineup change can move them without moving any
+  price. Corrected and put on the same review horizon.
+
+### Changed
+
+- **`docs/method/recalibration-playbook.md` Step 0 points at the mirror registry
+  instead of restating it.** Restating made this document a fourth copy of the site
+  list, and it had drifted both ways: it still named an adapter price table that is
+  now deleted, and never named `src/fathom/routing.py`, which is a real one. Its
+  hand-walk fallback now reads the bindings file and greps outgoing *prices* as well
+  as ids.
+- **`docs/method/series-toml-skeleton.md`** says why fathom strips `tier` and pins an
+  explicit `model`: an engine resolving a tier could move an arm mid-matrix, and an
+  experiment cannot have its treatment changed by a release. That is also why a
+  lineup change never reaches a fathom trial.
+
 
 - **Void rows** (`src/fathom/ledger.py`, `fathom void`): an append-only `kind: void` row
   names one recorded trial (bank, dataset version, task, config hash, repeat) and the

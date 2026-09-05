@@ -27,7 +27,12 @@ timeout_seconds = 1800             #    NOT pinned — the template's value is u
                                    #    the trial's own wall-clock ceiling is the scenario's
                                    #    [limits] trial_timeout_s, applied to the engine subprocess
 # tier = "strong"                  #    dropped, not overwritten — fathom removes `tier` so the
-                                   #    explicit model pin is authoritative
+                                   #    explicit model pin is authoritative. That is deliberate and
+                                   #    it is why a lineup change never reaches a fathom trial: an
+                                   #    engine resolving a tier could route one arm somewhere else
+                                   #    mid-matrix, and an experiment cannot have its treatment
+                                   #    moved by a release. The pins below are examples; the
+                                   #    scenario supplies the real ones.
 
 [governance.budgets]               # per-phase USD ceilings — TOML numbers, not strings.
 implementation = 20.0              # a spawn that exceeds its cap halts un-integrated
