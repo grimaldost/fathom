@@ -28,7 +28,7 @@ concrete mechanism in fathom.
 |---|---|
 | Series runner | convoy — `convoy run series.toml` (engine CLI) or the `convoy:convoy` skill driving the `convoy_run` MCP tool (in-session) |
 | Single-unit discipline | humblepowers skills (brainstorming → planned-execution → TDD → receiving-code-review → verification-before-completion) — replaces superpowers |
-| Cross-series memory | `.remember/` handoffs + session-workflow journaling → mantis corpus |
+| Cross-series memory | `.remember/` handoffs + session-workflow journaling → sealore corpus |
 
 *A slot left unbound is a method-not-fully-applied warning. The one deliberately
 deferred binding is the edit-time hook (planned, named above).*
