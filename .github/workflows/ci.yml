@@ -52,10 +52,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Every gate-matrix leg must have succeeded
+        # The result arrives as an environment variable rather than as a `${{ }}`
+        # expansion inside the script. An expansion is substituted into the script TEXT
+        # before bash parses it, so the line's safety depends on what the value contains;
+        # an env var is data whatever it contains. This value is one of four words GitHub
+        # chooses, so nothing is exploitable here - the point is that the shape stops
+        # being one an audit has to judge.
+        env:
+          GATE_RESULT: ${{ needs.gate-matrix.result }}
         run: |
-          result="${{ needs.gate-matrix.result }}"
-          echo "gate-matrix result: $result"
-          test "$result" = "success"
+          echo "gate-matrix result: $GATE_RESULT"
+          test "$GATE_RESULT" = "success"
 
   changelog-currency:
     # Record the change or declare the exemption, machine-enforced (ported from keel's
