@@ -5,6 +5,16 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-05
+
+**Minor**, and the reason is a removal rather than an addition: `estimate_cost_usd`
+and the per-family price table it read are gone from the adapter's public surface,
+and every run record and ledger row gains a `cost_source` field. Both are surface a
+consumer can be reading. The additive default (`"reported"`) keeps legacy ledger
+lines loading unchanged, so nothing already recorded is invalidated — but a caller
+importing the estimator will not find it, and that is a break, not a patch.
+
+
 ### Removed
 
 - **The adapter's token x price cost fallback** (`_PRICE_PER_1K`, `_DEFAULT_PRICE`,
