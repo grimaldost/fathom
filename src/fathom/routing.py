@@ -21,12 +21,17 @@ THE THREE THINGS THIS MODULE REFUSES TO DO
 1. It does not invent `cheapest_adequate_tier`. A task with no measured outcome is
    excluded from the quality and routing-accuracy terms and counted in `n_missing`,
    which every result carries. "Unmeasured" is never rendered as a number.
-2. It does not trust ``cost_usd_est`` blindly. Under subscription auth the CLI reports
-   ``total_cost_usd == 0`` and fathom's fallback prices only the uncached
-   ``input_tokens`` field — 48 tokens on a trial that actually read 548k from cache.
-   That failure mode understates a big cached system prompt by orders of magnitude,
-   which is precisely the arm under test, so :func:`cost_from_usage` recomputes from
-   the raw buckets and :func:`audit_ledger_costs` reports the disagreement.
+2. It does not trust ``cost_usd_est`` blindly. The reported figure collapses four
+   token buckets into one, and cached input dominates a real trial — 548k read from
+   cache against 48 uncached on one committed row. A number blind to that understates
+   a large cached system prompt by orders of magnitude, and the system prompt is
+   exactly where an injected treatment lives, so the error scales with the quantity
+   under test. :func:`cost_from_usage` recomputes from the raw buckets and
+   :func:`audit_ledger_costs` reports the disagreement.
+   (Historical note: this module was written when the adapter carried its own token x
+   price fallback for subscription auth. That fallback is gone — see the dated D2
+   entry in ``docs/STATUS.md`` — but the audit stands on its own, because a reported
+   number is still a number worth checking.)
 3. It does not pick a task mix for you. A mechanism that wins on a bank of hard tasks
    can lose on a realistic session mix, so every headline is reported per mix and the
    decision-relevant output is :func:`break_even_hard_fraction` — the share of hard
@@ -75,18 +80,31 @@ HARD_WELL_FORMEDNESS: tuple[str, ...] = (
     "tiers_are_legal",
 )
 
-# Published cache multipliers on the input rate. Re-check against the platform model
-# reference when prices move; they are multipliers, not prices, so a family repricing
-# does not touch them.
+# fathom's ONE price table, as of 2026-09-05. The adapter carried a second copy and
+# no longer does; this one survives because it has a job the other did not — auditing
+# a reported figure against the raw buckets, which needs prices whether or not any
+# fallback exists.
+#
+# Registered as a mirror site of the upstream tier data, in FAMILY vocabulary. A grep
+# for an outgoing model id passes straight over a family-keyed table, which is how
+# this one sat three weeks stale and unregistered until an audit tripped over it.
+PRICE_REVIEWED_ON = "2026-09-05"
+PRICE_REVIEW_BY = "2026-12-05"
+
+# Cache multipliers on the input rate. These are NOT safe to leave unread on a
+# repricing. The claim they used to carry here — "multipliers, not prices, so a
+# family repricing does not touch them" — is false: a model may read cache at a
+# different FRACTION of its own input rate than its predecessor did (Fable 5.1 reads
+# at 2.5%, not the 10% below), so a lineup change can move these without moving any
+# price. They are the frontier-era gap in this table, re-checked on the same horizon.
 CACHE_WRITE_5M = 1.25
 CACHE_WRITE_1H = 2.0
 CACHE_READ = 0.1
 
-# Per-1k (input, output) USD by family substring — the same table fathom's adapter
-# uses, kept here so a recomputation never silently depends on adapter internals.
+# Per-1k (input, output) USD by family substring.
 PRICE_PER_1K: dict[str, tuple[float, float]] = {
     "haiku": (0.001, 0.005),
-    "sonnet": (0.003, 0.015),
+    "sonnet": (0.002, 0.010),
     "opus": (0.005, 0.025),
     "fable": (0.010, 0.050),
 }

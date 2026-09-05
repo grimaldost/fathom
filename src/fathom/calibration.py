@@ -35,8 +35,13 @@ to every tier verdict (a comparison feeds a tier, and both sonnets share the ``m
 and the dose-response column reads ``Δ first-attempt vs prev arm`` rather than ``vs cheaper`` so
 the rendered scorecard never asserts a dollar order the ladder does not promise.
 
-The cost axis is the token×price estimate (``cost_usd_est``; subscription auth reports
-``total_cost_usd=0``, D2 / FM-13). The judge is NOT used here (verifier-fraction only).
+The cost axis is ``cost_usd_est``. Until 2026-09-05 that field could be a token x price
+estimate, because the adapter substituted one whenever the provider reported
+``total_cost_usd=0`` (D2 / FM-13, recorded 2026-07-04). It no longer can: the estimate
+path is gone, every row carries ``cost_source``, and a row with no reported cost says
+so instead of carrying an invented number. Rows written before that date are all
+``reported`` - the substitution needed a zero from the provider, and no committed row
+has one. The judge is NOT used here (verifier-fraction only).
 """
 
 from __future__ import annotations

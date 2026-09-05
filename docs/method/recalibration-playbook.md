@@ -16,25 +16,25 @@ to bound what the whole invocation may spend.
 updated. **Bound to:** the humblepowers `choosing-models` skill and its `/refresh-models` command
 (canonical data: `skills/choosing-models/models.toml`).
 
-Run `/refresh-models`, land the changeset it proposes, then continue at Step 1. It owns convoy's
-`src/convoy/core/governance.py` (`DEFAULT_TIER_MODELS`), `src/convoy/core/pricing.py` (`_FAMILY_RATES`),
-`skills/convoy/SKILL.md`'s tier/cost table, `src/convoy/interface/scaffold.py`'s starter model, and
-fathom's own `src/fathom/adapters/claude_cli.py` (`_PRICE_PER_1K`) and
-`docs/method/series-toml-skeleton.md` pins — so you know what NOT to hand-edit. This playbook does not
-co-own them; a mirror edit made here instead is how the two rituals drift apart.
+Run `/refresh-models`, land the changeset it proposes, then continue at Step 1. **Which files it
+owns is its own registry to answer, not this playbook's** — the list lives in the operator's
+mirror-sites bindings file (`$MODEL_MIRRORS_FILE`, else `~/.claude/model-mirrors.toml`), and
+`/refresh-models` walks it as a command. Restating the list here made this document a fourth copy of
+it, which drifted: the entry naming this repo's adapter price table stayed after that table was
+deleted, and the entry for `src/fathom/routing.py` — a real price mirror — was never here at all.
+This playbook does not co-own the mirrors; a mirror edit made here instead is how the two rituals
+drift apart.
 
-**Fallback (owner not installed / no mirror binding registered).** `/refresh-models` walks its mirror
-sites only when a mirror-sites table is registered in project or user memory, and that binding lives in
-the operator's global config outside this repo — so a bare "run /refresh-models" silently no-ops when
-the plugin or the binding is absent, and this playbook must not hard-depend on a plugin being installed.
-When the owner cannot run, do the walk by hand:
+**Fallback (owner not installed).** This playbook must not hard-depend on a plugin being installed,
+so when the owner cannot run, do the walk by hand — but read the site list from the bindings file
+rather than from here, for the reason above. An absent bindings file is a legitimate state in a fresh
+environment; it is not "clean", and the walk says so rather than passing silently.
 1. Confirm current model IDs + pricing via the `claude-api` skill (never from memory).
-2. convoy repo — edit `DEFAULT_TIER_MODELS` in `src/convoy/core/governance.py`
-   (`weak`/`mid`/`strong` → the current Haiku/Sonnet/Opus ids), the per-family USD/MTok rates in
-   `src/convoy/core/pricing.py` (`_FAMILY_RATES`), the tier/cost table in `skills/convoy/SKILL.md`
-   (add a dated changelog row), and the starter model in `src/convoy/interface/scaffold.py`.
-3. fathom repo — the `_PRICE_PER_1K` rates in `src/fathom/adapters/claude_cli.py` and the pinned
-   model/effort strings in `docs/method/series-toml-skeleton.md`.
+2. For each `[[site]]` in the bindings file, honour its `vocabulary`: a family-named copy is
+   **translated**, never substituted, and a family-keyed price table is untouched by a model-id change
+   inside that family but not by a repricing between generations.
+3. Then grep every repo for the `[[retired]]` patterns — outgoing model ids AND outgoing price
+   literals. The id-only grep is what let a family-keyed price table go unregistered.
 4. Update the governance/pricing-asserting tests; leave explicit-pin tests + historical fixtures alone.
 5. Verify against the **repo source** (edits don't reach an installed CLI/plugin until reinstalled):
    `uv run --project . convoy validate <series.toml>` · `uv run --project . pytest -q`.

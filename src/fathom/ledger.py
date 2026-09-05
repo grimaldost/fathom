@@ -48,9 +48,16 @@ class RunRecord:
     tool_git_sha: str
     cli_version: str
     pin_level: str  # "strong" | "series"
-    cost_usd_est: float = 0.0  # adapter-computed USD estimate; additive (ADR-0002).
+    cost_usd_est: float = 0.0  # USD as the provider reported it; additive (ADR-0002).
     # Defaults to 0.0 so pre-existing lines without the field still load — no old
     # line is ever rewritten (append-only invariant).
+    cost_source: str = "reported"  # "reported" | "none"; additive (ADR-0002).
+    # Says whether the number above is the provider's or a gap. Until 2026-09-05 the
+    # adapter silently substituted a token x local-price estimate for a missing cost,
+    # so a row's USD could be measured or invented with nothing to tell them apart
+    # — which is why 'no zero-cost rows in any ledger' was uninformative. Rows
+    # written before this field default to "reported", which is what they were: the
+    # estimate path needed a zero from the provider, and no committed row carries one.
     model_id: str = ""  # exact model id the CLI reported (the strong pin, ADR-0001);
     # additive default "" so legacy lines load unchanged. Was computed by the adapter
     # but dropped at the cli.py ledger boundary — the pin the design advertises but

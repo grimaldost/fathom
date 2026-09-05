@@ -75,10 +75,18 @@ group 4 deliberately with `--no-engine-boundary`, or fix the resolution — FATH
   (`estimate_cost_usd`, the series engine's model-tiers rates) so subscription spawns are non-zero even when the CLI
   reports `total_cost_usd = 0`. **Billing path (resolved):** matrix spawns authenticate with the **copied
   subscription credential** (`.credentials.json`, the only file `make_isolated_config` copies into the
-  temp `CLAUDE_CONFIG_DIR`); that is the intended path. Subscription auth reports `total_cost_usd = 0`
-  (usage bills against the plan, not per-token), which is why the token×price estimate is the operative
-  USD figure for these arms; when a real `total_cost_usd` is present (e.g. API-key auth) it is always
-  preferred over the estimate. Tokens/turns/wall-clock remain the primary economy currency (C1); USD is a
+  temp `CLAUDE_CONFIG_DIR`); that is the intended path. **The premise below expired, and the fix with
+  it (2026-09-05).** It read: subscription auth reports `total_cost_usd = 0` (usage bills against the
+  plan, not per-token), so the token×price estimate is the operative USD figure for these arms. That
+  held when it was written on 2026-07-04 and does not now, measured on this adapter's own stream logs:
+  `streams-rg2x2` (2026-07-31) holds 96 `result` events with **no** zero-cost row, and
+  `streams-multiagent` (through 2026-09-04) holds 478 of which 13 are zero — every one an `is_error`
+  event with zero input, output and cache tokens, where zero is the true cost. Every init event reports
+  `apiKeySource: "none"`, i.e. subscription. So the estimator was removed rather than repriced: a spawn
+  that consumed tokens and reports no cost now records `cost_source = "none"` and warns, instead of a
+  local price table filling the gap with a number nothing downstream could distinguish from a
+  measurement. That confirmation on **this repo's own adapter path** is what FATH-B16's cross-review
+  required before deleting anything. Tokens/turns/wall-clock remain the primary economy currency (C1); USD is a
   derived estimate. *Adjacent caveat — now resolved:* `make_spawn_env` (claude_cli.py) strips
   `ANTHROPIC_API_KEY` and the whole routing-diverter set (`_SPAWN_ENV_STRIP`: `ANTHROPIC_AUTH_TOKEN`,
   `ANTHROPIC_BASE_URL`, Bedrock/Vertex) from every spawn env — both spawn paths (adapter + series)

@@ -64,6 +64,11 @@ class RunRecord:
     num_turns: int = 0
     duration_s: float = 0.0
     cost_usd_est: float = 0.0
+    # Where ``cost_usd_est`` came from: "reported" (the provider's own number, or a
+    # true zero on a spawn that consumed nothing) or "none" (tokens were consumed and
+    # no cost came back). Never an estimate: the local price table that used to fill
+    # that gap is gone, and a labelled gap beats a plausible number.
+    cost_source: str = "reported"
     model_id: str = ""
     cli_version: str = ""
     result_text: str = ""
