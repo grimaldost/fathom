@@ -35,8 +35,16 @@ An **analysis** = a scenario matrix run against a task bank, scored into a score
 uv run fathom smoke                       # real-spawn isolation gate — run before any paid matrix
 uv run fathom run <bank> --dry-run        # plan + USD ceiling, spawns nothing
 uv run fathom run <bank> --repeats 3      # the real (paid) matrix; resumable — re-invoking skips done trials
+uv run fathom stop <bank>                 # ask that run to halt at its next trial boundary
 uv run fathom report <bank>               # render report/scorecard-<bank>.md from the ledger
 ```
+
+A paid matrix holds a **run lock** on its bank (`.fathom/locks/`, gitignored): a second
+`fathom run` on the same bank queues instead of spending beside it on the same seat. The
+holder writes a heartbeat, so a run that died without releasing expires on its own rather
+than blocking the next one forever. `fathom stop <bank>` asks the holder to halt after the
+trial in flight — the ledger is the checkpoint, so nothing already bought is lost; `--now`
+also terminates its process tree, discarding the in-flight trial's spend.
 
 `uv run python -m fathom …` is equivalent and is what the plugin surfaces use — prefer it on
 Windows, where the generated `fathom.exe` console script can be blocked by Smart App Control

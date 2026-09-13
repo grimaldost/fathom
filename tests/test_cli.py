@@ -1764,3 +1764,285 @@ def _mutating_stage_factory(task: Task, when: str):
             shutil.rmtree(d, ignore_errors=True)
 
     return _stage
+
+
+class CredentialPreflightTests(unittest.TestCase):
+    """`fathom run` refuses a seat with no credential life left (T25a / FATH-B04(a)).
+
+    Free and spawn-free: the check reads two timestamps out of the credential file
+    and never a token. It has recurred across the corpus since the first triage pass
+    — a matrix starts, spawns, and dies on auth, repeatedly, once "for the third and
+    fourth time in one day".
+    """
+
+    def _bank_tree(self, tmp_p: pathlib.Path) -> None:
+        bank_dir = tmp_p / "tasks" / "b"
+        (bank_dir / "t1").mkdir(parents=True)
+        (bank_dir / "bank.toml").write_text(
+            'name = "b"\ndataset_version = "1"\nholdout = []\n', encoding="utf-8"
+        )
+        (bank_dir / "t1" / "task.toml").write_text(
+            'id = "t1"\ninstruction = "x"\n[limits]\ntrial_timeout_s = 1\n'
+            '[verify]\nentry = "verify.py"\n',
+            encoding="utf-8",
+        )
+        (bank_dir / "t1" / "verify.py").write_text("print('{}')", encoding="utf-8")
+        sc_dir = tmp_p / "scenarios"
+        sc_dir.mkdir()
+        (sc_dir / "arm.toml").write_text(
+            'name = "arm"\nadapter = "claude-cli"\nmodel = "m"\n'
+            'strategy = "single-session"\neffort = "high"\n'
+            '[tools]\nsource = "none"\nallowed = ["Read"]\n',
+            encoding="utf-8",
+        )
+
+    def _args(self, tmp_p: pathlib.Path, **kw):  # noqa: ANN202
+        args = types.SimpleNamespace(
+            command="run",
+            bank="b",
+            dry_run=False,
+            limit=None,
+            tasks=None,
+            repeats=1,
+            tasks_dir=tmp_p / "tasks",
+            scenarios_dir=tmp_p / "scenarios",
+            ledger_dir=tmp_p / "ledger",
+            include_holdout=False,
+            max_spawn_usd=None,
+            legacy_max_budget_usd=None,
+            max_run_usd=None,
+            skip_bank_validation=True,
+            skip_arming_check=True,
+            skip_credential_check=False,
+            # These tests are about the credential gate, not the lock: --no-lock keeps
+            # them out of the repo's own lock directory entirely.
+            no_lock=True,
+            lock_wait_s=None,
+        )
+        for k, v in kw.items():
+            setattr(args, k, v)
+        return args
+
+    def _run(self, args, credential):  # noqa: ANN001, ANN202
+        import contextlib
+
+        import fathom.smoke as _smoke
+        from fathom.cli import _cmd_run
+
+        real = _smoke.read_credential_status
+        _smoke.read_credential_status = lambda *a, **kw: credential
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(buf), contextlib.redirect_stdout(io.StringIO()):
+                code = _cmd_run(args)
+        finally:
+            _smoke.read_credential_status = real
+        return code, buf.getvalue()
+
+    @staticmethod
+    def _credential(**kw):  # noqa: ANN205
+        import time
+
+        from fathom.smoke import CredentialStatus
+
+        now = time.time()
+        base = dict(
+            found=True,
+            readable=True,
+            expires_at_ms=int((now + 3600) * 1000),
+            refresh_expires_at_ms=int((now + 30 * 86400) * 1000),
+        )
+        base.update(kw)
+        return CredentialStatus(**base)
+
+    def test_dead_credential_refuses_before_any_spawn(self):
+        from fathom.cli import EXIT_CREDENTIAL
+
+        import time
+
+        dead = self._credential(
+            expires_at_ms=int((time.time() - 86400) * 1000),
+            refresh_expires_at_ms=int((time.time() - 3600) * 1000),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = pathlib.Path(tmp)
+            self._bank_tree(tmp_p)
+            code, err = self._run(self._args(tmp_p), dead)
+        self.assertEqual(code, EXIT_CREDENTIAL)
+        self.assertIn("re-authenticate", err.lower())
+        self.assertIn("REFUSING TO RUN", err)
+
+    def test_missing_credential_file_refuses_rather_than_passing_by_absence(self):
+        from fathom.cli import EXIT_CREDENTIAL
+        from fathom.smoke import CredentialStatus
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = pathlib.Path(tmp)
+            self._bank_tree(tmp_p)
+            code, _ = self._run(
+                self._args(tmp_p), CredentialStatus(found=False, readable=False, detail="gone")
+            )
+        self.assertEqual(code, EXIT_CREDENTIAL)
+
+    def test_dry_run_is_exempt(self):
+        """A dry run spawns nothing, so it has nothing to authenticate."""
+        import time
+
+        dead = self._credential(
+            expires_at_ms=int((time.time() - 86400) * 1000),
+            refresh_expires_at_ms=int((time.time() - 3600) * 1000),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = pathlib.Path(tmp)
+            self._bank_tree(tmp_p)
+            code, _ = self._run(self._args(tmp_p, dry_run=True), dead)
+        self.assertEqual(code, EXIT_OK)
+
+    def test_skip_flag_lets_a_dead_credential_through(self):
+        import time
+
+        dead = self._credential(
+            expires_at_ms=int((time.time() - 86400) * 1000),
+            refresh_expires_at_ms=int((time.time() - 3600) * 1000),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = pathlib.Path(tmp)
+            self._bank_tree(tmp_p)
+            # --limit 0 plans nothing, so the matrix returns before any spawn: this
+            # test is about the gate NOT firing, and must never buy a trial to say so.
+            args = self._args(tmp_p, skip_credential_check=True, limit=0)
+            code, err = self._run(args, dead)
+        self.assertEqual(code, EXIT_OK)
+        self.assertNotIn("REFUSING TO RUN", err)
+
+
+class StopVerbTests(unittest.TestCase):
+    """`fathom stop` halts a matrix at its next trial boundary (T24b / FATH-B53).
+
+    The primitive `pause_matrix.py` and `guard_cap.py` each re-implemented by hand on
+    the same day. It halts BETWEEN trials because the ledger is the checkpoint: nothing
+    already bought is lost, and no paid spawn is thrown away.
+    """
+
+    def setUp(self):
+        self.ledger_dir = pathlib.Path(tempfile.mkdtemp())
+        self.lock_root = pathlib.Path(tempfile.mkdtemp())
+        td = pathlib.Path(tempfile.mkdtemp())
+        self.bank = _make_bank(
+            "stopme", [_make_task("t1", td), _make_task("t2", td), _make_task("t3", td)]
+        )
+        self.sc = _make_scenario("bare")
+
+    def _lock(self):
+        from fathom.runlock import RunLock
+
+        lock = RunLock("stopme", lock_root=self.lock_root, label="test run")
+        lock.acquire(timeout_s=5.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        return lock
+
+    def test_a_request_halts_the_matrix_at_the_next_boundary(self):
+        from fathom.cli import EXIT_STOPPED
+        from fathom.runlock import request_stop
+
+        lock = self._lock()
+        trials = {"n": 0}
+        real_stop_requested = lock.stop_requested
+
+        class _CountingExecutor(StubExecutor):
+            def run_trial(self, task, workspace, scenario, runner):  # noqa: ANN001
+                trials["n"] += 1
+                if trials["n"] == 1:
+                    request_stop("stopme", lock_root=self.outer.lock_root, reason="cap reached")
+                return super().run_trial(task, workspace, scenario, runner)
+
+        _CountingExecutor.outer = self
+        code, out = _run_matrix(
+            self.bank,
+            [self.sc],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            run_lock=lock,
+            executor_factory=lambda sc: _CountingExecutor(),
+        )
+        self.assertEqual(code, EXIT_STOPPED)
+        self.assertIn("stop requested", out)
+        self.assertIn("cap reached", out)
+        self.assertEqual(trials["n"], 1, "the trial in flight finished; the next never started")
+        # The ledger is intact and holds exactly the trial that completed.
+        rows = [
+            json.loads(line)
+            for line in (self.ledger_dir / "stopme.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        self.assertEqual(sum(1 for r in rows if r.get("kind") == "trial"), 1)
+        # The request is consumed, so a later run is not halted by a stale one.
+        self.assertIsNone(real_stop_requested())
+
+    def test_no_request_means_no_halt(self):
+        """Also the halt's non-vacuity proof: the same bank runs all three trials.
+
+        Without it, `trials == 1` above would be consistent with a loop that stops
+        after one trial for any reason at all.
+        """
+        lock = self._lock()
+        trials = {"n": 0}
+
+        class _CountingExecutor(StubExecutor):
+            def run_trial(self, task, workspace, scenario, runner):  # noqa: ANN001
+                trials["n"] += 1
+                return super().run_trial(task, workspace, scenario, runner)
+
+        code, out = _run_matrix(
+            self.bank,
+            [self.sc],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            run_lock=lock,
+            executor_factory=lambda sc: _CountingExecutor(),
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(trials["n"], 3)
+        self.assertNotIn("stop requested", out)
+
+    def test_stop_on_an_unheld_bank_is_not_an_error(self):
+        import contextlib
+
+        from fathom.cli import _cmd_stop
+
+        args = types.SimpleNamespace(
+            bank="nobody-holds-this",
+            at_boundary=True,
+            now=False,
+            reason="",
+            lock_root=str(self.lock_root),
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = _cmd_stop(args)
+        self.assertEqual(code, EXIT_OK, "a stop that finds nothing to stop did its job")
+        self.assertIn("nothing holds the lock", buf.getvalue())
+
+    def test_stop_names_the_holder_and_records_the_reason(self):
+        import contextlib
+
+        from fathom.cli import _cmd_stop
+
+        lock = self._lock()
+        args = types.SimpleNamespace(
+            bank="stopme",
+            at_boundary=True,
+            now=False,
+            reason="program cap",
+            lock_root=str(self.lock_root),
+        )
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = _cmd_stop(args)
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("stop requested for bank 'stopme'", buf.getvalue())
+        self.assertIn("pid", buf.getvalue())
+        req = lock.stop_requested()
+        self.assertIsNotNone(req)
+        self.assertEqual(req.reason, "program cap")
+        self.assertTrue(req.at_boundary, "at-boundary is the default: it loses nothing bought")

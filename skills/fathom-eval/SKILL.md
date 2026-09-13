@@ -124,9 +124,17 @@ was not set; or you only need to re-read an existing verdict (`report` is free).
 
 `fathom run` exits `0` on success, `10` on an infrastructure error (auth or
 usage limit — the matrix stops cleanly and the ledger stays the resume
-checkpoint), and `1` on a usage error (unloadable bank, no scenarios found in
-the scenarios dir, unknown strategy). `fathom smoke` exits `0` only when every
-check passes.
+checkpoint), `11` on an unarmed treatment arm, `12` on an invalid bank, `13` on
+an unreconciled fact, `14` on the per-invocation spend rail, `15` when the seat
+has too little credential life to start, `16` when `fathom stop` halted it at a
+trial boundary, and `1` on a usage error (unloadable bank, no scenarios found in
+the scenarios dir, unknown strategy). Every nonzero exit above leaves the ledger
+as the resume checkpoint, so re-invoking continues rather than repeating.
+
+`fathom smoke` exits `0` only when every check was **proven**: a failed check and
+a SKIPPED one both make it nonzero. A check is skipped when its precondition did
+not hold — the spawn it reads never went live — and "we could not prove it" must
+not read as "go" on the gate before paid spend.
 
 ## Strategy catalog
 
