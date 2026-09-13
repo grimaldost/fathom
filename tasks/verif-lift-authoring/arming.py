@@ -155,7 +155,7 @@ def run_one(task_dir: Path, overlay: str) -> dict:
             return json.loads(proc.stdout.strip().splitlines()[-1])
         except Exception:
             return {"__error__": f"non-JSON stdout: {proc.stdout[-300:]} / {proc.stderr[-300:]}"}
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return {"__error__": f"{type(exc).__name__}: {exc}"}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -202,11 +202,9 @@ def main() -> int:
             pool.submit(run_one, task_dir, ov): (task_dir.name, cls, ov)
             for task_dir, cls, ov in jobs
         }
-        done = 0
-        for future in concurrent.futures.as_completed(futures):
+        for done, future in enumerate(concurrent.futures.as_completed(futures), 1):
             name, cls, ov = futures[future]
             results[(name, ov)] = future.result()
-            done += 1
             if done % 40 == 0:
                 print(f"  {done}/{len(jobs)}")
 
@@ -258,9 +256,7 @@ def main() -> int:
         print(f"  tasks whose criteria are not individually two-sided: {weak}")
 
     drift = _strong_equivalence()
-    print(
-        f"Strong-tier banks: {'byte-identical to their armed weak twins' if not drift else drift}"
-    )
+    print(f"Strong-tier banks: {drift if drift else 'byte-identical to their armed weak twins'}")
     mismatches.extend(drift)
 
     if mismatches:

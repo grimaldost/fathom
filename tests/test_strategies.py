@@ -125,19 +125,24 @@ depends_on = ["PR01"]
 _CURRENT_RUN = "20260610T143000Z-aaaa"
 _FOREIGN_RUN = "20260609T120000Z-bbbb"
 _SERIES_SPAWNS = (
-    '{"schema_version": 1, "event": "run_start", "run_id": "%(cur)s", "series_id": "demo"}\n'
-    '{"schema_version": 1, "event": "spawn_complete", "run_id": "%(cur)s", "pr_id": "PR01",'
+    f'{{"schema_version": 1, "event": "run_start", "run_id": "{_CURRENT_RUN}",'
+    ' "series_id": "demo"}\n'
+    f'{{"schema_version": 1, "event": "spawn_complete", "run_id": "{_CURRENT_RUN}",'
+    ' "pr_id": "PR01",'
     ' "role": "implementation", "exit_code": 0, "input_tokens": 1000, "output_tokens": 400,'
     ' "num_turns": 5, "duration_s": 12.0, "cost_usd": 0.12, "effective_model": "claude-opus-4-8"}\n'
-    '{"schema_version": 1, "event": "spawn_complete", "run_id": "%(cur)s", "pr_id": "PR01",'
+    f'{{"schema_version": 1, "event": "spawn_complete", "run_id": "{_CURRENT_RUN}",'
+    ' "pr_id": "PR01",'
     ' "role": "review", "exit_code": 0, "input_tokens": 300, "output_tokens": 200,'
     ' "num_turns": 2, "duration_s": 4.0, "cost_usd": 0.03, "effective_model": "claude-opus-4-8"}\n'
-    '{"schema_version": 1, "event": "spawn_complete", "run_id": "%(foreign)s", "pr_id": "PR01",'
+    f'{{"schema_version": 1, "event": "spawn_complete", "run_id": "{_FOREIGN_RUN}",'
+    ' "pr_id": "PR01",'
     ' "role": "implementation", "exit_code": 0, "input_tokens": 9999, "output_tokens": 8888,'
     ' "num_turns": 9, "duration_s": 99.0, "cost_usd": 9.99, "effective_model": "claude-opus-4-8"}\n'
-    '{"schema_version": 1, "event": "run_complete", "run_id": "%(cur)s", "outcome": "completed",'
+    f'{{"schema_version": 1, "event": "run_complete", "run_id": "{_CURRENT_RUN}",'
+    ' "outcome": "completed",'
     ' "integrated": true}\n'
-) % {"cur": _CURRENT_RUN, "foreign": _FOREIGN_RUN}
+)
 
 
 def _scenario(
@@ -159,15 +164,15 @@ def _scenario(
 
 
 def _ok_record(**kw):
-    base = dict(
-        status=ExitStatus.OK,
-        tokens_in=10,
-        tokens_out=5,
-        num_turns=3,
-        duration_s=1.5,
-        cost_usd_est=0.01,
-        model_id="claude-opus-4-8-exact",
-    )
+    base = {
+        "status": ExitStatus.OK,
+        "tokens_in": 10,
+        "tokens_out": 5,
+        "num_turns": 3,
+        "duration_s": 1.5,
+        "cost_usd_est": 0.01,
+        "model_id": "claude-opus-4-8-exact",
+    }
     base.update(kw)
     return RunRecord(**base)
 
@@ -504,16 +509,17 @@ class TestSeriesTelemetryParsing(SeriesTestBase):
 class TestSeriesClassification(SeriesTestBase):
     _RUN = "20260610T150000Z-cccc"
     _IMPL = (
-        '{"schema_version": 1, "event": "run_start", "run_id": "%(r)s", "series_id": "demo"}\n'
-        '{"schema_version": 1, "event": "spawn_complete", "run_id": "%(r)s", "pr_id": "PR01",'
+        f'{{"schema_version": 1, "event": "run_start", "run_id": "{_RUN}", "series_id": "demo"}}\n'
+        f'{{"schema_version": 1, "event": "spawn_complete", "run_id": "{_RUN}", "pr_id": "PR01",'
         ' "role": "implementation", "exit_code": 0, "input_tokens": 100, "output_tokens": 50,'
-        ' "num_turns": 2, "duration_s": 3.0, "cost_usd": 0.2, "effective_model": "claude-opus-4-8"}\n'
-    ) % {"r": _RUN}
+        ' "num_turns": 2, "duration_s": 3.0, "cost_usd": 0.2,'
+        ' "effective_model": "claude-opus-4-8"}\n'
+    )
 
     def _run_complete(self, outcome, integrated):
         return (
-            '{"schema_version": 1, "event": "run_complete", "run_id": "%s", "outcome": "%s",'
-            ' "integrated": %s}\n' % (self._RUN, outcome, "true" if integrated else "false")
+            '{{"schema_version": 1, "event": "run_complete", "run_id": "{}", "outcome": "{}",'
+            ' "integrated": {}}}\n'.format(self._RUN, outcome, "true" if integrated else "false")
         )
 
     def test_blocking_red_is_completed_and_therefore_actually_scored(self):

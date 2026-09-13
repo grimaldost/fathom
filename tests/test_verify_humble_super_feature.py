@@ -338,7 +338,15 @@ class TestRetry(unittest.TestCase):
             raise ValueError("x")
 
         with self.assertRaises(ValueError):
-            retry(fn, attempts=6, base_delay=1.0, max_delay=10.0, jitter=True, sleep=rec, rand=lambda: 1.0)
+            retry(
+                fn,
+                attempts=6,
+                base_delay=1.0,
+                max_delay=10.0,
+                jitter=True,
+                sleep=rec,
+                rand=lambda: 1.0,
+            )
         caps = [min(10.0, 1.0 * (2 ** k)) for k in range(5)]
         for d, cap in zip(rec.sleeps, caps):
             self.assertGreaterEqual(d, 0.0)

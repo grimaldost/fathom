@@ -31,7 +31,7 @@ class _StubRunner:
         self.files_by_call = files_by_call or {}
         self.prompts: list[str] = []
 
-    def execute(self, prompt, workspace, scenario, max_turns=None):  # noqa: ANN001, ARG002
+    def execute(self, prompt, workspace, scenario, max_turns=None):
         self.calls += 1
         self.prompts.append(prompt)
         if self.calls == self.write_done_on_call:
@@ -274,7 +274,7 @@ def test_a_lost_gate_stream_is_a_named_condition_not_an_empty_string():
 
     from fathom.strategies import gated_session as gs
 
-    def _lost_stream_run(*a, **kw):  # noqa: ANN002, ANN003
+    def _lost_stream_run(*a, **kw):
         return _sp.CompletedProcess(args=a[0] if a else "", returncode=1, stdout=None, stderr="")
 
     # Shadow the NAME in gated_session's namespace, never the subprocess module

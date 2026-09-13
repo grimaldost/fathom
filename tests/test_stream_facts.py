@@ -16,7 +16,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools"))
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import stream_facts as sf  # noqa: E402
+import stream_facts as sf
 
 BANK = "bank-v2"
 TASK = "tasks/bank-v2/exprlang"

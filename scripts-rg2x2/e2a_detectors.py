@@ -180,7 +180,7 @@ def parse_session(path: str):
     n_records = 0
     n_bad = 0
 
-    with open(path, "r", encoding="utf-8", errors="replace") as fh:
+    with open(path, encoding="utf-8", errors="replace") as fh:
         for line in fh:
             line = line.strip()
             if not line:

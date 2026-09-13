@@ -638,7 +638,7 @@ def _guard(label: str, fn: object) -> list[SmokeResult]:
     """Run a probe+assert step; a raised probe becomes a failing result, not a crash."""
     try:
         return fn()  # type: ignore[operator]
-    except Exception as exc:  # noqa: BLE001 - any probe failure is a gate failure, reported
+    except Exception as exc:
         return [SmokeResult(f"{label} (probe error)", False, f"{type(exc).__name__}: {exc}")]
 
 
@@ -811,7 +811,7 @@ def _locate_windows_launcher() -> Path | None:
         user = site.getusersitepackages()
         if user:
             roots.append(Path(user))
-    except Exception:  # noqa: BLE001 - site dirs are best-effort; purelib usually suffices
+    except Exception:  # noqa: S110 - site dirs are best-effort; purelib usually suffices
         pass
 
     for root in roots:
@@ -1151,8 +1151,8 @@ class _DefaultSmokeResolver:
     def resolve_tool_repo_sha(self, repo: str) -> str:
         import subprocess
 
-        result = subprocess.run(  # noqa: S603
-            ["git", "-C", repo, "rev-parse", "HEAD"],  # noqa: S607
+        result = subprocess.run(
+            ["git", "-C", repo, "rev-parse", "HEAD"],
             capture_output=True,
             text=True,
         )

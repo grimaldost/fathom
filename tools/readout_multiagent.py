@@ -14,6 +14,7 @@ Stdlib only.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import statistics
 import sys
@@ -109,10 +110,8 @@ def gate_counts(detail: str) -> tuple[int | None, int | None]:
     fixes = None
     for token in detail.split():
         if token.startswith("fixes="):
-            try:
+            with contextlib.suppress(ValueError):
                 fixes = int(token[len("fixes=") :].rstrip(";,"))
-            except ValueError:
-                pass
     return first_red, fixes
 
 
@@ -152,11 +151,13 @@ def main(argv: list[str]) -> int:
         cells[(arm, tier)].append(t)
 
     print("multiagent-composition readout — pre-registered endpoints only")
-    print(
-        f"trials: {len(trials)}  (completed: {sum(1 for t in trials if t.get('status') == 'completed')})"
-    )
+    n_completed = sum(1 for t in trials if t.get("status") == "completed")
+    print(f"trials: {len(trials)}  (completed: {n_completed})")
     print()
-    hdr = f"{'cell':16} {'n':>2} {'held_out':>9} {'ho_indep':>9} {'full15':>7} {'1st-red':>7} {'fixes':>6} {'med$/tr':>8} {'med_s':>7}"
+    hdr = (
+        f"{'cell':16} {'n':>2} {'held_out':>9} {'ho_indep':>9} {'full15':>7} "
+        f"{'1st-red':>7} {'fixes':>6} {'med$/tr':>8} {'med_s':>7}"
+    )
     print(hdr)
     stats: dict[tuple[str, str], dict] = {}
     for tier in TIERS:
@@ -222,7 +223,10 @@ def main(argv: list[str]) -> int:
             for name, p in raw.items():
                 treat, ctrl = name.split(" vs ")
                 a, b = stats[(treat, tier)], stats[(ctrl, tier)]
-                line = f"  [{tier}] {name:18} {a[key]}/{a['n']} vs {b[key]}/{b['n']}  one-sided p={p:.4f}"
+                line = (
+                    f"  [{tier}] {name:18} {a[key]}/{a['n']} vs {b[key]}/{b['n']}  "
+                    f"one-sided p={p:.4f}"
+                )
                 if adj:
                     line += f"  Holm p={adj[name]:.4f}"
                 print(line)

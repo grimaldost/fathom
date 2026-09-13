@@ -29,15 +29,17 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+import itertools
+
 from fathom.runlock import (
     HEARTBEAT_INTERVAL_S,
     STALE_AFTER_S,
     LockTimeout,
     RunLock,
     Ticket,
+    ancestors_of,
     choosing_now,
     clear_stop_request,
-    ancestors_of,
     decide,
     descendants_of,
     holders,
@@ -162,9 +164,8 @@ class TestTicketDirectory(unittest.TestCase):
 
     def test_held_releases_on_an_exception(self):
         lock = self._lock()
-        with self.assertRaises(ValueError):
-            with lock.held():
-                raise ValueError("boom")
+        with self.assertRaises(ValueError), lock.held():
+            raise ValueError("boom")
         self.assertEqual(read_tickets(lock.dir), [])
 
     def test_a_second_acquirer_waits_and_then_holds(self):
@@ -341,7 +342,7 @@ class TestRealContention(unittest.TestCase):
             log = tmp_p / "log.jsonl"
             root = str(tmp_p / "locks")
             procs = [
-                subprocess.Popen(  # noqa: S603
+                subprocess.Popen(
                     [sys.executable, str(script), src, root, str(log), f"run-{i}"],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
@@ -349,7 +350,7 @@ class TestRealContention(unittest.TestCase):
                 for i in range(6)
             ]
             for p in procs:
-                out, err = p.communicate(timeout=120)
+                _out, err = p.communicate(timeout=120)
                 self.assertEqual(p.returncode, 0, err.decode("utf-8", "replace"))
 
             spans = [
@@ -360,7 +361,7 @@ class TestRealContention(unittest.TestCase):
 
         self.assertEqual(len(spans), 6, "every contender must eventually get the lock")
         spans.sort(key=lambda s: s["enter"])
-        for earlier, later in zip(spans, spans[1:]):
+        for earlier, later in itertools.pairwise(spans):
             self.assertLessEqual(
                 earlier["leave"],
                 later["enter"],
@@ -466,12 +467,12 @@ class TestTerminateProcessTree(unittest.TestCase):
 
     def test_a_sibling_in_the_same_group_survives(self):
         """The regression CI paid for: a bystander sharing our process group lives."""
-        bystander = subprocess.Popen(  # noqa: S603
+        bystander = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        target = subprocess.Popen(  # noqa: S603
+        target = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(30)"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -494,7 +495,7 @@ class TestTerminateProcessTree(unittest.TestCase):
             beat = Path(tmp) / "grandchild.beat"
             child_src = Path(tmp) / "child.py"
             child_src.write_text(_TREE_PARENT, encoding="utf-8")
-            parent = subprocess.Popen(  # noqa: S603
+            parent = subprocess.Popen(
                 [sys.executable, str(child_src), str(beat), _TREE_GRANDCHILD],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -521,7 +522,7 @@ class TestTerminateProcessTree(unittest.TestCase):
                     parent.wait(timeout=10)
 
     def test_kills_a_live_child(self):
-        proc = subprocess.Popen(  # noqa: S603
+        proc = subprocess.Popen(
             [sys.executable, "-c", "import time; time.sleep(60)"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -536,7 +537,7 @@ class TestTerminateProcessTree(unittest.TestCase):
                 proc.wait(timeout=10)
 
     def test_a_pid_that_is_gone_is_reported_not_raised(self):
-        proc = subprocess.Popen([sys.executable, "-c", "pass"])  # noqa: S603
+        proc = subprocess.Popen([sys.executable, "-c", "pass"])
         proc.wait(timeout=30)
         killed, detail = terminate_process_tree(proc.pid)
         self.assertIsInstance(killed, bool)

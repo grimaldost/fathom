@@ -30,6 +30,7 @@ stub — no real spawns here (that is the smoke gate's job, spec §11).
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import json
 import os
@@ -119,15 +120,13 @@ def make_isolated_config(real_config: str | None = None, settings_file: str | No
     for name in _CONFIG_COPY_ALLOWLIST:
         src = real / name
         if src.is_file():
-            try:
+            # locked/unreadable; the smoke gate catches a dead config
+            with contextlib.suppress(OSError):
                 shutil.copy2(src, dest / name)
-            except OSError:
-                pass  # locked/unreadable; the smoke gate catches a dead config
     if settings_file:
-        try:
+        # missing/unreadable; the factory warns and the arm degrades to control
+        with contextlib.suppress(OSError):
             shutil.copy2(settings_file, dest / "settings.json")
-        except OSError:
-            pass  # missing/unreadable; the factory warns and the arm degrades to control
     return str(dest)
 
 
@@ -352,9 +351,9 @@ def _spawn_is_infrastructure(stderr: str, result_text: str, *, success: bool) ->
     """
     if _USAGE_LIMIT.search(stderr or "") or _AUTH.search(stderr or ""):
         return True
-    if not success and (_USAGE_LIMIT.search(result_text or "") or _AUTH.search(result_text or "")):
-        return True
-    return False
+    return bool(
+        not success and (_USAGE_LIMIT.search(result_text or "") or _AUTH.search(result_text or ""))
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +448,7 @@ def terminate_process_tree(pid: int) -> None:
     series engine boundary (one home, no drift).
     """
     if os.name == "nt":
-        subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
+        subprocess.run(
             ["taskkill", "/F", "/T", "/PID", str(pid)],
             capture_output=True,
             check=False,
@@ -457,16 +456,14 @@ def terminate_process_tree(pid: int) -> None:
     else:
         import signal
 
-        try:
+        with contextlib.suppress(ProcessLookupError, PermissionError):
             os.killpg(os.getpgid(pid), signal.SIGKILL)
-        except (ProcessLookupError, PermissionError):
-            pass
 
 
 def pid_alive(pid: int) -> bool:
     """True if ``pid`` is a live process (used by the timeout no-orphan checks)."""
     if os.name == "nt":
-        proc = subprocess.run(  # noqa: S603, S607 - fixed argv, no shell
+        proc = subprocess.run(
             ["tasklist", "/FI", f"PID eq {pid}", "/NH"],
             capture_output=True,
             text=True,
@@ -503,7 +500,7 @@ def _subprocess_spawn(
     if os.name != "nt":
         # Own session/group so a timeout can killpg the CLI and its tool children.
         popen_kwargs["start_new_session"] = True
-    proc = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+    proc = subprocess.Popen(
         list(argv),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -699,7 +696,7 @@ class ClaudeCliRunner:
             last = (proc, parsed)
             if attempt < self.max_attempts and _TRANSIENT.search(proc.stderr or ""):
                 # Exponential backoff with jitter, exactly as upstream.
-                self._sleep(min(10 * 2 ** (attempt - 1), 120) + random.uniform(0, 5))  # noqa: S311
+                self._sleep(min(10 * 2 ** (attempt - 1), 120) + random.uniform(0, 5))
                 continue
             break
         if last is None:

@@ -135,7 +135,7 @@ def load_bank():
     return _load(BANK)
 
 
-def load_bank_task(task_id: str):  # noqa: ANN201 - a taskbank.Task
+def load_bank_task(task_id: str):
     return next(t for t in load_bank().tasks if t.id == task_id)
 
 

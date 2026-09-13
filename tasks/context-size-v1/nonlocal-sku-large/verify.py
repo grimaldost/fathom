@@ -43,7 +43,9 @@ def _stock_merges_aliases(view: Path) -> bool:
 
 
 def _price_merges_aliases(view: Path) -> bool:
-    """A price lookup by a variant code resolves to the canonical product (defeats a one-caller fix)."""
+    """A price lookup by a variant code resolves to the canonical product
+    (defeats a one-caller fix).
+    """
     mod = bv.import_candidate(view, "warehouse.pricing", PACKAGE)
     if mod is None or not hasattr(mod, "price_for"):
         return False

@@ -45,7 +45,7 @@ STANDARD = [
 ]
 
 
-def _report(view: Path):  # noqa: ANN202 - a module or None
+def _report(view: Path):
     return bv.import_candidate(view, "logparse.report", PACKAGE)
 
 

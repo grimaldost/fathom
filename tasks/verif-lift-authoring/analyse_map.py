@@ -211,7 +211,7 @@ def main() -> None:
     print("| tier | class | arm | config_hash | trials | $ total | $/trial | turns | dur s |")
     print("|---|---|---|---|---|---|---|---|---|")
     econ: dict[str, list[dict]] = defaultdict(list)
-    for bank, tier, klass in BLOCKS:
+    for bank, _tier, _klass in BLOCKS:
         _, runs = load(bank)
         for r in runs:
             econ[r["config_hash"]].append(r)

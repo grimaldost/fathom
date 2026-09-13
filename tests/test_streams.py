@@ -14,7 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom import streams  # noqa: E402
+from fathom import streams
 
 INIT = {
     "type": "system",

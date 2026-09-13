@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import json
 import dataclasses
+import json
 import os
 import pathlib
 import sys
 import tomllib
-from collections.abc import Sequence
-from typing import Any, Callable, TextIO
+from collections.abc import Callable, Sequence
+from typing import Any, TextIO
 
 import fathom.arming as _arming
 import fathom.ledger as _ledger
@@ -1115,7 +1115,7 @@ def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenar
     for sc_file in sorted(scenarios_dir.glob("*.toml")):
         try:
             out.append(resolve_scenario(load_scenario(sc_file), resolver))
-        except Exception as exc:  # noqa: BLE001 - one bad arm must not hide the rest
+        except Exception as exc:
             print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
     return out
 
@@ -1126,7 +1126,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     try:
         bank = load_bank(args.tasks_dir / args.bank)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
         return 1
 
@@ -1244,7 +1244,7 @@ def void_trial(
         scenario=scenario,
         reason=reason,
         evidence=evidence,
-        voided_at=_dt.datetime.now(_dt.timezone.utc).isoformat(timespec="seconds"),
+        voided_at=_dt.datetime.now(_dt.UTC).isoformat(timespec="seconds"),
     )
     _ledger.append_record(bank, void, ledger_dir=_dir)
     return void
@@ -1369,7 +1369,7 @@ class _DefaultResolver:
 
         plugin_path = pathlib.Path(plugin_dir)
         plugin_json = plugin_path / ".claude-plugin" / "plugin.json"
-        with open(plugin_json) as f:
+        with open(plugin_json, encoding="utf-8") as f:
             meta = json.load(f)
         name: str = meta["name"]
         version: str = meta["version"]

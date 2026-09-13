@@ -464,7 +464,7 @@ def agreement(a: Mapping[str, str], b: Mapping[str, str]) -> tuple[int, int]:
 
 def fixed_tier_mechanism(tier: str, task_ids: Sequence[str]) -> Mechanism:
     """`fixed-<tier>` — one tier for everything, zero decision cost."""
-    return Mechanism(f"fixed-{tier}", {t: tier for t in task_ids}, ZERO_DECISION_COST)
+    return Mechanism(f"fixed-{tier}", dict.fromkeys(task_ids, tier), ZERO_DECISION_COST)
 
 
 def always_weak_start() -> Mechanism:
@@ -584,7 +584,7 @@ class Mix:
 
 def uniform_mix(task_ids: Sequence[str]) -> Mix:
     """The bank's own mix. Recorded as unrepresentative: the bank is mid-band heavy."""
-    return Mix("bank-uniform", {t: 1.0 for t in task_ids})
+    return Mix("bank-uniform", dict.fromkeys(task_ids, 1.0))
 
 
 def band_mix(name: str, substrate: Substrate, band_weights: Mapping[str, float]) -> Mix:

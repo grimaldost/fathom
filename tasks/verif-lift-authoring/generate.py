@@ -178,7 +178,7 @@ def _cases_pass(source: str, func: str, cases: list, tag: str) -> bool:
         wants_raise = isinstance(expected, dict) and "raises" in expected
         try:
             got = fn(*args)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             if wants_raise and type(exc).__name__ == expected["raises"]:
                 continue
             return False
@@ -332,7 +332,7 @@ def emit_code_task(task: dict, cls: str) -> dict:
         f"{task_id}: the drifted signature changes behaviour -- it must not",
     )
     _write(root / "refs" / "signature-drift" / pkg / f"{mod}.py", drifted)
-    drift_cases = [[list(args) + [], expected] for args, expected in task["edge_cases"]]
+    drift_cases = [[list(args), expected] for args, expected in task["edge_cases"]]
     drift_body = []
     for args, expected in drift_cases:
         call = f"{func}({', '.join(repr(a) for a in args)}, strict=True)"

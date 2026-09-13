@@ -22,9 +22,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom import validate  # noqa: E402
-from fathom.grading.verifier import VerifierResult  # noqa: E402
-from fathom.taskbank import Bank, Task  # noqa: E402
+from fathom import validate
+from fathom.grading.verifier import VerifierResult
+from fathom.taskbank import Bank, Task
 
 
 def _task(task_id: str, *, gate: dict | None = None, task_dir: Path | None = None) -> Task:
@@ -43,12 +43,12 @@ def _bank(*tasks: Task) -> Bank:
 
 
 @contextmanager
-def _stage(task, base_branch):  # noqa: ANN001, ANN201
+def _stage(task, base_branch):
     yield Path("/staged") / task.id
 
 
-def _verifier(outcome: str):  # noqa: ANN202
-    def _fn(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+def _verifier(outcome: str):
+    def _fn(entry, workspace, timeout_s=60):
         return VerifierResult(
             outcome=outcome, criteria={"c": outcome == "pass"}, stdout="", stderr="", exit_code=0
         )
@@ -56,11 +56,11 @@ def _verifier(outcome: str):  # noqa: ANN202
     return _fn
 
 
-def _run(bank, *, fixture="fail", solution=None, gate_rc=0, has_solution=False):  # noqa: ANN001, ANN202
+def _run(bank, *, fixture="fail", solution=None, gate_rc=0, has_solution=False):
     """Drive validate_bank with stubbed staging / verification / gate."""
     calls = {"n": 0}
 
-    def verifier(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+    def verifier(entry, workspace, timeout_s=60):
         # First call per task is the unmodified fixture, second is the solution.
         calls["n"] += 1
         outcome = fixture if calls["n"] % 2 == 1 else (solution or "pass")
@@ -71,7 +71,7 @@ def _run(bank, *, fixture="fail", solution=None, gate_rc=0, has_solution=False):
     return validate.validate_bank(
         bank,
         stage_fn=_stage,
-        verifier_fn=verifier if solution is not None or True else _verifier(fixture),
+        verifier_fn=verifier if True else _verifier(fixture),
         gate_fn=lambda cmd, ws: (gate_rc, "gate output"),
         overlay_fn=(lambda task, ws: True) if has_solution else (lambda task, ws: False),
     )
@@ -92,8 +92,8 @@ class CriteriaAwareDiscriminationTests(unittest.TestCase):
     """
 
     @staticmethod
-    def _checks(outcome: str, criteria: dict | None):  # noqa: ANN205
-        def verifier(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+    def _checks(outcome: str, criteria: dict | None):
+        def verifier(entry, workspace, timeout_s=60):
             return VerifierResult(
                 outcome=outcome, criteria=criteria, stdout="", stderr="", exit_code=0
             )
@@ -159,7 +159,7 @@ class DiscriminationTests(unittest.TestCase):
     def test_one_bad_task_fails_the_whole_bank(self) -> None:
         calls = {"n": 0}
 
-        def verifier(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+        def verifier(entry, workspace, timeout_s=60):
             calls["n"] += 1
             # t1 discriminates, t2 already passes.
             outcome = "fail" if calls["n"] == 1 else "pass"

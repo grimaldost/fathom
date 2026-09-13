@@ -219,13 +219,14 @@ omitted when `None`; a runner constructed with the path passes it through `execu
 In `TestBuildCommand`:
 
 ```python
-    def test_append_system_prompt_file_present_when_set(self):
-        cmd = self._cmd(append_system_prompt_file="/abs/skill.md")
-        self.assertIn("--append-system-prompt-file", cmd)
-        self.assertEqual(cmd[cmd.index("--append-system-prompt-file") + 1], "/abs/skill.md")
+def test_append_system_prompt_file_present_when_set(self):
+    cmd = self._cmd(append_system_prompt_file="/abs/skill.md")
+    self.assertIn("--append-system-prompt-file", cmd)
+    self.assertEqual(cmd[cmd.index("--append-system-prompt-file") + 1], "/abs/skill.md")
 
-    def test_append_system_prompt_file_absent_when_unset(self):
-        self.assertNotIn("--append-system-prompt-file", self._cmd())
+
+def test_append_system_prompt_file_absent_when_unset(self):
+    self.assertNotIn("--append-system-prompt-file", self._cmd())
 ```
 
 In `TestExecuteArgv`:
@@ -291,10 +292,18 @@ class TestRunnerFactoryInjection(unittest.TestCase):
         from fathom.scenario import ContextConfig, LimitsOverride, ResolvedScenario, ToolsConfig
 
         return ResolvedScenario(
-            name="pyeng-skill", adapter="claude-cli", model="m", strategy="single-session",
-            effort="high", tools=ToolsConfig(source="none", allowed=("Read", "Write")),
-            limits=LimitsOverride(), model_id=None, tool_repo_sha=None,
-            tool_invocation_cmd=None, config_hash="x" * 64, context=ContextConfig(inject=inject),
+            name="pyeng-skill",
+            adapter="claude-cli",
+            model="m",
+            strategy="single-session",
+            effort="high",
+            tools=ToolsConfig(source="none", allowed=("Read", "Write")),
+            limits=LimitsOverride(),
+            model_id=None,
+            tool_repo_sha=None,
+            tool_invocation_cmd=None,
+            config_hash="x" * 64,
+            context=ContextConfig(inject=inject),
         )
 
     def test_factory_passes_inject_to_runner(self):
@@ -735,7 +744,9 @@ class TestBank(unittest.TestCase):
 def _run_verifier(view: Path) -> dict:
     proc = subprocess.run(
         [sys.executable, str(TASK_DIR / "verify.py"), str(view)],
-        capture_output=True, text=True, encoding="utf-8",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
     )
     return json.loads(proc.stdout)
 

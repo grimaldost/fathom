@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import tomllib
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -151,7 +152,7 @@ class TestVerifierContract:
         import sys
 
         sys.path.insert(0, str(BANK))
-        import routingverify as rv  # noqa: PLC0415
+        import routingverify as rv
 
         assert tuple(rv.HARD) == r.HARD_WELL_FORMEDNESS
 
@@ -160,7 +161,7 @@ class TestVerifierContract:
         import sys
 
         sys.path.insert(0, str(BANK))
-        import routingverify as rv  # noqa: PLC0415
+        import routingverify as rv
 
         for block in BLOCKS:
             briefs = _manifest(block)
@@ -176,7 +177,11 @@ class TestArmGrid:
     """The pre-registered grid: three mechanisms crossed with three deciding tiers."""
 
     MECHANISMS = ("none", "rubric", "shortcuts")
-    TIERS = {"weak": "claude-haiku-4-5", "mid": "claude-sonnet-5", "strong": "claude-opus-5"}
+    TIERS: ClassVar[dict[str, str]] = {
+        "weak": "claude-haiku-4-5",
+        "mid": "claude-sonnet-5",
+        "strong": "claude-opus-5",
+    }
 
     def test_every_cell_of_the_grid_exists(self):
         found = {p.stem for p in SCENARIOS.glob("*.toml")}

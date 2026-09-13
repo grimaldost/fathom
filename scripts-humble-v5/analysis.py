@@ -241,7 +241,7 @@ def cmd_criteria(args: argparse.Namespace) -> int:
             if total and passed != total:
                 saturated = False
         row = f"{task:<24} {crit:<26}" + "".join(
-            f"{c:>{max(width, len(a) + 2)}}" for c, a in zip(cells, arms)
+            f"{c:>{max(width, len(a) + 2)}}" for c, a in zip(cells, arms, strict=False)
         )
         print(row + ("" if saturated else "   <-- headroom"))
     return 0
@@ -289,7 +289,7 @@ def cmd_cost(args: argparse.Namespace) -> int:
             mean, sd, t_stat, df, p = paired_t(diffs_pct)
             verdict = "SEPARATED (p<0.05)" if p < 0.05 else "not separated"
             print(f"  {a} -> {b} over {len(shared)} tasks:")
-            for task, d in zip(shared, diffs_pct):
+            for task, d in zip(shared, diffs_pct, strict=False):
                 print(f"      {task:<24} {d:+.1f}%")
             print(
                 f"      mean {mean:+.1f}%  sd {sd:.1f}  t={t_stat:.2f}  df={df}  "

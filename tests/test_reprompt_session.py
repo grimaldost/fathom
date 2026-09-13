@@ -24,7 +24,7 @@ class _StubRunner:
         self.calls = 0
         self.statuses = statuses
 
-    def execute(self, prompt, workspace, scenario, max_turns=None):  # noqa: ANN001, ARG002
+    def execute(self, prompt, workspace, scenario, max_turns=None):
         st = self.statuses[self.calls]
         self.calls += 1
         return RunRecord(status=st, duration_s=1.0, num_turns=1)

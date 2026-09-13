@@ -129,7 +129,7 @@ class ReconciliationTests(unittest.TestCase):
                 continue
             try:
                 resolved = resolve_scenario(load_scenario(toml_path), _StubResolver())
-            except Exception:
+            except Exception:  # noqa: S112
                 continue  # unresolvable arms are the coverage story, not this invariant
             digest = hashlib.sha256(resolved.config_preimage.encode("utf-8")).hexdigest()
             self.assertEqual(

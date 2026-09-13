@@ -17,7 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fathom.ledgerindex import (  # noqa: E402
+from fathom.ledgerindex import (
     HEADER,
     INDEX_PATH,
     LEDGER_DIR,
@@ -35,9 +35,9 @@ __all__ = [
     "REPO",
     "canonical_bytes",
     "ledger_files",
+    "main",
     "render",
     "summarise",
-    "main",
 ]
 
 

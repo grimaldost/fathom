@@ -525,7 +525,7 @@ def verify_all(scenarios: Sequence[ResolvedScenario], probe: Any) -> tuple[bool,
         try:
             observation = probe.observe(sc)
             checks = verify_arming(sc, observation)
-        except Exception as exc:  # noqa: BLE001 - a broken probe blocks the run
+        except Exception as exc:
             checks = [
                 ArmingCheck(
                     "probe",

@@ -341,8 +341,8 @@ def _posix_parents() -> dict[int, int]:
     Walking the tree explicitly is the only safe way to reach a holder's descendants:
     see :func:`terminate_process_tree` for why the process group is not.
     """
-    proc = subprocess.run(  # noqa: S603
-        ["ps", "-A", "-o", "pid=,ppid="],  # noqa: S607
+    proc = subprocess.run(
+        ["ps", "-A", "-o", "pid=,ppid="],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -403,8 +403,8 @@ def terminate_process_tree(pid: int) -> tuple[bool, str]:
     descendants are walked explicitly and signalled deepest-first.
     """
     if os.name == "nt":
-        proc = subprocess.run(  # noqa: S603
-            ["taskkill", "/PID", str(pid), "/T", "/F"],  # noqa: S607
+        proc = subprocess.run(
+            ["taskkill", "/PID", str(pid), "/T", "/F"],
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -515,7 +515,7 @@ class RunLock:
     # -- ticket lifecycle ---------------------------------------------------
 
     def _write_ticket(self, heartbeat_s: float) -> None:
-        assert self._ticket_path is not None
+        assert self._ticket_path is not None  # noqa: S101 - type narrowing; acquire() sets it first
         _atomic_write_json(
             self._ticket_path,
             {

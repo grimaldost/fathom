@@ -53,8 +53,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from fathom.grading.verifier import run_verifier  # noqa: E402
-from fathom.taskbank import Bank, Task, load_bank, stage_task  # noqa: E402
+from fathom.grading.verifier import run_verifier
+from fathom.taskbank import Bank, Task, load_bank, stage_task
 
 NAIVE_DIRNAME = "refs/naive"
 
@@ -134,7 +134,7 @@ def check_task(task: Task, *, base_branch: str = "main") -> NaiveCheck:
                     f"[naive] is declared but {NAIVE_DIRNAME}/ does not exist",
                 )
             result = run_verifier(entry, workspace, timeout_s=timeout_s)
-    except Exception as exc:  # noqa: BLE001 - a staging failure is a check failure
+    except Exception as exc:
         return NaiveCheck(task.id, STATUS_FAIL, f"could not stage: {type(exc).__name__}: {exc}")
 
     criteria = result.criteria

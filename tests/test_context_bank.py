@@ -329,7 +329,7 @@ class TestLargeCoherence(unittest.TestCase):
                     )
                 if spec["control"]:
                     # negative control: distractors import NOTHING under test (ignorable)
-                    for name, src in distractors.items():
+                    for _name, src in distractors.items():
                         self.assertNotIn(
                             f"import {buggy_stem}", src, f"{pair}: control distractor refs target"
                         )

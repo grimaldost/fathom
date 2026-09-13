@@ -346,33 +346,31 @@ class TestTaskVerifiers(unittest.TestCase):
     def test_reference_fix_with_regression_test_reports_all_true(self):
         # §6 acceptance: a correct fix plus a real regression test passes every criterion.
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, meta["fixed"], meta["regtest"])
-                    crit, code = _run_verify(task_id, view)
-                    self.assertEqual(
-                        crit,
-                        {
-                            "fix_correct": True,
-                            "no_regression": True,
-                            "regression_test_present": True,
-                        },
-                    )
-                    self.assertEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, meta["fixed"], meta["regtest"])
+                crit, code = _run_verify(task_id, view)
+                self.assertEqual(
+                    crit,
+                    {
+                        "fix_correct": True,
+                        "no_regression": True,
+                        "regression_test_present": True,
+                    },
+                )
+                self.assertEqual(code, 0)
 
     def test_reference_fix_without_test_lacks_regression_present(self):
         # §6 acceptance: regression_test_present distinguishes a real test from none —
         # a correct fix with NO added test is fix_correct/no_regression true but
         # regression_test_present false.
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, meta["fixed"])
-                    crit, code = _run_verify(task_id, view)
-                    self.assertTrue(crit["fix_correct"])
-                    self.assertTrue(crit["no_regression"])
-                    self.assertFalse(crit["regression_test_present"])
-                    self.assertNotEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, meta["fixed"])
+                crit, code = _run_verify(task_id, view)
+                self.assertTrue(crit["fix_correct"])
+                self.assertTrue(crit["no_regression"])
+                self.assertFalse(crit["regression_test_present"])
+                self.assertNotEqual(code, 0)
 
     def test_naive_overfix_fails_fix_correct(self):
         # Discrimination: a plausible naive fix that passes the obvious case still fails
@@ -380,11 +378,10 @@ class TestTaskVerifiers(unittest.TestCase):
         for task_id, meta in TASKS.items():
             if meta["naive"] is None:
                 continue
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, meta["naive"])
-                    crit, _ = _run_verify(task_id, view)
-                    self.assertFalse(crit["fix_correct"], "naive over-fix must fail fix_correct")
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, meta["naive"])
+                crit, _ = _run_verify(task_id, view)
+                self.assertFalse(crit["fix_correct"], "naive over-fix must fail fix_correct")
 
 
 class TestBankIntegrity(unittest.TestCase):

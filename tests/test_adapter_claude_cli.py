@@ -20,13 +20,13 @@ from pathlib import Path
 # Allow `python tests/test_adapter_claude_cli.py` from the project root.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom.adapters.base import ExitStatus, RunRecord, Runner
+from fathom.adapters.base import ExitStatus, Runner, RunRecord
 from fathom.adapters.claude_cli import (
+    COST_SOURCE_NONE,
+    COST_SOURCE_REPORTED,
     ClaudeCliRunner,
     build_command,
     cleanup_dir,
-    COST_SOURCE_NONE,
-    COST_SOURCE_REPORTED,
     cost_and_source,
     make_isolated_config,
     parse_stream,
@@ -118,15 +118,15 @@ class AdapterTestBase(unittest.TestCase):
 
 class TestBuildCommand(unittest.TestCase):
     def _cmd(self, **overrides):
-        kw = dict(
-            model="claude-opus-4-8",
-            effort="high",
-            max_turns=30,
-            max_budget_usd=5.0,
-            allowed_tools=["Read", "Grep"],
-            disallowed_tools=["Write", "Edit", "Bash"],
-            stream=True,
-        )
+        kw = {
+            "model": "claude-opus-4-8",
+            "effort": "high",
+            "max_turns": 30,
+            "max_budget_usd": 5.0,
+            "allowed_tools": ["Read", "Grep"],
+            "disallowed_tools": ["Write", "Edit", "Bash"],
+            "stream": True,
+        }
         kw.update(overrides)
         return build_command(**kw)
 

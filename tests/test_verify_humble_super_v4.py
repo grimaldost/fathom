@@ -185,46 +185,41 @@ class TestUntouchedFixtures(unittest.TestCase):
 class TestRootFix(unittest.TestCase):
     def test_root_fix_with_test_passes_everything(self):
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(
-                        td, task_id, {meta["root_path"]: meta["root_fix"]}, meta["regtest"]
-                    )
-                    crit, code = _run_verify(task_id, view)
-                    self.assertTrue(all(crit.values()), f"{task_id}: not all true: {crit}")
-                    self.assertEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(
+                    td, task_id, {meta["root_path"]: meta["root_fix"]}, meta["regtest"]
+                )
+                crit, code = _run_verify(task_id, view)
+                self.assertTrue(all(crit.values()), f"{task_id}: not all true: {crit}")
+                self.assertEqual(code, 0)
 
     def test_root_fix_without_test_lacks_regression_present(self):
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, {meta["root_path"]: meta["root_fix"]})
-                    crit, code = _run_verify(task_id, view)
-                    self.assertFalse(crit["regression_test_present"])
-                    for k, v in crit.items():
-                        if k != "regression_test_present":
-                            self.assertTrue(v, f"{task_id}: {k} should hold on the root fix")
-                    self.assertNotEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, {meta["root_path"]: meta["root_fix"]})
+                crit, code = _run_verify(task_id, view)
+                self.assertFalse(crit["regression_test_present"])
+                for k, v in crit.items():
+                    if k != "regression_test_present":
+                        self.assertTrue(v, f"{task_id}: {k} should hold on the root fix")
+                self.assertNotEqual(code, 0)
 
 
 class TestBandAidFailsSecondConsumer(unittest.TestCase):
     def test_consumer_band_aid_fails_a_correctness_criterion(self):
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, {meta["band_aid_path"]: meta["band_aid"]})
-                    crit, code = _run_verify(task_id, view)
-                    self.assertTrue(
-                        meta["band_aid_fails"], f"{task_id}: expected a non-empty fail set"
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, {meta["band_aid_path"]: meta["band_aid"]})
+                crit, code = _run_verify(task_id, view)
+                self.assertTrue(meta["band_aid_fails"], f"{task_id}: expected a non-empty fail set")
+                for k in meta["band_aid_passes"]:
+                    self.assertTrue(crit[k], f"{task_id}: band-aid should pass {k}")
+                for k in meta["band_aid_fails"]:
+                    self.assertFalse(
+                        crit[k],
+                        f"{task_id}: band-aid should FAIL {k} (the non-local trap)",
                     )
-                    for k in meta["band_aid_passes"]:
-                        self.assertTrue(crit[k], f"{task_id}: band-aid should pass {k}")
-                    for k in meta["band_aid_fails"]:
-                        self.assertFalse(
-                            crit[k],
-                            f"{task_id}: band-aid should FAIL {k} (the non-local trap)",
-                        )
-                    self.assertNotEqual(code, 0, f"{task_id}: band-aid must not pass overall")
+                self.assertNotEqual(code, 0, f"{task_id}: band-aid must not pass overall")
 
 
 class TestBankIntegrity(unittest.TestCase):

@@ -1,4 +1,5 @@
-"""Guards for the `scenarios/keel-kit-proof/` arms — the properties the proof run's reading depends on.
+"""Guards for the `scenarios/keel-kit-proof/` arms — the properties the proof run's
+reading depends on.
 
 The proof run adds two generations of the kit to the pre-registered ablation, so it can separate
 two independent edits that the original bank could not:

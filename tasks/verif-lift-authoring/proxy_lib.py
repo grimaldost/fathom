@@ -32,6 +32,7 @@ Fails CLOSED on any error.
 from __future__ import annotations
 
 import ast
+import contextlib
 import importlib
 import json
 import os
@@ -187,10 +188,8 @@ def import_candidate(view: Path, package: str, dotted: str):
     except Exception:
         return None
     finally:
-        try:
+        with contextlib.suppress(ValueError):
             sys.path.remove(root_str)
-        except ValueError:
-            pass
 
 
 def cases_hold(view: Path, package: str, dotted: str, func: str, cases: list[Any]) -> bool:
@@ -209,7 +208,7 @@ def cases_hold(view: Path, package: str, dotted: str, func: str, cases: list[Any
         wants_raise = isinstance(expected, dict) and "raises" in expected
         try:
             got = fn(*args)
-        except Exception as exc:  # noqa: BLE001 - a raise may be the declared outcome
+        except Exception as exc:
             if wants_raise and type(exc).__name__ == expected["raises"]:
                 continue
             return False
@@ -256,7 +255,7 @@ def _run_harness(root: Path, files: list[Path]) -> tuple[int, int, int, int]:
                 cwd=str(root),
                 timeout=_CHECK_TIMEOUT_S,
             )
-        except Exception:  # noqa: BLE001 - a broken harness is an errored check run
+        except Exception:
             return 1, 0, 0, 1
         ran = fails = errs = 0
         for line in proc.stdout.splitlines():
@@ -275,10 +274,8 @@ def _run_harness(root: Path, files: list[Path]) -> tuple[int, int, int, int]:
                         errs = num
         return proc.returncode, ran, fails, errs
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.remove(hpath)
-        except OSError:
-            pass
 
 
 def _run_script(root: Path, path: Path) -> int:
@@ -294,7 +291,7 @@ def _run_script(root: Path, path: Path) -> int:
             timeout=_CHECK_TIMEOUT_S,
         )
         return proc.returncode
-    except Exception:  # noqa: BLE001
+    except Exception:
         return 1
 
 
@@ -459,7 +456,7 @@ def swap_back_probe(
         if after["failures"] > 0:
             return {"verdict": "guarded", "after": after}
         return {"verdict": "vacuous_red", "after": after}
-    except Exception as exc:  # noqa: BLE001 - fail closed
+    except Exception as exc:
         return {"verdict": "infeasible", "why": f"{type(exc).__name__}: {exc}"}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -569,12 +566,12 @@ def main(task_dir: Path, argv: list[str]) -> int:
     view = Path(argv[1])
     try:
         spec = json.loads((task_dir / "spec.json").read_text(encoding="utf-8"))
-    except Exception as exc:  # noqa: BLE001 - fail closed
+    except Exception as exc:
         print(json.dumps({"spec_unreadable": False, "detail": str(exc)[:200]}))
         return 1
     try:
         criteria = grade(spec, task_dir, view)
-    except Exception:  # noqa: BLE001 - fail closed
+    except Exception:
         keys = spec.get("criteria", ["spec_met"])
         criteria = dict.fromkeys(keys, False)
     print(json.dumps(criteria, sort_keys=True))

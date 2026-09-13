@@ -21,6 +21,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import ClassVar
 
 # Allow `python tests/test_smoke_logic.py` from the project root.
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -35,9 +36,9 @@ from fathom.smoke import (
     SmokeResult,
     assert_activity_detected,
     assert_authed_completes,
-    assert_credential_live,
     assert_canary_skill_absent,
     assert_canary_skill_mounted,
+    assert_credential_live,
     assert_injection_armed,
     assert_isolated_config_is_credential_only,
     assert_no_bypass_in_engine_spawn,
@@ -52,14 +53,13 @@ from fathom.smoke import (
 )
 from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
 
-
 # ---------------------------------------------------------------------------
 # Factories
 # ---------------------------------------------------------------------------
 
 
 def _ok_record(**kw):
-    base = dict(status=ExitStatus.OK, num_turns=2, tokens_in=10, tokens_out=5)
+    base = {"status": ExitStatus.OK, "num_turns": 2, "tokens_in": 10, "tokens_out": 5}
     base.update(kw)
     return RunRecord(**base)
 
@@ -92,12 +92,12 @@ def _live_credential(at=None, **kw):
     test pins `now_s`.
     """
     now = time.time() if at is None else at
-    base = dict(
-        found=True,
-        readable=True,
-        expires_at_ms=int((now + 3600) * 1000),
-        refresh_expires_at_ms=int((now + 30 * 86400) * 1000),
-    )
+    base = {
+        "found": True,
+        "readable": True,
+        "expires_at_ms": int((now + 3600) * 1000),
+        "refresh_expires_at_ms": int((now + 30 * 86400) * 1000),
+    }
     base.update(kw)
     return CredentialStatus(**base)
 
@@ -126,7 +126,7 @@ class StubProbes:
             injection
             if injection is not None
             else (
-                _good_argv() + ["--append-system-prompt-file", "/skill.md"],
+                [*_good_argv(), "--append-system-prompt-file", "/skill.md"],
                 _ok_record(result_text=f"hi {INJECTION_CANARY}"),
             )
         )
@@ -352,7 +352,12 @@ class TestCredentialReaderTakesMetadataOnly(unittest.TestCase):
 class TestLivenessGating(unittest.TestCase):
     """The two checks must not conclude anything from a spawn that never ran."""
 
-    _DEAD = dict(status=ExitStatus.INFRASTRUCTURE, num_turns=1, tokens_in=0, tokens_out=0)
+    _DEAD: ClassVar[dict[str, object]] = {
+        "status": ExitStatus.INFRASTRUCTURE,
+        "num_turns": 1,
+        "tokens_in": 0,
+        "tokens_out": 0,
+    }
 
     def test_activity_is_skipped_not_passed_on_a_dead_spawn(self):
         r = assert_activity_detected(_ok_record(**self._DEAD))
@@ -394,7 +399,7 @@ class TestInjectionArmed(unittest.TestCase):
     the argv AND the injected canary directive reached the model (OK spawn)."""
 
     def _armed_argv(self):
-        return _good_argv("default") + ["--append-system-prompt-file", "/skill.md"]
+        return [*_good_argv("default"), "--append-system-prompt-file", "/skill.md"]
 
     def test_armed_passes(self):
         rec = _ok_record(result_text=f"Hello! {INJECTION_CANARY}")
@@ -434,7 +439,7 @@ class TestEngineBoundaryAssertion(unittest.TestCase):
         self.assertIn("bypassPermissions", r.detail)
 
     def test_dangerously_skip_flag_fails(self):
-        argv = _good_argv("default") + ["--dangerously-skip-permissions"]
+        argv = [*_good_argv("default"), "--dangerously-skip-permissions"]
         r = assert_no_bypass_in_engine_spawn([argv])
         self.assertFalse(r.ok)
         self.assertIn("--dangerously-skip-permissions", r.detail)
@@ -561,7 +566,7 @@ class TestRunSmoke(unittest.TestCase):
     def test_reports_every_check(self):
         # 10 checks when engine included: credential, concurrency, config, authed,
         # activity, deny, injection, mount-treatment, mount-control, engine.
-        code, output = self._run(StubProbes())
+        _code, output = self._run(StubProbes())
         self.assertEqual(output.count("[PASS]"), 10, output)
         self.assertIn("(10/10 checks)", output)
 

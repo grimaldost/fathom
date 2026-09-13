@@ -10,6 +10,7 @@ import sys
 import unittest
 import warnings
 from pathlib import Path
+from typing import ClassVar
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "src"))
@@ -320,7 +321,7 @@ class TestRunAttribution(unittest.TestCase):
             cost = 1.0 if rep == 0 else 0.0  # all cost in the first (orphaned) repeat
             raw.append(_prod_run("opus", "t", rep, cost))  # run FIRST, as production does
             raw.append(_trial("opus", "t", rep, 2))  # then the trial record
-        trials, runs = cal.parse_ledger(raw)
+        _trials, runs = cal.parse_ledger(raw)
         # (i) every run attributes to a real arm — no key is a bare config_hash
         self.assertTrue(all(k[0] == "opus" for k in runs), f"orphaned run keys: {list(runs)}")
         # (ii) the Pareto cost is the full mean $/trial (1.0/5), not diluted by the orphan
@@ -478,7 +479,7 @@ class TestFisherExact(unittest.TestCase):
 
 
 class TestPositiveControl(unittest.TestCase):
-    CONTROL = {
+    CONTROL: ClassVar[dict[str, object]] = {
         "task": "ctl",
         "weak_arm": "haiku",
         "strong_arm": "opus5",
@@ -648,7 +649,7 @@ class TestFailureMode(unittest.TestCase):
     """A failure's mode is a cost term, so it is counted and not just totalled."""
 
     def test_gate_caught_and_silent_failures_are_counted_separately(self):
-        raw, meta = _rung("t", 45, "weak", {"haiku": 1}, COSTS)
+        raw, _meta = _rung("t", 45, "weak", {"haiku": 1}, COSTS)
         trials, _ = cal.parse_ledger(raw)
         stats = cal.arm_task_stats(trials, "t", "haiku", HARD)
         self.assertEqual(stats["draws"], (1, 5))

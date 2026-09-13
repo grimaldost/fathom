@@ -13,8 +13,8 @@ from fathom.strategies.base import (
     TrialStatus,
 )
 from fathom.strategies.gated_session import GatedSessionExecutor
-from fathom.strategies.series import EngineOutcome, SeriesExecutor
 from fathom.strategies.reprompt_session import RepromptSessionExecutor
+from fathom.strategies.series import EngineOutcome, SeriesExecutor
 from fathom.strategies.single_session import SingleSessionExecutor
 
 # The canonical set of strategy names a scenario's ``strategy`` field may carry.
@@ -38,8 +38,8 @@ __all__ = [
     "PIN_STRONG",
     "EngineOutcome",
     "GatedSessionExecutor",
-    "SeriesExecutor",
     "RepromptSessionExecutor",
+    "SeriesExecutor",
     "SingleSessionExecutor",
     "StrategyExecutor",
     "TrialResult",

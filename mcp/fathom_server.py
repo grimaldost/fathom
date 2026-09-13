@@ -29,7 +29,7 @@ from pydantic import Field
 
 # _resolve.py sits beside this file; import it without a package install.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from _resolve import FathomHomeError, resolve_fathom_home  # noqa: E402
+from _resolve import FathomHomeError, resolve_fathom_home
 
 mcp = FastMCP("fathom")
 
@@ -48,9 +48,7 @@ def _run_fathom(args: list[str], home: pathlib.Path, timeout: float) -> dict[str
     # portable and sidesteps Windows Smart App Control blocking the generated
     # console-script .exe (os error 4551).
     cmd = ["uv", "run", "--project", str(home), "python", "-m", "fathom", *args]
-    proc = subprocess.run(  # noqa: S603 — fixed argv, no shell
-        cmd, cwd=home, capture_output=True, text=True, timeout=timeout
-    )
+    proc = subprocess.run(cmd, cwd=home, capture_output=True, text=True, timeout=timeout)
     return {
         "cmd": " ".join(cmd),
         "exit_code": proc.returncode,
@@ -125,7 +123,9 @@ async def report(
     bank: Annotated[
         str,
         Field(
-            description="Bank name — regenerate report/scorecard-<bank>.md from its committed ledger."
+            description=(
+                "Bank name — regenerate report/scorecard-<bank>.md from its committed ledger."
+            )
         ),
     ],
 ) -> dict[str, Any]:
@@ -160,13 +160,17 @@ async def smoke(
     force_fail: Annotated[
         bool,
         Field(
-            description="Append a forced failing check to demonstrate the nonzero-exit path. Default false."
+            description=(
+                "Append a forced failing check to demonstrate the nonzero-exit path. Default false."
+            )
         ),
     ] = False,
     no_engine_boundary: Annotated[
         bool,
         Field(
-            description="Skip the real-engine (convoy) boundary assertion in group 4. Default false."
+            description=(
+                "Skip the real-engine (convoy) boundary assertion in group 4. Default false."
+            )
         ),
     ] = False,
 ) -> dict[str, Any]:
