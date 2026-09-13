@@ -18,6 +18,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -28,10 +29,13 @@ from fathom.adapters.base import ExitStatus, RunRecord
 from fathom.adapters.claude_cli import cleanup_dir
 from fathom.smoke import (
     CANARY_SKILL,
+    CREDENTIAL_MIN_TTL_S,
     INJECTION_CANARY,
+    CredentialStatus,
     SmokeResult,
     assert_activity_detected,
     assert_authed_completes,
+    assert_credential_live,
     assert_canary_skill_absent,
     assert_canary_skill_mounted,
     assert_injection_armed,
@@ -43,6 +47,7 @@ from fathom.smoke import (
     parse_init_skills,
     permission_mode_of,
     read_argv_log,
+    read_credential_status,
     run_smoke,
 )
 from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
@@ -77,12 +82,33 @@ def _good_argv(mode=NON_BYPASS_PERMISSION_MODE):
     ]
 
 
+_NOW_S = 1_700_000_000.0
+
+
+def _live_credential(at=None, **kw):
+    """A credential whose refresh window comfortably clears the gate's horizon.
+
+    Relative to *at* (default: the real clock), so a stub is live whether or not the
+    test pins `now_s`.
+    """
+    now = time.time() if at is None else at
+    base = dict(
+        found=True,
+        readable=True,
+        expires_at_ms=int((now + 3600) * 1000),
+        refresh_expires_at_ms=int((now + 30 * 86400) * 1000),
+    )
+    base.update(kw)
+    return CredentialStatus(**base)
+
+
 class StubProbes:
     """A SmokeProbes implementation that replays canned observations."""
 
     def __init__(
         self,
         *,
+        credential=None,
         config_contents=None,
         authed=None,
         deny=None,
@@ -92,6 +118,7 @@ class StubProbes:
         engine_argvs=None,
         raise_on=None,
     ):
+        self._credential = credential if credential is not None else _live_credential()
         self._config = config_contents if config_contents is not None else [".credentials.json"]
         self._authed = authed if authed is not None else _ok_record()
         self._deny = deny if deny is not None else ([], _ok_record())
@@ -111,6 +138,12 @@ class StubProbes:
         self._engine = engine_argvs if engine_argvs is not None else [_good_argv()]
         self._raise_on = set(raise_on or ())
         self.calls = []
+
+    def credential_status(self):
+        self.calls.append("credential")
+        if "credential" in self._raise_on:
+            raise RuntimeError("credential boom")
+        return self._credential
 
     def isolated_config_contents(self):
         self.calls.append("config")
@@ -203,6 +236,141 @@ class TestToolDenied(unittest.TestCase):
         r = assert_tool_denied(["probe.txt"], _ok_record())
         self.assertFalse(r.ok, "a created file means default-deny did not hold")
         self.assertIn("probe.txt", r.detail)
+
+
+# ---------------------------------------------------------------------------
+# T25 — the credential pre-flight, and the two checks that passed HOLLOW
+#
+# 2026-09-01-multiagent-composition-pilot-blocked recorded both, verbatim:
+#   "stream parsing detects activity" passed with turns=1 tokens_in=0 tokens_out=0
+#   "disallowed tool refused"        passed with no tool call to refuse
+# Neither check verified the spawn was live before asserting on it, so an
+# unauthenticated spawn made them PASS by absence — a vacuous gate inside the
+# trust gate, and the 7/8 headline read as "mostly fine".
+# ---------------------------------------------------------------------------
+
+
+class TestCredentialPreflight(unittest.TestCase):
+    def test_live_credential_passes(self):
+        r = assert_credential_live(_live_credential(at=_NOW_S), now_s=_NOW_S)
+        self.assertTrue(r.ok, r.detail)
+        self.assertFalse(r.skipped)
+
+    def test_dead_refresh_token_fails_and_says_reauthenticate(self):
+        dead = _live_credential(
+            at=_NOW_S,
+            expires_at_ms=int((_NOW_S - 86400) * 1000),
+            refresh_expires_at_ms=int((_NOW_S - 3600) * 1000),
+        )
+        r = assert_credential_live(dead, now_s=_NOW_S)
+        self.assertFalse(r.ok, "an expired refresh token is a dead seat, not a warning")
+        self.assertIn("re-authenticate", r.detail.lower())
+
+    def test_expired_access_token_with_live_refresh_passes(self):
+        # The CLI refreshes on demand; a short-lived access token is normal.
+        refreshable = _live_credential(at=_NOW_S, expires_at_ms=int((_NOW_S - 60) * 1000))
+        self.assertTrue(assert_credential_live(refreshable, now_s=_NOW_S).ok)
+
+    def test_refresh_window_under_the_horizon_fails(self):
+        short = _live_credential(
+            at=_NOW_S, refresh_expires_at_ms=int((_NOW_S + CREDENTIAL_MIN_TTL_S / 2) * 1000)
+        )
+        r = assert_credential_live(short, now_s=_NOW_S)
+        self.assertFalse(r.ok, "less life than the gate's own horizon must refuse before spend")
+
+    def test_missing_file_fails_rather_than_passing_by_absence(self):
+        absent = CredentialStatus(found=False, readable=False)
+        r = assert_credential_live(absent, now_s=_NOW_S)
+        self.assertFalse(r.ok, "absence of evidence is the failure mode this cluster is about")
+
+    def test_unparsable_file_fails(self):
+        shapeless = CredentialStatus(found=True, readable=True, detail="no claudeAiOauth block")
+        self.assertFalse(assert_credential_live(shapeless, now_s=_NOW_S).ok)
+
+
+class TestCredentialReaderTakesMetadataOnly(unittest.TestCase):
+    """ADR-0004: the credential is copied, never read.  The pre-flight reads two
+    integers out of it and must not surface anything else, ever."""
+
+    def _write(self, body):
+        d = Path(tempfile.mkdtemp(prefix="fathom-cred-"))
+        self.addCleanup(cleanup_dir, str(d))
+        p = d / ".credentials.json"
+        p.write_text(json.dumps(body), encoding="utf-8")
+        return p
+
+    def test_reads_the_two_timestamps(self):
+        p = self._write(
+            {
+                "claudeAiOauth": {
+                    "accessToken": "SENTINEL-ACCESS",
+                    "refreshToken": "SENTINEL-REFRESH",
+                    "expiresAt": 1234000,
+                    "refreshTokenExpiresAt": 5678000,
+                    "subscriptionType": "max",
+                }
+            }
+        )
+        st = read_credential_status(p)
+        self.assertTrue(st.found and st.readable)
+        self.assertEqual(st.expires_at_ms, 1234000)
+        self.assertEqual(st.refresh_expires_at_ms, 5678000)
+
+    def test_no_token_value_reaches_the_status_or_its_rendering(self):
+        p = self._write(
+            {
+                "claudeAiOauth": {
+                    "accessToken": "SENTINEL-ACCESS",
+                    "refreshToken": "SENTINEL-REFRESH",
+                    "expiresAt": 1234000,
+                    "refreshTokenExpiresAt": 5678000,
+                },
+                "mcpOAuth": {"some:server": {"accessToken": "SENTINEL-MCP"}},
+            }
+        )
+        st = read_credential_status(p)
+        rendered = repr(st) + assert_credential_live(st, now_s=_NOW_S).detail
+        for sentinel in ("SENTINEL-ACCESS", "SENTINEL-REFRESH", "SENTINEL-MCP"):
+            self.assertNotIn(sentinel, rendered, "a token value must never leave the file")
+
+    def test_missing_file_is_found_false(self):
+        d = Path(tempfile.mkdtemp(prefix="fathom-cred-"))
+        self.addCleanup(cleanup_dir, str(d))
+        st = read_credential_status(d / "nope.json")
+        self.assertFalse(st.found)
+
+    def test_malformed_json_is_readable_false(self):
+        d = Path(tempfile.mkdtemp(prefix="fathom-cred-"))
+        self.addCleanup(cleanup_dir, str(d))
+        p = d / ".credentials.json"
+        p.write_text("{not json", encoding="utf-8")
+        st = read_credential_status(p)
+        self.assertTrue(st.found)
+        self.assertFalse(st.readable)
+
+
+class TestLivenessGating(unittest.TestCase):
+    """The two checks must not conclude anything from a spawn that never ran."""
+
+    _DEAD = dict(status=ExitStatus.INFRASTRUCTURE, num_turns=1, tokens_in=0, tokens_out=0)
+
+    def test_activity_is_skipped_not_passed_on_a_dead_spawn(self):
+        r = assert_activity_detected(_ok_record(**self._DEAD))
+        self.assertFalse(r.ok, "a spawn that never authenticated proves no stream parsing")
+        self.assertTrue(r.skipped, "and it is SKIPPED, not a failure of the parser")
+        self.assertIn("spawn not live", r.detail)
+
+    def test_denial_is_skipped_not_passed_on_a_dead_spawn(self):
+        r = assert_tool_denied([], _ok_record(**self._DEAD))
+        self.assertFalse(r.ok, "no tool call was made, so no refusal was observed")
+        self.assertTrue(r.skipped)
+        self.assertIn("spawn not live", r.detail)
+
+    def test_live_spawn_with_no_token_flow_is_a_real_failure(self):
+        # Turns alone are the harness's own accounting; tokens are the model's.
+        r = assert_activity_detected(_ok_record(num_turns=1, tokens_in=0, tokens_out=0))
+        self.assertFalse(r.ok)
+        self.assertFalse(r.skipped, "an OK spawn with no tokens is a parser failure, not a skip")
 
 
 class TestPermissionModeOf(unittest.TestCase):
@@ -391,19 +559,69 @@ class TestRunSmoke(unittest.TestCase):
         self.assertNotIn("[FAIL]", output)
 
     def test_reports_every_check(self):
-        # 8 checks when engine included:
-        #   config, authed, activity, deny, injection, mount-treatment, mount-control, engine.
+        # 10 checks when engine included: credential, concurrency, config, authed,
+        # activity, deny, injection, mount-treatment, mount-control, engine.
         code, output = self._run(StubProbes())
-        self.assertEqual(output.count("[PASS]"), 8, output)
-        self.assertIn("(8/8 checks)", output)
+        self.assertEqual(output.count("[PASS]"), 10, output)
+        self.assertIn("(10/10 checks)", output)
+
+    # -- T25: the hollow checks, and the headline that hid them ---------------
+
+    def test_a_dead_credential_refuses_before_anything_else(self):
+        dead = _live_credential(
+            at=_NOW_S,
+            expires_at_ms=int((_NOW_S - 86400) * 1000),
+            refresh_expires_at_ms=int((_NOW_S - 3600) * 1000),
+        )
+        code, output = self._run(StubProbes(credential=dead), now_s=_NOW_S)
+        self.assertEqual(code, 1)
+        self.assertIn("re-authenticate", output.lower())
+        # Check 0: the credential verdict is available to everything after it.
+        self.assertLess(output.index("credential"), output.index("isolated config"))
+
+    def test_a_dead_spawn_does_not_let_the_two_liveness_checks_pass(self):
+        """The finding, end to end: 7/8 must not read as 'mostly fine'."""
+        dead_spawn = _ok_record(
+            status=ExitStatus.INFRASTRUCTURE, num_turns=1, tokens_in=0, tokens_out=0
+        )
+        probes = StubProbes(authed=dead_spawn, deny=([], dead_spawn))
+        code, output = self._run(probes)
+        self.assertEqual(code, 1)
+        self.assertIn("[SKIP] stream parsing detects activity", output)
+        self.assertIn("[SKIP] disallowed tool refused under default-deny", output)
+        self.assertNotIn("[PASS] stream parsing detects activity", output)
+        self.assertNotIn("[PASS] disallowed tool refused under default-deny", output)
+
+    def test_a_skipped_check_is_not_a_pass_in_the_headline(self):
+        dead_spawn = _ok_record(
+            status=ExitStatus.INFRASTRUCTURE, num_turns=1, tokens_in=0, tokens_out=0
+        )
+        _, output = self._run(StubProbes(authed=dead_spawn, deny=([], dead_spawn)), now_s=_NOW_S)
+        summary = output.splitlines()[-1]
+        self.assertNotIn("ALL PASS", summary)
+        self.assertIn("skipped", summary.lower())
+
+    def test_the_summary_line_names_what_was_not_proven(self):
+        """T25c: the one line an operator reads carries what the fold above says."""
+        probes = StubProbes(engine_argvs=[_good_argv("bypassPermissions")])
+        _, output = self._run(probes)
+        summary = output.splitlines()[-1]
+        self.assertIn("engine-boundary", summary, summary)
+
+    def test_credential_probe_exception_is_guarded(self):
+        code, output = self._run(StubProbes(raise_on={"credential"}))
+        self.assertEqual(code, 1)
+        self.assertIn("credential boom", output)
 
     def test_force_fail_returns_one(self):
         code, output = self._run(StubProbes(), force_fail=True)
         self.assertEqual(
             code, 1, "force-fail must produce a nonzero exit even when all else passes"
         )
-        self.assertIn("SOME FAILED", output)
-        self.assertIn("forced failure", output)
+        summary = output.splitlines()[-1]
+        self.assertNotIn("ALL PASS", summary)
+        # T25c: the summary names the check, not just that something went wrong.
+        self.assertIn("forced failure (--force-fail)", summary)
 
     def test_failing_assertion_returns_one(self):
         probes = StubProbes(engine_argvs=[_good_argv("bypassPermissions")])
@@ -450,14 +668,23 @@ class TestRunSmoke(unittest.TestCase):
         code, output = self._run(probes, include_engine=False)
         self.assertEqual(code, 0)
         self.assertNotIn("engine", probes.calls, "engine probe must not run when excluded")
-        self.assertEqual(output.count("[PASS]"), 7)
+        self.assertEqual(output.count("[PASS]"), 9)
 
-    def test_order_config_authed_deny_injection_mount_engine(self):
+    def test_order_credential_config_authed_deny_injection_mount_engine(self):
         probes = StubProbes()
         self._run(probes)
         self.assertEqual(
             probes.calls,
-            ["config", "authed", "deny", "injection", "mount_treatment", "mount_control", "engine"],
+            [
+                "credential",
+                "config",
+                "authed",
+                "deny",
+                "injection",
+                "mount_treatment",
+                "mount_control",
+                "engine",
+            ],
         )
 
 
