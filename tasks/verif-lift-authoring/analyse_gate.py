@@ -38,7 +38,7 @@ from collections import defaultdict
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from analyse_vnext import (  # noqa: E402
+from analyse_vnext import (
     LEDGER,
     mcnemar_exact,
     mdd_label,

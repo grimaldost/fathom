@@ -23,8 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom import arming  # noqa: E402
-from fathom.scenario import (  # noqa: E402
+from fathom import arming
+from fathom.scenario import (
     ContextConfig,
     EnvConfig,
     LimitsOverride,
@@ -36,40 +36,40 @@ from fathom.scenario import (  # noqa: E402
 
 
 def make_scenario(**kw) -> ResolvedScenario:
-    base = dict(
-        name="arm",
-        adapter="claude-cli",
-        model="claude-haiku-4-5",
-        strategy="single-session",
-        effort="low",
-        tools=ToolsConfig(source="none", allowed=("Read",)),
-        limits=LimitsOverride(trial_timeout_s=60),
-        model_id=None,
-        tool_repo_sha=None,
-        tool_invocation_cmd=None,
-        config_hash="0" * 64,
-    )
+    base = {
+        "name": "arm",
+        "adapter": "claude-cli",
+        "model": "claude-haiku-4-5",
+        "strategy": "single-session",
+        "effort": "low",
+        "tools": ToolsConfig(source="none", allowed=("Read",)),
+        "limits": LimitsOverride(trial_timeout_s=60),
+        "model_id": None,
+        "tool_repo_sha": None,
+        "tool_invocation_cmd": None,
+        "config_hash": "0" * 64,
+    }
     base.update(kw)
     return ResolvedScenario(**base)
 
 
 def make_obs(**kw) -> arming.ArmingObservation:
-    base = dict(
-        spawn_ok=True,
-        init_present=True,
-        plugins=(),
-        skills=(),
-        tools=("Read", "Write"),
-        mcp_servers=(),
-        hooks_fired=(),
-        successful_mcp_calls=(),
-        denied_tools=(),
-        argv=("claude", "-p"),
-        spawn_env={},
-        config_dir_files=(),
-        settings_sha=None,
-        detail="",
-    )
+    base = {
+        "spawn_ok": True,
+        "init_present": True,
+        "plugins": (),
+        "skills": (),
+        "tools": ("Read", "Write"),
+        "mcp_servers": (),
+        "hooks_fired": (),
+        "successful_mcp_calls": (),
+        "denied_tools": (),
+        "argv": ("claude", "-p"),
+        "spawn_env": {},
+        "config_dir_files": (),
+        "settings_sha": None,
+        "detail": "",
+    }
     base.update(kw)
     return arming.ArmingObservation(**base)
 
@@ -460,13 +460,13 @@ class VerifyAllTests(unittest.TestCase):
             self.obs_by_name = obs_by_name
             self.calls: list[str] = []
 
-        def observe(self, scenario):  # noqa: ANN001, ANN202
+        def observe(self, scenario):
             self.calls.append(scenario.name)
             return self.obs_by_name[scenario.name]
 
     def test_an_all_unarmed_matrix_never_spawns_a_probe(self) -> None:
         probe = self._Probe({})
-        ok, report = arming.verify_all([make_scenario(name="bare")], probe)
+        ok, _report = arming.verify_all([make_scenario(name="bare")], probe)
         self.assertTrue(ok)
         self.assertEqual(probe.calls, [], "an arm with no treatment must cost nothing to verify")
 
@@ -487,7 +487,7 @@ class VerifyAllTests(unittest.TestCase):
 
     def test_a_probe_that_raises_is_a_failure_not_a_crash(self) -> None:
         class _Boom:
-            def observe(self, scenario):  # noqa: ANN001, ANN202
+            def observe(self, scenario):
                 raise RuntimeError("spawn exploded")
 
         armed = make_scenario(name="armed", env=EnvConfig(vars=(("M", "1"),)))

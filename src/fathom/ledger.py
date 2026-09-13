@@ -6,7 +6,8 @@ import dataclasses
 import json
 import pathlib
 import warnings
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 LEDGER_DIR = pathlib.Path("ledger")
 

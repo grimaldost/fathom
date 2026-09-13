@@ -686,7 +686,8 @@ def test_pairwise_only_for_non_bare_scenarios():
     lines = content.splitlines()
     pw_start = next((i for i, ln in enumerate(lines) if "Pairwise vs Bare Anchor" in ln), None)
     assert pw_start is not None
-    # Collect table data rows from the pairwise section (skip blanks and header rows; stop at next heading)
+    # Collect table data rows from the pairwise section (skip blanks and header rows;
+    # stop at next heading)
     pw_rows = []
     in_table = False
     for line in lines[pw_start + 1 :]:

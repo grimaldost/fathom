@@ -5,7 +5,103 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
-## [0.6.0] - 2026-09-13
+## [0.6.1] - 2026-09-13
+
+**Patch.** `ruff` 0.15.20 → 0.16.5 (dependabot #56, rebased onto today's `main`). Nothing an
+operator invokes changes shape; this is the lint config the bump exposed as missing. Measured
+on the same tree: `ruff@0.15.20 check .` was clean; `ruff@0.16.5 check .` with no
+`[tool.ruff.lint] select` — the block never had one — found 841 errors, because 0.16 widened
+ruff's *default* rule selection and this repo had been passing that default by accident, not
+by choice. Every future ruff release could have repeated the trick. The fix is an explicit
+`select`, not a fix-up of 841 findings against a default nobody chose.
+
+### Added
+
+- **`[tool.ruff.lint] select`**, the estate's three sibling lists (keel, convoy,
+  mantis-research) unioned and then cut down to what this tree's shape actually supports:
+  `E, F, W, B, I, UP, S, RUF, SIM, C4, ISC` plus preview-scoped `PLW1514` (convoy's own
+  Windows-encoding rule; this repo already carries the LF/encoding scars that motivate it —
+  `.pre-commit-config.yaml`, the Windows CI leg). `ignore`s two subprocess codes (`S603`,
+  `S607` — fixed argv to `claude`/`uv`/`git`, keel's own call already) and three ambiguous-
+  unicode codes (`RUF001-003` — this repo's own α/×/em-dash prose, not typos) plus two bandit
+  false positives found while auditing (`S311` on seeded `random.Random(<fixed seed>)` Monte
+  Carlo, never a token; `S105` on `STATUS_PASS = "pass"`-style enum constants, matched on the
+  substring, not a credential).
+- **`per-file-ignores`** for the handful of places the estate-wide list doesn't fit: `S101`
+  (bare `assert`) for `tests/**`, `tasks/verif-lift-authoring/**` and one misplaced test file
+  outside `tests/`, all script-shaped code never run under `-O`; a `tasks/**` carve-out for
+  `S110`/`S112`/`SIM105`/`B905` — real findings in per-task gate scripts, deferred visibly
+  rather than fixed blind (see Excluded below); and two specific gate scripts
+  (`ablation-v2/exprlang/run_convoy_gate.py`, `keel-kit-ablation-v1/keelgate_verify.py`)
+  pinned against even a cosmetic edit because each already has a documented incident from a
+  prior post-hoc change.
+- **Three new `exclude` entries**, found the hard way while adopting the list, not planned in
+  advance: `tasks/*/*/fixtures` (ruff 0.16 started reformatting fenced Python inside
+  Markdown by default, which reached every task's spec/prompt file for the first time on
+  this bump — generalises the existing verif-lift/`_oracle` exclusions to every bank);
+  `tasks/*/_tree` (keel-kit-ablation-v1's canonical pre-copy baseline, ADR-0005-sealed, not
+  previously named); and `tasks/model-tier-v2/*/{counter,counter-strong,original,solution}`
+  (an early SIM114 autofix safely merged two `elif` branches in
+  `fix-merge-3way/counter/cfg/merge.py` — behaviour-preserving in isolation, but a byte edit
+  to material this bank already spent $25.12 over 80 trials measuring; reverted, excluded).
+
+### Fixed
+
+- **Three silent `except: pass`/`continue` in `report.py`** now `warnings.warn` with the
+  path/task and the underlying exception instead of discarding it — a malformed ledger line,
+  an unreadable `task.toml`, now leave a trace instead of a scorecard that is quietly short a
+  row. Same for `taskbank._remove_tree`'s chmod-retry cleanup.
+- **`RUF100` (unused `noqa`): 94 stale directives removed**, all written against the 0.15
+  default set for codes this select never turns on (`BLE001`, `ANN*`, most of it). 5 new,
+  justified ones added instead of quietly widening an ignore: one `S101` type-narrowing
+  assert, one `S110` best-effort site-packages probe, one `S112` in a test with its reasoning
+  already inline, one `S602` (`shell=True` on a task-authored, not untrusted, gate command).
+- Real, small findings in the rules kept selected: two `contextlib.suppress` rewrites
+  (`SIM105` in `adapters/claude_cli.py`), a loop-variable closure bound as a default argument
+  (`B023` in `calibration.py`), `ClassVar` annotations on six test-fixture class dicts
+  (`RUF012`), unused loop variables renamed (`B007`), nested `with` statements combined
+  (`SIM117`), and the same class of fixes applied to `tasks/verif-lift-authoring/` (this
+  repo's one `tasks/` subtree the exclude block already calls "source, stays linted").
+- **10 files reformatted** by `ruff format` under 0.16.5's defaults: 2 real docs
+  (`docs/plans/`, `docs/specs/`); the other 8 were task `fixtures/` spec/prompt files caught
+  by the same new Markdown-formatting default that motivated the `tasks/*/*/fixtures`
+  exclude above, and are excluded rather than reformatted.
+
+### Excluded, and why
+
+Dropped as whole families rather than case-by-case, because each collides with something
+this repo does on purpose, not by neglect:
+
+- **`BLE001`** (blind `except Exception`) — 269 hits under bare defaults, 89% inside `tasks/`
+  eval fixtures where an untrusted or unpredictable task's failure modes are the point of
+  catching broadly. The ~29 real hits in `src/fathom/` (`cli.py`, `ledger.py`, `report.py`,
+  `grading/verifier.py`) are all a deliberate "catch anything at this boundary, report it as
+  a structured outcome" pattern, not a swallow — which is exactly what `S110`/`S112` catch
+  instead, kept selected for it.
+- **`N` (pep8-naming)** — 96% of hits are per-task `verify.py` gate scripts using terse names
+  that deliberately mirror the fixture under test (`Column`, `Q`, `R`) and this suite's own
+  test-naming convention: dozens of `test_..._FAILS`/`_PASSES`/`_WARNS` names that shout the
+  asserted outcome on purpose. Enforcing `N` means renaming an established readability
+  convention for no safety gain.
+- **`TC` (type-checking imports)** — real findings, but the only available fix is
+  `--unsafe-fixes` across ~26 files in `src/`, and previewing it touched
+  `keel-kit-ablation-v1/_tree` and its `repair-bijection` copy identically-but-separately —
+  the exact fork risk the new `_tree` exclude above exists to prevent. Not worth that blast
+  radius in a lint-config change.
+- **`PT`, `ANN`, `T20`** — `PT` (pytest-style) would flag this repo's entire
+  `unittest.TestCase`-based suite for not being pytest-idiomatic; `ANN` (type annotations)
+  would require annotating a largely unannotated codebase from a lint bump; `T20` (no-`print`)
+  flags a CLI tool for doing what a CLI is for. `Q` (quotes) is redundant with the formatter's
+  own `quote-style = "double"` and found zero hits either way.
+- **`ASYNC`** — zero hits under bare defaults; this repo has no async code for it to check.
+
+### Risk carried forward, not closed
+
+`S110`/`S112`/`SIM105`/`B905` stay selected but are scoped off `tasks/**` (see Added): several
+per-task gate scripts genuinely swallow a parse/score failure with no trace, which is the
+"hollow gate" shape `reconcile.py` exists to catch elsewhere. Fixing each correctly means
+reading that gate's own scoring logic to add a log line without changing a trial's recorded
+pass/fail — real work, not a lint fix, and out of scope here.
 
 **Minor.** `fathom run` now takes a lock on its bank before it spends, and `fathom
 stop` is a new verb — a caller's behaviour changes even though nothing already

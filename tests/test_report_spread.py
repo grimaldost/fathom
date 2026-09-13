@@ -25,7 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-import fathom.report as report  # noqa: E402
+import fathom.report as report
 
 
 def _ch(sc: str) -> str:
@@ -101,10 +101,10 @@ class _Rendered:
         )
         return Path(path).read_text(encoding="utf-8")
 
-    def __enter__(self):  # noqa: ANN204
+    def __enter__(self):
         return self
 
-    def __exit__(self, *a) -> None:  # noqa: ANN002
+    def __exit__(self, *a) -> None:
         self.tmp.cleanup()
 
 

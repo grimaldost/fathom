@@ -145,7 +145,7 @@ class SpendRailTests(unittest.TestCase):
 
 class PairedTestTests(unittest.TestCase):
     def test_reproduces_a_known_paired_t(self) -> None:
-        mean, sd, t_stat, df, p = analysis.paired_t([13.08, 21.20, 14.35, 15.60])
+        mean, _sd, t_stat, df, p = analysis.paired_t([13.08, 21.20, 14.35, 15.60])
         self.assertAlmostEqual(mean, 16.06, places=1)
         self.assertEqual(df, 3)
         self.assertGreater(t_stat, 8.0)

@@ -24,7 +24,7 @@ from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
-from fathom import routing as r  # noqa: E402
+from fathom import routing as r
 
 ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "ledger" / "routing-decision-v1.jsonl"
@@ -172,7 +172,7 @@ def main() -> None:
             if a and b and a != b:
                 flips += 1
                 flag = "  <- FLIP"
-            print(f"  {arm:18s} K=1 {str(a):>6s}   K=9 {str(b):>6s}{flag}")
+            print(f"  {arm:18s} K=1 {a!s:>6s}   K=9 {b!s:>6s}{flag}")
     print(f"  arms whose route moved with presentation alone: {flips}/9")
 
 

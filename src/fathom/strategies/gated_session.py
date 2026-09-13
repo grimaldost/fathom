@@ -30,7 +30,7 @@ from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from fathom.adapters.base import RunRecord, Runner
+    from fathom.adapters.base import Runner, RunRecord
     from fathom.scenario import ResolvedScenario
     from fathom.taskbank import Task
 
@@ -270,9 +270,11 @@ class GatedSessionExecutor:
         fix prompt and in the trial row's ``detail``.
         """
         try:
-            proc = subprocess.run(
+            # cmd is the task's own repo-authored gate command, not untrusted runtime
+            # input; shell syntax (pipes/redirects) is the point of shell=True here.
+            proc = subprocess.run(  # noqa: S602
                 cmd,
-                shell=True,  # noqa: S602 - gate is a task-authored command (engine parity)
+                shell=True,
                 cwd=str(workspace),
                 capture_output=True,
                 text=True,

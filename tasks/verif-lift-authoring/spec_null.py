@@ -16,11 +16,11 @@ like the BUG/DATA workspaces -- an arm cannot tell the classes apart by shape.
 from __future__ import annotations
 
 NULL = [
-    dict(
-        id="null-docstring-typo",
-        package="mathkit",
-        module="rounding",
-        source='''"""Rounding helpers used by the reporting layer.
+    {
+        "id": "null-docstring-typo",
+        "package": "mathkit",
+        "module": "rounding",
+        "source": '''"""Rounding helpers used by the reporting layer.
 
 The functions here round half away from zero, wich is what the ledger expects.
 """
@@ -42,7 +42,7 @@ def places_needed(value: float) -> int:
     _, _, fraction = text.partition(".")
     return len(fraction)
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from mathkit.rounding import places_needed, round_to
 
@@ -59,19 +59,19 @@ class RoundingTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="mathkit/rounding.py",
-        must_contain="which is what the ledger expects",
-        must_not_contain="wich",
-        instruction=(
+        "edit_file": "mathkit/rounding.py",
+        "must_contain": "which is what the ledger expects",
+        "must_not_contain": "wich",
+        "instruction": (
             "The module docstring of `mathkit/rounding.py` misspells 'which' as 'wich'.\n"
             "Correct the spelling. Change nothing else."
         ),
-    ),
-    dict(
-        id="null-rename-constant",
-        package="httpkit",
-        module="retries",
-        source='''"""Retry policy constants and helpers."""
+    },
+    {
+        "id": "null-rename-constant",
+        "package": "httpkit",
+        "module": "retries",
+        "source": '''"""Retry policy constants and helpers."""
 
 MAX_TRYS = 5
 BACKOFF_BASE_S = 0.5
@@ -86,7 +86,7 @@ def backoff_for(attempt: int) -> float:
     """Seconds to wait before *attempt*, doubling each time."""
     return BACKOFF_BASE_S * (2 ** max(attempt - 1, 0))
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from httpkit import retries
 
@@ -102,20 +102,20 @@ class RetryTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="httpkit/retries.py",
-        must_contain="MAX_ATTEMPTS",
-        must_not_contain="MAX_TRYS",
-        instruction=(
+        "edit_file": "httpkit/retries.py",
+        "must_contain": "MAX_ATTEMPTS",
+        "must_not_contain": "MAX_TRYS",
+        "instruction": (
             "In `httpkit/retries.py` the constant `MAX_TRYS` is misspelled. Rename it to\n"
             "`MAX_ATTEMPTS` and update its use inside that module. The shipped tests refer\n"
             "to the module, not the constant, so they need no change. Change nothing else."
         ),
-    ),
-    dict(
-        id="null-return-hint",
-        package="idkit",
-        module="short",
-        source='''"""Short identifier helpers."""
+    },
+    {
+        "id": "null-return-hint",
+        "package": "idkit",
+        "module": "short",
+        "source": '''"""Short identifier helpers."""
 
 ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"
 
@@ -136,7 +136,7 @@ def is_short_id(value):
     """Whether *value* looks like an identifier this module produced."""
     return bool(value) and all(char in ALPHABET for char in value)
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from idkit.short import is_short_id, shorten
 
@@ -152,20 +152,20 @@ class ShortIdTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="idkit/short.py",
-        must_contain="def is_short_id(value) -> bool:",
-        must_not_contain="def is_short_id(value):",
-        instruction=(
+        "edit_file": "idkit/short.py",
+        "must_contain": "def is_short_id(value) -> bool:",
+        "must_not_contain": "def is_short_id(value):",
+        "instruction": (
             "`is_short_id` in `idkit/short.py` has no return type annotation while every\n"
             "other function in the module does. Add `-> bool` to its signature. Change\n"
             "nothing else."
         ),
-    ),
-    dict(
-        id="null-stale-comment",
-        package="cachekit",
-        module="lru",
-        source='''"""A small size-bounded cache."""
+    },
+    {
+        "id": "null-stale-comment",
+        "package": "cachekit",
+        "module": "lru",
+        "source": '''"""A small size-bounded cache."""
 
 from collections import OrderedDict
 
@@ -193,7 +193,7 @@ class BoundedCache:
         while len(self._entries) > self.capacity:
             self._entries.popitem(last=False)
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from cachekit.lru import BoundedCache
 
@@ -212,20 +212,20 @@ class BoundedCacheTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="cachekit/lru.py",
-        must_contain="least recently used entry when full",
-        must_not_contain="most recently used entry when full",
-        instruction=(
+        "edit_file": "cachekit/lru.py",
+        "must_contain": "least recently used entry when full",
+        "must_not_contain": "most recently used entry when full",
+        "instruction": (
             "The comment inside `BoundedCache.put` in `cachekit/lru.py` says the cache\n"
             "evicts the most recently used entry; the code and the class docstring both say\n"
             "least recently used. Correct the comment. Change no code."
         ),
-    ),
-    dict(
-        id="null-readme-default",
-        package="flagkit",
-        module="parse",
-        source='''"""Flag parsing with defaults."""
+    },
+    {
+        "id": "null-readme-default",
+        "package": "flagkit",
+        "module": "parse",
+        "source": '''"""Flag parsing with defaults."""
 
 DEFAULT_TIMEOUT_S = 30
 
@@ -240,7 +240,7 @@ def parse_flags(argv: list) -> dict:
         flags[name.replace("-", "_")] = int(value) if value.isdigit() else value
     return flags
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from flagkit.parse import DEFAULT_TIMEOUT_S, parse_flags
 
@@ -256,27 +256,27 @@ class ParseFlagTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        extra_files={
+        "extra_files": {
             "README.md": (
                 "# flagkit\n\n"
                 "`parse_flags(argv)` reads `--name=value` tokens into a dict.\n\n"
                 "The default timeout is 60 seconds when `--timeout-s` is not given.\n"
             )
         },
-        edit_file="README.md",
-        must_contain="default timeout is 30 seconds",
-        must_not_contain="default timeout is 60 seconds",
-        instruction=(
+        "edit_file": "README.md",
+        "must_contain": "default timeout is 30 seconds",
+        "must_not_contain": "default timeout is 60 seconds",
+        "instruction": (
             "The README states the default timeout is 60 seconds; `DEFAULT_TIMEOUT_S` in\n"
             "`flagkit/parse.py` is 30. The code is correct. Fix the README sentence so it\n"
             "matches. Change no code."
         ),
-    ),
-    dict(
-        id="null-import-order",
-        package="logkit",
-        module="fields",
-        source='''"""Structured log field helpers."""
+    },
+    {
+        "id": "null-import-order",
+        "package": "logkit",
+        "module": "fields",
+        "source": '''"""Structured log field helpers."""
 
 import time
 import json
@@ -292,7 +292,7 @@ def render(fields: dict) -> str:
     """Render *fields* as one JSON line with sorted keys."""
     return json.dumps(fields, sort_keys=True)
 ''',
-        tests="""import json
+        "tests": """import json
 import unittest
 
 from logkit.fields import base_fields, render
@@ -309,20 +309,20 @@ class FieldTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="logkit/fields.py",
-        must_contain="import json\nimport os\nimport time",
-        must_not_contain="import time\nimport json\nimport os",
-        instruction=(
+        "edit_file": "logkit/fields.py",
+        "must_contain": "import json\nimport os\nimport time",
+        "must_not_contain": "import time\nimport json\nimport os",
+        "instruction": (
             "The three standard-library imports at the top of `logkit/fields.py` are not in\n"
             "alphabetical order, unlike every other module in this package. Reorder them\n"
             "alphabetically. Change nothing else."
         ),
-    ),
-    dict(
-        id="null-log-wording",
-        package="jobkit",
-        module="runner",
-        source='''"""Job runner status messages."""
+    },
+    {
+        "id": "null-log-wording",
+        "package": "jobkit",
+        "module": "runner",
+        "source": '''"""Job runner status messages."""
 
 STARTED = "job started"
 FINISHED = "job finished sucessfully"
@@ -338,7 +338,7 @@ def is_terminal(state: str) -> bool:
     """Whether *state* ends the job."""
     return state in ("finished", "failed")
 ''',
-        tests="""import unittest
+        "tests": """import unittest
 
 from jobkit.runner import is_terminal, message_for
 
@@ -355,12 +355,12 @@ class RunnerTests(unittest.TestCase):
 if __name__ == "__main__":
     unittest.main()
 """,
-        edit_file="jobkit/runner.py",
-        must_contain="job finished successfully",
-        must_not_contain="sucessfully",
-        instruction=(
+        "edit_file": "jobkit/runner.py",
+        "must_contain": "job finished successfully",
+        "must_not_contain": "sucessfully",
+        "instruction": (
             "The `FINISHED` status string in `jobkit/runner.py` misspells 'successfully'.\n"
             "Correct the spelling in that string. Change nothing else."
         ),
-    ),
+    },
 ]

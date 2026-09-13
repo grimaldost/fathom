@@ -10,14 +10,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from fathom.taskbank import (
-    fixture_drift,
-    fixture_fingerprint,
-    fixture_manifest,
     Bank,
     DuplicateTaskIdError,
     InvalidHoldoutIdError,
     MissingFieldError,
     Task,
+    fixture_drift,
+    fixture_fingerprint,
+    fixture_manifest,
     load_bank,
     stage_task,
 )

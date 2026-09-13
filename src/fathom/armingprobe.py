@@ -140,7 +140,7 @@ class RealArmingProbe:
         ws = Path(tempfile.mkdtemp(prefix="fathom-arming-"))
         try:
             record = runner.execute(PROBE_PROMPT, ws, probe_scenario)
-        except Exception as exc:  # noqa: BLE001 - a probe crash is an arming failure, reported
+        except Exception as exc:
             return _empty_observation(f"{type(exc).__name__}: {exc}")
         finally:
             cleanup_dir(str(ws))

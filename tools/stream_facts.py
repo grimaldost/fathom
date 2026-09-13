@@ -42,7 +42,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from fathom.ledger import apply_voids  # noqa: E402
+from datetime import UTC
+
+from fathom.ledger import apply_voids
 
 DRIVER_MARKER = "run_convoy_gate.py"
 PLACEBO_MARKER = "placebo_gate.py"
@@ -157,7 +159,7 @@ def ledger_keys(ledger: Path) -> tuple[set[tuple[str, int]], dict[tuple[str, int
 
 
 def _iso_to_epoch_ms(ts: str) -> int | None:
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if not ts:
         return None
@@ -166,7 +168,7 @@ def _iso_to_epoch_ms(ts: str) -> int | None:
     except ValueError:
         return None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return int(dt.timestamp() * 1000)
 
 
@@ -286,7 +288,10 @@ def dose_table(facts: dict[tuple[str, int], TrialFacts]) -> list[str]:
     for (scenario, _), f in facts.items():
         cells[scenario].append(f)
     lines = [
-        f"{'cell':16} {'n':>3}  {'reds/trial':>10}  {'distribution':22} {'dispatches/trial':>16}  distribution   driver calls (orch)  truncated"
+        (
+            f"{'cell':16} {'n':>3}  {'reds/trial':>10}  {'distribution':22} "
+            f"{'dispatches/trial':>16}  distribution   driver calls (orch)  truncated"
+        )
     ]
     for scenario in sorted(cells):
         fs = [f for f in cells[scenario] if not f.truncated]
@@ -324,10 +329,13 @@ def main(argv: list[str]) -> int:
     if args.per_trial:
         for (scenario, repeat), f in facts.items():
             print(
-                f"  {scenario:16} r{repeat:<3} files={len(f.files)} dispatches={f.agent_dispatches:>2} "
-                f"driver={f.driver_calls:>2} reds={f.driver_reds} placebo={f.placebo_calls}/{f.placebo_reds} "
+                f"  {scenario:16} r{repeat:<3} files={len(f.files)} "
+                f"dispatches={f.agent_dispatches:>2} "
+                f"driver={f.driver_calls:>2} reds={f.driver_reds} "
+                f"placebo={f.placebo_calls}/{f.placebo_reds} "
                 f"spawn_driver={f.spawn_driver_calls} exposed={len(f.exposure)} "
-                f"models={','.join(sorted(f.models)) or 'undated-alias-only'}{' TRUNCATED' if f.truncated else ''}"
+                f"models={','.join(sorted(f.models)) or 'undated-alias-only'}"
+                f"{' TRUNCATED' if f.truncated else ''}"
             )
     if args.dose:
         print()
@@ -339,7 +347,8 @@ def main(argv: list[str]) -> int:
     if args.exposure:
         print()
         print(
-            f"EXPOSURE: counted trials whose transcript names the task dir outside prompts/: {len(exposed)}"
+            "EXPOSURE: counted trials whose transcript names the task dir outside "
+            f"prompts/: {len(exposed)}"
         )
         for (scenario, repeat), f in exposed.items():
             paths = Counter(

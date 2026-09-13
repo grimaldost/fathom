@@ -986,9 +986,11 @@ def _render_control(control: dict | None) -> list[str]:
     tid, weak, strong = control["task_id"], control["weak_arm"], control["strong_arm"]
     if not control.get("ran"):
         lines += [
-            f"`{tid}`: **did not run on both `{weak}` and `{strong}`** — the control is"
-            " absent, so a null on this bank stays uninterpretable and no tier"
-            " conclusion is available from any part of the matrix.",
+            (
+                f"`{tid}`: **did not run on both `{weak}` and `{strong}`** — the control is"
+                " absent, so a null on this bank stays uninterpretable and no tier"
+                " conclusion is available from any part of the matrix."
+            ),
             "",
         ]
         return lines
@@ -998,22 +1000,28 @@ def _render_control(control: dict | None) -> list[str]:
     lines += [
         f"| control | {weak} | {strong} | one-sided Fisher p | α | verdict |",
         "|---|---|---|---|---|---|",
-        f"| `{tid}` | {wa}/{wn} | {sa}/{sn} | {control['p']:.4f} |"
-        f" {control['alpha']:.2f} | **{verdict}** |",
+        (
+            f"| `{tid}` | {wa}/{wn} | {sa}/{sn} | {control['p']:.4f} |"
+            f" {control['alpha']:.2f} | **{verdict}** |"
+        ),
         "",
     ]
     if control.get("underpowered"):
         lines += [
-            f"> Underpowered: {control['reason']}. The verdict is forced to DOES NOT"
-            " SEPARATE rather than read off an underpowered comparison.",
+            (
+                f"> Underpowered: {control['reason']}. The verdict is forced to DOES NOT"
+                " SEPARATE rather than read off an underpowered comparison."
+            ),
             "",
         ]
     if not control["separates"]:
         lines += [
-            "> **The ladder did not separate on the control.** The instrument or the"
-            ' lineup moved; no conclusion of the form "tier X should be dropped" is'
-            " available from any part of this matrix, and a null here is not evidence"
-            " against the complexity score.",
+            (
+                "> **The ladder did not separate on the control.** The instrument or the"
+                ' lineup moved; no conclusion of the form "tier X should be dropped" is'
+                " available from any part of this matrix, and a null here is not evidence"
+                " against the complexity score."
+            ),
             "",
         ]
     return lines
@@ -1033,19 +1041,23 @@ def _render_routing(cal: dict) -> list[str]:
     lines = [
         "### Routing substrate (the table the mechanism comparison is scored against)",
         "",
-        f"Adequacy bar τ = {tau:.2f}: a tier is adequate for a task when its per-trial"
-        " pass rate reaches it. **cheapest adequate** is the ground truth — the tier a"
-        " perfect router would pick. `~` marks a reading that is a point estimate"
-        " rather than a robust one (the bound is not cleared by the confidence"
-        " interval, or a cheaper tier's interval still reaches it).",
+        (
+            f"Adequacy bar τ = {tau:.2f}: a tier is adequate for a task when its per-trial"
+            " pass rate reaches it. **cheapest adequate** is the ground truth — the tier a"
+            " perfect router would pick. `~` marks a reading that is a point estimate"
+            " rather than a robust one (the bound is not cleared by the confidence"
+            " interval, or a cheaper tier's interval still reaches it)."
+        ),
         "",
-        "Every pass rate on this page — here, in the dose-response table and on the"
-        " Pareto frontier — is a **first-attempt** rate. The quality estimand for a"
-        " routing decision is **post-repair** quality, which this bank deliberately"
-        " does not compute: it exports the facts that bound it"
-        " (`first_attempt_pass_rate` ≤ post-repair ≤ `1 - escape_rate`) and the"
-        " analysis that owns the estimand picks the repair-success assumption between"
-        " them.",
+        (
+            "Every pass rate on this page — here, in the dose-response table and on the"
+            " Pareto frontier — is a **first-attempt** rate. The quality estimand for a"
+            " routing decision is **post-repair** quality, which this bank deliberately"
+            " does not compute: it exports the facts that bound it"
+            " (`first_attempt_pass_rate` ≤ post-repair ≤ `1 - escape_rate`) and the"
+            " analysis that owns the estimand picks the repair-success assumption between"
+            " them."
+        ),
         "",
     ]
     header = "| task | genre | score | points | reduced | cheapest adequate |"
@@ -1082,9 +1094,11 @@ def _render_routing(cal: dict) -> list[str]:
         )
     lines += [
         "",
-        "A **gate-caught** failure buys a repair loop: the session pays for this tier"
-        " and the one it escalates to. A **silent** failure buys neither — it buys an"
-        " escape, which the quality constraint governs. They are never summed.",
+        (
+            "A **gate-caught** failure buys a repair loop: the session pays for this tier"
+            " and the one it escalates to. A **silent** failure buys neither — it buys an"
+            " escape, which the quality constraint governs. They are never summed."
+        ),
         "",
     ]
 
@@ -1105,13 +1119,15 @@ def _render_routing(cal: dict) -> list[str]:
             )
         lines += [
             "",
-            "**`decision $` is not measured here and is not zero.** What it costs to RUN"
-            " a mechanism — to score a task on a rubric before dispatching it — is"
-            " measured by running it, which needs its own arms. Every total above is"
-            " therefore a LOWER BOUND, and the ordering is decisive only where the gap"
-            " between two mechanisms exceeds the difference in what they cost to run."
-            " `oracle` is the cheapest-adequate router and is unbeatable by"
-            " construction: it is the floor, not a candidate.",
+            (
+                "**`decision $` is not measured here and is not zero.** What it costs to RUN"
+                " a mechanism — to score a task on a rubric before dispatching it — is"
+                " measured by running it, which needs its own arms. Every total above is"
+                " therefore a LOWER BOUND, and the ordering is decisive only where the gap"
+                " between two mechanisms exceeds the difference in what they cost to run."
+                " `oracle` is the cheapest-adequate router and is unbeatable by"
+                " construction: it is the floor, not a candidate."
+            ),
             "",
         ]
 
@@ -1120,27 +1136,33 @@ def _render_routing(cal: dict) -> list[str]:
         lines += ["### Where the two mechanisms disagree", ""]
         if d.get("underpowered"):
             lines += [
-                f"**Underpowered: {d['n_informative']} informative discordant rungs, and"
-                f" {d['min_informative_for_a_verdict']} is the minimum at which an exact"
-                " one-sided sign test can reach α at all.** No verdict on which"
-                " mechanism routes better is available — not 'no difference', but no"
-                " test. The cost comparison below still reads.",
+                (
+                    f"**Underpowered: {d['n_informative']} informative discordant rungs, and"
+                    f" {d['min_informative_for_a_verdict']} is the minimum at which an exact"
+                    " one-sided sign test can reach α at all.** No verdict on which"
+                    " mechanism routes better is available — not 'no difference', but no"
+                    " test. The cost comparison below still reads."
+                ),
                 "",
             ]
         else:
             lines += [
-                f"Points right on {d['points_right']}, reduced right on"
-                f" {d['reduced_right']}, of {d['n_informative']} informative discordant"
-                f" rungs (one-sided exact p = {d['sign_p']:.4f}, α = {d['alpha']:.2f}).",
+                (
+                    f"Points right on {d['points_right']}, reduced right on"
+                    f" {d['reduced_right']}, of {d['n_informative']} informative discordant"
+                    f" rungs (one-sided exact p = {d['sign_p']:.4f}, α = {d['alpha']:.2f})."
+                ),
                 "",
             ]
         if d.get("cost_delta_points_minus_reduced") is not None:
             delta = d["cost_delta_points_minus_reduced"]
             lines += [
-                f"Paired cost difference on {d['cost_delta_n']} discordant rungs:"
-                f" **${delta:+.3f} per task** (points minus reduced; positive means the"
-                f" scored rubric routes DEARER), sign-flip permutation"
-                f" p = {d['cost_delta_p']:.4f}.",
+                (
+                    f"Paired cost difference on {d['cost_delta_n']} discordant rungs:"
+                    f" **${delta:+.3f} per task** (points minus reduced; positive means the"
+                    f" scored rubric routes DEARER), sign-flip permutation"
+                    f" p = {d['cost_delta_p']:.4f}."
+                ),
                 "",
             ]
     return lines
@@ -1216,9 +1238,11 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     lines += ["", f"On-diagonal (well-tuned): **{on_diag}/{total}**.", ""]
     if any(r.get("control") for r in rows):
         lines += [
-            "> A declared positive control ran and is NOT counted above — it is read by"
-            " its own rule (below), because the cheapest-adequate statistic answers a"
-            " different question than the one a control is bought to answer.",
+            (
+                "> A declared positive control ran and is NOT counted above — it is read by"
+                " its own rule (below), because the cheapest-adequate statistic answers a"
+                " different question than the one a control is bought to answer."
+            ),
             "",
         ]
 
@@ -1234,7 +1258,7 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     for r in sorted(rows, key=lambda x: x["score"]):
         m = r["means"]
 
-        def cell(a: str) -> str:
+        def cell(a: str, m: dict = m) -> str:
             return _pct(m[a]) if a in m else "—"
 
         note = (
@@ -1257,9 +1281,11 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
     mixed = sum(r.get("mixed", 0) for r in rows)
     trials_scored = sum(sum(r["n"].values()) for r in rows)
     lines += [
-        f"Mixed-hard trials: **{mixed}/{trials_scored}** (a trial where some hard criteria"
-        " passed and others failed). The per-trial estimator treats a cell as one draw;"
-        " at 0 that is exact, above 0 it is conservative — see ADR-0009.",
+        (
+            f"Mixed-hard trials: **{mixed}/{trials_scored}** (a trial where some hard criteria"
+            " passed and others failed). The per-trial estimator treats a cell as one draw;"
+            " at 0 that is exact, above 0 it is conservative — see ADR-0009."
+        ),
         "",
     ]
 

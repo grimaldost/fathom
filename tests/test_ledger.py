@@ -28,55 +28,55 @@ from fathom.ledger import (
 
 
 def make_trial(**kwargs) -> TrialRecord:
-    defaults: dict = dict(
-        bank="test-bank",
-        task_id="task-001",
-        repeat=0,
-        status="completed",
-        dataset_version="v1",
-        config_hash="abc123",
-        tool_git_sha="def456",
-        cli_version="1.0.0",
-        pin_level="strong",
-    )
+    defaults: dict = {
+        "bank": "test-bank",
+        "task_id": "task-001",
+        "repeat": 0,
+        "status": "completed",
+        "dataset_version": "v1",
+        "config_hash": "abc123",
+        "tool_git_sha": "def456",
+        "cli_version": "1.0.0",
+        "pin_level": "strong",
+    }
     defaults.update(kwargs)
     return TrialRecord(**defaults)
 
 
 def make_run(**kwargs) -> RunRecord:
-    defaults: dict = dict(
-        bank="test-bank",
-        task_id="task-001",
-        repeat=0,
-        usage={"input_tokens": 100, "output_tokens": 50},
-        turns=3,
-        duration=10.5,
-        exit_code=0,
-        dataset_version="v1",
-        config_hash="abc123",
-        tool_git_sha="def456",
-        cli_version="1.0.0",
-        pin_level="strong",
-    )
+    defaults: dict = {
+        "bank": "test-bank",
+        "task_id": "task-001",
+        "repeat": 0,
+        "usage": {"input_tokens": 100, "output_tokens": 50},
+        "turns": 3,
+        "duration": 10.5,
+        "exit_code": 0,
+        "dataset_version": "v1",
+        "config_hash": "abc123",
+        "tool_git_sha": "def456",
+        "cli_version": "1.0.0",
+        "pin_level": "strong",
+    }
     defaults.update(kwargs)
     return RunRecord(**defaults)
 
 
 def make_grading(**kwargs) -> GradingRecord:
-    defaults: dict = dict(
-        bank="test-bank",
-        task_id="task-001",
-        repeat=0,
-        verdict="a",
-        dataset_version="v1",
-        config_hash_a="abc123",
-        config_hash_b="xyz789",
-        tool_git_sha="def456",
-        cli_version="1.0.0",
-        judge_config_hash="jdg000",
-        judge_model="claude-sonnet-4-6",
-        pin_level="strong",
-    )
+    defaults: dict = {
+        "bank": "test-bank",
+        "task_id": "task-001",
+        "repeat": 0,
+        "verdict": "a",
+        "dataset_version": "v1",
+        "config_hash_a": "abc123",
+        "config_hash_b": "xyz789",
+        "tool_git_sha": "def456",
+        "cli_version": "1.0.0",
+        "judge_config_hash": "jdg000",
+        "judge_model": "claude-sonnet-4-6",
+        "pin_level": "strong",
+    }
     defaults.update(kwargs)
     return GradingRecord(**defaults)
 
@@ -529,7 +529,13 @@ def test_a_void_removes_the_key_from_the_resume_set_until_it_is_rerun():
 
 
 def test_apply_voids_drops_earlier_trial_and_run_rows_only():
-    base = dict(bank="b", dataset_version="v1", task_id="t", config_hash="c" * 64, repeat=2)
+    base = {
+        "bank": "b",
+        "dataset_version": "v1",
+        "task_id": "t",
+        "config_hash": "c" * 64,
+        "repeat": 2,
+    }
     earlier_trial = {"kind": "trial", "status": "completed", **base}
     earlier_run = {"kind": "run", "cost_usd_est": 1.0, **base}
     other = {"kind": "trial", "status": "completed", **{**base, "repeat": 5}}

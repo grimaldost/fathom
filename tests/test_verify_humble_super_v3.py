@@ -249,40 +249,40 @@ class TestUntouchedFixtures(unittest.TestCase):
 class TestReferenceFix(unittest.TestCase):
     def test_correct_fix_with_regression_test_passes_everything(self):
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, meta["fixed"], meta["regtest"])
-                    crit, code = _run_verify(task_id, view)
-                    self.assertTrue(all(crit.values()), f"{task_id}: not all criteria true: {crit}")
-                    self.assertEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, meta["fixed"], meta["regtest"])
+                crit, code = _run_verify(task_id, view)
+                self.assertTrue(all(crit.values()), f"{task_id}: not all criteria true: {crit}")
+                self.assertEqual(code, 0)
 
     def test_correct_fix_without_test_lacks_regression_present(self):
         for task_id, meta in TASKS.items():
-            with self.subTest(task=task_id):
-                with tempfile.TemporaryDirectory() as td:
-                    view = _candidate_view(td, task_id, meta["fixed"])
-                    crit, code = _run_verify(task_id, view)
-                    self.assertFalse(crit["regression_test_present"])
-                    # every correctness/anchor criterion (everything but the swap) holds
-                    for k, v in crit.items():
-                        if k != "regression_test_present":
-                            self.assertTrue(v, f"{task_id}: {k} should hold on the correct fix")
-                    self.assertNotEqual(code, 0)
+            with self.subTest(task=task_id), tempfile.TemporaryDirectory() as td:
+                view = _candidate_view(td, task_id, meta["fixed"])
+                crit, code = _run_verify(task_id, view)
+                self.assertFalse(crit["regression_test_present"])
+                # every correctness/anchor criterion (everything but the swap) holds
+                for k, v in crit.items():
+                    if k != "regression_test_present":
+                        self.assertTrue(v, f"{task_id}: {k} should hold on the correct fix")
+                self.assertNotEqual(code, 0)
 
 
 class TestNaiveFixesDiscriminate(unittest.TestCase):
     def test_naive_shortcut_flips_its_targeted_criterion(self):
         for task_id, meta in TASKS.items():
             for i, (source, passes, fails) in enumerate(meta["naive"]):
-                with self.subTest(task=task_id, naive=i):
-                    with tempfile.TemporaryDirectory() as td:
-                        view = _candidate_view(td, task_id, source)
-                        crit, code = _run_verify(task_id, view)
-                        for k in passes:
-                            self.assertTrue(crit[k], f"{task_id} naive#{i}: {k} should still pass")
-                        for k in fails:
-                            self.assertFalse(crit[k], f"{task_id} naive#{i}: {k} should FAIL")
-                        self.assertNotEqual(code, 0)
+                with (
+                    self.subTest(task=task_id, naive=i),
+                    tempfile.TemporaryDirectory() as td,
+                ):
+                    view = _candidate_view(td, task_id, source)
+                    crit, code = _run_verify(task_id, view)
+                    for k in passes:
+                        self.assertTrue(crit[k], f"{task_id} naive#{i}: {k} should still pass")
+                    for k in fails:
+                        self.assertFalse(crit[k], f"{task_id} naive#{i}: {k} should FAIL")
+                    self.assertNotEqual(code, 0)
 
 
 class TestBankIntegrity(unittest.TestCase):

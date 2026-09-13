@@ -165,9 +165,11 @@ live catalog, not this line.
 class Runner(Protocol):
     def execute(self, prompt: str, workspace: Path, scenario: ResolvedScenario) -> RunRecord: ...
 
+
 class StrategyExecutor(Protocol):
-    def run_trial(self, task: Task, workspace: Path,
-                  scenario: ResolvedScenario, runner: Runner) -> TrialResult: ...
+    def run_trial(
+        self, task: Task, workspace: Path, scenario: ResolvedScenario, runner: Runner
+    ) -> TrialResult: ...
 ```
 
 `claude_cli.Runner` vendors the proven core: temp `CLAUDE_CONFIG_DIR` containing only the copied

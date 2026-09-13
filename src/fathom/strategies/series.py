@@ -177,7 +177,7 @@ def _default_run_engine(
         # Own session/group so a timeout can killpg the engine + its claude child.
         popen_kwargs["start_new_session"] = True
     start = time.monotonic()
-    proc = subprocess.Popen(  # noqa: S603 - fixed argv, no shell
+    proc = subprocess.Popen(
         list(argv),
         cwd=cwd,
         env=dict(env),
@@ -526,7 +526,7 @@ class SeriesExecutor:
         task: Task,
         workspace: Path,
         scenario: ResolvedScenario,
-        runner: Runner,  # noqa: ARG002 - the engine spawns claude itself (ADR-0001)
+        runner: Runner,
     ) -> TrialResult:
         """Instantiate the series outside ``workspace``, run the engine, score it."""
         workspace = Path(workspace)

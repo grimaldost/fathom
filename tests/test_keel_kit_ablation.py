@@ -261,7 +261,7 @@ class DiscriminationGateTests(unittest.TestCase):
 
     def _tool(self):
         sys.path.insert(0, str(REPO / "tools"))
-        import check_skeleton_refs  # noqa: PLC0415
+        import check_skeleton_refs
 
         return check_skeleton_refs
 

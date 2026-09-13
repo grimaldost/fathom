@@ -1,6 +1,6 @@
 [project]
 name = "fathom"
-version = "0.6.0"
+version = "0.6.1"
 description = "Scenario-blind tool-effectiveness evals"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -36,7 +36,97 @@ exclude = [
     # A sha256-pinned copy of the gate a bank scores with. Reformatting it would move the
     # ruler the run is measured against, and the pin assertion would (correctly) refuse to run.
     "tasks/*/_oracle",
+    # Every task's fixtures/ is the same MATERIAL-not-source class as the two entries above,
+    # generalised: the baseline code AND the spec/prompt handed to the agent-under-test,
+    # across every bank, not just verif-lift's. Ruff 0.16 started reformatting fenced Python
+    # inside Markdown by default, which reached into these spec files for the first time on
+    # this bump (found via `ruff format --check .`) -- excluding the directory keeps the
+    # prompt an agent already ran against byte-identical to what a re-run would see.
+    "tasks/*/*/fixtures",
+    # The canonical pre-copy baseline that keel-kit-ablation-v1's eight task variants are
+    # each a byte-identical copy of (verified: `diff` against every variant agrees) and that
+    # ADR-0005 seals as a holdout feeding a retirement decision -- same MATERIAL class as
+    # _oracle above, just not yet named here.
+    "tasks/*/_tree",
+    # model-tier-v2 authors its per-task variant baselines beside fixtures/ rather than
+    # inside it: counter/ and counter-strong/ (the weak- and strong-tier pre-staged
+    # comparison arms) and original/ and solution/ (the unfixed and fixed reference
+    # copies). Found the hard way -- an early lint pass here safely merged two `elif`
+    # branches with identical bodies in counter/cfg/merge.py, behaviour-preserving in
+    # isolation but a byte edit to material this bank already spent $25.12 over 80
+    # trials measuring (docs/reports/2026-08-12-model-tier-v2-*.md). Reverted; excluded
+    # instead of risking the rest of the four directories the same way.
+    "tasks/model-tier-v2/*/counter",
+    "tasks/model-tier-v2/*/counter-strong",
+    "tasks/model-tier-v2/*/original",
+    "tasks/model-tier-v2/*/solution",
 ]
+
+[tool.ruff.lint]
+# Baseline is the union of the estate's three sibling lists (keel, convoy, mantis-research);
+# see CHANGELOG.md for the per-family reasoning this repo's shape required on top of it.
+select = ["E", "F", "W", "B", "I", "UP", "S", "RUF", "SIM", "C4", "ISC", "PLW1514"]
+ignore = [
+    "S603",   # subprocess-without-shell-equals-true: every call here is a fixed argv
+    "S607",   # (claude/uv/git), never a shell string built from untrusted input -- keel's
+              # own ignore list already made this call estate-wide.
+    "RUF001", "RUF002", "RUF003",  # ambiguous-unicode-character-*: fires on this repo's
+              # own deliberate typography (alpha/times signs in stats prose, em dashes and
+              # curly quotes throughout comments and docstrings), not on typos or homoglyphs.
+    "S311",   # suspicious-non-cryptographic-random-usage: every hit is `random.Random(<seed>)`
+              # for a deterministic Monte Carlo simulation or property-test data generator,
+              # never a token/credential -- the seed itself is the point (reproducibility).
+    "S105",   # hardcoded-password-string: both hits are `STATUS_PASS = "pass"`-style status
+              # constants (pass/fail/warn), matched on the substring "pass", not a credential.
+]
+preview = true            # PLW1514 is preview-only; explicit-preview-rules scopes preview
+explicit-preview-rules = true  # to just that rule, matching convoy's own precedent exactly.
+
+[tool.ruff.lint.per-file-ignores]
+# Bare `assert` is the normal test-assertion idiom; this suite is never run under `-O`, so
+# bandit's stripped-assertion premise does not apply. `mcp/test_server_schema.py` is a test
+# by every other measure (name, shape, intent) but sits outside tests/ because it exercises
+# the MCP server wrapper specifically.
+"tests/**" = ["S101"]
+"mcp/test_server_schema.py" = ["S101"]
+# tasks/verif-lift-authoring/ is the one tasks/ subtree the exclude block above already
+# calls "source, stays linted" (it authors and analyses the verif-lift-*-v1 dataset). It
+# earns the same S101 idiom as tests/ and tools/ for the same reason -- assert-as-precondition
+# in a standalone, human-run authoring script, never imported and never optimized.
+"tasks/verif-lift-authoring/**" = ["S101"]
+# spec_data.py's "buggy"/"fixed" values are triple-quoted PYTHON SOURCE copied verbatim
+# into the generated verif-lift-data-v1 fixtures -- wrapping a long `def` line inside one
+# would change the dataset's actual bytes without a dataset_version bump, the exact drift
+# the exclude block above protects against elsewhere. The module's own code stays linted;
+# only E501 is scoped off, and only here.
+"tasks/verif-lift-authoring/spec_data.py" = ["E501"]
+# Every other path under tasks/ is one narrow, disposable eval task's own definition: a
+# verify.py/analyse.py gate script or scenario glue for exactly one scenario, not this
+# repo's reusable engineering surface. Two concrete collisions, not a blanket exemption:
+#   - S110/S112/SIM105 (silent except-pass/except-continue/suppressible-exception): real,
+#     and load-bearing precisely because these are eval GATES -- but ~40 hits are a
+#     boilerplate try/except template repeated near-identically across the e2-data-semantics
+#     bank and several csvcoalesce/retry-backoff task variants. Fixing each correctly means
+#     reading each gate's own scoring logic to add the right log line without changing a
+#     single trial's pass/fail outcome, which is out of proportion to a lint-config change
+#     and risks exactly the silent-scoring-drift this repo's reconcile.py exists to catch.
+#     Deferred visibly (flagged as a follow-up), not dropped quietly.
+#   - B905 (zip-without-explicit-strict): the 3 tasks/ hits are the same pattern in
+#     ablation-v1/querytable and the retry-backoff verify.py copies.
+"tasks/**" = ["S110", "S112", "SIM105", "B905"]
+# Two specific gate scripts left byte-untouched on purpose rather than edited even for a
+# one-line E501 wrap, because each carries its own documented history of a post-hoc edit
+# causing real harm and both feed already-published, already-paid findings:
+#   - ablation-v2/exprlang/run_convoy_gate.py: reconcile.py's KNOWN exceptions record that
+#     this exact file was edited after its 8 trials ran (a stream-encoding fix, same commit
+#     as the findings report) without bumping the arm name, forking what the committed
+#     config_hash actually reproduces; the arm was retired to a -v2 name over it.
+#   - keel-kit-ablation-v1/keelgate_verify.py: the shared gate for a bank whose holdout
+#     tasks ADR-0005 seals for a retirement decision (same file the exclude block above
+#     protects `_tree/` and every variant's `fixtures/` for).
+# A comment-only line-length nit is not worth relitigating either incident for.
+"tasks/ablation-v2/exprlang/run_convoy_gate.py" = ["E501"]
+"tasks/keel-kit-ablation-v1/keelgate_verify.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"

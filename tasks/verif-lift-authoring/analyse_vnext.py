@@ -153,7 +153,7 @@ def newcombe_paired(a: int, b: int, c: int, d: int) -> tuple[float, float]:
     return (max(-1.0, lo), min(1.0, hi))
 
 
-def ni_decidable_at(n: int, margin_pp: float = None) -> bool:
+def ni_decidable_at(n: int, margin_pp: float | None = None) -> bool:
     """Could a PERFECT TIE at this n clear the non-inferiority margin?
 
     If not, the cell cannot pass the test on any data, and reporting it as a
@@ -167,7 +167,7 @@ def ni_decidable_at(n: int, margin_pp: float = None) -> bool:
     return lo * 100 > margin_pp
 
 
-def min_n_for_ni(margin_pp: float = None, cap: int = 4000) -> int | None:
+def min_n_for_ni(margin_pp: float | None = None, cap: int = 4000) -> int | None:
     """Smallest n at which a perfect tie clears the margin. None if never."""
     for n in range(1, cap + 1):
         if ni_decidable_at(n, margin_pp):
@@ -225,7 +225,7 @@ def self_check() -> None:
         assert phi_paired(a, b, c, d) == 0.0, (a, b, c, d)
         lp = newcombe_paired(a, b, c, d)
         lu = newcombe(a + b, n, a + c, n)
-        assert all(abs(x - y) < 1e-12 for x, y in zip(lp, lu)), (lp, lu)
+        assert all(abs(x - y) < 1e-12 for x, y in zip(lp, lu, strict=True)), (lp, lu)
 
     # 2. Pairing NARROWS the interval whenever the correlation is positive.
     for a, b, c, d in [(10, 1, 4, 5), (8, 2, 5, 5), (14, 1, 3, 2), (20, 2, 6, 12)]:
@@ -469,7 +469,8 @@ def main() -> None:
         "carry the paired intervals.\n"
     )
     print(
-        "| tier | n | bare | skill | vnext | skill−bare | vnext−skill | 95% unpaired (vnext−skill) |"
+        "| tier | n | bare | skill | vnext | skill−bare | vnext−skill "
+        "| 95% unpaired (vnext−skill) |"
     )
     print("|---|---|---|---|---|---|---|---|")
     for tier in ("weak", "strong"):

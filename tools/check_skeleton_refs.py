@@ -89,7 +89,7 @@ def load_material(bank_dir: Path):
         return None, {}
     spec = importlib.util.spec_from_file_location("_bank_verify", path)
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
+    assert spec.loader is not None  # noqa: S101 - type narrowing; spec_from_file_location sets it
     spec.loader.exec_module(module)
     return getattr(module, "material_counts", None), getattr(module, "MATERIAL_OF", {})
 

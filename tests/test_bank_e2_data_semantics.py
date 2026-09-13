@@ -38,7 +38,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from fathom.taskbank import load_bank  # noqa: E402
+from fathom.taskbank import load_bank
 
 REPO = Path(__file__).resolve().parent.parent
 BANK_DIR = REPO / "tasks" / "e2-data-semantics"

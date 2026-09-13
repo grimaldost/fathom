@@ -33,8 +33,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom.strategies.base import TrialStatus  # noqa: E402
-from fathom.strategies.series import (  # noqa: E402
+from fathom.strategies.base import TrialStatus
+from fathom.strategies.series import (
     EngineOutcome,
     _classify,
     _final_run_outcome,

@@ -94,15 +94,15 @@ class TestComputeConfigHash(unittest.TestCase):
 
 class TestResolveScenario(unittest.TestCase):
     def _config(self, **overrides) -> ScenarioConfig:
-        defaults = dict(
-            name="test",
-            adapter="claude-cli",
-            model="claude-opus-4-8",
-            strategy="single-session",
-            effort="high",
-            tools=ToolsConfig(source="none"),
-            limits=LimitsOverride(),
-        )
+        defaults = {
+            "name": "test",
+            "adapter": "claude-cli",
+            "model": "claude-opus-4-8",
+            "strategy": "single-session",
+            "effort": "high",
+            "tools": ToolsConfig(source="none"),
+            "limits": LimitsOverride(),
+        }
         defaults.update(overrides)
         return ScenarioConfig(**defaults)
 
@@ -321,7 +321,7 @@ class TestThreeScenarios(unittest.TestCase):
 
     def test_series_invocation_cmd_uses_uv_run_project(self):
         """Must be explicit uv run --project <repo> convoy, not a bare PATH lookup."""
-        config, resolved = self._lr("series.toml")
+        _config, resolved = self._lr("series.toml")
         cmd = resolved.tool_invocation_cmd
         self.assertIn("uv run --project", cmd)
         self.assertIn("convoy", cmd)

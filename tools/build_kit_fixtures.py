@@ -285,7 +285,7 @@ def build(task_id: str, spec: dict, force_briefs: bool) -> None:
         (fixtures / "brief.md").unlink(missing_ok=True)
         instruction = REPAIR_INSTRUCTION.format(defect=spec["defect"])
 
-    criteria = ["spec_written"] + SHARED + BEHAVIOUR + NOTE_ONLY + INTEGRITY
+    criteria = ["spec_written", *SHARED, *BEHAVIOUR, *NOTE_ONLY, *INTEGRITY]
     if task_id == "author-single-change":
         # The correct answer declares `single-change`, which relaxes the structural trio to
         # absent-ok. Scoring criteria that the right answer is entitled to omit would manufacture

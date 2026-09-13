@@ -258,7 +258,7 @@ def _check_task(
                 )
             else:
                 checks.append(_gate_check(task, str(gate_cmd), *gate_fn(str(gate_cmd), workspace)))
-    except Exception as exc:  # noqa: BLE001 - a staging failure is a validation failure
+    except Exception as exc:
         return [
             BankCheck(
                 task.id,
@@ -299,7 +299,7 @@ def _check_task(
                         ),
                     )
                 )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         checks.append(
             BankCheck(
                 task.id,

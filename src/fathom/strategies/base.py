@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from fathom.adapters.base import RunRecord, Runner
+    from fathom.adapters.base import Runner, RunRecord
     from fathom.scenario import ResolvedScenario
     from fathom.taskbank import Task
 

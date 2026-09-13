@@ -6,6 +6,7 @@ import stat
 import subprocess
 import tempfile
 import tomllib
+import warnings
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -131,8 +132,11 @@ def _remove_tree(path: str) -> None:
         try:
             os.chmod(fpath, stat.S_IWRITE)
             func(fpath)
-        except Exception:
-            pass
+        except Exception as retry_exc:
+            warnings.warn(
+                f"could not remove {fpath} after chmod retry: {retry_exc} (original: {exc})",
+                stacklevel=2,
+            )
 
     shutil.rmtree(path, onexc=_on_error)
 

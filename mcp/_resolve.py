@@ -85,6 +85,7 @@ def resolve_fathom_home(
         )
     if not _is_fathom_checkout(candidate):
         raise FathomHomeError(
-            f"{candidate} is not a fathom checkout (need pyproject name=fathom, src/fathom/, tasks/)."
+            f"{candidate} is not a fathom checkout "
+            "(need pyproject name=fathom, src/fathom/, tasks/)."
         )
     return candidate

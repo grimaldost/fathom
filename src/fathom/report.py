@@ -54,13 +54,16 @@ def _read_raw(bank: str, ledger_dir: pathlib.Path) -> list[dict]:
         return []
     out = []
     with open(path, encoding="utf-8") as f:
-        for line in f:
+        for lineno, line in enumerate(f, 1):
             stripped = line.strip()
             if stripped:
                 try:
                     out.append(json.loads(stripped))
-                except Exception:
-                    pass
+                except Exception as exc:
+                    warnings.warn(
+                        f"Skipping malformed record at {path}:{lineno}: {exc}",
+                        stacklevel=2,
+                    )
     return out
 
 
@@ -118,8 +121,11 @@ def _load_task_meta(bank: str) -> dict[str, dict]:
                     entry["context"] = ctx["size"]
                 if ctx.get("pair"):
                     entry["pair"] = ctx["pair"]
-            except Exception:
-                pass
+            except Exception as exc:
+                warnings.warn(
+                    f"{t.id}: could not re-read task.toml for [context]: {exc}",
+                    stacklevel=2,
+                )
             meta[t.id] = entry
     return meta
 
@@ -169,7 +175,8 @@ def _load_turn_caps(bank: str, tasks_dir: pathlib.Path) -> dict[str, int]:
             cap = (data.get("limits") or {}).get("max_turns")
             if data.get("id") and cap:
                 caps[str(data["id"])] = int(cap)
-        except Exception:
+        except Exception as exc:
+            warnings.warn(f"Skipping unreadable {task_toml}: {exc}", stacklevel=2)
             continue
     return caps
 
@@ -396,7 +403,10 @@ def render(
                 )
             else:
                 # n=0 with infra>0: no scored trials — avoid misleading "0/0" fraction
-                v = f"- **{sc}** — no scored trials, Wilson 95% CI N/A, n=0 — directional, not final"
+                v = (
+                    f"- **{sc}** — no scored trials, Wilson 95% CI N/A, n=0 — "
+                    "directional, not final"
+                )
             if infra:
                 v += f"; {infra} infra error(s) excluded"
             if _SERIES_KEY in sc:
@@ -703,10 +713,12 @@ def render(
                 json.dumps(substrate, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
             lines += [
-                f"> Routing substrate written to `{routing_path.as_posix()}`"
-                " (schema in the bank README). It is the input to the"
-                " mechanism-cost comparison; regenerate it any time with"
-                f" `fathom report {bank}`.",
+                (
+                    f"> Routing substrate written to `{routing_path.as_posix()}`"
+                    " (schema in the bank README). It is the input to the"
+                    " mechanism-cost comparison; regenerate it any time with"
+                    f" `fathom report {bank}`."
+                ),
                 "",
             ]
 

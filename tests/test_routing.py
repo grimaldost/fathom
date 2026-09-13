@@ -10,6 +10,7 @@ asserted as behaviour rather than described in prose.
 from __future__ import annotations
 
 import math
+from typing import ClassVar
 
 import pytest
 
@@ -336,7 +337,7 @@ class TestSubstrateJoin:
     mis-mapped field would still produce a plausible C(m).
     """
 
-    ARTIFACT = {
+    ARTIFACT: ClassVar[dict[str, object]] = {
         "schema_version": "1",
         "tau": 0.7,
         "non_inferiority_margin": 0.05,
@@ -924,8 +925,12 @@ class TestPrePurchaseProjection:
 
     # Medians over 35 trials/arm on ledger/model-tier-v1.jsonl, mapped to the current
     # lineup by ascending cost (haiku / sonnet-5 / opus-5).
-    EXEC = {"weak": 0.0756, "mid": 0.2254, "strong": 0.3368}
-    MODELS = {"weak": "claude-haiku-4-5", "mid": "claude-sonnet-5", "strong": "claude-opus-5"}
+    EXEC: ClassVar[dict[str, float]] = {"weak": 0.0756, "mid": 0.2254, "strong": 0.3368}
+    MODELS: ClassVar[dict[str, str]] = {
+        "weak": "claude-haiku-4-5",
+        "mid": "claude-sonnet-5",
+        "strong": "claude-opus-5",
+    }
 
     def _premium_per_task(self, tier: str, k: int) -> float:
         model = self.MODELS[tier]
@@ -970,7 +975,7 @@ class TestPrePurchaseProjection:
     def test_the_full_matrix_is_affordable(self):
         """3 single-brief blocks + 1 batch block, 9 arms, 5 repeats, under $20."""
         total = 0.0
-        for mech, policy, extra_turns, extra_out in (
+        for _mech, policy, extra_turns, extra_out in (
             ("none", 0, 0, 0),
             ("shortcuts", 435, 0, 100),
             ("rubric", 6100, 1, 1000),

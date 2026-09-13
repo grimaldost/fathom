@@ -89,7 +89,7 @@ def find_tests_dir(view: Path) -> Path | None:
     return None
 
 
-def import_candidate(view: Path, dotted: str, package: str):  # noqa: ANN201 - a module or None
+def import_candidate(view: Path, dotted: str, package: str):
     """Import *dotted* (e.g. ``"ndj.merge"``) from the candidate *view*.
 
     Returns the module, or ``None`` on any failure. Safe to call repeatedly within a

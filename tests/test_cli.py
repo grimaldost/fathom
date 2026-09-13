@@ -29,24 +29,23 @@ from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus
 from fathom.taskbank import Bank, Task, fixture_fingerprint
 
-
 # ---------------------------------------------------------------------------
 # Stub factories
 # ---------------------------------------------------------------------------
 
 
 def _make_scenario(name: str = "bare", config_hash: str = "a" * 64, **kw) -> ResolvedScenario:
-    defaults: dict = dict(
-        adapter="claude-cli",
-        model="claude-opus-4-8",
-        strategy="single-session",
-        effort="high",
-        tools=ToolsConfig(source="none"),
-        limits=LimitsOverride(),
-        model_id=None,
-        tool_repo_sha=None,
-        tool_invocation_cmd=None,
-    )
+    defaults: dict = {
+        "adapter": "claude-cli",
+        "model": "claude-opus-4-8",
+        "strategy": "single-session",
+        "effort": "high",
+        "tools": ToolsConfig(source="none"),
+        "limits": LimitsOverride(),
+        "model_id": None,
+        "tool_repo_sha": None,
+        "tool_invocation_cmd": None,
+    }
     defaults.update(kw)
     return ResolvedScenario(name=name, config_hash=config_hash, **defaults)
 
@@ -702,14 +701,14 @@ class TestLedgerWrites(_Base):
 
     def test_second_run_over_full_ledger_spawns_nothing(self):
         """A second identical run must see all trials as already done."""
-        kw = dict(
-            executor_factory=lambda sc: StubExecutor(),
-            runner_factory=lambda sc: StubRunner(),
-            stage_task_fn=_stub_stage,
-            verifier_fn=_stub_verifier,
-            skip_bank_validation=True,
-            ledger_dir=self.ledger_dir,
-        )
+        kw = {
+            "executor_factory": lambda sc: StubExecutor(),
+            "runner_factory": lambda sc: StubRunner(),
+            "stage_task_fn": _stub_stage,
+            "verifier_fn": _stub_verifier,
+            "skip_bank_validation": True,
+            "ledger_dir": self.ledger_dir,
+        }
         run_matrix(self.bank, [self.sc_a], 1, **kw)
 
         executor = StubExecutor()
@@ -837,7 +836,7 @@ class TestRunnerFactoryInjection(unittest.TestCase):
 
         from fathom.cli import _default_runner_factory
 
-        with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as f:
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md", delete=False) as f:
             f.write("SKILL BODY")
             path = f.name
         runner = _default_runner_factory(self._resolved(path))
@@ -888,7 +887,7 @@ class TestRunnerFactoryMountPlumbing(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             # A non-empty dir is a valid plugin mount
-            Path(d, "plugin.json").write_text("{}")
+            Path(d, "plugin.json").write_text("{}", encoding="utf-8")
             runner = _default_runner_factory(self._resolved_with_mounts((d,)))
         self.assertEqual(runner.plugin_dirs, (d,))
 
@@ -900,7 +899,7 @@ class TestRunnerFactoryMountPlumbing(unittest.TestCase):
 
         buf = io.StringIO()
         with tempfile.TemporaryDirectory() as d:
-            Path(d, "plugin.json").write_text("{}")
+            Path(d, "plugin.json").write_text("{}", encoding="utf-8")
             with contextlib.redirect_stderr(buf):
                 _default_runner_factory(self._resolved_with_mounts((d,)))
         self.assertNotIn("UNARMED", buf.getvalue())
@@ -923,10 +922,9 @@ class TestRunnerFactoryMountPlumbing(unittest.TestCase):
         from fathom.cli import _default_runner_factory
 
         buf = io.StringIO()
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory() as d, contextlib.redirect_stderr(buf):
             # Directory exists but is empty — not a usable plugin mount
-            with contextlib.redirect_stderr(buf):
-                _default_runner_factory(self._resolved_with_mounts((d,)))
+            _default_runner_factory(self._resolved_with_mounts((d,)))
         self.assertIn("UNARMED", buf.getvalue())
 
     def test_no_mounts_produces_no_warning_and_no_plugin_dirs(self):
@@ -1216,33 +1214,33 @@ class ArmingGateTests(unittest.TestCase):
     class _Probe:
         """Stub arming probe returning a canned observation; counts its spawns."""
 
-        def __init__(self, obs) -> None:  # noqa: ANN001
+        def __init__(self, obs) -> None:
             self.obs = obs
             self.calls: list[str] = []
 
-        def observe(self, scenario):  # noqa: ANN001, ANN202
+        def observe(self, scenario):
             self.calls.append(scenario.name)
             return self.obs
 
     @staticmethod
-    def _obs(**kw):  # noqa: ANN205
+    def _obs(**kw):
         from fathom.arming import ArmingObservation
 
-        base = dict(
-            spawn_ok=True,
-            init_present=True,
-            plugins=(),
-            skills=(),
-            tools=(),
-            mcp_servers=(),
-            hooks_fired=(),
-            successful_mcp_calls=(),
-            denied_tools=(),
-            argv=(),
-            spawn_env={},
-            config_dir_files=(),
-            settings_sha=None,
-        )
+        base = {
+            "spawn_ok": True,
+            "init_present": True,
+            "plugins": (),
+            "skills": (),
+            "tools": (),
+            "mcp_servers": (),
+            "hooks_fired": (),
+            "successful_mcp_calls": (),
+            "denied_tools": (),
+            "argv": (),
+            "spawn_env": {},
+            "config_dir_files": (),
+            "settings_sha": None,
+        }
         base.update(kw)
         return ArmingObservation(**base)
 
@@ -1255,7 +1253,7 @@ class ArmingGateTests(unittest.TestCase):
         shutil.rmtree(self._tmp, ignore_errors=True)
         shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
 
-    def _run(self, scenario, probe, **kw):  # noqa: ANN001, ANN202
+    def _run(self, scenario, probe, **kw):
         executor = StubExecutor()
         code = run_matrix(
             self.bank,
@@ -1335,8 +1333,8 @@ class UnrunTrialsAreStructurallyDistinctTests(_Base):
     filter on ``status``.
     """
 
-    def _errored_executor(self):  # noqa: ANN202
-        def _fn(task, workspace, scenario):  # noqa: ANN001, ANN202
+    def _errored_executor(self):
+        def _fn(task, workspace, scenario):
             return TrialResult(
                 status=TrialStatus.ERRORED,
                 runs=[_ok_run()],
@@ -1346,7 +1344,7 @@ class UnrunTrialsAreStructurallyDistinctTests(_Base):
 
         return StubExecutor(_fn)
 
-    def _trials(self, ledger_dir):  # noqa: ANN001, ANN202
+    def _trials(self, ledger_dir):
         """Read the raw on-disk JSONL — the shape external consumers actually see."""
         import json
 
@@ -1414,15 +1412,15 @@ class VerifierEvidenceIsRetainedTests(_Base):
     at import time lands on the verifier's stdout ahead of the JSON.
     """
 
-    def _crashing_verifier(self, stdout: str, stderr: str = ""):  # noqa: ANN202
-        def _fn(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+    def _crashing_verifier(self, stdout: str, stderr: str = ""):
+        def _fn(entry, workspace, timeout_s=60):
             return VerifierResult(
                 outcome="error", criteria=None, stdout=stdout, stderr=stderr, exit_code=1
             )
 
         return _fn
 
-    def _trials(self):  # noqa: ANN202
+    def _trials(self):
         import json
 
         path = pathlib.Path(self.ledger_dir) / f"{self.bank.name}.jsonl"
@@ -1478,8 +1476,8 @@ class BankValidationGateTests(unittest.TestCase):
         shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
 
     @staticmethod
-    def _verifier(outcome: str):  # noqa: ANN205
-        def _fn(entry, workspace, timeout_s=60):  # noqa: ANN001, ANN202
+    def _verifier(outcome: str):
+        def _fn(entry, workspace, timeout_s=60):
             return VerifierResult(
                 outcome=outcome,
                 criteria={"ok": outcome == "pass"},
@@ -1490,7 +1488,7 @@ class BankValidationGateTests(unittest.TestCase):
 
         return _fn
 
-    def _run(self, outcome: str, **kw):  # noqa: ANN001, ANN202
+    def _run(self, outcome: str, **kw):
         executor = StubExecutor()
         code = run_matrix(
             self.bank,
@@ -1796,7 +1794,7 @@ class CredentialPreflightTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def _args(self, tmp_p: pathlib.Path, **kw):  # noqa: ANN202
+    def _args(self, tmp_p: pathlib.Path, **kw):
         args = types.SimpleNamespace(
             command="run",
             bank="b",
@@ -1823,7 +1821,7 @@ class CredentialPreflightTests(unittest.TestCase):
             setattr(args, k, v)
         return args
 
-    def _run(self, args, credential):  # noqa: ANN001, ANN202
+    def _run(self, args, credential):
         import contextlib
 
         import fathom.smoke as _smoke
@@ -1840,25 +1838,25 @@ class CredentialPreflightTests(unittest.TestCase):
         return code, buf.getvalue()
 
     @staticmethod
-    def _credential(**kw):  # noqa: ANN205
+    def _credential(**kw):
         import time
 
         from fathom.smoke import CredentialStatus
 
         now = time.time()
-        base = dict(
-            found=True,
-            readable=True,
-            expires_at_ms=int((now + 3600) * 1000),
-            refresh_expires_at_ms=int((now + 30 * 86400) * 1000),
-        )
+        base = {
+            "found": True,
+            "readable": True,
+            "expires_at_ms": int((now + 3600) * 1000),
+            "refresh_expires_at_ms": int((now + 30 * 86400) * 1000),
+        }
         base.update(kw)
         return CredentialStatus(**base)
 
     def test_dead_credential_refuses_before_any_spawn(self):
-        from fathom.cli import EXIT_CREDENTIAL
-
         import time
+
+        from fathom.cli import EXIT_CREDENTIAL
 
         dead = self._credential(
             expires_at_ms=int((time.time() - 86400) * 1000),
@@ -1950,7 +1948,7 @@ class StopVerbTests(unittest.TestCase):
         real_stop_requested = lock.stop_requested
 
         class _CountingExecutor(StubExecutor):
-            def run_trial(self, task, workspace, scenario, runner):  # noqa: ANN001
+            def run_trial(self, task, workspace, scenario, runner):
                 trials["n"] += 1
                 if trials["n"] == 1:
                     request_stop("stopme", lock_root=self.outer.lock_root, reason="cap reached")
@@ -1989,7 +1987,7 @@ class StopVerbTests(unittest.TestCase):
         trials = {"n": 0}
 
         class _CountingExecutor(StubExecutor):
-            def run_trial(self, task, workspace, scenario, runner):  # noqa: ANN001
+            def run_trial(self, task, workspace, scenario, runner):
                 trials["n"] += 1
                 return super().run_trial(task, workspace, scenario, runner)
 
