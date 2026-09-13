@@ -37,9 +37,12 @@ from fathom.runlock import (
     Ticket,
     choosing_now,
     clear_stop_request,
+    ancestors_of,
     decide,
+    descendants_of,
     holders,
     is_stale,
+    parse_ps_output,
     read_stop_request,
     read_tickets,
     request_stop,
@@ -365,8 +368,157 @@ class TestRealContention(unittest.TestCase):
             )
 
 
+# A two-level tree for the `--now` escalation: this script starts a grandchild that
+# touches a beat file every 50ms and then sleeps. Killing only the parent leaves the
+# grandchild beating, which is exactly the `uv -> fathom -> claude` survival that cost
+# ~$2 and ~15 minutes to clear by hand.
+_TREE_GRANDCHILD = textwrap.dedent(
+    """
+    import sys, time
+    while True:
+        with open(sys.argv[1], "w", encoding="utf-8") as fh:
+            fh.write(str(time.time()))
+        time.sleep(0.05)
+    """
+)
+
+_TREE_PARENT = textwrap.dedent(
+    """
+    import subprocess, sys, tempfile, time, pathlib
+    src = pathlib.Path(tempfile.mkdtemp()) / "grandchild.py"
+    src.write_text(sys.argv[2], encoding="utf-8")
+    subprocess.Popen([sys.executable, str(src), sys.argv[1]])
+    time.sleep(60)
+    """
+)
+
+
+class TestDescendantWalk(unittest.TestCase):
+    """Pure over a {pid: ppid} map — the walk that replaced killing a process group."""
+
+    def test_children_and_grandchildren_deepest_first(self):
+        parents = {1: 0, 10: 1, 11: 10, 12: 11, 20: 1}
+        self.assertEqual(descendants_of(10, parents), [12, 11])
+
+    def test_a_leaf_has_no_descendants(self):
+        self.assertEqual(descendants_of(12, {10: 1, 11: 10, 12: 11}), [])
+
+    def test_the_target_is_never_its_own_descendant(self):
+        self.assertNotIn(10, descendants_of(10, {10: 1, 11: 10}))
+
+    def test_a_cycle_terminates(self):
+        """A malformed map must not hang the stop verb."""
+        self.assertEqual(descendants_of(10, {10: 11, 11: 10}), [11])
+
+    def test_siblings_are_not_swept_in(self):
+        parents = {10: 1, 11: 10, 20: 1, 21: 20}
+        self.assertEqual(descendants_of(10, parents), [11])
+
+    def test_ancestors_are_listed_nearest_first(self):
+        self.assertEqual(ancestors_of(12, {10: 1, 11: 10, 12: 11, 1: 0}), [11, 10, 1])
+
+    def test_ancestors_of_a_root_is_empty(self):
+        self.assertEqual(ancestors_of(1, {1: 0}), [])
+
+    def test_ancestor_cycle_terminates(self):
+        self.assertEqual(ancestors_of(10, {10: 11, 11: 10}), [11])
+
+    def test_ps_output_parses_padded_columns(self):
+        text = "    1     0\n  842     1\n  900   842\n"
+        self.assertEqual(parse_ps_output(text), {1: 0, 842: 1, 900: 842})
+
+    def test_ps_header_and_junk_lines_are_dropped_not_guessed(self):
+        text = "  PID  PPID\n  842     1\n\ngarbage\n  900   842  extra\n"
+        self.assertEqual(parse_ps_output(text), {842: 1, 900: 842})
+
+    def test_empty_ps_output_is_an_empty_tree(self):
+        self.assertEqual(parse_ps_output(""), {})
+
+
 class TestTerminateProcessTree(unittest.TestCase):
-    """`fathom stop --now` must take the tree, not just the process it names."""
+    """`fathom stop --now` must take the tree, not just the process it names.
+
+    And it must take NOTHING above it. The first implementation signalled
+    `os.getpgid(pid)`, which a Popen child shares with its parent — on CI that killed
+    the test runner mid-suite, the same "a stop took out more than it meant to" shape
+    the verb exists to end.
+    """
+
+    def test_refuses_to_terminate_the_calling_process(self):
+        import os
+
+        if os.name == "nt":
+            self.skipTest("the upward guards live on the POSIX path")
+        killed, detail = terminate_process_tree(os.getpid())
+        self.assertFalse(killed)
+        self.assertIn("refusing", detail)
+
+    def test_refuses_to_terminate_an_ancestor(self):
+        """`fathom stop --now` from the shell that launched the matrix takes the
+        stopper with it. Refuse rather than honour it."""
+        import os
+
+        if os.name == "nt":
+            self.skipTest("the upward guards live on the POSIX path")
+        killed, detail = terminate_process_tree(os.getppid())
+        self.assertFalse(killed, detail)
+        self.assertIn("refusing", detail)
+
+    def test_a_sibling_in_the_same_group_survives(self):
+        """The regression CI paid for: a bystander sharing our process group lives."""
+        bystander = subprocess.Popen(  # noqa: S603
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        target = subprocess.Popen(  # noqa: S603
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        try:
+            terminate_process_tree(target.pid)
+            target.wait(timeout=30)
+            self.assertIsNone(
+                bystander.poll(), "terminating one holder must not reach its siblings"
+            )
+        finally:
+            for p in (bystander, target):
+                if p.poll() is None:
+                    p.kill()
+                    p.wait(timeout=10)
+
+    def test_a_grandchild_dies_with_the_tree(self):
+        """`uv -> fathom -> claude`: the unit that has to go is the tree."""
+        with tempfile.TemporaryDirectory(prefix="fathom-tree-") as tmp:
+            beat = Path(tmp) / "grandchild.beat"
+            child_src = Path(tmp) / "child.py"
+            child_src.write_text(_TREE_PARENT, encoding="utf-8")
+            parent = subprocess.Popen(  # noqa: S603
+                [sys.executable, str(child_src), str(beat), _TREE_GRANDCHILD],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            try:
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline and not beat.exists():
+                    time.sleep(0.05)
+                self.assertTrue(beat.exists(), "the grandchild never started beating")
+
+                terminate_process_tree(parent.pid)
+                time.sleep(1.5)
+                # Liveness by artifact, not by pid: robust to zombies and reparenting.
+                stopped_at = beat.stat().st_mtime
+                time.sleep(1.5)
+                self.assertEqual(
+                    beat.stat().st_mtime,
+                    stopped_at,
+                    "the grandchild outlived the tree it belonged to",
+                )
+            finally:
+                if parent.poll() is None:
+                    parent.kill()
+                    parent.wait(timeout=10)
 
     def test_kills_a_live_child(self):
         proc = subprocess.Popen(  # noqa: S603

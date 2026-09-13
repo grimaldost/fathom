@@ -316,13 +316,91 @@ def clear_stop_request(bank: str, *, lock_root: Path | None = None) -> None:
 # ---------------------------------------------------------------------------
 
 
+def parse_ps_output(text: str) -> dict[int, int]:
+    """``{pid: ppid}`` from ``ps -A -o pid=,ppid=`` output. Pure, so it is testable.
+
+    Unparsable lines are dropped rather than guessed at: a process this cannot see is
+    simply not in the tree, which is the safe direction — the walk then signals fewer
+    processes, never more.
+    """
+    parents: dict[int, int] = {}
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        try:
+            parents[int(parts[0])] = int(parts[1])
+        except ValueError:
+            continue
+    return parents
+
+
+def _posix_parents() -> dict[int, int]:
+    """``{pid: ppid}`` for every visible process, via POSIX ``ps``.
+
+    Walking the tree explicitly is the only safe way to reach a holder's descendants:
+    see :func:`terminate_process_tree` for why the process group is not.
+    """
+    proc = subprocess.run(  # noqa: S603
+        ["ps", "-A", "-o", "pid=,ppid="],  # noqa: S607
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return parse_ps_output(proc.stdout or "")
+
+
+def descendants_of(pid: int, parents: dict[int, int]) -> list[int]:
+    """Every descendant of *pid*, deepest first, never including *pid* itself.
+
+    Pure over a ``{pid: ppid}`` map, so the walk is unit-testable without spawning
+    anything — and a cycle in a malformed map terminates rather than hanging.
+    """
+    children: dict[int, list[int]] = {}
+    for child, parent in parents.items():
+        children.setdefault(parent, []).append(child)
+    out: list[int] = []
+    seen = {pid}
+    frontier = [pid]
+    while frontier:
+        current = frontier.pop()
+        for child in sorted(children.get(current, ())):
+            if child in seen:
+                continue
+            seen.add(child)
+            out.append(child)
+            frontier.append(child)
+    out.reverse()  # deepest first: a parent outliving its children respawns nothing
+    return out
+
+
+def ancestors_of(pid: int, parents: dict[int, int]) -> list[int]:
+    """Every process *pid* descends from, nearest first. Cycle-safe."""
+    out: list[int] = []
+    seen = {pid}
+    current = parents.get(pid)
+    while current is not None and current > 0 and current not in seen:
+        seen.add(current)
+        out.append(current)
+        current = parents.get(current)
+    return out
+
+
 def terminate_process_tree(pid: int) -> tuple[bool, str]:
-    """Kill *pid* and its children; return ``(killed, detail)``.
+    """Kill *pid* and its descendants; return ``(killed, detail)``.
 
     The recorded incident: stopping the wrapper left ``uv -> fathom -> claude`` alive
-    and ~$2 was spent over ~15 minutes killing it by hand. The tree, not the process, is
-    the unit that has to go — so Windows gets ``taskkill /T /F`` and POSIX walks to the
-    process group, falling back to the bare pid when the holder is not a group leader.
+    and ~$2 went over ~15 minutes on killing it by hand. The tree, not the process, is
+    the unit that has to go.
+
+    **Not the process group.** A first implementation sent ``SIGTERM`` to
+    ``os.getpgid(pid)``, which is correct only when the target leads its own group. A
+    process started by ``Popen`` inherits its parent's group, so that call reaches the
+    *caller* — on CI it killed the test runner mid-suite, which is exactly the
+    "a stop took out more than it meant to" failure this verb exists to end. The group
+    is used only when the target genuinely leads one that is not ours; otherwise the
+    descendants are walked explicitly and signalled deepest-first.
     """
     if os.name == "nt":
         proc = subprocess.run(  # noqa: S603
@@ -334,17 +412,50 @@ def terminate_process_tree(pid: int) -> tuple[bool, str]:
         )
         detail = ((proc.stdout or "") + (proc.stderr or "")).strip()
         return proc.returncode == 0, detail or f"taskkill exited {proc.returncode}"
+
     import signal
 
+    if pid == os.getpid():
+        return False, "refusing to terminate this process"
     try:
-        os.killpg(os.getpgid(pid), signal.SIGTERM)
-        return True, f"SIGTERM to process group of {pid}"
-    except (OSError, AttributeError, ProcessLookupError):
+        own_group = os.getpgid(0)
+        target_group = os.getpgid(pid)
+    except OSError as exc:
+        return False, f"{type(exc).__name__}: {exc}"
+
+    if target_group == pid and target_group != own_group:
         try:
-            os.kill(pid, signal.SIGTERM)
-            return True, f"SIGTERM to {pid} (no process group)"
+            os.killpg(target_group, signal.SIGTERM)
+            return True, f"SIGTERM to process group {target_group} (the holder leads it)"
         except OSError as exc:
             return False, f"{type(exc).__name__}: {exc}"
+
+    try:
+        parents = _posix_parents()
+    except OSError as exc:
+        parents = {}
+        note = f" (child walk unavailable: {type(exc).__name__})"
+    else:
+        note = ""
+    # Reaching UPWARD is how a stop becomes an outage. A holder this process is running
+    # inside — `fathom stop --now` issued from the very shell that launched the matrix —
+    # is not a coherent request: honouring it would take this process with it.
+    ours = {os.getpid(), *ancestors_of(os.getpid(), parents)}
+    if pid in ours:
+        return False, f"refusing: {pid} is an ancestor of this process"
+    victims = [*descendants_of(pid, parents), pid]
+    signalled: list[int] = []
+    for victim in victims:
+        if victim in ours:
+            continue
+        try:
+            os.kill(victim, signal.SIGTERM)
+            signalled.append(victim)
+        except OSError:
+            continue
+    if not signalled:
+        return False, f"nothing signalled for {pid} (already gone?){note}"
+    return True, f"SIGTERM to {len(signalled)} process(es) under {pid}: {signalled}{note}"
 
 
 # ---------------------------------------------------------------------------
