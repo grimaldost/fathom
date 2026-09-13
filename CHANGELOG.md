@@ -38,6 +38,13 @@ gate-output decode that turned a repair brief into an empty string.
   holder's process tree, for a run wedged inside a spawn — the `TaskStop` incident,
   where stopping the wrapper left `uv -> fathom -> claude` alive and ~$2 went on
   killing it by hand. A stop that finds nothing to stop exits 0.
+  The tree is taken by walking the target's descendants explicitly, **not** by
+  signalling its process group: a process started by `Popen` inherits its parent's
+  group, so the group form reaches the *caller*. The first implementation did exactly
+  that and CI caught it — the ubuntu leg died mid-suite because the test killed its
+  own runner, which is the same "a stop took out more than it meant to" shape this
+  verb exists to end. The group is used only when the target genuinely leads one that
+  is not ours, and a target that is this process's own ancestor is refused outright.
 - **A credential-TTL pre-flight** (`fathom smoke` check 0, `fathom run`). Free, spawns
   nothing, and reads exactly two integers out of `~/.claude/.credentials.json` —
   `expiresAt` and `refreshTokenExpiresAt` — and never a token (ADR-0004: the
