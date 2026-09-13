@@ -21,6 +21,7 @@ Fails closed on any error.
 import importlib
 import json
 import sys
+import warnings
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -64,8 +65,8 @@ def _load_func(view, hint, dotted, func_name):
             attr = getattr(importlib.import_module(dotted), func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         preferred = view / hint
         candidates = [preferred] if preferred.is_file() else []
         candidates += [
@@ -83,7 +84,8 @@ def _load_func(view, hint, dotted, func_name):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 attr = getattr(importlib.import_module(".".join(rel.parts)), func_name, None)
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             if callable(attr):
                 return attr
@@ -125,8 +127,12 @@ def main():
             if totals is not None:
                 result["total_revenue_correct"] = sum(totals.values()) == LEDGER_TOTAL
                 result["measure_correct_after_fix"] = totals == KNOWN_GOOD
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"total_revenue_correct, measure_correct_after_fix: could not be scored "
+            f"and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if result[GATE] else 1

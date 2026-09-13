@@ -28,6 +28,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -177,7 +178,8 @@ def _get(mod, attr):
     for sub in SUBMODULES:
         try:
             m = importlib.import_module(f"{PKG}.{sub}")
-        except Exception:
+        except Exception as exc:
+            warnings.warn(f"{PKG}.{sub}: did not import; skipping it: {exc}", stacklevel=2)
             continue
         if hasattr(m, attr):
             return getattr(m, attr)

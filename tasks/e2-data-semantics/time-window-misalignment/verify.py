@@ -19,6 +19,7 @@ Fails closed on any error.
 import importlib
 import json
 import sys
+import warnings
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -92,8 +93,8 @@ def _load_func(view, hint, dotted, func_name):
             attr = getattr(importlib.import_module(dotted), func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         preferred = view / hint
         candidates = [preferred] if preferred.is_file() else []
         candidates += [
@@ -111,7 +112,8 @@ def _load_func(view, hint, dotted, func_name):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 attr = getattr(importlib.import_module(".".join(rel.parts)), func_name, None)
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             if callable(attr):
                 return attr
@@ -148,8 +150,12 @@ def main():
                     total = None
                 if total is not None:
                     result["metric_correct_under_consistent_join"] = total == EXPECTED_TOTAL
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"orders_in_window_correct, metric_correct_under_consistent_join: could not be scored "
+            f"and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if result[GATE] else 1

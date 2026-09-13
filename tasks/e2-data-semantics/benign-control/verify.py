@@ -19,6 +19,7 @@ Fails closed on any error.
 import importlib
 import json
 import sys
+import warnings
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -52,8 +53,8 @@ def _load_func(view, hint, dotted, func_name):
             attr = getattr(importlib.import_module(dotted), func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         preferred = view / hint
         candidates = [preferred] if preferred.is_file() else []
         candidates += [
@@ -71,7 +72,8 @@ def _load_func(view, hint, dotted, func_name):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 attr = getattr(importlib.import_module(".".join(rel.parts)), func_name, None)
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             if callable(attr):
                 return attr
@@ -120,8 +122,10 @@ def main():
         defines_new = any(f"def {NEW_NAME}(" in text for text in sources)
         defines_old = any(f"def {OLD_NAME}(" in text for text in sources)
         result["helper_renamed"] = defines_new and not defines_old
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"helper_renamed: could not be scored and stays at its default: {exc}", stacklevel=2
+        )
 
     try:
         func = _load_func(view, "settlement_export.py", "settlement_export", "export_rows")
@@ -131,8 +135,10 @@ def main():
                 dict(CANONICAL_FX),
             )
             result["no_semantic_change"] = _rows_signature(produced) == EXPECTED
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"no_semantic_change: could not be scored and stays at its default: {exc}", stacklevel=2
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if all(result.values()) else 1
