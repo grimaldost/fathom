@@ -29,3 +29,8 @@ streams-multiagent/
 
 # operator-local runner scripts (machine paths); not part of the tool
 local/
+
+# Run-lock tickets and stop requests (fathom.runlock). Deliberately NOT under
+# ledger/: that directory is tracked, so a lock there becomes a committed artifact
+# the first time anyone runs `git add ledger/` after a matrix (FATH-B53's trigger).
+/.fathom/

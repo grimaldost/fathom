@@ -50,6 +50,8 @@ EXIT_UNARMED = 11  # a treatment arm could not be proven armed (FATH-B01)
 EXIT_BANK_INVALID = 12  # the bank cannot discriminate between arms (FATH-B02)
 EXIT_UNRECONCILED = 13  # two derivations of one fact disagree (FATH-B62/B63)
 EXIT_RUN_BUDGET = 14  # the per-invocation spend rail halted the matrix (FATH-B04)
+EXIT_CREDENTIAL = 15  # the seat has too little credential life to start (FATH-B04(a))
+EXIT_STOPPED = 16  # `fathom stop` halted the matrix at a trial boundary (FATH-B53)
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -177,6 +179,62 @@ def _build_parser() -> argparse.ArgumentParser:
         "arm once scored 100%% over 9 trials; skip it only to re-run a matrix whose "
         "arming was already verified this session.",
     )
+    run_p.add_argument(
+        "--skip-credential-check",
+        action="store_true",
+        dest="skip_credential_check",
+        help="Start WITHOUT checking that the seat has credential life left. The "
+        "check is free and reads two timestamps (never a token); it exists because "
+        "matrices have repeatedly started, spawned and died on auth. Skip it only "
+        "when the credential lives somewhere this check cannot see.",
+    )
+    run_p.add_argument(
+        "--no-lock",
+        action="store_true",
+        dest="no_lock",
+        help="Spend WITHOUT serializing against other runs of this bank. A paid "
+        "matrix consumes one seat's credential and rate budget, so two concurrent "
+        "runs interfere; the lock is free and self-healing (a holder silent past the "
+        "staleness horizon is released). Use only when the concurrent run is on "
+        "another seat.",
+    )
+    run_p.add_argument(
+        "--lock-wait-s",
+        type=float,
+        default=None,
+        dest="lock_wait_s",
+        metavar="SECONDS",
+        help="Give up waiting for the lock after SECONDS (default: wait). Waiting is "
+        "the default because a wait that gives up is how two matrices end up on one "
+        "seat anyway; a DEAD holder is not a reason to wait, and expires on its own.",
+    )
+
+    stop_p = sub.add_parser(
+        "stop",
+        help="Ask the run holding a bank's lock to stop at its next trial boundary",
+    )
+    stop_p.add_argument("bank", help="Bank name, as passed to `fathom run`")
+    stop_p.add_argument(
+        "--at-boundary",
+        action="store_true",
+        dest="at_boundary",
+        help="The default, spelled out: halt after the trial in flight finishes. The "
+        "ledger is the resume checkpoint, so nothing already bought is lost.",
+    )
+    stop_p.add_argument(
+        "--now",
+        action="store_true",
+        dest="now",
+        help="Also terminate the holder's process tree. Use when a run is wedged "
+        "INSIDE a spawn and will not reach a boundary — it discards the in-flight "
+        "trial's spend, which is the cost of not waiting.",
+    )
+    stop_p.add_argument(
+        "--reason",
+        default="",
+        help="Recorded with the request and printed by the run that honours it",
+    )
+    stop_p.add_argument("--lock-root", default=None, help=argparse.SUPPRESS)
 
     void_p = sub.add_parser(
         "void",
@@ -338,6 +396,7 @@ def run_matrix(
     arming_probe: Any | None = None,
     skip_arming_check: bool = False,
     skip_bank_validation: bool = False,
+    run_lock: Any | None = None,
     out: TextIO | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
@@ -348,6 +407,12 @@ def run_matrix(
     An infrastructure error from any executor (auth / usage-limit) stops the
     matrix cleanly: the affected trial is not scored, the ledger is untouched
     as the resume checkpoint, and EXIT_INFRASTRUCTURE is returned.
+
+    ``run_lock`` is an acquired :class:`fathom.runlock.RunLock`.  When one is given,
+    every trial boundary is also a stop point: a request placed by ``fathom stop``
+    halts the matrix with ``EXIT_STOPPED`` before the next trial starts, which is the
+    primitive two hand-written watcher scripts re-implemented in one day.  Passing
+    ``None`` (the default, and what every test does) changes nothing.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
@@ -576,6 +641,21 @@ def run_matrix(
                 file=_out,
             )
             return EXIT_RUN_BUDGET
+        # The trial boundary is the stop point, for the same reason the budget rail
+        # halts here: the ledger is the checkpoint, so halting between trials loses
+        # nothing already bought, while killing a tree mid-trial discards a spawn that
+        # has already been paid for.
+        if run_lock is not None:
+            stop = run_lock.stop_requested()
+            if stop is not None:
+                run_lock.clear_stop_request()
+                because = f" ({stop.reason})" if stop.reason else ""
+                print(
+                    f"stop requested{because} — halting before the next trial. Nothing "
+                    "already bought is lost; re-invoke to continue from the ledger.",
+                    file=_out,
+                )
+                return EXIT_STOPPED
         # Names the raw-stream file the adapter tees when FATHOM_STREAM_DIR is
         # set (opt-in post-hoc analysis); harmless otherwise.
         os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
@@ -831,6 +911,8 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_report(args)
     if args.command == "void":
         return _cmd_void(args)
+    if args.command == "stop":
+        return _cmd_stop(args)
     if args.command == "smoke":
         return _cmd_smoke(args)
     if args.command == "verify-arming":
@@ -906,24 +988,122 @@ def _cmd_run(args: argparse.Namespace) -> int:
             )
             spawn_cap = args.legacy_max_budget_usd
 
-    return run_matrix(
-        bank,
-        resolved_scenarios,
-        args.repeats,
-        dry_run=args.dry_run,
-        limit=args.limit,
-        task_ids=(
-            [t.strip() for t in args.tasks.split(",") if t.strip()]
-            if args.tasks is not None
-            else None
-        ),
-        ledger_dir=ledger_dir,
-        max_budget_usd=spawn_cap,
-        max_run_usd=args.max_run_usd,
-        include_holdout=args.include_holdout,
-        skip_arming_check=args.skip_arming_check,
-        skip_bank_validation=args.skip_bank_validation,
+    # --- Credential pre-flight: is this seat worth spending against at all? ---
+    # Free, spawns nothing, reads two timestamps and never a token. It sits here
+    # rather than inside `run_matrix` because it is a precondition of the INVOCATION,
+    # not of the measurement: run_matrix's own gates (bank validity, arming) are about
+    # whether the numbers would mean anything, and this one is about whether there
+    # will be numbers. A dry run plans and spawns nothing, so it is exempt.
+    if not args.dry_run and not args.skip_credential_check:
+        from fathom.smoke import assert_credential_live, read_credential_status
+
+        credential = assert_credential_live(read_credential_status())
+        if not credential.ok:
+            print(f"credential: {credential.detail}", file=sys.stderr)
+            print(
+                "REFUSING TO RUN: a matrix started on this seat would spawn and die on "
+                "auth. Nothing is lost by fixing it first; re-invoke to continue from "
+                "the ledger.",
+                file=sys.stderr,
+            )
+            return EXIT_CREDENTIAL
+        print(f"credential: {credential.detail}", file=sys.stderr)
+
+    def _go(run_lock: Any | None) -> int:
+        return run_matrix(
+            bank,
+            resolved_scenarios,
+            args.repeats,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            task_ids=(
+                [t.strip() for t in args.tasks.split(",") if t.strip()]
+                if args.tasks is not None
+                else None
+            ),
+            ledger_dir=ledger_dir,
+            max_budget_usd=spawn_cap,
+            max_run_usd=args.max_run_usd,
+            include_holdout=args.include_holdout,
+            skip_arming_check=args.skip_arming_check,
+            skip_bank_validation=args.skip_bank_validation,
+            run_lock=run_lock,
+        )
+
+    # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
+    # A dry run spawns nothing and consumes no seat, so it queues for nothing.
+    if args.dry_run or getattr(args, "no_lock", False):
+        if getattr(args, "no_lock", False) and not args.dry_run:
+            print(
+                "WARNING: --no-lock: spending WITHOUT serializing against other runs "
+                "of this bank on this seat",
+                file=sys.stderr,
+            )
+        return _go(None)
+
+    from fathom.runlock import LockTimeout, RunLock
+
+    lock = RunLock(bank.name, label=f"fathom run {bank.name}")
+    try:
+        with lock.held(timeout_s=args.lock_wait_s, out=sys.stderr) as held:
+            # A request left behind by an earlier run must not halt this one; the lock
+            # scopes requests by time, and clearing here makes that visible in the tree.
+            held.clear_stop_request()
+            return _go(held)
+    except LockTimeout as exc:
+        print(f"lock: {exc}", file=sys.stderr)
+        print(
+            "REFUSING TO RUN: another run holds this bank. Wait, or `fathom stop "
+            f"{bank.name}` to ask it to halt at its next trial boundary.",
+            file=sys.stderr,
+        )
+        return EXIT_INFRASTRUCTURE
+
+
+def _cmd_stop(args: argparse.Namespace) -> int:
+    """Ask the run holding a bank's lock to stop; `--now` takes its process tree.
+
+    The primitive `pause_matrix.py` and `guard_cap.py` each re-implemented by hand on
+    the same day, plus the one the `TaskStop` incident needed: stopping the wrapper left
+    `uv -> fathom -> claude` alive and ~$2 went on killing it by hand.
+    """
+    import time as _time
+
+    from fathom import runlock as _lock
+
+    lock_root = pathlib.Path(args.lock_root) if args.lock_root else None
+    now = _time.time()
+    decision = _lock.holders(args.bank, lock_root=lock_root, now_s=now)
+
+    if decision.holder is None:
+        # Not an error: a stop that finds nothing to stop did its job.
+        print(f"nothing holds the lock for bank {args.bank!r}")
+        if decision.stale:
+            print(
+                f"({len(decision.stale)} stale ticket(s) past the "
+                f"{_lock.STALE_AFTER_S:.0f}s horizon; the next run releases them)"
+            )
+        return EXIT_OK
+
+    _lock.request_stop(args.bank, lock_root=lock_root, at_boundary=True, reason=args.reason)
+    print(f"stop requested for bank {args.bank!r}, held by {decision.holder.describe(now)}")
+    print(
+        "the run halts after the trial in flight — the ledger is the checkpoint, so "
+        "nothing already bought is lost"
     )
+
+    if args.now:
+        killed, detail = _lock.terminate_process_tree(decision.holder.pid)
+        print(f"--now: terminating the holder's process tree: {detail}")
+        if killed:
+            print(
+                "the in-flight trial's spend is discarded (it was not recorded); the "
+                "holder's ticket expires on its own within "
+                f"{_lock.STALE_AFTER_S:.0f}s"
+            )
+        else:
+            print("the tree could not be terminated; the boundary request still stands")
+    return EXIT_OK
 
 
 def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenario]:

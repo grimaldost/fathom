@@ -2,10 +2,15 @@
 
 The go/no-go gate that must pass before any paid matrix run **and again at every
 resume** (spec §13): it asserts, on *real* spawns, the isolation properties the
-rest of the harness assumes but that only a live spawn can prove.  Five assertion
+rest of the harness assumes but that only a live spawn can prove.  Six assertion
 groups, ported from craft-collection's ``evals/harness/smoke.py`` and extended
 for fathom's engine boundary and plugin-mount fidelity:
 
+0. **The credential is live.**  Free, spawns nothing, and runs FIRST because every
+   group below it depends on a spawn that can authenticate.  Reads exactly two
+   integers out of ``~/.claude/.credentials.json`` — ``expiresAt`` and
+   ``refreshTokenExpiresAt`` — and never a token (ADR-0004: the credential is
+   copied, not read).
 1. **Credential-only spawn authenticates and completes.**  The temp
    ``CLAUDE_CONFIG_DIR`` holds exactly ``.credentials.json`` (no CLAUDE.md /
    settings.json / history leak — ADR-0004), and a tiny spawn under it is
@@ -21,7 +26,12 @@ for fathom's engine boundary and plugin-mount fidelity:
    ``skills`` array (treatment).  A control spawn without the mount must not list
    it.  Proves ``--plugin-dir`` wiring reaches the live CLI init layer — mount
    fidelity, not auto-fire (ADR-0006).
-5. **Engine boundary: the §6-pinned non-bypass permission mode reaches the
+5. **Concurrency exclusion.**  Free and spawn-free: while one ticket holds a bank's
+   run lock a second acquirer does not, and a ticket past the staleness horizon is
+   released rather than honoured.  FATH-B64's corrected sequencing is that an
+   operational check ships in the same change as its mechanism — a gate written after
+   the thing it gates is a gate written to pass.
+6. **Engine boundary: the §6-pinned non-bypass permission mode reaches the
    engine's spawned CLI invocation.**  A minimal one-PR series run against
    a scratch workspace, with ``claude`` shadowed by a PATH shim that records its
    argv (and spends **no** model tokens), confirms the engine spawns ``claude``
@@ -30,6 +40,14 @@ for fathom's engine boundary and plugin-mount fidelity:
 
 Exit nonzero on any violation; ``--force-fail`` appends a failing check to
 demonstrate the nonzero path.
+
+**A check that could not be proven is not a pass.**  Two of the assertions below
+(activity detection, tool denial) read a *live* spawn's behaviour, and both used to
+conclude from a spawn that never authenticated: "stream parsing detects activity"
+passed on ``turns=1 tokens_in=0 tokens_out=0``, and "disallowed tool refused"
+passed with no tool call to refuse.  They are now gated on liveness and report
+``SKIPPED`` instead, and a SKIPPED check keeps the gate red — this is the go/no-go
+before paid spend, so "we could not prove it" must never read as "go".
 
 The design splits **pure assertions** (observation → :class:`SmokeResult`) from
 the **probes** that perform the real I/O.  The assertions and the
@@ -48,6 +66,7 @@ import os
 import platform
 import sys
 import tempfile
+import time
 import zipfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
@@ -91,6 +110,19 @@ CANARY_PLUGIN_DIR: Path = _REPO_ROOT / "tests" / "fixtures" / "canary-plugin"
 # array.  Format: ``<plugin-name>:<skill-dir>``, matching the convention confirmed
 # in the spike (humblepowers skills list as ``humblepowers:<skill-dir>``).
 CANARY_SKILL = "fathom-smoke-canary:probe"
+
+# How much credential life the gate requires before it says "go".  This is a FLOOR,
+# not an estimate of matrix duration: smoke does not know how long a matrix will run,
+# and pretending otherwise would be a number that looks like a forecast and is not.
+# Thirty minutes is long enough that a green gate is not immediately followed by an
+# auth failure mid-trial, and short enough that it refuses no legitimate run.
+CREDENTIAL_MIN_TTL_S = 1800.0
+
+# The only two fields the pre-flight reads.  Named as constants so a reviewer can see
+# the whole of what leaves the credential file in one place (ADR-0004).
+_CRED_BLOCK = "claudeAiOauth"
+_CRED_EXPIRES_AT = "expiresAt"
+_CRED_REFRESH_EXPIRES_AT = "refreshTokenExpiresAt"
 
 # Minimal one-PR series template for the engine-boundary scratch run.  Structure
 # mirrors the committed bank templates (§12); the §6 executor overwrites
@@ -148,16 +180,154 @@ depends_on = []
 
 @dataclasses.dataclass
 class SmokeResult:
-    """One assertion's verdict: a name, pass/fail, and a human-readable detail."""
+    """One assertion's verdict: a name, pass/fail, and a human-readable detail.
+
+    ``ok`` means **proven true**, never "nothing contradicted it".  ``skipped``
+    marks an assertion whose precondition did not hold — the spawn it reads never
+    went live — and such a result carries ``ok=False``, so the gate cannot go green
+    on a check that proved nothing.  The two states are reported separately because
+    "this is broken" and "we could not tell" call for different actions.
+    """
 
     name: str
     ok: bool
     detail: str = ""
+    skipped: bool = False
+
+
+def _skipped(name: str, detail: str) -> SmokeResult:
+    """A check whose precondition did not hold: reported, never counted as a pass."""
+    return SmokeResult(name, False, f"SKIPPED (spawn not live): {detail}", skipped=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class CredentialStatus:
+    """What the credential file says about its own remaining life — and nothing else.
+
+    Exactly two values are lifted out of it (``expiresAt``, ``refreshTokenExpiresAt``,
+    both epoch **milliseconds**).  No token, no scope list, no subscription field, and
+    nothing from the ``mcpOAuth`` block ever enters this object, so nothing a smoke
+    run prints or logs can carry one (ADR-0004).
+    """
+
+    found: bool
+    readable: bool
+    expires_at_ms: int | None = None
+    refresh_expires_at_ms: int | None = None
+    detail: str = ""
+
+
+def read_credential_status(path: str | Path | None = None) -> CredentialStatus:
+    """Read the two expiry timestamps from *path* (default ``~/.claude/.credentials.json``).
+
+    Zero cost and no spawn.  Every failure to read is reported as a failure to read —
+    a missing, locked or shapeless file gives ``found``/``readable``/values that say so,
+    never a silent default that would let the gate pass by absence.
+    """
+    p = Path(path) if path is not None else Path.home() / ".claude" / ".credentials.json"
+    if not p.is_file():
+        return CredentialStatus(
+            found=False, readable=False, detail=f"no credential file at {p.name}"
+        )
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        return CredentialStatus(found=True, readable=False, detail=f"{type(exc).__name__}")
+    block = data.get(_CRED_BLOCK) if isinstance(data, dict) else None
+    if not isinstance(block, dict):
+        return CredentialStatus(
+            found=True, readable=True, detail=f"no {_CRED_BLOCK} block in the credential file"
+        )
+
+    def _ms(key: str) -> int | None:
+        value = block.get(key)
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
+
+    return CredentialStatus(
+        found=True,
+        readable=True,
+        expires_at_ms=_ms(_CRED_EXPIRES_AT),
+        refresh_expires_at_ms=_ms(_CRED_REFRESH_EXPIRES_AT),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Pure assertions — observation -> SmokeResult (unit-tested directly)
 # ---------------------------------------------------------------------------
+
+
+def _hms(seconds: float) -> str:
+    """A duration as ``1d 2h`` / ``3h 4m`` / ``5m`` — coarse on purpose."""
+    seconds = int(seconds)
+    sign = "-" if seconds < 0 else ""
+    seconds = abs(seconds)
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes = rem // 60
+    if days:
+        return f"{sign}{days}d {hours}h"
+    if hours:
+        return f"{sign}{hours}h {minutes}m"
+    return f"{sign}{minutes}m"
+
+
+def assert_credential_live(
+    status: CredentialStatus,
+    *,
+    now_s: float | None = None,
+    min_ttl_s: float = CREDENTIAL_MIN_TTL_S,
+) -> SmokeResult:
+    """The seat has enough credential life left to be worth spending against.
+
+    FATH-B04(a), open since the first triage pass and recurring since: nothing checked
+    remaining credential life before a matrix started, so a run began, spawned, and
+    died on auth — repeatedly, and once "for the third and fourth time in one day".
+
+    What decides it is the **refresh** window, not the access token: the CLI refreshes
+    an expired access token on demand, so a short-lived one is normal.  A refresh token
+    that has expired is a dead seat, and the only cure is re-authentication.
+    """
+    name = "credential has life left (free, no spawn)"
+    now = time.time() if now_s is None else now_s
+    reauth = "re-authenticate (`claude` once, interactively), then re-run"
+
+    if not status.found:
+        return SmokeResult(name, False, f"{status.detail}; {reauth}")
+    if not status.readable:
+        return SmokeResult(name, False, f"credential file unreadable ({status.detail}); {reauth}")
+    if status.expires_at_ms is None and status.refresh_expires_at_ms is None:
+        return SmokeResult(
+            name,
+            False,
+            f"credential carries neither {_CRED_EXPIRES_AT} nor {_CRED_REFRESH_EXPIRES_AT} "
+            f"({status.detail or 'unexpected shape'}), so its life cannot be checked; {reauth}",
+        )
+
+    access_left = None if status.expires_at_ms is None else status.expires_at_ms / 1000.0 - now
+    refresh_left = (
+        None
+        if status.refresh_expires_at_ms is None
+        else status.refresh_expires_at_ms / 1000.0 - now
+    )
+    shape = (
+        f"access {'n/a' if access_left is None else _hms(access_left)}, "
+        f"refresh {'n/a' if refresh_left is None else _hms(refresh_left)}"
+    )
+
+    if refresh_left is None:
+        # No refresh window to fall back on: the access token is the whole life.
+        if access_left is None or access_left < min_ttl_s:
+            return SmokeResult(name, False, f"{shape}; under {_hms(min_ttl_s)}; {reauth}")
+        return SmokeResult(name, True, shape)
+    if refresh_left <= 0:
+        return SmokeResult(name, False, f"{shape}; the refresh token has expired; {reauth}")
+    if refresh_left < min_ttl_s:
+        return SmokeResult(
+            name,
+            False,
+            f"{shape}; less than the {_hms(min_ttl_s)} this gate requires before spend; {reauth}",
+        )
+    return SmokeResult(name, True, shape)
 
 
 def assert_isolated_config_is_credential_only(contents: list[str]) -> SmokeResult:
@@ -187,22 +357,98 @@ def assert_authed_completes(record: RunRecord) -> SmokeResult:
 
 
 def assert_activity_detected(record: RunRecord) -> SmokeResult:
-    """The stream-json parser recovered activity (turns or tokens) from the spawn."""
-    ok = record.num_turns > 0 or record.tokens_out > 0 or record.tokens_in > 0
-    return SmokeResult(
-        "stream parsing detects activity",
-        ok,
-        f"turns={record.num_turns} tokens_in={record.tokens_in} tokens_out={record.tokens_out}",
-    )
+    """The stream-json parser recovered activity from a spawn that actually ran.
+
+    Two changes from the version that passed hollow.  **Liveness first**: a spawn with
+    an ``INFRASTRUCTURE`` status never authenticated, so its stream proves nothing about
+    the parser and the check is SKIPPED rather than concluded either way.  **Tokens, not
+    turns**: a turn count comes from the harness's own accounting and was ``1`` on a spawn
+    that reached no model, while tokens are emitted only by a spawn the model answered.
+    The recorded hollow pass was exactly ``turns=1 tokens_in=0 tokens_out=0``.
+    """
+    name = "stream parsing detects activity"
+    shape = f"turns={record.num_turns} tokens_in={record.tokens_in} tokens_out={record.tokens_out}"
+    if record.status is not ExitStatus.OK:
+        return _skipped(name, f"status={record.status.value} {shape}")
+    ok = record.tokens_out > 0 or record.tokens_in > 0
+    return SmokeResult(name, ok, shape)
 
 
 def assert_tool_denied(leaked_files: list[str], record: RunRecord) -> SmokeResult:
-    """Default-deny + explicit disallow refused the write: no file was created."""
-    ok = not leaked_files
+    """Default-deny + explicit disallow refused the write: no file was created.
+
+    Gated on liveness for the same reason: "no file was created" is what a spawn that
+    never ran produces, so on a dead spawn the empty leak list is the absence of a tool
+    call, not the refusal of one.  SKIPPED, not PASS.
+    """
+    name = "disallowed tool refused under default-deny"
+    shape = f"files_created={leaked_files} status={record.status.value}"
+    if record.status is not ExitStatus.OK:
+        return _skipped(name, shape)
+    return SmokeResult(name, not leaked_files, shape)
+
+
+def assert_concurrency_exclusion() -> SmokeResult:
+    """One holder at a time, and a dead holder's claim is released, not waited on.
+
+    Exercised against a scratch lock directory, so it costs nothing and needs no seat —
+    which is exactly why it can ship now.  The three deadlocks this mechanism answers
+    were all decidable from the lock's own timestamps and were not decided, because
+    nothing recorded whether a holder was alive.
+    """
+    from fathom import runlock
+
+    name = "concurrency exclusion: one run per bank, dead holders released"
+    scratch = Path(tempfile.mkdtemp(prefix="fathom-smoke-lock-"))
+    try:
+        first = runlock.RunLock("smoke", lock_root=scratch, label="smoke holder")
+        first.acquire(timeout_s=5.0, poll_s=0.02)
+        try:
+            second = runlock.RunLock("smoke", lock_root=scratch, label="smoke waiter")
+            try:
+                second.acquire(timeout_s=0.3, poll_s=0.02)
+            except runlock.LockTimeout:
+                excluded = True
+            else:
+                second.release()
+                excluded = False
+        finally:
+            first.release()
+
+        # A ticket whose holder stopped beating must expire from its own timestamp.
+        stale_dir = runlock.lock_dir_for("stale", scratch)
+        stale_dir.mkdir(parents=True, exist_ok=True)
+        dead = stale_dir / "00000000000000000001-0000001-deadbeef.ticket.json"
+        dead.write_text(
+            json.dumps(
+                {
+                    "pid": 1,
+                    "created_ns": 1,
+                    "heartbeat_s": time.time() - runlock.STALE_AFTER_S - 10,
+                    "host": "",
+                    "label": "a holder that died without releasing",
+                }
+            ),
+            encoding="utf-8",
+        )
+        third = runlock.RunLock("stale", lock_root=scratch)
+        try:
+            third.acquire(timeout_s=5.0, poll_s=0.02)
+            released = not dead.exists()
+        except runlock.LockTimeout:
+            released = False
+        finally:
+            third.release()
+    finally:
+        cleanup_dir(str(scratch))
+
+    ok = excluded and released
     return SmokeResult(
-        "disallowed tool refused under default-deny",
+        name,
         ok,
-        f"files_created={leaked_files} status={record.status.value}",
+        f"second acquirer excluded={excluded} dead holder released={released} "
+        f"(horizon {runlock.STALE_AFTER_S:.0f}s, beat every "
+        f"{runlock.HEARTBEAT_INTERVAL_S:.0f}s)",
     )
 
 
@@ -349,6 +595,10 @@ class SmokeProbes(Protocol):
     credential-only spawns and the engine-boundary shim; tests pass a stub.
     """
 
+    def credential_status(self) -> CredentialStatus:
+        """The two expiry timestamps of the real credential (free; no spawn)."""
+        ...
+
     def isolated_config_contents(self) -> list[str]:
         """Sorted top-level names in a freshly made isolated config dir."""
         ...
@@ -398,15 +648,29 @@ def run_smoke(
     force_fail: bool = False,
     include_engine: bool = True,
     out: TextIO | None = None,
+    now_s: float | None = None,
 ) -> int:
     """Run the smoke assertions against *probes*; print each; return 0/1.
 
-    Returns 0 only when every check passed.  ``force_fail`` appends a failing
-    check (the nonzero-path demonstration); ``include_engine`` toggles the
-    engine-boundary group (group 4) for environments without the series engine.
+    Returns 0 only when every check was **proven**: a failed check and a skipped
+    one both keep it nonzero.  ``force_fail`` appends a failing check (the
+    nonzero-path demonstration); ``include_engine`` toggles the engine-boundary
+    group (group 5) for environments without the series engine; ``now_s`` pins the
+    clock the credential pre-flight compares against (tests).
     """
     _out = out if out is not None else sys.stdout
     results: list[SmokeResult] = []
+
+    # Check 0, first and free: every group below it reads a spawn, and a spawn under
+    # a dead credential cannot prove anything the groups below claim to prove.
+    results += _guard(
+        "credential pre-flight",
+        lambda: [assert_credential_live(probes.credential_status(), now_s=now_s)],
+    )
+
+    # Operational, free, spawn-free — and it ships in the same release as the lock it
+    # checks, which is FATH-B64's own corrected sequencing rule.
+    results += _guard("concurrency exclusion", lambda: [assert_concurrency_exclusion()])
 
     results += _guard(
         "isolated config",
@@ -457,16 +721,34 @@ def run_smoke(
         )
 
     for r in results:
-        print(f"[{'PASS' if r.ok else 'FAIL'}] {r.name}\n        {r.detail}", file=_out)
+        print(f"[{_label(r)}] {r.name}\n        {r.detail}", file=_out)
 
     passed = sum(1 for r in results if r.ok)
+    failed = [r.name for r in results if not r.ok and not r.skipped]
+    skipped = [r.name for r in results if r.skipped]
     all_ok = passed == len(results)
     print("", file=_out)
-    print(
-        f"SMOKE RESULT: {'ALL PASS' if all_ok else 'SOME FAILED'} ({passed}/{len(results)} checks)",
-        file=_out,
-    )
+    # T25c: name them here too. The `7/8` headline read as "mostly fine" precisely
+    # because the count travelled without the names, and the count is the line an
+    # operator quotes. A verdict a reader has to scroll up to interpret is half a verdict.
+    verdict = "ALL PASS" if all_ok else _verdict(failed, skipped)
+    print(f"SMOKE RESULT: {verdict} ({passed}/{len(results)} checks)", file=_out)
     return 0 if all_ok else 1
+
+
+def _label(result: SmokeResult) -> str:
+    if result.skipped:
+        return "SKIP"
+    return "PASS" if result.ok else "FAIL"
+
+
+def _verdict(failed: list[str], skipped: list[str]) -> str:
+    parts = []
+    if failed:
+        parts.append("FAILED: " + ", ".join(failed))
+    if skipped:
+        parts.append("SKIPPED (proved nothing): " + ", ".join(skipped))
+    return "; ".join(parts) if parts else "SOME FAILED"
 
 
 # ---------------------------------------------------------------------------
@@ -651,6 +933,14 @@ class RealProbes:
 
     def _scenario(self) -> ResolvedScenario:
         return _smoke_scenario(self.model, self.effort, self.spawn_timeout_s)
+
+    # -- group 0 (credential life; free, no spawn) --------------------------
+
+    def credential_status(self) -> CredentialStatus:
+        # Reads the SAME file `make_isolated_config` copies, so the pre-flight and
+        # the spawns below it cannot disagree about which credential is in play.
+        real = Path(self.real_config_dir) if self.real_config_dir else Path.home() / ".claude"
+        return read_credential_status(real / ".credentials.json")
 
     # -- group 1 (config) ---------------------------------------------------
 

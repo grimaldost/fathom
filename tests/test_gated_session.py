@@ -233,6 +233,84 @@ def test_commands_without_placeholders_are_byte_identical():
             assert expand_gate_placeholders(cmd, task_dir=ws, workspace=ws) == cmd
 
 
+# ---------------------------------------------------------------------------
+# T34a — a gate whose output cannot be decoded must not read as a gate that
+# printed nothing.  With `encoding="utf-8"` and no `errors=`, the reader thread
+# raises inside subprocess.run, which returns with the exit code intact and the
+# offending stream as None; `(None or "") + (None or "")` is `""`, and the fix
+# loop is then re-briefed with nothing.  Reproduced here against a real
+# subprocess emitting byte 0x97 (the em-dash a cp1252 console stream produced).
+# ---------------------------------------------------------------------------
+
+
+def _emit_bad_byte_script(d: Path) -> Path:
+    """A script that writes an invalid-UTF-8 byte to stdout and exits red."""
+    script = d / "emit_bad_byte.py"
+    script.write_bytes(
+        b"import sys\n"
+        b'sys.stdout.buffer.write(b"gate said: \\x97 FAILED on 2 checks\\n")\n'
+        b"sys.stdout.flush()\n"
+        b"sys.exit(1)\n"
+    )
+    return script
+
+
+def test_undecodable_gate_output_is_not_an_empty_re_brief():
+    """The whole finding: a byte invalid under UTF-8 blanked the fix prompt."""
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        script = _emit_bad_byte_script(ws)
+        cmd = f'"{sys.executable}" "{script}"'
+        ok, output = GatedSessionExecutor._run_gate(cmd, ws)
+        assert ok is False, "the verdict must stay red — this fix never touches red/green"
+        assert output != "", "a gate that printed output must not re-brief with nothing"
+        assert "FAILED on 2 checks" in output, output
+
+
+def test_a_lost_gate_stream_is_a_named_condition_not_an_empty_string():
+    """`stdout is None` is a distinct fact from "the gate ran and said nothing"."""
+    import subprocess as _sp
+    import types
+
+    from fathom.strategies import gated_session as gs
+
+    def _lost_stream_run(*a, **kw):  # noqa: ANN002, ANN003
+        return _sp.CompletedProcess(args=a[0] if a else "", returncode=1, stdout=None, stderr="")
+
+    # Shadow the NAME in gated_session's namespace, never the subprocess module
+    # itself — a test that mutates the stdlib leaks into every test after it.
+    stub = types.SimpleNamespace(run=_lost_stream_run, TimeoutExpired=_sp.TimeoutExpired)
+    real_module = gs.subprocess
+    gs.subprocess = stub
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            ok, output = GatedSessionExecutor._run_gate("whatever", Path(d))
+    finally:
+        gs.subprocess = real_module
+    assert ok is False
+    assert output == gs.GATE_STREAM_LOST, output
+
+
+def test_fix_prompt_carries_the_undecodable_output():
+    """End to end: the re-brief the fix spawn receives is not blank."""
+    with tempfile.TemporaryDirectory() as d:
+        ws = Path(d)
+        script = _emit_bad_byte_script(ws)
+        task = Task(
+            id="t",
+            instruction="implement it",
+            limits={},
+            verify={"entry": "verify.py"},
+            task_dir=ws,
+            gate={"run": f'"{sys.executable}" "{script}"'},
+        )
+        runner = _StubRunner(write_done_on_call=99)  # never green; one fix attempt
+        GatedSessionExecutor(max_fix_attempts=1).run_trial(task, ws, None, runner)
+        fix_prompts = [p for p in runner.prompts if "quality gate is failing" in p]
+        assert fix_prompts, "the gate stayed red, so a fix must have been briefed"
+        assert "FAILED on 2 checks" in fix_prompts[0], fix_prompts[0]
+
+
 if __name__ == "__main__":
     for fn in (
         test_gate_green_on_first_check_is_one_spawn,
@@ -246,6 +324,9 @@ if __name__ == "__main__":
         test_task_dir_placeholder_resolves_to_a_runnable_probe,
         test_unexpanded_placeholder_would_fail_the_gate,
         test_commands_without_placeholders_are_byte_identical,
+        test_undecodable_gate_output_is_not_an_empty_re_brief,
+        test_a_lost_gate_stream_is_a_named_condition_not_an_empty_string,
+        test_fix_prompt_carries_the_undecodable_output,
     ):
         fn()
         print(f"ok {fn.__name__}")

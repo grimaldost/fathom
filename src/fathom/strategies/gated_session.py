@@ -49,6 +49,19 @@ _EXTRA_TAIL_CHARS = 500
 _EXTRA_NOT_REACHED = "<not run: the task's own gate was red>"
 _EXTRA_SILENT = "<ran, no output>"
 
+# `subprocess.run` decodes each stream on its own reader THREAD. When a decode
+# raises there, nothing propagates to the caller: the call returns with the exit
+# code intact and that stream as ``None``. Read strictly (the pre-0.6.0 posture),
+# a single non-ASCII byte from a cp1252 console therefore turned the gate's whole
+# output into ``(None or "") + (None or "")`` — an empty string — and the fix loop
+# was re-briefed with nothing while the red/green verdict stayed correct.
+# ``errors="replace"`` (below) removes the cause; this names what is left, because
+# a lost stream must not be able to re-enter the same silence by another route.
+GATE_STREAM_LOST = (
+    "<gate output unavailable: a reader thread produced no text for this stream; "
+    "the exit code below is still the gate's own verdict>"
+)
+
 # Run-time path placeholders a scenario's ``[gate].extra`` command may carry.
 # A gate command runs with ``cwd`` = the trial workspace (a fresh temp dir), so a
 # harness-side probe living in the task directory is unreachable by any relative
@@ -247,6 +260,15 @@ class GatedSessionExecutor:
 
     @staticmethod
     def _run_gate(cmd: str, workspace: Path) -> tuple[bool, str]:
+        """Run one gate command; return ``(exited_zero, combined output)``.
+
+        ``errors="replace"`` matches the posture already applied to the harness's own
+        stdout: a gate is a task-authored command, often an external tool, and what it
+        prints is not fathom's to constrain to ASCII. A lost stream is reported as
+        :data:`GATE_STREAM_LOST` rather than as an empty string, so "the gate said
+        nothing" and "we could not read what the gate said" stay distinguishable in the
+        fix prompt and in the trial row's ``detail``.
+        """
         try:
             proc = subprocess.run(
                 cmd,
@@ -255,11 +277,14 @@ class GatedSessionExecutor:
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
+                errors="replace",
                 timeout=_GATE_TIMEOUT_S,
             )
         except subprocess.TimeoutExpired:
             return False, f"gate timed out after {_GATE_TIMEOUT_S}s"
-        return proc.returncode == 0, (proc.stdout or "") + (proc.stderr or "")
+        if proc.stdout is None or proc.stderr is None:
+            return proc.returncode == 0, GATE_STREAM_LOST
+        return proc.returncode == 0, proc.stdout + proc.stderr
 
     @staticmethod
     def _infra(runs: list[RunRecord]) -> TrialResult:
