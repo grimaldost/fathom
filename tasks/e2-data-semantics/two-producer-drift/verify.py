@@ -25,6 +25,7 @@ code.
 import importlib
 import json
 import sys
+import warnings
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -90,8 +91,8 @@ def _load_attr(view, hint, dotted, func_name, name_filter=None):
             attr = getattr(module, func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         for path in _iter_module_paths(view, hint):
             if name_filter and name_filter not in path.as_posix().lower():
                 continue
@@ -104,7 +105,8 @@ def _load_attr(view, hint, dotted, func_name, name_filter=None):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 module = importlib.import_module(".".join(rel.parts))
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             attr = getattr(module, func_name, None)
             if callable(attr):
@@ -203,8 +205,12 @@ def main():
             result["both_producers_reconciled"] = (
                 len(key_types) == 1 and _natural_join(order_rows, settlement_rows) == EXPECTED
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"reconciliation_covers_all_periods, both_producers_reconciled: could not be scored "
+            f"and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if result[GATE] else 1

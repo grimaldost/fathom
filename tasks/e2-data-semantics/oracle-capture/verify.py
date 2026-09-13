@@ -21,6 +21,7 @@ everything untouched.
 import importlib
 import json
 import sys
+import warnings
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -59,8 +60,8 @@ def _load_func(view, hint, dotted, func_name):
             attr = getattr(importlib.import_module(dotted), func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         preferred = view / hint
         candidates = [preferred] if preferred.is_file() else []
         candidates += [
@@ -78,7 +79,8 @@ def _load_func(view, hint, dotted, func_name):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 attr = getattr(importlib.import_module(".".join(rel.parts)), func_name, None)
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             if callable(attr):
                 return attr
@@ -136,13 +138,19 @@ def main():
             totals = func([dict(row) for row in CANONICAL_ORDERS])
             if isinstance(totals, dict):
                 result["output_correct_on_subtle_case"] = _decimals(totals) == KNOWN_GOOD
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"output_correct_on_subtle_case: could not be scored and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     try:
         result["expected_values_unmodified"] = _baseline_intact(view)
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"expected_values_unmodified: could not be scored and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if all(result.values()) else 1

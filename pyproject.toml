@@ -1,6 +1,6 @@
 [project]
 name = "fathom"
-version = "0.6.1"
+version = "0.6.2"
 description = "Scenario-blind tool-effectiveness evals"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -103,17 +103,23 @@ explicit-preview-rules = true  # to just that rule, matching convoy's own preced
 # Every other path under tasks/ is one narrow, disposable eval task's own definition: a
 # verify.py/analyse.py gate script or scenario glue for exactly one scenario, not this
 # repo's reusable engineering surface. Two concrete collisions, not a blanket exemption:
-#   - S110/S112/SIM105 (silent except-pass/except-continue/suppressible-exception): real,
-#     and load-bearing precisely because these are eval GATES -- but ~40 hits are a
-#     boilerplate try/except template repeated near-identically across the e2-data-semantics
-#     bank and several csvcoalesce/retry-backoff task variants. Fixing each correctly means
-#     reading each gate's own scoring logic to add the right log line without changing a
-#     single trial's pass/fail outcome, which is out of proportion to a lint-config change
-#     and risks exactly the silent-scoring-drift this repo's reconcile.py exists to catch.
-#     Deferred visibly (flagged as a follow-up), not dropped quietly.
+#   - SIM105 (suppressible-exception): the 18 remaining hits are already NARROW handlers
+#     (`except ValueError: pass` and kin) in bugfix_verify.py / e1-debug gates. The rule is
+#     a style preference for `contextlib.suppress`, not a safety signal, and rewriting a
+#     gate's control flow to satisfy it would touch scoring code for no diagnostic gain.
+#     S110/S112 are NO LONGER ignored here: all 33 sites now name what they swallowed
+#     (0.6.2). Each `except Exception:` became `except Exception as exc:` plus a
+#     `warnings.warn(...)` carrying the module, candidate or criterion that failed --
+#     control flow, return value, stdout and exit code untouched, which is what makes it
+#     safe over banks that already hold paid trials. Proven rather than asserted: every
+#     affected gate was run against each of its own views before and after, and all 31
+#     runs match byte-for-byte on stdout and exit code. The warning lands on stderr, which
+#     `grading/verifier.py::extract_criteria` never reads, and PYTHONWARNINGS is not in the
+#     env allow-list that file forwards, so the warn cannot be promoted to an error inside
+#     a gate. No dataset_version bump: no trial's grade can move.
 #   - B905 (zip-without-explicit-strict): the 3 tasks/ hits are the same pattern in
 #     ablation-v1/querytable and the retry-backoff verify.py copies.
-"tasks/**" = ["S110", "S112", "SIM105", "B905"]
+"tasks/**" = ["SIM105", "B905"]
 # Two specific gate scripts left byte-untouched on purpose rather than edited even for a
 # one-line E501 wrap, because each carries its own documented history of a post-hoc edit
 # causing real harm and both feed already-published, already-paid findings:

@@ -5,6 +5,51 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-09-13
+
+**Patch.** The 33 silent `except`/`pass` and `except`/`continue` sites that 0.6.1 scoped off
+`tasks/**` now name what they swallowed. `S110`/`S112` leave the per-file-ignore list; the
+deferral 0.6.1 recorded is discharged rather than carried.
+
+### Changed
+
+- **Every gate that swallowed an exception now says which one, and why it did not matter**
+  (33 sites across 15 `verify.py` files in `e2-data-semantics`, `humble-vs-super-v1/v2/v5`
+  and `model-tier-v1`). Each `except Exception:` became `except Exception as exc:` followed by
+  a `warnings.warn(...)`, matching `report.py`'s idiom, carrying the module that would not
+  import, the candidate that was skipped, or the criteria that stayed at their default. The
+  three shapes are the gates' own: the hinted-module attempt in `_load_func`/`_load_attr`, the
+  candidate scan, and criterion scoring in `main()`. A gate could previously not distinguish
+  "this candidate does not match" from "this gate is broken"; it can now.
+
+  **No handler was narrowed, deliberately.** Replacing `except Exception` with a specific type
+  would let every other exception propagate, turning a scored trial into a crashed gate — a
+  changed outcome over banks that already hold **746 paid, committed trial rows**
+  (`e2-data-semantics` 36, `humble-vs-super-v1` 240, `humble-vs-super-v2` 120,
+  `model-tier-v1` 350). Adding a line to stderr changes nothing a trial is graded on.
+
+  **Outcome-neutrality is proven, not asserted.** Every affected gate was run against each of
+  its own views (`fixtures`, `solution`, `refs`) before and after the change: **31 runs, 0
+  differences in stdout, 0 in exit code** — a baseline that discriminates, since it splits 24
+  failing and 7 passing. Two independent reasons it cannot drift: the warning goes to stderr,
+  which `grading/verifier.py::extract_criteria` never reads (it parses stdout only, and the
+  exit code comes from `all(result.values())`); and `PYTHONWARNINGS` is absent from the env
+  allow-list that same module forwards to the gate subprocess, so a warning cannot be promoted
+  to an error inside a gate. **No `dataset_version` bump**: no trial's grade can move, so the
+  banks' ledgers stay comparable across this change.
+
+  The edit was made through the AST, never by matching lines. These gates embed candidate and
+  mutant **source code in triple-quoted strings** — the naive mutant that `tests_present` is
+  scored against lives in one — and a line-oriented pass writes into them, silently moving the
+  ruler of a criterion. All 50 module-level string constants across the 15 files are
+  byte-identical after the change, and the seven `csvcoalesce`/`retry-backoff` gates that are
+  byte-identical copies of one another still are.
+
+- **`S110`/`S112` drop out of `tasks/**`'s per-file-ignores.** `SIM105` and `B905` stay, and
+  the comment now says what each is still for: the 18 remaining `SIM105` hits are already
+  narrow handlers (`except ValueError: pass`) where the rule is a style preference for
+  `contextlib.suppress`, not a safety signal.
+
 ## [0.6.1] - 2026-09-13
 
 **Patch.** `ruff` 0.15.20 → 0.16.5 (dependabot #56, rebased onto today's `main`). Nothing an

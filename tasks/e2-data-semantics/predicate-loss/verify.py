@@ -19,6 +19,7 @@ Fails closed on any error.
 import importlib
 import json
 import sys
+import warnings
 from pathlib import Path
 
 AS_OF = "2026-06-30"
@@ -106,8 +107,8 @@ def _load_func(view, hint, dotted, func_name):
             attr = getattr(importlib.import_module(dotted), func_name, None)
             if callable(attr):
                 return attr
-        except Exception:
-            pass
+        except Exception as exc:
+            warnings.warn(f"{dotted}: did not import; skipping it: {exc}", stacklevel=2)
         preferred = view / hint
         candidates = [preferred] if preferred.is_file() else []
         candidates += [
@@ -125,7 +126,8 @@ def _load_func(view, hint, dotted, func_name):
             try:
                 rel = path.relative_to(view).with_suffix("")
                 attr = getattr(importlib.import_module(".".join(rel.parts)), func_name, None)
-            except Exception:
+            except Exception as exc:
+                warnings.warn(f"{path}: did not import; skipping it: {exc}", stacklevel=2)
                 continue
             if callable(attr):
                 return attr
@@ -166,8 +168,12 @@ def main():
             if ids is not None:
                 result["soft_deleted_excluded"] = not (SOFT_DELETED_IDS & set(ids))
                 result["rowset_matches_known_good"] = sorted(ids) == KNOWN_GOOD_IDS
-    except Exception:
-        pass
+    except Exception as exc:
+        warnings.warn(
+            f"soft_deleted_excluded, rowset_matches_known_good: could not be scored "
+            f"and stays at its default: {exc}",
+            stacklevel=2,
+        )
 
     print(json.dumps(result, sort_keys=True))
     return 0 if result[GATE] else 1
