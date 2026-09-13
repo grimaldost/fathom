@@ -147,14 +147,18 @@ measurement it produced is the reason several rows below are deferred rather tha
 These are **not** open rows waiting for someone to notice them. Each was designed, examined against
 the code, and deferred for a stated reason; the trigger is what would change the answer.
 
-- **FATH-B53 (run lock + heartbeat) — deferred to 0.5.0.** Two unresolved design questions and one
-  gate problem. The lock cannot live under `ledger/`: `.gitignore` has no ledger entry and `ledger/`
-  is tracked, so it would become a committed artifact the first time anyone runs `git add ledger/`
-  after a matrix. The heartbeat has no obviously right seam (per-spawn, per-trial) and no safe
-  staleness horizon. And its failure mode is multi-process on one authenticated seat, which this
-  repo's gate cannot exercise at all — so it would ship untested against the thing it is for.
-  **Trigger:** a decision on the heartbeat seam plus a lock path outside `ledger/` with its
-  `.gitignore` rule in the same change.
+- **FATH-B53 (run lock + heartbeat) — SHIPPED in 0.6.0**, having missed its own 0.5.0 trigger by a
+  release. The deferral stood on two unresolved design questions and one gate problem; the argument
+  is kept here beside the answer. *The lock cannot live under `ledger/`* — it does not: it lives in
+  `.fathom/locks/`, gitignored in the same change. *The heartbeat has no obviously right seam and no
+  safe staleness horizon* — the seam is a background thread beating every 15s against a 120s horizon,
+  because a per-trial beat gives a horizon no shorter than the longest trial, which is exactly the
+  horizon that made the three observed deadlocks undecidable. *Its failure mode is multi-process on
+  one authenticated seat, which this repo's gate cannot exercise* — true of the **seat** and false of
+  the **lock**: who holds it is a pure function of the ticket files, so the decision is unit-tested
+  against handwritten tickets and the exclusion is exercised by six real OS processes racing one
+  directory, at no cost and with no credential. The cost of the extra release was four more
+  hand-written stop/pause scripts, two of them on the same day. `fathom stop` ships with it.
 - **FATH-B63 (cost reconciliation) — deferred to 0.5.0.** It is downstream of preimage coverage,
   which is **0/2985 rows today** and only grows as trials are bought; and a recompute-vs-stored form
   starts with ~129 day-one exceptions, which is the table size that makes a gate hollow.
@@ -167,16 +171,22 @@ the code, and deferred for a stated reason; the trigger is what would change the
   is a `@contextmanager` and the failure surfaces at `__enter__`, not at the call — a large diff for
   a better message on a path that already exits nonzero. **Trigger:** the cross-invocation half
   finding a carrier (the lock is the natural one), at which point the exit code is the seam a buy
-  script branches on.
+  script branches on. **Unblocked by FATH-B53 (0.6.0):** `fathom run` now has the lock as that
+  carrier, and `EXIT_STOPPED` (16) plus `EXIT_CREDENTIAL` (15) are seams a buy script can branch on.
+  Not built.
 - **FATH-B59 (orphan-process preflight) — deferred.** The failure is Windows holding an open file;
   CI runs ubuntu, where it is a non-issue, so the check would ship unexercised by the gate.
   **Trigger:** it rides FATH-B64's operational check group, whenever that group has a way to be
-  exercised on CI.
+  exercised on CI. **Unblocked by FATH-B53 (0.6.0):** that group now exists and is CI-exercisable,
+  because the lock needs no seat. Not built.
 - **FATH-B64 (operational check group in `smoke`) — deferred, and the sequencing is corrected.**
   The v4 plan had this group land *after* the mechanisms it gates. A gate written after the thing it
   gates is a gate written to pass, which is the exact vacuity this release is about. **Trigger:**
   each check ships in the same change as its mechanism, so this row dissolves into B53 and its
-  siblings rather than landing as a trailing part.
+  siblings rather than landing as a trailing part. **Partly SHIPPED in 0.6.0:** the
+  concurrency-exclusion check landed in the same release as the lock it checks, per this row's own
+  rule. The rest of the group (rail refusal, gate-path validity, MCP bounded-wait) still waits on its
+  own mechanism.
 
 ### Measured and worth recording: the root cause behind the 45%
 

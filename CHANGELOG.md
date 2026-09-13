@@ -5,6 +5,92 @@ Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a change
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-13
+
+**Minor.** `fathom run` now takes a lock on its bank before it spends, and `fathom
+stop` is a new verb — a caller's behaviour changes even though nothing already
+recorded does. The three clusters here come from the 2026-09-13 feedback triage
+(v5, 14 reports): the run lock deferred by name to 0.5.0 and missed, a credential
+pre-flight whose absence let two of `smoke`'s own checks pass hollow, and a
+gate-output decode that turned a repair brief into an empty string.
+
+### Added
+
+- **A native run lock with a heartbeat** (`src/fathom/runlock.py`, `fathom run`).
+  A paid matrix consumes one seat's credential and rate budget, and fathom shipped
+  no lock: serialization was whatever convention each caller invented, which
+  produced **three deadlocks in one day** — twice from a holder that had finished
+  spending and never released, once from a process that had died still holding the
+  claim — and four hand-written stop/pause scripts across the three waves since.
+  FATH-B53 designed it and deferred it behind a named trigger (a decision on the
+  heartbeat seam plus a lock path outside `ledger/` with its `.gitignore` rule in
+  the same change); both decisions are made here. The lock lives in `.fathom/locks/`
+  (gitignored in this change — `ledger/` is tracked, so a lock there becomes a
+  committed artifact the first time anyone runs `git add ledger/`). The holder beats
+  every 15s and a claim silent for 120s is released by the next waiter, so staleness
+  is decidable from the lock's own timestamps instead of by guessing at process
+  tables. Acquirers queue FIFO through a ticket directory rather than racing a single
+  flag. `--no-lock` spends without it; `--lock-wait-s` bounds the wait.
+- **`fathom stop <bank>`** — the primitive `pause_matrix.py` and `guard_cap.py` each
+  re-implemented by hand on the same day. The default halts the holder after the
+  trial in flight: the ledger is the resume checkpoint, so nothing already bought is
+  lost (`--at-boundary` spells that default out). `--now` also terminates the
+  holder's process tree, for a run wedged inside a spawn — the `TaskStop` incident,
+  where stopping the wrapper left `uv -> fathom -> claude` alive and ~$2 went on
+  killing it by hand. A stop that finds nothing to stop exits 0.
+- **A credential-TTL pre-flight** (`fathom smoke` check 0, `fathom run`). Free, spawns
+  nothing, and reads exactly two integers out of `~/.claude/.credentials.json` —
+  `expiresAt` and `refreshTokenExpiresAt` — and never a token (ADR-0004: the
+  credential is copied, not read). What decides it is the refresh window, not the
+  access token, because the CLI refreshes an expired access token on demand. FATH-B04(a)
+  had been open since the first triage pass and recurred through the corpus, once
+  "for the third and fourth time in one day". New exit code `15`; `--skip-credential-check`
+  opts out.
+- **A concurrency-exclusion check in `smoke`** — while one ticket holds, a second
+  acquirer does not, and a ticket past the staleness horizon is released rather than
+  honoured. It ships in the same release as the lock it checks, which is FATH-B64's
+  own corrected sequencing: a gate written after the thing it gates is a gate written
+  to pass. Costs nothing and needs no seat, which is what FATH-B59 and the rest of
+  FATH-B64 were waiting for.
+
+### Fixed
+
+- **Two of `smoke`'s own checks passed hollow on a dead credential.** "Stream parsing
+  detects activity" passed with `turns=1 tokens_in=0 tokens_out=0`, and "disallowed
+  tool refused" passed with no tool call to refuse — both true by vacuity, because
+  neither verified the spawn was live before asserting on it, and the `7/8` headline
+  therefore read as "mostly fine" when nothing smoke exists to prove was proven. This
+  is the failure class fathom exists to find in other tools, inside fathom's own trust
+  gate. Both are now gated on liveness and report `SKIPPED (spawn not live)`; activity
+  additionally requires token flow rather than a turn count, since turns come from the
+  harness's own accounting and tokens only from a spawn the model answered. **A SKIPPED
+  check is not a pass and keeps the gate red** — `smoke` is the go/no-go before paid
+  spend, so "we could not prove it" must not read as "go".
+- **`_run_gate` read gate-subprocess output strictly, so a decode failure became an
+  empty re-brief** (`src/fathom/strategies/gated_session.py`). `subprocess.run` decodes
+  each stream on its own reader thread; a failure there does not propagate, so the call
+  returns with the exit code intact and that stream as `None`, and `_run_gate` built
+  `(None or "") + (None or "")` = `""`. The verdict stayed right and the fix loop went
+  out briefed with nothing — at least one A3 fix loop did, when a driver emitted an
+  em-dash through a cp1252 console stream (byte `0x97`). Now read with
+  `errors="replace"`, matching the posture already applied to the harness's own stdout;
+  a stream that still comes back `None` is recorded as a named condition rather than as
+  silence. Reproduced against a real subprocess, which is also the regression test.
+
+### Changed
+
+- **`fathom smoke`'s summary line names the checks that failed or were skipped**, not
+  only how many. The count travelled without the names, and the count is the line an
+  operator quotes.
+- **`docs/specs/2026-09-13-triage-v5-run-lock-and-credential-preflight-design.md`**
+  records the two decisions FATH-B53's trigger named, and why T26 (harness staging
+  outside the bank) is **not** in this release: its allow-list assertion is specified
+  against the init event's `tools` array, which a real init event shows to be the
+  platform's full 30-tool registry rather than the effective allow-list; and resolving
+  the harness from a staged directory moves the `[env]` templates that enter
+  `config_hash`, forking the resume key of every arm in a bank with ~3,000 committed
+  rows. Both are decisions to take deliberately, not by side effect (ADR-0002).
+
 ## [0.5.0] - 2026-09-05
 
 **Minor**, and the reason is a removal rather than an addition: `estimate_cost_usd`
