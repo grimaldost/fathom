@@ -2,6 +2,7 @@
 
 All notable changes to fathom. Format: Keep a Changelog; versioning: SemVer.
 Started at 0.2.0 — 0.1.0 is the initial public surface, unrecorded by a changelog.
+Tags start at 0.2.0; every dated version below is tagged.
 
 ## [Unreleased]
 
@@ -147,6 +148,8 @@ per-task gate scripts genuinely swallow a parse/score failure with no trace, whi
 "hollow gate" shape `reconcile.py` exists to catch elsewhere. Fixing each correctly means
 reading that gate's own scoring logic to add a log line without changing a trial's recorded
 pass/fail — real work, not a lint fix, and out of scope here.
+
+## [0.6.0] - 2026-09-13
 
 **Minor.** `fathom run` now takes a lock on its bank before it spends, and `fathom
 stop` is a new verb — a caller's behaviour changes even though nothing already

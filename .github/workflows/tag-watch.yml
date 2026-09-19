@@ -1,0 +1,77 @@
+name: tag-watch
+
+# The one release artifact no test can see. The version-sites reconciliation holds
+# pyproject.toml, .claude-plugin/plugin.json and the newest CHANGELOG heading to each
+# other, so a half-done bump fails the suite. Nothing held the tag, and the tag is what
+# `git show v0.2.0` and `git log v0.1.0..v0.2.0` answer from: an untagged version leaves
+# "what was released" unanswerable while every gate stays green.
+#
+# EVERY released version, not just the current one. Checking only the version
+# pyproject names today would let a release superseded before the next scheduled run
+# go unwatched forever. A watch that only ever asks about the newest release cannot
+# see the one thing it watches for.
+#
+# Scheduled rather than push-triggered, deliberately. The release commit lands first
+# and is tagged immediately afterwards (CONTRIBUTING, "Releasing"), so a push gate
+# would fail every release by construction and leave that commit permanently red even
+# once tagged. An alarm that is wrong at first is an alarm people learn to ignore. A
+# scheduled run re-evaluates, so the alarm clears by itself the next morning;
+# workflow_dispatch clears it immediately.
+
+# Least privilege: the check reads the checkout and its tags.
+permissions:
+  contents: read
+
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+
+jobs:
+  tagged:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 0 # full history, so the tags come with it
+      - name: every released version is tagged
+        run: |
+          # The dated headings in CHANGELOG.md are the list of what was released;
+          # [Unreleased] carries no date and the pattern skips it by construction.
+          #
+          # `tr -d` strips a carriage return. This runner is Linux and python3
+          # emits LF here, but the same line is what a maintainer runs by hand on
+          # the Windows machine that IS production, where print() translates to
+          # CRLF and every version would carry a trailing CR into the ref name.
+          # Measured locally without it: four tagged releases reported missing.
+          versions=$(python3 -c 'import pathlib, re; print("\n".join(re.findall(r"^## \[(\d+\.\d+\.\d+)\]", pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8"), re.M)))' | tr -d '\r')
+          # A cut-off, read from the CHANGELOG's own preamble rather than hard-coded
+          # here, so raising it is a changelog edit, not a workflow edit. Versions
+          # older than the cut-off were released before this repository tagged its
+          # releases, and asking about them would report a permanent, unfixable miss.
+          # Compared as integer tuples, not strings, so 0.10.0 does not sort before
+          # 0.9.0. With no such sentence, every dated version is checked.
+          cutoff=$(python3 -c 'import pathlib, re; m = re.search(r"Tags start at (\d+\.\d+\.\d+)", pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")); print(m.group(1) if m else "")' | tr -d '\r')
+          missing=""
+          for version in $versions; do
+            if [ -n "$cutoff" ]; then
+              older=$(python3 -c "print(1 if tuple(int(p) for p in '$version'.split('.')) < tuple(int(p) for p in '$cutoff'.split('.')) else 0)")
+              [ "$older" = "1" ] && continue
+            fi
+            git rev-parse -q --verify "refs/tags/v$version" > /dev/null || missing="$missing v$version"
+          done
+          # Every miss in one run rather than exiting on the first: a backlog
+          # revealed one tag per day is a backlog nobody sees the shape of.
+          if [ -n "$missing" ]; then
+            echo "::error::CHANGELOG.md records released versions with no matching tag:$missing. The tag is what identifies a release in a repository with no release page, so an untagged version leaves 'what was released' unanswerable. Tag each release commit: git tag -a vX.Y.Z -m 'X.Y.Z' <commit> && git push origin vX.Y.Z"
+            exit 1
+          fi
+          echo "every version with a dated heading in CHANGELOG.md is tagged (cutoff: ${cutoff:-none}):"
+          # `^{}` dereferences the annotated tag to the commit it points at.
+          # Without it this prints the tag OBJECT's sha, which appears nowhere in
+          # `git log` and so cannot be checked against anything.
+          for version in $versions; do
+            git rev-parse -q --verify "refs/tags/v$version^{}" > /dev/null 2>&1 && echo "  v$version -> $(git rev-parse --short "v$version^{}")"
+          done
