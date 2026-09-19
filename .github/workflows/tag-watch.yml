@@ -3,7 +3,7 @@ name: tag-watch
 # The one release artifact no test can see. The version-sites reconciliation holds
 # pyproject.toml, .claude-plugin/plugin.json and the newest CHANGELOG heading to each
 # other, so a half-done bump fails the suite. Nothing held the tag, and the tag is what
-# `git show v0.2.0` and `git log v0.1.0..v0.2.0` answer from: an untagged version leaves
+# `git show v0.2.0` and `git log v0.2.0..v0.3.0` answer from: an untagged version leaves
 # "what was released" unanswerable while every gate stays green.
 #
 # EVERY released version, not just the current one. Checking only the version
@@ -37,41 +37,44 @@ jobs:
           ref: main
           fetch-depth: 0 # full history, so the tags come with it
       - name: every released version is tagged
+        # One Python step instead of a shell pipeline: nothing here can pass because
+        # an interpreter was missing or a pipe swallowed an exit status.
         run: |
-          # The dated headings in CHANGELOG.md are the list of what was released;
-          # [Unreleased] carries no date and the pattern skips it by construction.
-          #
-          # `tr -d` strips a carriage return. This runner is Linux and python3
-          # emits LF here, but the same line is what a maintainer runs by hand on
-          # the Windows machine that IS production, where print() translates to
-          # CRLF and every version would carry a trailing CR into the ref name.
-          # Measured locally without it: four tagged releases reported missing.
-          versions=$(python3 -c 'import pathlib, re; print("\n".join(re.findall(r"^## \[(\d+\.\d+\.\d+)\]", pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8"), re.M)))' | tr -d '\r')
-          # A cut-off, read from the CHANGELOG's own preamble rather than hard-coded
-          # here, so raising it is a changelog edit, not a workflow edit. Versions
-          # older than the cut-off were released before this repository tagged its
-          # releases, and asking about them would report a permanent, unfixable miss.
-          # Compared as integer tuples, not strings, so 0.10.0 does not sort before
-          # 0.9.0. With no such sentence, every dated version is checked.
-          cutoff=$(python3 -c 'import pathlib, re; m = re.search(r"Tags start at (\d+\.\d+\.\d+)", pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")); print(m.group(1) if m else "")' | tr -d '\r')
-          missing=""
-          for version in $versions; do
-            if [ -n "$cutoff" ]; then
-              older=$(python3 -c "print(1 if tuple(int(p) for p in '$version'.split('.')) < tuple(int(p) for p in '$cutoff'.split('.')) else 0)")
-              [ "$older" = "1" ] && continue
-            fi
-            git rev-parse -q --verify "refs/tags/v$version" > /dev/null || missing="$missing v$version"
-          done
-          # Every miss in one run rather than exiting on the first: a backlog
-          # revealed one tag per day is a backlog nobody sees the shape of.
-          if [ -n "$missing" ]; then
-            echo "::error::CHANGELOG.md records released versions with no matching tag:$missing. The tag is what identifies a release in a repository with no release page, so an untagged version leaves 'what was released' unanswerable. Tag each release commit: git tag -a vX.Y.Z -m 'X.Y.Z' <commit> && git push origin vX.Y.Z"
-            exit 1
-          fi
-          echo "every version with a dated heading in CHANGELOG.md is tagged (cutoff: ${cutoff:-none}):"
-          # `^{}` dereferences the annotated tag to the commit it points at.
-          # Without it this prints the tag OBJECT's sha, which appears nowhere in
-          # `git log` and so cannot be checked against anything.
-          for version in $versions; do
-            git rev-parse -q --verify "refs/tags/v$version^{}" > /dev/null 2>&1 && echo "  v$version -> $(git rev-parse --short "v$version^{}")"
-          done
+          python3 - <<'PY'
+          import pathlib, re, subprocess, sys
+
+          # Single-CHANGELOG repositories: one entry, tag prefix "v".
+          # craft-collection: one entry per plugins/<name>/CHANGELOG.md, prefix "<name>--v".
+          TARGETS = [(pathlib.Path("CHANGELOG.md"), "v")]
+
+          def released(path):
+              text = path.read_text(encoding="utf-8")
+              first = re.search(r"^## \[", text, re.M)
+              preamble = text[: first.start()] if first else text
+              cut = re.search(r"Tags start at (\d+)\.(\d+)\.(\d+)", preamble)
+              floor = tuple(map(int, cut.groups())) if cut else (0, 0, 0)
+              found = [tuple(map(int, v)) for v in re.findall(r"^## \[(\d+)\.(\d+)\.(\d+)\]", text, re.M)]
+              return found, [v for v in found if v >= floor]
+
+          def tagged(name):
+              probe = ["git", "rev-parse", "-q", "--verify", f"refs/tags/{name}"]
+              return subprocess.run(probe, capture_output=True).returncode == 0
+
+          missing, checked = [], 0
+          for path, prefix in TARGETS:
+              found, due = released(path)
+              if not found:
+                  # A CHANGELOG with no parseable version is a changed format, not a clean bill.
+                  print(f"::error::{path} has no '## [X.Y.Z]' heading this check can read.")
+                  sys.exit(1)
+              for version in due:
+                  name = prefix + ".".join(map(str, version))
+                  checked += 1
+                  if not tagged(name):
+                      missing.append(name)
+
+          if missing:
+              print("::error::Released versions with no tag: " + ", ".join(missing) + ". Tag the release PR's merge commit: git tag -a vX.Y.Z <merge-commit> -m 'fathom X.Y.Z' && git push origin vX.Y.Z")
+              sys.exit(1)
+          print(f"{checked} released version(s) checked, all tagged.")
+          PY
