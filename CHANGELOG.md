@@ -6,6 +6,20 @@ Tags start at 0.2.0; every dated version below is tagged.
 
 ## [Unreleased]
 
+### Added
+
+- **`fathom run` defaults `FATHOM_STREAM_DIR` for a treatment arm (T35a).** An arm whose
+  scenario declares a `[context]` inject or a non-default tool allowance (anything beyond
+  `source = "none"` with no explicit `allowed`/`disallowed`) now gets its raw spawn stream
+  persisted under `.fathom/streams/<bank>/` automatically — streams are the only record of
+  what such an arm's agent actually did, and hundreds of committed ledger lines have depended
+  on streams that were opt-in and were not kept. A bare control arm is unaffected, and an
+  explicit `FATHOM_STREAM_DIR` (set before invocation) always wins over the default. Not
+  under `ledger/`: that directory is tracked, so a stream file there would become a committed
+  artifact the first time anyone runs `git add ledger/` (same reasoning as `runlock`'s
+  `LOCK_ROOT`). `fathom validate` warns, at $0 and before any spend, when such an arm is
+  planned and `FATHOM_STREAM_DIR` is not already set.
+
 ## [0.6.2] - 2026-09-13
 
 **Patch.** The 33 silent `except`/`pass` and `except`/`continue` sites that 0.6.1 scoped off

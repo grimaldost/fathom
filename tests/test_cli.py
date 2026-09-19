@@ -25,7 +25,7 @@ from fathom.adapters.base import ExitStatus
 from fathom.adapters.base import RunRecord as AdapterRunRecord
 from fathom.cli import EXIT_INFRASTRUCTURE, EXIT_OK, run_matrix, void_trial
 from fathom.grading.verifier import VerifierResult
-from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
+from fathom.scenario import ContextConfig, LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus
 from fathom.taskbank import Bank, Task, fixture_fingerprint
 
@@ -2044,3 +2044,172 @@ class StopVerbTests(unittest.TestCase):
         self.assertIsNotNone(req)
         self.assertEqual(req.reason, "program cap")
         self.assertTrue(req.at_boundary, "at-boundary is the default: it loses nothing bought")
+
+
+# ---------------------------------------------------------------------------
+# T35a — default FATHOM_STREAM_DIR for an arm with a [context] inject or a
+# non-default tool allowance; an explicit value always wins; validate warns.
+# ---------------------------------------------------------------------------
+
+
+class StreamDirDefaultTests(_Base):
+    """Streams are the only record of what a treatment arm's agent actually did.
+
+    Bare-control arms (default tools, no context inject) are unaffected — they
+    are not the arms this row is about, and forcing a stream dir on every arm
+    would silently start writing to disk for every existing bank.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self._saved_stream_dir = __import__("os").environ.pop("FATHOM_STREAM_DIR", None)
+
+    def tearDown(self):
+        import os
+
+        if self._saved_stream_dir is None:
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+        else:
+            os.environ["FATHOM_STREAM_DIR"] = self._saved_stream_dir
+        super().tearDown()
+
+    def _observed_stream_dirs(self, scenario) -> list[str | None]:
+        import os
+
+        seen: list[str | None] = []
+
+        def _record(task, ws, sc):
+            seen.append(os.environ.get("FATHOM_STREAM_DIR"))
+            return _ok_result()
+
+        _run_matrix(
+            self.bank,
+            [scenario],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            executor_factory=lambda sc: StubExecutor(result_fn=_record),
+            # Arming verification is a different gate (FATH-B01), orthogonal to
+            # T35a; skip it so a declared [context] inject reaches the trial
+            # loop here without a probe.
+            skip_arming_check=True,
+        )
+        return seen
+
+    def test_context_inject_arm_gets_a_default_stream_dir_under_the_run_output(self):
+        sc = _make_scenario(context=ContextConfig(inject="/some/skill-body.md"))
+        seen = self._observed_stream_dirs(sc)
+        self.assertTrue(seen, "the stub executor was never called")
+        for value in seen:
+            self.assertIsNotNone(value, "a [context]-inject arm must default a stream dir")
+            self.assertIn(str(pathlib.Path(".fathom") / "streams" / self.bank.name), value)
+
+    def test_non_default_tool_allowance_arm_gets_a_default_stream_dir(self):
+        sc = _make_scenario(tools=ToolsConfig(source="none", allowed=("Read", "Bash")))
+        seen = self._observed_stream_dirs(sc)
+        for value in seen:
+            self.assertIsNotNone(value, "a non-default-tools arm must default a stream dir")
+
+    def test_bare_arm_without_either_gets_no_stream_dir(self):
+        sc = _make_scenario()  # tools=ToolsConfig(source="none"), no allowed/disallowed, no context
+        seen = self._observed_stream_dirs(sc)
+        self.assertTrue(seen)
+        for value in seen:
+            self.assertIsNone(value, "a bare control arm must not get a default stream dir")
+
+    def test_explicit_stream_dir_is_kept_even_for_a_bare_arm(self):
+        import os
+
+        os.environ["FATHOM_STREAM_DIR"] = "/an/explicit/dir"
+        try:
+            sc = _make_scenario()
+            seen = self._observed_stream_dirs(sc)
+        finally:
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+        for value in seen:
+            self.assertEqual(value, "/an/explicit/dir")
+
+    def test_explicit_stream_dir_is_kept_for_a_context_inject_arm_too(self):
+        import os
+
+        os.environ["FATHOM_STREAM_DIR"] = "/an/explicit/dir"
+        try:
+            sc = _make_scenario(context=ContextConfig(inject="/some/skill-body.md"))
+            seen = self._observed_stream_dirs(sc)
+        finally:
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+        for value in seen:
+            self.assertEqual(value, "/an/explicit/dir", "an explicit value always wins")
+
+
+class ValidateWarnsMissingStreamDirTests(unittest.TestCase):
+    """`fathom validate` is the $0 preflight — it warns before any spend."""
+
+    def setUp(self):
+        import os
+
+        self._tmp = tempfile.mkdtemp()
+        self.scenarios_dir = Path(self._tmp) / "scenarios"
+        self.scenarios_dir.mkdir()
+        self._saved_stream_dir = os.environ.pop("FATHOM_STREAM_DIR", None)
+
+    def tearDown(self):
+        import os
+
+        shutil.rmtree(self._tmp, ignore_errors=True)
+        if self._saved_stream_dir is None:
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+        else:
+            os.environ["FATHOM_STREAM_DIR"] = self._saved_stream_dir
+
+    def _write_scenario(self, name: str, extra: str = "") -> None:
+        (self.scenarios_dir / f"{name}.toml").write_text(
+            f"""\
+name = "{name}"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+
+{extra}
+""",
+            encoding="utf-8",
+        )
+
+    def test_warns_when_a_context_inject_arm_is_planned_without_a_stream_dir(self):
+        import contextlib
+
+        from fathom.cli import _warn_missing_stream_dir
+
+        self._write_scenario("treated", extra='[context]\ninject = "skill-body.md"\n')
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _warn_missing_stream_dir(self.scenarios_dir)
+        self.assertIn("FATHOM_STREAM_DIR", buf.getvalue())
+        self.assertIn("treated", buf.getvalue())
+
+    def test_says_nothing_when_only_bare_arms_are_planned(self):
+        import contextlib
+
+        from fathom.cli import _warn_missing_stream_dir
+
+        self._write_scenario("bare")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _warn_missing_stream_dir(self.scenarios_dir)
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_says_nothing_when_FATHOM_STREAM_DIR_is_already_set(self):
+        import contextlib
+        import os
+
+        from fathom.cli import _warn_missing_stream_dir
+
+        self._write_scenario("treated", extra='[context]\ninject = "skill-body.md"\n')
+        os.environ["FATHOM_STREAM_DIR"] = "/already/set"
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            _warn_missing_stream_dir(self.scenarios_dir)
+        self.assertEqual(buf.getvalue(), "")

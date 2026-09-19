@@ -268,6 +268,14 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Directory holding <bank>/ task banks (default: tasks/).",
     )
     val_p.add_argument(
+        "--scenarios-dir",
+        type=pathlib.Path,
+        default=SCENARIOS_DIR,
+        dest="scenarios_dir",
+        metavar="DIR",
+        help="Directory globbed for arm *.toml, to warn on T35a (default: scenarios/).",
+    )
+    val_p.add_argument(
         "--strict",
         action="store_true",
         help="Also fail on UNVERIFIABLE properties (no reference solution, no gate).",
@@ -375,6 +383,36 @@ def _trial_ceiling_usd(
     impl = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_IMPL
     fix = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_FIX
     return n_prs * (impl + attempts * fix)
+
+
+# T35a: streams are the only record of what such an arm's agent actually did —
+# there is no ledger-side invocation counter, and hundreds of ledger lines have
+# depended on streams that were opt-in and were not kept. Not under ledger/:
+# that directory is tracked, so a stream file there becomes a committed
+# artifact the first time anyone runs `git add ledger/` (same reasoning as
+# runlock's LOCK_ROOT, `src/fathom/runlock.py`).
+_STREAM_ROOT = pathlib.Path(".fathom") / "streams"
+
+
+def _wants_stream_dir(sc: ResolvedScenario) -> bool:
+    """True for the arms this row is about: a ``[context]`` inject, or tools
+    beyond the unarmed default.
+
+    "default" tools is the same distinction ``scenario._tools_to_dict`` already
+    encodes for hashing: ``source == "none"`` with no explicit ``allowed`` or
+    ``disallowed`` list is the one config with no declared tool access at all.
+    Anything else — an explicit allowlist (every armed single-session arm has
+    one; an empty one is unarmed, not evaluated) or ``source == "repo"`` — is a
+    declared grant, and the treatment being measured needs its stream kept.
+    """
+    if sc.context.inject:
+        return True
+    tools = sc.tools
+    return tools.source != "none" or bool(tools.allowed) or bool(tools.disallowed)
+
+
+def _default_stream_dir(bank_name: str) -> pathlib.Path:
+    return _STREAM_ROOT / bank_name
 
 
 def run_matrix(
@@ -622,6 +660,11 @@ def run_matrix(
     fixture_expected = {task.id: fixture_manifest(task) for task in tasks_to_run}
     fixture_shas = {task.id: fixture_fingerprint(task) for task in tasks_to_run}
 
+    # T35a: an explicit FATHOM_STREAM_DIR always wins. Captured once, before any
+    # trial, so it is not lost if an earlier trial in this same matrix needed no
+    # default and cleared the env var (see the per-trial branch below).
+    _explicit_stream_dir = os.environ.get("FATHOM_STREAM_DIR")
+
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
         drifted = fixture_drift(task, fixture_expected[task.id])
@@ -656,6 +699,18 @@ def run_matrix(
                     file=_out,
                 )
                 return EXIT_STOPPED
+        # T35a: default FATHOM_STREAM_DIR, per trial, for an arm whose scenario
+        # declares a [context] inject or a non-default tool allowance — the
+        # kind of arm where the stream is the only record of what the agent
+        # actually did. An explicit value (set before this invocation) always
+        # wins; a bare control arm gets none, even mid-matrix after an armed
+        # arm defaulted one for an earlier trial.
+        if _explicit_stream_dir:
+            os.environ["FATHOM_STREAM_DIR"] = _explicit_stream_dir
+        elif _wants_stream_dir(sc):
+            os.environ["FATHOM_STREAM_DIR"] = str(_default_stream_dir(bank.name))
+        else:
+            os.environ.pop("FATHOM_STREAM_DIR", None)
         # Names the raw-stream file the adapter tees when FATHOM_STREAM_DIR is
         # set (opt-in post-hoc analysis); harmless otherwise.
         os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
@@ -1120,6 +1175,31 @@ def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenar
     return out
 
 
+def _warn_missing_stream_dir(scenarios_dir: pathlib.Path) -> None:
+    """T35a, the minimum case: warn before any spend when an arm that declares a
+    [context] inject or a non-default tool allowance is planned and
+    FATHOM_STREAM_DIR is not set.
+
+    `fathom run` defaults the variable itself for exactly these arms
+    (`_wants_stream_dir`); this surfaces the same fact for `validate` run on
+    its own, before a matrix — and therefore any spawn — exists to default it.
+    Unparsable scenario files are skipped (as `_load_resolved_scenarios`
+    already does for `run`), never turned into a validate failure.
+    """
+    if os.environ.get("FATHOM_STREAM_DIR"):
+        return
+    scenarios = _load_resolved_scenarios(scenarios_dir)
+    unstreamed = [sc.name for sc in scenarios if _wants_stream_dir(sc)]
+    if not unstreamed:
+        return
+    print(
+        f"WARNING: {len(unstreamed)} arm(s) in {scenarios_dir} declare a [context] inject "
+        f"or a non-default tool allowance ({', '.join(unstreamed)}) and FATHOM_STREAM_DIR is "
+        "not set. Streams are the only record of what such an arm's agent actually did; "
+        "`fathom run` defaults one under .fathom/streams/<bank>/ unless you set your own."
+    )
+
+
 def _cmd_validate(args: argparse.Namespace) -> int:
     """Check the bank-validation triad. Free — local verifier runs, no spawns."""
     import fathom.validate as _validate
@@ -1132,6 +1212,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
     print(_validate.render_validation(bank.name, checks))
+    _warn_missing_stream_dir(args.scenarios_dir)
     return EXIT_OK if _validate.validation_ok(checks, strict=args.strict) else EXIT_BANK_INVALID
 
 
