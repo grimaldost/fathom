@@ -115,8 +115,8 @@ CHOOSING_STALE_AFTER_S = 30.0
 # reading as a live holder until STALE_AFTER_S.
 UNLINK_BACKOFF_S = (0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4)
 
-# A ticket's file name leads with its FIFO number.
-_TICKET_NUMBER = re.compile(r"(\d+)-", flags=re.ASCII)
+# A ticket's file name leads with its FIFO number, then the pid that took it.
+_TICKET_NUMBER = re.compile(r"(\d+)-(?:(\d+)-)?", flags=re.ASCII)
 
 
 # ---------------------------------------------------------------------------
@@ -258,14 +258,23 @@ def next_ticket_number(lock_dir: Path) -> int:
 
 
 def _parse_ticket(path: Path) -> Ticket | None:
-    number = ticket_number(path.name)
-    if number is None:
+    match = _TICKET_NUMBER.match(path.name) if path.name.endswith(_TICKET_SUFFIX) else None
+    if match is None:
         return None
+    number = int(match.group(1))
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        # A ticket being written right now, or one whose writer died mid-write. It is
-        # not evidence of a live holder, and it is not evidence of anything else either.
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        # Released or pruned since the directory was listed.
+        return None
+    except OSError:
+        return _unread_ticket(path, number, int(match.group(2) or 0))
+    try:
+        data = json.loads(text)
+    except ValueError:
+        # Writes are atomic (`_atomic_write_json`), so no reader sees a half-written
+        # ticket. A file that does not parse was not written whole by this module, and
+        # it is not evidence of a live holder.
         return None
     if not isinstance(data, dict):
         return None
@@ -283,8 +292,32 @@ def _parse_ticket(path: Path) -> Ticket | None:
         return None
 
 
+def _unread_ticket(path: Path, number: int, pid: int) -> Ticket | None:
+    """A ticket that exists but cannot be read right now; it keeps its place.
+
+    On Windows a read fails with PermissionError while the owner's heartbeat replaces
+    the file. Treating such a ticket as absent let a waiter that read the directory at
+    that moment find nobody ahead of it and hold beside the holder. Its order comes
+    from its name. Its file's modification time stands in for the heartbeat it hides,
+    because every beat replaces the file, so a dead ticket that stays unreadable still
+    goes stale. When even that cannot be read, the ticket is taken as just beaten: the
+    error is toward "still held", which costs waiting rather than a second run.
+    """
+    try:
+        heartbeat_s = path.stat().st_mtime
+    except FileNotFoundError:
+        return None
+    except OSError:
+        heartbeat_s = time.time()
+    return Ticket(name=path.name, number=number, pid=pid, created_ns=0, heartbeat_s=heartbeat_s)
+
+
 def read_tickets(lock_dir: Path) -> list[Ticket]:
-    """Every parsable ticket in *lock_dir*, in FIFO order."""
+    """Every ticket in *lock_dir*, in FIFO order.
+
+    A ticket that cannot be read right now is included (see :func:`_unread_ticket`);
+    one that is malformed is not.
+    """
     try:
         entries = sorted(Path(lock_dir).iterdir())
     except OSError:

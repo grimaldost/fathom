@@ -61,7 +61,23 @@ Tags start at 0.2.0; every dated version below is tagged.
   warning and not an exception because `release()` runs in a `finally`, where raising would
   replace an exception already in flight.
 
-- **How the two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
+- **A holder whose ticket could not be read at that moment counted as absent.** On Windows a
+  read of a ticket fails with `PermissionError` while its owner's heartbeat replaces the file
+  (`os.replace`). With a writer replacing one ticket in a loop, 663 of 7353 reads failed.
+  `_parse_ticket` returned None for such a ticket, so a waiter that read the directory at that
+  moment found nobody ahead of it and held beside the holder. A ticket that exists but cannot be
+  read now keeps its place. Its order comes from its name (number, then pid), and its file's
+  modification time stands in for the heartbeat it hides, because every beat replaces the file,
+  so a dead ticket that stays unreadable still goes stale and is pruned. On the same measurement
+  after the fix, 486 raw reads failed and no ticket was dropped in 7992 reads. This defect
+  surfaced while testing the waiter heartbeat below. More replaces meant more collisions, and
+  the six-process contention test put two holders inside the lock in 2 of 30 runs under Python
+  3.12. It is fixed first, so no commit in the series has the wider exposure. Regression tests:
+  a waiter behind a holder whose ticket cannot be read times out instead of holding (it failed
+  on the unchanged code with `LockTimeout not raised`), and an unreadable ticket untouched past
+  the horizon is pruned instead of waited on.
+
+- **How the first two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
   the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
   1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The
   two failures were these two defects, not timing noise. Each now has a deterministic

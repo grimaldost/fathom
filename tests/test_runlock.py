@@ -405,6 +405,59 @@ class TestTicketOrderIsNotAClockReading(unittest.TestCase):
         self.assertTrue(legacy.exists())
 
 
+def _unreadable(target_matches):
+    """A `Path.read_text` that fails the way Windows does while the file is being
+    replaced (a heartbeat's `os.replace`), for every path *target_matches* accepts."""
+    real_read_text = Path.read_text
+
+    def read_text(self, *args, **kwargs):
+        if target_matches(self):
+            raise PermissionError(errno.EACCES, "Permission denied", str(self))
+        return real_read_text(self, *args, **kwargs)
+
+    return mock.patch.object(Path, "read_text", read_text)
+
+
+class TestATicketThatCannotBeReadIsStillThere(unittest.TestCase):
+    """A ticket file that exists but cannot be read right now still holds its place.
+
+    On Windows, a read that lands while the owner's heartbeat replaces the ticket
+    fails with PermissionError (measured: 663 of 7353 reads failed under a writer
+    replacing the file in a loop). `_parse_ticket` returned None for it, so the
+    holder's ticket was treated as absent, and a waiter that read the directory at
+    that moment found no one ahead of it and held.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def test_a_holder_whose_ticket_cannot_be_read_still_holds(self):
+        holder = RunLock("b", lock_root=self.root, label="holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        held = holder.dir / holder.ticket_name
+        waiter = RunLock("b", lock_root=self.root, label="waiter")
+        with _unreadable(lambda p: p == held), self.assertRaises(LockTimeout):
+            waiter.acquire(timeout_s=0.3, poll_s=0.02)
+
+    def test_an_unreadable_ticket_untouched_past_the_horizon_is_pruned(self):
+        """Counting an unreadable ticket as present must not become a new way to wait
+        forever: its file's modification time stands in for the heartbeat it hides."""
+        d = self.root / "b"
+        d.mkdir()
+        dead = d / "00000000000000000001-0000001-deadbeef.ticket.json"
+        dead.write_text("{}", encoding="utf-8")
+        old = time.time() - STALE_AFTER_S - 10
+        os.utime(dead, (old, old))
+        waiter = RunLock("b", lock_root=self.root, label="waiter")
+        with _unreadable(lambda p: p == dead):
+            waiter.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(waiter.release)
+        self.assertFalse(dead.exists(), "a dead, unreadable ticket must be released")
+
+
 def _refusing_unlink(target_matches, refusals: int | None):
     """An `os.unlink` that fails the way Windows does while another process has the
     file open (a sharing violation surfaces as PermissionError), *refusals* times for
