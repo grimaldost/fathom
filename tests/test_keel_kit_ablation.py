@@ -35,6 +35,32 @@ import keelgate_verify as kv  # noqa: E402
 
 ORACLE = kv.load_oracle()
 
+# Names the bank's fixtures must never contain, stored as (length, sha256 of the lowercased
+# name). This repository is public, so the list cannot carry the names themselves.
+FORBIDDEN_DIGESTS = frozenset(
+    {
+        (13, "72f27d80d8bec45342c5327b8dbfaa0194c5a796fadecb7bf67c24d4c9b1ad80"),
+        (11, "6ec4a324e0b2739969927b22ec659fcba9d20c525472c913c1378354e3218c76"),
+        (12, "82f1bb9548aac5757d9e6da57d9777682d34a15811dbfc3c2e81a91dfbab74e4"),
+        (11, "769cc09c53ce2ae8e72f140027aa8150c9318f56a0a51e16de477c5548e44402"),
+        (7, "e290059b42945193fc3d17062b7860d5cf296b8a4d1586b0129fa1f80ad34d91"),
+    }
+)
+
+
+def forbidden_offsets(text: str, digests: frozenset[tuple[int, str]]) -> list[int]:
+    """Offsets in `text` where a window hashes to one of `digests` (case-insensitive)."""
+    lowered = text.lower()
+    offsets = set()
+    for length in {n for n, _ in digests}:
+        wanted = {d for n, d in digests if n == length}
+        for start in range(len(lowered) - length + 1):
+            window = lowered[start : start + length].encode("utf-8")
+            if hashlib.sha256(window).hexdigest() in wanted:
+                offsets.add(start)
+    return sorted(offsets)
+
+
 CLEAN_SPEC = """\
 # Spec — a small change
 
@@ -349,13 +375,31 @@ class BankShapeTests(unittest.TestCase):
 
     def test_no_fixture_names_an_internal_tool(self):
         """Public repo: fixtures use invented domains only."""
-        forbidden = ("treasuryutils", "datacontext", "data-context", "stack-radar", "datahub")
         for path in BANK.rglob("*"):
             if not path.is_file() or "_oracle" in path.parts:
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace").lower()
-            for token in forbidden:
-                self.assertNotIn(token, text, f"{path} names {token}")
+            text = path.read_text(encoding="utf-8", errors="replace")
+            offsets = forbidden_offsets(text, FORBIDDEN_DIGESTS)
+            self.assertEqual(offsets, [], f"{path} names a forbidden token at {offsets}")
+
+    def test_the_forbidden_list_is_digests_only(self):
+        self.assertEqual(len(FORBIDDEN_DIGESTS), 5)
+        for length, digest in FORBIDDEN_DIGESTS:
+            self.assertGreater(length, 0)
+            self.assertRegex(digest, r"\A[0-9a-f]{64}\Z")
+
+    def test_a_planted_token_fails_the_check(self):
+        """The check must fire on a fixture that contains a listed token, in any case."""
+        token = "invented-planted-name"
+        digests = frozenset({(len(token), hashlib.sha256(token.encode()).hexdigest())})
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = Path(tmp) / "fixture.md"
+            fixture.write_text(
+                "# Notes\n\nThis uses Invented-Planted-NAME here.\n", encoding="utf-8"
+            )
+            text = fixture.read_text(encoding="utf-8")
+        self.assertEqual(forbidden_offsets(text, digests), [text.lower().index(token)])
+        self.assertEqual(forbidden_offsets("# Notes\n\nNothing to see.\n", digests), [])
 
 
 if __name__ == "__main__":
