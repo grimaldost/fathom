@@ -101,10 +101,16 @@ CACHE_WRITE_5M = 1.25
 CACHE_WRITE_1H = 2.0
 CACHE_READ = 0.1
 
-# Per-1k (input, output) USD by family substring.
+# Per-1k (input, output) USD by substring of the model id, FIRST MATCH WINS. A family
+# key covers every model of the family until the family carries two live prices; then
+# the model that differs gets its own key AHEAD of the family's, so the more specific
+# substring is tried first. Opus 5.5 ($4/$20 per MTok) sits beside Opus 5 and 4.8
+# ($5/$25); keyed by family alone, an Opus 5.5 trial is over-priced by 25% and the
+# ledger audit flags a reported figure that is right.
 PRICE_PER_1K: dict[str, tuple[float, float]] = {
     "haiku": (0.001, 0.005),
     "sonnet": (0.002, 0.010),
+    "opus-5-5": (0.004, 0.020),
     "opus": (0.005, 0.025),
     "fable": (0.010, 0.050),
 }
@@ -116,7 +122,7 @@ class MissingGroundTruth(KeyError):
 
 
 def rates_for(model_id: str) -> tuple[float, float]:
-    """(input, output) per-1k USD for *model_id*, by family substring."""
+    """(input, output) per-1k USD for *model_id*: the first key it contains wins."""
     lower = model_id.lower()
     for family, rate in PRICE_PER_1K.items():
         if family in lower:

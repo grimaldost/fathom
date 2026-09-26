@@ -20,6 +20,15 @@ Tags start at 0.2.0; every dated version below is tagged.
   `LOCK_ROOT`). `fathom validate` warns, at $0 and before any spend, when such an arm is
   planned and `FATHOM_STREAM_DIR` is not already set.
 
+### Fixed
+
+- **An Opus 5.5 trial is priced at its own rate.** `routing.PRICE_PER_1K` is matched by
+  substring of the model id, first match wins, and had one key per family. Opus 5.5
+  ($4/$20 per MTok) now sits beside Opus 5 and 4.8 ($5/$25), so keyed by family alone an
+  Opus 5.5 trial was over-priced by 25% and the ledger audit would flag a reported figure that
+  is right. `opus-5-5` gets its own key ahead of `opus`. The series skeleton's example model
+  string follows the lineup (`docs/method/series-toml-skeleton.md`).
+
 ## [0.6.2] - 2026-09-13
 
 **Patch.** The 33 silent `except`/`pass` and `except`/`continue` sites that 0.6.1 scoped off
