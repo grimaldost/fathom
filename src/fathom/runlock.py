@@ -736,13 +736,14 @@ class RunLock:
         Until 0.7.0 only a holder beat, so a wait longer than the horizon made the
         waiter's own ticket stale: it could never hold, and other waiters pruned it.
         """
-        self._take_ticket()
-        self._start_heartbeat()
         try:
+            self._take_ticket()
+            self._start_heartbeat()
             self._wait_for_turn(timeout_s=timeout_s, poll_s=poll_s, out=out)
         except BaseException:
-            # A timeout, a Ctrl-C or any error mid-wait drops the ticket and stops its
-            # beat. Otherwise a live process keeps a place in a queue it has left.
+            # A timeout, a Ctrl-C or any error from the moment the ticket exists drops
+            # the ticket and stops its beat, including one raised while the beat thread
+            # starts. Otherwise a live process keeps a place in a queue it has left.
             self.release()
             raise
 

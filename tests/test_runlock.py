@@ -673,6 +673,36 @@ class TestAWaiterStaysInTheQueue(unittest.TestCase):
         self.assertEqual([t.name for t in read_tickets(holder.dir)], [holder.ticket_name])
         self.assertIsNone(waiter._beat_thread)
 
+    def test_an_error_before_the_beat_starts_drops_the_ticket(self):
+        """The ticket exists once `_take_ticket` returns. Anything raised from then on,
+        including a Ctrl-C while the beat thread starts, must release it."""
+        lock = RunLock("b", lock_root=self.root, label="interrupted")
+        with (
+            mock.patch.object(RunLock, "_start_heartbeat", side_effect=_Interrupted),
+            self.assertRaises(_Interrupted),
+        ):
+            lock.acquire(timeout_s=1.0, poll_s=0.02)
+        self.assertEqual(read_tickets(lock.dir), [])
+
+    def test_an_error_after_the_beat_starts_drops_the_ticket_and_stops_the_beat(self):
+        real_start = RunLock._start_heartbeat
+        started: list[threading.Thread] = []
+
+        def start_then_fail(lock_self):
+            real_start(lock_self)
+            started.append(lock_self._beat_thread)
+            raise _Interrupted
+
+        lock = RunLock("b", lock_root=self.root, label="interrupted")
+        with (
+            mock.patch.object(RunLock, "_start_heartbeat", start_then_fail),
+            self.assertRaises(_Interrupted),
+        ):
+            lock.acquire(timeout_s=1.0, poll_s=0.02)
+        self.assertEqual(read_tickets(lock.dir), [])
+        started[0].join(timeout=5.0)
+        self.assertFalse(started[0].is_alive(), "the beat thread outlived the failed acquire")
+
 
 # ---------------------------------------------------------------------------
 # Stop requests (T24b)

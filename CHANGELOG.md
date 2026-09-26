@@ -86,7 +86,8 @@ Tags start at 0.2.0; every dated version below is tagged.
   minutes behind a matrix never started. An acquirer now beats its ticket from the moment the
   ticket exists. The wait loop no longer goes straight round after pruning, because the decision
   already leaves stale tickets out, so every pass either decides or pauses. An acquire that ends
-  in a timeout, a Ctrl-C or any other exception now drops its ticket and stops its beat. Regression tests:
+  in a timeout, a Ctrl-C or any other exception, from the moment its ticket exists (including
+  while its beat thread starts), now drops its ticket and stops its beat. Regression tests:
   - With the horizon at 0.5 s and the holder releasing at 1.0 s, the waiter now holds. On the
     unchanged code it timed out after 5 s.
   - A dead ticket whose unlink is refused no longer makes the loop spin. The test counts
