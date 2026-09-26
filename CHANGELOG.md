@@ -77,6 +77,23 @@ Tags start at 0.2.0; every dated version below is tagged.
   on the unchanged code with `LockTimeout not raised`), and an unreadable ticket untouched past
   the horizon is pruned instead of waited on.
 
+- **A waiter that waited longer than the staleness horizon never got the lock, and spun a CPU
+  core while it waited.** Only the holder beat its ticket, so a waiter's ticket kept the
+  heartbeat it was written with. Once a wait outlasted `STALE_AFTER_S` (120 s), the waiter
+  judged its own ticket stale and could never hold, and other waiters pruned it. The `continue`
+  after pruning, which skips the waiter's own ticket, then re-read the directory with no pause.
+  With the default unbounded `--lock-wait-s`, a second `fathom run` that waited more than two
+  minutes behind a matrix never started. An acquirer now beats its ticket from the moment the
+  ticket exists. The wait loop no longer goes straight round after pruning, because the decision
+  already leaves stale tickets out, so every pass either decides or pauses. An acquire that ends
+  in a timeout, a Ctrl-C or any other exception now drops its ticket and stops its beat. Regression tests:
+  - With the horizon at 0.5 s and the holder releasing at 1.0 s, the waiter now holds. On the
+    unchanged code it timed out after 5 s.
+  - A dead ticket whose unlink is refused no longer makes the loop spin. The test counts
+    directory reads against pauses on the waiting thread, a ratio that does not depend on
+    machine speed. On the unchanged code it counted 540 reads and 0 pauses in 0.3 s.
+  - An interrupted wait leaves no ticket behind.
+
 - **How the first two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
   the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
   1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The
@@ -86,9 +103,10 @@ Tags start at 0.2.0; every dated version below is tagged.
   failed with `AssertionError: LockTimeout not raised`, the message CI printed. The T24e tests
   hold the ticket open across `release()` with a real file handle (meaningful on the Windows
   leg; on POSIX the first unlink succeeds) or refuse its unlink the way Windows does (both
-  legs), and they failed with the ticket still on disk. After the fix, on Windows, each new test
-  passed 100 of 100 runs under Python 3.12 and under 3.14, and the existing contention tests
-  passed 30 of 30 under each.
+  legs), and they failed with the ticket still on disk. On the final tree, on Windows, each of
+  the 14 new tests that drive a real lock directory passed 100 of 100 runs under Python 3.12
+  and under 3.14. The existing contention, ticket-directory and stop-request tests passed 50 of
+  50 under each.
 
 - **An Opus 5.5 trial is priced at its own rate.** `routing.PRICE_PER_1K` is matched by
   substring of the model id, first match wins, and had one key per family. Opus 5.5

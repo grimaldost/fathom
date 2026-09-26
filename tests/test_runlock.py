@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+import threading
 import time
 import unittest
 import uuid
@@ -549,6 +550,128 @@ class TestReleaseRemovesItsTicket(unittest.TestCase):
         self.addCleanup(lock.release)
         self.assertEqual(len(refused), 1)
         self.assertEqual(choosing_now(lock.dir), [])
+
+
+class _Interrupted(Exception):
+    """Stands in for a Ctrl-C arriving while an acquirer waits."""
+
+
+class TestAWaiterStaysInTheQueue(unittest.TestCase):
+    """A waiter keeps its ticket alive, and its wait loop pauses on every pass.
+
+    Only the holder used to beat, so a waiter's ticket kept the heartbeat it was
+    written with. Once the wait outlasted STALE_AFTER_S (120 s), the waiter judged its
+    own ticket stale: it could never hold, and the `continue` after pruning (which
+    skips the waiter's own ticket) re-read the directory without sleeping. A second
+    `fathom run` that waited more than two minutes therefore never started, and it
+    spun a CPU core while it waited.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _counting(self):
+        """Wrap `read_tickets` and `time.sleep` to count calls made on this thread.
+
+        Every pass of the wait loop either decides or pauses, so a loop that does not
+        spin reads the directory at most once more than it sleeps. That ratio does not
+        depend on how fast the machine is.
+        """
+        me = threading.get_ident()
+        counts = {"reads": 0, "sleeps": 0}
+        real_read, real_sleep = read_tickets, time.sleep
+
+        def read(lock_dir):
+            if threading.get_ident() == me:
+                counts["reads"] += 1
+            return real_read(lock_dir)
+
+        def sleep(seconds):
+            if threading.get_ident() == me:
+                counts["sleeps"] += 1
+            real_sleep(seconds)
+
+        patches = (
+            mock.patch("fathom.runlock.read_tickets", side_effect=read),
+            mock.patch("fathom.runlock.time.sleep", side_effect=sleep),
+        )
+        return counts, patches
+
+    def test_a_wait_longer_than_the_horizon_still_acquires(self):
+        """Horizon 0.5 s, holder releases at 1.0 s: the waiter must then hold."""
+        kw = {"lock_root": self.root, "stale_after_s": 0.5, "heartbeat_interval_s": 0.1}
+        first = RunLock("b", label="holder", **kw)
+        first.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(first.release)
+        release_at = threading.Timer(1.0, first.release)
+        self.addCleanup(release_at.cancel)
+        release_at.start()
+        second = RunLock("b", label="waiter", **kw)
+        counts, (patch_read, patch_sleep) = self._counting()
+        with patch_read, patch_sleep:
+            second.acquire(timeout_s=5.0, poll_s=0.02)
+        self.addCleanup(second.release)
+        release_at.join(timeout=5.0)
+        self.assertLessEqual(
+            counts["reads"], counts["sleeps"] + 1, "the wait loop re-read without pausing"
+        )
+
+    def test_a_stale_ticket_that_cannot_be_pruned_does_not_make_the_loop_spin(self):
+        """Deterministic spin check: a dead ticket whose unlink is refused stays stale on
+        every pass. Before the fix each pass pruned it, failed, and went round again
+        without sleeping."""
+        holder = RunLock("b", lock_root=self.root, label="holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        dead = holder.dir / "00000000000000000000-0000001-deadbeef.ticket.json"
+        dead.write_text(
+            json.dumps(
+                {
+                    "pid": 1,
+                    "created_ns": 1,
+                    "heartbeat_s": time.time() - STALE_AFTER_S - 10,
+                    "host": "h",
+                    "label": "a dead holder whose ticket cannot be removed",
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.addCleanup(dead.unlink, missing_ok=True)
+        unlink, refused = _refusing_unlink(lambda p: p == dead, refusals=None)
+        waiter = RunLock("b", lock_root=self.root, label="waiter")
+        counts, (patch_read, patch_sleep) = self._counting()
+        with (
+            patch_read,
+            patch_sleep,
+            mock.patch("os.unlink", side_effect=unlink),
+            self.assertRaises(LockTimeout),
+        ):
+            waiter.acquire(timeout_s=0.3, poll_s=0.05)
+        self.assertTrue(refused, "the dead ticket was never offered for pruning")
+        self.assertLessEqual(
+            counts["reads"], counts["sleeps"] + 1, "the wait loop re-read without pausing"
+        )
+
+    def test_an_interrupted_wait_drops_its_ticket_and_stops_beating(self):
+        """A waiter now beats from the moment it queues, so an exception mid-wait must
+        release, or the ticket would be kept alive for as long as the process lives."""
+        holder = RunLock("b", lock_root=self.root, label="holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        waiter = RunLock("b", lock_root=self.root, label="waiter")
+
+        def interrupt(_seconds):
+            raise _Interrupted
+
+        with (
+            mock.patch("fathom.runlock.time.sleep", side_effect=interrupt),
+            self.assertRaises(_Interrupted),
+        ):
+            waiter.acquire(poll_s=0.05)
+        self.assertEqual([t.name for t in read_tickets(holder.dir)], [holder.ticket_name])
+        self.assertIsNone(waiter._beat_thread)
 
 
 # ---------------------------------------------------------------------------

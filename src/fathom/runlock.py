@@ -14,7 +14,7 @@ artifacts**, because nothing in the claim recorded whether its holder was alive.
 
 ## The two properties the ad-hoc conventions lacked
 
-**A heartbeat.** The holder rewrites its own ticket every
+**A heartbeat.** Every queued acquirer, the holder included, rewrites its own ticket every
 :data:`HEARTBEAT_INTERVAL_S`, so staleness is decidable from the lock's own timestamps
 against a stated horizon (:data:`STALE_AFTER_S`) rather than by guessing at process
 tables. A finished or dead holder expires instead of blocking forever. Release happens
@@ -130,8 +130,9 @@ class Ticket:
 
     ``name`` is the ticket's file name, and it leads with ``number``, the FIFO key.
     ``created_ns`` is when the ticket was taken; it is recorded and orders nothing.
-    ``heartbeat_s`` is wall-clock seconds, rewritten by the holder's own beat thread
-    and the only evidence anyone else has that the holder is alive.
+    ``heartbeat_s`` is wall-clock seconds, rewritten by the owner's beat thread while
+    it waits and while it holds, and the only evidence anyone else has that the owner
+    is alive.
     """
 
     name: str
@@ -730,8 +731,22 @@ class RunLock:
         caller ends up running two matrices on one seat anyway. A holder that has died
         is not a reason to wait: its ticket goes stale within
         :data:`STALE_AFTER_S` and is pruned here.
+
+        The ticket is beaten from the moment it exists, not from the moment it holds.
+        Until 0.7.0 only a holder beat, so a wait longer than the horizon made the
+        waiter's own ticket stale: it could never hold, and other waiters pruned it.
         """
         self._take_ticket()
+        self._start_heartbeat()
+        try:
+            self._wait_for_turn(timeout_s=timeout_s, poll_s=poll_s, out=out)
+        except BaseException:
+            # A timeout, a Ctrl-C or any error mid-wait drops the ticket and stops its
+            # beat. Otherwise a live process keeps a place in a queue it has left.
+            self.release()
+            raise
+
+    def _wait_for_turn(self, *, timeout_s: float | None, poll_s: float, out: object | None) -> None:
         deadline = None if timeout_s is None else time.monotonic() + timeout_s
         announced = ""
         held_by = "nobody (raced)"
@@ -742,7 +757,6 @@ class RunLock:
             # abandoned `choosing` marker sat for the marker's whole horizon and
             # returned success, ignoring the timeout it had been given.
             if deadline is not None and time.monotonic() >= deadline:
-                self.release()
                 raise LockTimeout(
                     f"waited {timeout_s:.0f}s for bank {self.bank!r}; held by {held_by}"
                 )
@@ -761,10 +775,12 @@ class RunLock:
                 stale_after_s=self.stale_after_s,
             )
             if decision.stale:
+                # No `continue`: the decision already leaves stale tickets out, so
+                # pruning them does not change it. Going straight round again spun
+                # without a pause whenever a stale ticket stayed: this waiter's own,
+                # which it never prunes, or one whose unlink failed.
                 self._prune(decision.stale)
-                continue
             if decision.holds:
-                self._start_heartbeat()
                 return
             if decision.holder is not None:
                 held_by = decision.holder.describe(now)
