@@ -1104,6 +1104,26 @@ class TestTerminateProcessTree(unittest.TestCase):
     the verb exists to end.
     """
 
+    def test_refuses_pid_zero_one_and_negative(self):
+        """On POSIX, `os.kill(0, …)` signals the caller's own process group and -1 every
+        process it may signal; 1 is init. An unreadable ticket whose name carries no pid
+        reads as pid 0, and `fathom stop --now` passes the holder's pid straight here.
+        Nothing is signalled on either platform: the calls are mocked."""
+        done = subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr="")
+        with (
+            mock.patch("fathom.runlock.subprocess.run", return_value=done) as run,
+            mock.patch("fathom.runlock._posix_parents", return_value={}),
+            mock.patch("os.kill") as kill,
+            mock.patch("os.killpg", create=True) as killpg,
+        ):
+            for pid in (0, 1, -1):
+                killed, detail = terminate_process_tree(pid)
+                self.assertFalse(killed, f"pid {pid}: {detail}")
+                self.assertIn("refusing", detail)
+        run.assert_not_called()
+        kill.assert_not_called()
+        killpg.assert_not_called()
+
     def test_refuses_to_terminate_the_calling_process(self):
         import os
 

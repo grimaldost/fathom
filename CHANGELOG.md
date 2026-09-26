@@ -132,6 +132,13 @@ Tags start at 0.2.0; every dated version below is tagged.
   - A stalled waiter whose ticket was pruned reclaimed its old number.
   - A refused read fell back to the modification time, and a refused beat was not retried.
 
+- **`fathom stop --now` refuses a pid of 1 or below.** A ticket that cannot be read and whose
+  name carries no pid reads as pid 0 (the fallback above), and `--now` passes the holder's pid
+  to `terminate_process_tree`, which had no guard. On POSIX `os.kill(0, …)` signals the
+  caller's own process group, -1 every process the caller may signal, and 1 is init. The
+  regression test mocks the signal calls. It failed on the unguarded code with
+  `pid 0: taskkill exited 0`.
+
 - **How the first two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
   the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
   1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The

@@ -537,7 +537,14 @@ def terminate_process_tree(pid: int) -> tuple[bool, str]:
     "a stop took out more than it meant to" failure this verb exists to end. The group
     is used only when the target genuinely leads one that is not ours; otherwise the
     descendants are walked explicitly and signalled deepest-first.
+
+    **Never pid 1 or below.** On POSIX, ``os.kill(0, …)`` signals the caller's own
+    process group, -1 every process the caller may signal, and 1 is init. A ticket that
+    cannot be read and whose name carries no pid reads as pid 0, and ``fathom stop
+    --now`` passes the holder's pid straight here.
     """
+    if pid <= 1:
+        return False, f"refusing: pid {pid} does not name a single process to stop"
     if os.name == "nt":
         proc = subprocess.run(
             ["taskkill", "/PID", str(pid), "/T", "/F"],
