@@ -260,7 +260,7 @@ the program's paid-run serialization lock, held by a run that was no longer exec
 holder=verification-lift MAP matrix (bare+skill)
 pid=5395
 started=2026-08-11T20:19:48Z
-worktree=C:/Users/grima/Documents/.wt-verification/fathom
+worktree=<workspace>/.wt-verification/fathom
 planned_trials=160
 ```
 
