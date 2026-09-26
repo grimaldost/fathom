@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import itertools
 
+from fathom import runlock
 from fathom.runlock import (
     HEARTBEAT_INTERVAL_S,
     STALE_AFTER_S,
@@ -550,6 +551,34 @@ class TestReleaseRemovesItsTicket(unittest.TestCase):
         self.addCleanup(lock.release)
         self.assertEqual(len(refused), 1)
         self.assertEqual(choosing_now(lock.dir), [])
+
+    def test_a_beat_in_flight_during_release_does_not_bring_the_ticket_back(self):
+        """release() joins the beat thread for one interval only. A beat write slower
+        than that (a slow disk, a scan) used to land after release had removed the
+        ticket, and recreate it with nobody left to beat it."""
+        lock = RunLock("b", lock_root=self.root, label="test", heartbeat_interval_s=0.05)
+        lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        path = lock.dir / lock.ticket_name
+        in_write, gate = threading.Event(), threading.Event()
+        self.addCleanup(gate.set)
+        real_write = runlock._atomic_write_json
+
+        def slow_write(target, payload):
+            if threading.current_thread().name.startswith("fathom-runlock"):
+                in_write.set()
+                gate.wait(5.0)
+            real_write(target, payload)
+
+        with mock.patch("fathom.runlock._atomic_write_json", side_effect=slow_write):
+            self.assertTrue(in_write.wait(5.0), "no beat started")
+            thread = lock._beat_thread
+            lock.release()
+            self.assertFalse(path.exists())
+            gate.set()
+            thread.join(5.0)
+        self.assertFalse(thread.is_alive())
+        self.assertFalse(path.exists(), "a beat in flight during release() recreated the ticket")
 
 
 class _Interrupted(Exception):

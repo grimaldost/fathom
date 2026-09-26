@@ -643,10 +643,9 @@ class RunLock:
 
     # -- ticket lifecycle ---------------------------------------------------
 
-    def _write_ticket(self, heartbeat_s: float) -> None:
-        assert self._ticket_path is not None  # noqa: S101 - type narrowing; acquire() sets it first
+    def _write_ticket(self, path: Path, heartbeat_s: float) -> None:
         _atomic_write_json(
-            self._ticket_path,
+            path,
             {
                 "pid": os.getpid(),
                 "created_ns": self._created_ns,
@@ -683,7 +682,7 @@ class RunLock:
             name = f"{number:020d}-{os.getpid():07d}-{uid}{_TICKET_SUFFIX}"
             self.ticket_name = name
             self._ticket_path = self.dir / name
-            self._write_ticket(time.time())
+            self._write_ticket(self._ticket_path, time.time())
         finally:
             path, self._choosing_path = self._choosing_path, None
             self._remove_own(
@@ -854,8 +853,7 @@ class RunLock:
             while not self._beat_stop.wait(self.heartbeat_interval_s):
                 if self._ticket_path is None:
                     return
-                with contextlib.suppress(OSError):
-                    self._write_ticket(time.time())
+                self._beat_once()
 
         self._beat_thread = threading.Thread(
             target=_beat, name=f"fathom-runlock-{self.bank}", daemon=True
@@ -864,9 +862,26 @@ class RunLock:
 
     def beat(self) -> None:
         """Beat once, synchronously. The thread does this; callers rarely need to."""
-        if self._ticket_path is not None:
-            with contextlib.suppress(OSError):
-                self._write_ticket(time.time())
+        self._beat_once()
+
+    def _beat_once(self) -> None:
+        path = self._ticket_path
+        if path is None:
+            return
+        with contextlib.suppress(OSError):
+            self._write_ticket(path, time.time())
+        # release() joins this thread for one interval only, so a write slower than
+        # that can land after release() removed the ticket. It would recreate the
+        # ticket with nobody left to beat it, so the write that outlived its release
+        # removes itself.
+        if self._beat_stop.is_set() or path != self._ticket_path:
+            self._remove_own(
+                path,
+                consequence=(
+                    f"it reads as a live claim on bank {self.bank!r} until it is "
+                    f"{self.stale_after_s:.0f}s old"
+                ),
+            )
 
     # -- stop requests ------------------------------------------------------
 

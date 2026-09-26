@@ -59,7 +59,10 @@ Tags start at 0.2.0; every dated version below is tagged.
   reported with a warning that names the file and what it blocks. The `choosing` marker, which
   blocks every acquirer for 30 s when it is left behind, is removed the same way. It is a
   warning and not an exception because `release()` runs in a `finally`, where raising would
-  replace an exception already in flight.
+  replace an exception already in flight. `release()` also waits for the beat thread for one
+  interval only. A beat write slower than that (a slow disk, a scan) used to land after
+  `release()` had removed the ticket and bring it back, with nothing left to beat it. A beat
+  that finds `release()` ran while it was writing now removes what it wrote.
 
 - **A holder whose ticket could not be read at that moment counted as absent.** On Windows a
   read of a ticket fails with `PermissionError` while its owner's heartbeat replaces the file
