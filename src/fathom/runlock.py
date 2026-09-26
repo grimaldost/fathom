@@ -81,6 +81,11 @@ live holder's included. Two rules keep that from putting a second run inside the
   trial boundary. A waiter takes a new place at the back of the queue, because an
   acquirer that pruned it may already hold.
 
+This bounds the harm but does not remove it. Such a newcomer can hold beside the holder
+until the holder's next trial boundary, and once it has removed the holder's ticket,
+queued waiters can pass too during that last trial. The overlap is at most one trial. In
+0.6.2 it had no bound, because the holder never learned it had lost the lock.
+
 ## Why this is testable, when FATH-B53 said it was not
 
 The row was deferred partly because "its failure mode is multi-process on one

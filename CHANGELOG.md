@@ -137,6 +137,26 @@ Tags start at 0.2.0; every dated version below is tagged.
   - A holder whose ticket was pruned after the step wrote the ticket back.
   - A stalled waiter whose ticket was pruned reclaimed its old number.
   - A refused read fell back to the modification time, and a refused beat was not retried.
+  - Three further tests came from the second review, which found mutants the suite let
+    through. They cover: the grace ends, so a dead holder is still removed after a clock step;
+    a holder records a loss from silence alone, with its ticket still there; and a loss
+    recorded while a pass reads the directory stops that pass from holding. Each fails on its
+    mutant, and every other lock test passes on it.
+
+  This bounds the harm but does not remove it. An acquirer that arrives just after a wake can
+  still hold beside the holder until the holder's next trial boundary, and once it has removed
+  the holder's ticket, queued waiters can pass too during that last trial. The overlap is at
+  most one trial. In 0.6.2 it had no bound, because the holder never learned it had lost the
+  lock.
+
+  Known limits, left for a follow-up:
+  - A holder alone in the directory still halts after a sleep longer than about 105 s: the
+    120 s horizon, less up to one 15 s beat interval.
+  - The stop after a possible loss exits with 16, the same code as `fathom stop`.
+  - Queue order is not kept across a wake, because a waiter that records a possible loss takes
+    a new place at the back.
+  - A waiter that keeps stalling starts a new grace each time, so it can go on treating
+    nothing as stale. This errs toward waiting.
 
 - **One stat error could end the heartbeat on Python 3.12.** The beat checked its ticket with
   `Path.exists()` outside any `try`, and the beat loop caught nothing. On 3.12 `Path.exists`
@@ -169,7 +189,7 @@ Tags start at 0.2.0; every dated version below is tagged.
   legs), and they failed with the ticket still on disk.
 
 - **What the final tree was measured at** (Windows, the runs concurrent for load):
-  - Each of the 23 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
+  - Each of the 28 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
     under Python 3.12 and under 3.14.
   - The existing contention, ticket-directory and stop-request tests passed 50 of 50 under each.
   - A stress run that detects overlap with an `O_EXCL` sentinel file, so it depends on no clock,
