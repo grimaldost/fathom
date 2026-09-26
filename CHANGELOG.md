@@ -6,6 +6,20 @@ Tags start at 0.2.0; every dated version below is tagged.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+**Minor**, because `fathom run`'s default behaviour changes. T35a keeps a treatment arm's raw
+stream by default, under the untracked `.fathom/streams/`, and 0.6.0 counted a change in what a
+caller's run does as minor even when nothing already recorded changes. One flag is added,
+`fathom validate --scenarios-dir` (T35a). No verb or ledger field is added or removed.
+
+The release also carries correctness fixes to the run lock that 0.6.0 shipped (see Fixed).
+Three of them change what an operator sees:
+- Lock ticket names now lead with a queue number instead of a timestamp.
+- A run that may have lost the lock after a sleep or a clock step halts at its next trial
+  boundary, reported as a stop request.
+- 0.6.2 and 0.7.0 must not run against one bank at the same time.
+
 ### Added
 
 - **The pre-mortem ablation was run again, and it did not replicate.**
