@@ -8,6 +8,16 @@ Tags start at 0.2.0; every dated version below is tagged.
 
 ### Added
 
+- **The pre-mortem ablation was run again, and it did not replicate.**
+  `docs/reports/2026-09-19-premortem-ablation-v1-replication.md` and its ledger: same arms, specs,
+  model id and configuration as 2026-08-11 ($23.13), and the ~225-word core held only 2 of 6 on both
+  citation-grounding checks, where the first run had 6 of 6. The first report's claim that the
+  eighteen finding-lists "exist in the workspaces" is corrected in place — each workspace was
+  removed when its trial ended — and `STATUS.md` and the KEEL-B09 backlog row now say the
+  structural result is re-opened. The replication ledger sits beside its report rather than in
+  `ledger/`, because the two runs share every cell key and a duplicate completed cell is what
+  `fathom report` warns about and double-counts.
+
 - **`fathom run` defaults `FATHOM_STREAM_DIR` for a treatment arm (T35a).** An arm whose
   scenario declares a `[context]` inject or a non-default tool allowance (anything beyond
   `source = "none"` with no explicit `allowed`/`disallowed`) now gets its raw spawn stream
