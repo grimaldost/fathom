@@ -90,6 +90,14 @@ class TestCacheAwareCost:
         assert audit["ratio"] > 100
         assert audit["recomputed_usd"] > audit["reported_usd"]
 
+    def test_a_family_with_two_live_prices_is_priced_by_model_first(self):
+        # Opus 5.5 is $4/$20 per MTok while Opus 5 and 4.8 stay at $5/$25: one family,
+        # two live prices, so the family key alone would over-price an Opus 5.5 trial by
+        # 25% and the ledger audit would flag a figure that is right.
+        assert r.rates_for("claude-opus-5-5") == (0.004, 0.020)
+        assert r.rates_for("claude-opus-5") == (0.005, 0.025)
+        assert r.rates_for("claude-opus-4-8") == (0.005, 0.025)
+
     def test_unknown_model_falls_back_to_the_dearest_rate(self):
         assert r.rates_for("some-unreleased-model") == r.PRICE_PER_1K["opus"]
 
