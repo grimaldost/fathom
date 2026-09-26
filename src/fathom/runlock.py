@@ -78,8 +78,10 @@ live holder's included. Two rules keep that from putting a second run inside the
   unwritten for longer than the horizon, or whose ticket was removed, records that it may
   have lost the lock. It never writes a removed ticket back. A holder's
   :meth:`RunLock.stop_requested` then reports the loss, and the run halts at its next
-  trial boundary. A waiter takes a new place at the back of the queue, because an
-  acquirer that pruned it may already hold.
+  trial boundary. :meth:`RunLock.stop_requested` runs the same checks itself, so a
+  boundary that comes after the wake but before the first beat sees the loss too. A
+  waiter takes a new place at the back of the queue, because an acquirer that pruned it
+  may already hold.
 
 This bounds the harm but does not remove it. Such a newcomer can hold beside the holder
 until the holder's next trial boundary, and once it has removed the holder's ticket,
@@ -982,11 +984,14 @@ class RunLock:
         """Beat once, synchronously. The thread does this; callers rarely need to."""
         self._beat_once()
 
-    def _beat_once(self) -> None:
-        path = self._ticket_path
-        if path is None:
-            return
-        now = time.time()
+    def _check_place(self, path: Path, now: float) -> bool:
+        """Record a possible loss if this ticket went silent past the horizon or is gone.
+
+        Returns True only when the ticket is known to be on disk. One clock read and one
+        stat, and no ``OSError`` escapes. The beat runs it before each write, and
+        :meth:`stop_requested` runs it at each trial boundary, so a boundary that comes
+        after a wake but before the first beat still sees the loss.
+        """
         silent_s = now - self._last_beat_s
         if silent_s > self.stale_after_s:
             self._lose(
@@ -997,16 +1002,23 @@ class RunLock:
             present = path.exists()
         except OSError as exc:
             # Python 3.12's `Path.exists` re-raises any stat error but not-found. Whether
-            # the ticket is still there is then unknown, so it is not written (that could
-            # restore a removed place), and a possible loss is recorded.
+            # the ticket is still there is then unknown: a possible loss.
             if path == self._ticket_path:
                 self._lose(f"its ticket could not be checked ({type(exc).__name__}: {exc})")
+            return False
+        if not present and path == self._ticket_path:
+            # Removed by an acquirer that judged it dead.
+            self._lose("its ticket was removed by another run that judged it dead")
+        return present
+
+    def _beat_once(self) -> None:
+        path = self._ticket_path
+        if path is None:
             return
-        if not present:
-            # Removed by an acquirer that judged it dead. Writing it back would restore
-            # a place that acquirer has already decided without.
-            if path == self._ticket_path:
-                self._lose("its ticket was removed by another run that judged it dead")
+        now = time.time()
+        # A ticket that is gone, or whose presence is unknown, is not written: writing it
+        # back could restore a place another acquirer has already decided without.
+        if not self._check_place(path, now):
             return
         try:
             _retrying(lambda: self._write_ticket(path, now))
@@ -1040,6 +1052,14 @@ class RunLock:
         so a run that slept or stalled past the horizon halts at its next trial
         boundary rather than spending beside a run that took the lock meanwhile.
         """
+        path = self._ticket_path
+        if path is not None:
+            # Checked here too, not left to the beat: a trial that ends after a wake but
+            # before the first beat since would otherwise start another paid trial.
+            try:
+                self._check_place(path, time.time())
+            except Exception as exc:
+                self._lose(f"its place could not be checked ({type(exc).__name__}: {exc})")
         if self._lost is not None:
             return StopRequest(
                 requested_at_s=time.time(),

@@ -968,6 +968,73 @@ class TestAGapLongerThanTheHorizon(unittest.TestCase):
         self.assertIsNotNone(holder.stop_requested())
 
 
+class TestTheTrialBoundarySeesALossAtOnce(unittest.TestCase):
+    """The trial boundary checks for a loss itself; it does not wait for a beat.
+
+    The holder used to learn of a possible loss only from its beat thread. A trial
+    that ended after a wake but before the first beat after it (up to one interval,
+    15 s by default) found `stop_requested()` returning None, so `fathom run` bought one
+    more trial. In the review's repro, 3 s after the wake the boundary saw no stop while
+    the holder's silence was already 608 s against a 120 s horizon, and its own ticket
+    had been removed. There is no beat in these tests: none has happened since the wake.
+    """
+
+    KW: ClassVar[dict[str, float]] = TestAGapLongerThanTheHorizon.KW
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.clock = _ScriptedClock()
+        for patch in self.clock.patches():
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def _holder(self) -> tuple[RunLock, Path]:
+        holder = RunLock("b", lock_root=self.root, label="holder", **self.KW)
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        return holder, holder.dir / holder.ticket_name
+
+    def test_after_a_wake_the_boundary_stops_before_the_first_beat(self):
+        """The review's repro: a newcomer arrives just after the wake and takes the lock."""
+        holder, _held = self._holder()
+        self.clock.step(600.0)
+        newcomer = RunLock("b", lock_root=self.root, label="newcomer", **self.KW)
+        newcomer.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(newcomer.release)
+        self.clock.step(3.0)  # the in-flight trial ends; no beat since the wake
+        stop = holder.stop_requested()
+        self.assertIsNotNone(stop, "the trial boundary did not see the loss")
+        self.assertIn("lost", stop.reason)
+
+    def test_silence_alone_is_seen_at_the_boundary(self):
+        holder, held = self._holder()
+        self.clock.step(600.0)
+        self.assertIsNotNone(holder.stop_requested(), "silence past the horizon went unseen")
+        self.assertTrue(held.exists())
+
+    def test_a_removed_ticket_is_seen_at_the_boundary(self):
+        holder, held = self._holder()
+        held.unlink()
+        self.assertIsNotNone(holder.stop_requested(), "the removed ticket went unseen")
+
+    def test_the_boundary_check_cannot_raise(self):
+        """It runs between trials in `fathom run`, so an error there must become a stop,
+        not an exception."""
+        holder, held = self._holder()
+        real_exists = Path.exists
+
+        def exists(path_self, *args, **kwargs):
+            if path_self == held:
+                raise RuntimeError("an error nothing anticipated")
+            return real_exists(path_self, *args, **kwargs)
+
+        with mock.patch.object(Path, "exists", exists):
+            stop = holder.stop_requested()
+        self.assertIsNotNone(stop, "an error in the boundary check produced no stop")
+
+
 class TestTheBeatSurvivesItsOwnErrors(unittest.TestCase):
     """A beat that raises must not end the beating.
 

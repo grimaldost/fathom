@@ -121,8 +121,10 @@ Tags start at 0.2.0; every dated version below is tagged.
     holder stale before it beats; 0.6.2 allowed this too. So an owner whose beat went unwritten
     for longer than the horizon, or whose ticket was removed, now records that it may have lost
     the lock, and it never writes a removed ticket back. A holder's `stop_requested()` then
-    reports the loss, and `fathom run` halts at its next trial boundary. A waiter takes a new
-    place at the back of the queue, because the acquirer that pruned it may already hold.
+    reports the loss, and `fathom run` halts at its next trial boundary. `stop_requested()`
+    runs the same checks itself, so a boundary that comes after the wake but before the first
+    beat also sees the loss. A waiter takes a new place at the back of the queue, because the
+    acquirer that pruned it may already hold.
   - A ticket read or a beat write that another process refuses for a moment (Windows file
     sharing) is retried for a few milliseconds (`CONTENTION_BACKOFF_S`). The first version of
     this fix still failed 2 of 30 clock-step trials. An instrumented run showed why: the waiter
@@ -142,6 +144,12 @@ Tags start at 0.2.0; every dated version below is tagged.
     a holder records a loss from silence alone, with its ticket still there; and a loss
     recorded while a pass reads the directory stops that pass from holding. Each fails on its
     mutant, and every other lock test passes on it.
+  - A third review found that the holder learned of a loss only from its beat. A trial that
+    ended after a wake but before the first beat since (up to 15 s) found `stop_requested()`
+    returning None, and `fathom run` bought one more trial. In its repro, 3 s after the wake
+    the holder's silence was already 608 s against the 120 s horizon, and its ticket had been
+    removed. The boundary tests (a newcomer after the wake, silence alone, a removed ticket, an
+    error in the check) each returned None on the code before the fix.
 
   This bounds the harm but does not remove it. An acquirer that arrives just after a wake can
   still hold beside the holder until the holder's next trial boundary, and once it has removed
@@ -157,6 +165,8 @@ Tags start at 0.2.0; every dated version below is tagged.
     a new place at the back.
   - A waiter that keeps stalling starts a new grace each time, so it can go on treating
     nothing as stale. This errs toward waiting.
+  - One transient heartbeat error also halts the holder at its next trial boundary. This errs
+    toward a re-run, and nothing already bought is lost.
 
 - **One stat error could end the heartbeat on Python 3.12.** The beat checked its ticket with
   `Path.exists()` outside any `try`, and the beat loop caught nothing. On 3.12 `Path.exists`
@@ -189,7 +199,7 @@ Tags start at 0.2.0; every dated version below is tagged.
   legs), and they failed with the ticket still on disk.
 
 - **What the final tree was measured at** (Windows, the runs concurrent for load):
-  - Each of the 28 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
+  - Each of the 32 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
     under Python 3.12 and under 3.14.
   - The existing contention, ticket-directory and stop-request tests passed 50 of 50 under each.
   - A stress run that detects overlap with an `O_EXCL` sentinel file, so it depends on no clock,
