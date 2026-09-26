@@ -238,7 +238,7 @@ mantis fix lands.
 ## To run it (state is ready; nothing needs re-deriving)
 
 ```sh
-cd C:/Users/grima/Documents/.wt-closeout/fathom-fusion
+cd <workspace>/.wt-closeout/fathom-fusion
 uv run fathom smoke --no-engine-boundary          # expect ALL PASS (7/7) — AUTH GATE, before the lock
 python <scratch>/restore_mount.py                 # MUST print MATCH before spending
 python <scratch>/pilot_hash_guard.py              # MUST print MATCH — pilot shares the resume key

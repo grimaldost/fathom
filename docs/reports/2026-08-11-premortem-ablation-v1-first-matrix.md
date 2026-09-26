@@ -24,7 +24,7 @@ A **10.6× compression** on the injected body. The arms differ in nothing else: 
 reviewer agent's declared set plus the Write the task needs), same 900 s / 40-turn caps, same tasks.
 
 **Which copy was exercised:** the directive was extracted from the **worktree** at
-`C:/Users/grima/Documents/keel/src/keel/templates/pre-mortem-prompt.md` on merged `main` (keel
+`<workspace>/keel/src/keel/templates/pre-mortem-prompt.md` on merged `main` (keel
 0.14.0), not from the installed plugin cache, which trails at 0.13.1. `fathom verify-arming` observed
 both bodies in the real spawn argv at 15,619 and 1,471 bytes.
 

@@ -17,7 +17,7 @@ the answer is unambiguous and was verified on a real spawn, not asserted:
 
 | | |
 |---|---|
-| **Exercised** | `C:/Users/grima/Documents/craft-collection/plugins/engineering-discipline/skills/python-engineering/SKILL.md` — the **worktree** on merged `main` (`07fea4f`), engineering-discipline **0.4.0** |
+| **Exercised** | `<workspace>/craft-collection/plugins/engineering-discipline/skills/python-engineering/SKILL.md` — the **worktree** on merged `main` (`07fea4f`), engineering-discipline **0.4.0** |
 | Copied verbatim to | `scenarios/skill-pyeng/assets/python-engineering.md` (17,895 bytes, sha256 `4e311b5d…`) |
 | Replaced | the 2026-07-03 snapshot (15,587 bytes, sha256 `ee154e4a…`) |
 | **Not** exercised | the installed plugin cache `~/.claude/plugins/cache/craft-collection/engineering-discipline/0.3.0` — which is a **release behind** the worktree |

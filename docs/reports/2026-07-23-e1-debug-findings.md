@@ -145,7 +145,7 @@ What this bank does establish, narrowly:
   mid-tier gradient (2/6 to 6/6, p = 0.061) is at best a hypothesis; the commit message
   correctly calls it underpowered.
 - **The mounted plugins live outside this repo.** These scenarios mount
-  `C:/Users/grima/Documents/craft-collection/plugins/...` by absolute path rather than
+  `<workspace>/craft-collection/plugins/...` by absolute path rather than
   vendoring them into the bank (as `inject-content-v1` does). Their content tree_sha
   enters `config_hash`, so the run is *pinned*, but it is not *reconstructible* from this
   repository alone.
