@@ -27,8 +27,9 @@ Tags start at 0.2.0; every dated version below is tagged.
   explicit `FATHOM_STREAM_DIR` (set before invocation) always wins over the default. Not
   under `ledger/`: that directory is tracked, so a stream file there would become a committed
   artifact the first time anyone runs `git add ledger/` (same reasoning as `runlock`'s
-  `LOCK_ROOT`). `fathom validate` warns, at $0 and before any spend, when such an arm is
-  planned and `FATHOM_STREAM_DIR` is not already set.
+  `LOCK_ROOT`). `fathom validate` gains a flag, `--scenarios-dir DIR` (default `scenarios/`),
+  and warns, at $0 and before any spend, when an arm in that directory is such an arm and
+  `FATHOM_STREAM_DIR` is not already set.
 
 ### Fixed
 
@@ -46,8 +47,13 @@ Tags start at 0.2.0; every dated version below is tagged.
   listing rather than from file contents. **A ticket written by 0.6.2** leads its name with its
   `created_ns` in that same field and is read as its number. A 0.7.0 acquirer that finds one
   takes a larger number and waits behind it, and a 0.6.2 ticket created later still sorts after
-  the 0.7.0 tickets already queued. A queue that mixes the two versions keeps arrival order
-  except for two tickets taken inside one clock step, which is the window 0.6.2 already had.
+  the 0.7.0 tickets already queued. **Do not run 0.6.2 and 0.7.0 against one bank at the same
+  time**, though. The two order by different keys, and there is a window in which each puts
+  itself first. A 0.6.2 acquirer publishes its ticket about a millisecond after it reads its
+  clock. A 0.7.0 acquirer that takes its number inside that millisecond cannot see the 0.6.2
+  ticket, so it draws a lower number with a later `created_ns`, and both hold. An independent
+  review reproduced this deterministically by holding that window open, and the fixed code
+  still shows it. Stop 0.6.2 runs before starting 0.7.0 ones on a bank.
 
 - **A released ticket could outlive its release on Windows and hold up the next run for up
   to 120 s (T24e).** `release()` unlinked its ticket under `contextlib.suppress(OSError)`. On
@@ -148,10 +154,14 @@ Tags start at 0.2.0; every dated version below is tagged.
   failed with `AssertionError: LockTimeout not raised`, the message CI printed. The T24e tests
   hold the ticket open across `release()` with a real file handle (meaningful on the Windows
   leg; on POSIX the first unlink succeeds) or refuse its unlink the way Windows does (both
-  legs), and they failed with the ticket still on disk. On the final tree, on Windows, each of
-  the 14 new tests that drive a real lock directory passed 100 of 100 runs under Python 3.12
-  and under 3.14. The existing contention, ticket-directory and stop-request tests passed 50 of
-  50 under each.
+  legs), and they failed with the ticket still on disk.
+
+- **What the final tree was measured at** (Windows, the runs concurrent for load):
+  - Each of the 23 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
+    under Python 3.12 and under 3.14.
+  - The existing contention, ticket-directory and stop-request tests passed 50 of 50 under each.
+  - A stress run that detects overlap with an `O_EXCL` sentinel file, so it depends on no clock,
+    found 0 overlaps in 600 acquisitions under each (6 processes, 20 rounds, 5 runs).
 
 - **An Opus 5.5 trial is priced at its own rate.** `routing.PRICE_PER_1K` is matched by
   substring of the model id, first match wins, and had one key per family. Opus 5.5

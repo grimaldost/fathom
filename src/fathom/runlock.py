@@ -45,10 +45,17 @@ number is read from one directory listing. Read from file contents, a ticket who
 failed would be missed, and a missed ticket lets the next acquirer take a number at or
 below it. A ticket written by 0.6.2 or earlier leads its name with its ``created_ns``
 in the same position, so it is read as that number, deliberately. A 0.7.0 acquirer that
-sees it takes a larger one, and a 0.6.2 ticket created after a 0.7.0 one carries a
-nanosecond timestamp far above any number counted up from an empty directory. A queue
-that mixes the two versions therefore stays in arrival order, except for two tickets
-taken inside one clock step, which is the window 0.6.2 already had.
+sees it takes a larger one and waits behind it, and a 0.6.2 ticket created after a 0.7.0
+one carries a nanosecond timestamp far above any number counted up from an empty
+directory.
+
+**Do not run 0.6.2 and 0.7.0 against one bank at the same time.** The two versions order
+by different keys (0.6.2 by ``created_ns`` from the JSON, 0.7.0 by the number in the
+name), and there is a window in which each puts itself first. A 0.6.2 acquirer reads its
+clock and publishes its ticket about a millisecond later. A 0.7.0 acquirer that takes its
+number inside that millisecond cannot see the 0.6.2 ticket, so its number is lower, while
+its ``created_ns`` is later. Each then decides that it holds. Two 0.6.2 acquirers also
+still share 0.6.2's own window of two tickets taken inside one clock step.
 
 ## Why the seam is per-heartbeat and not per-trial
 
@@ -268,8 +275,8 @@ def ticket_number(name: str) -> int | None:
     """The FIFO number a ticket's file name leads with; None for any other file.
 
     A name written by 0.6.2 or earlier leads with its ``created_ns`` in the same
-    position and is read as that number (see the module docstring for why that keeps
-    a mixed queue in order).
+    position and is read as that number. The module docstring says what that keeps in
+    order across the two versions, and the window in which it does not.
     """
     if not name.endswith(_TICKET_SUFFIX):
         return None
