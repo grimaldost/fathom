@@ -957,7 +957,16 @@ class RunLock:
             while not self._beat_stop.wait(self.heartbeat_interval_s):
                 if self._ticket_path is None:
                     return
-                self._beat_once()
+                # Nothing a beat raises may end the beating. A dead beat thread leaves
+                # the ticket to go stale under a live holder, and records nothing, so no
+                # stop would reach that holder.
+                try:
+                    self._beat_once()
+                except Exception as exc:
+                    self._lose(
+                        f"a heartbeat failed ({type(exc).__name__}: {exc}), so its ticket may "
+                        "have gone stale"
+                    )
 
         self._beat_thread = threading.Thread(
             target=_beat, name=f"fathom-runlock-{self.bank}", daemon=True
@@ -979,7 +988,16 @@ class RunLock:
                 f"its heartbeat went unwritten for {silent_s:.0f}s, past the "
                 f"{self.stale_after_s:.0f}s horizon, so another run could have judged it dead"
             )
-        if not path.exists():
+        try:
+            present = path.exists()
+        except OSError as exc:
+            # Python 3.12's `Path.exists` re-raises any stat error but not-found. Whether
+            # the ticket is still there is then unknown, so it is not written (that could
+            # restore a removed place), and a possible loss is recorded.
+            if path == self._ticket_path:
+                self._lose(f"its ticket could not be checked ({type(exc).__name__}: {exc})")
+            return
+        if not present:
             # Removed by an acquirer that judged it dead. Writing it back would restore
             # a place that acquirer has already decided without.
             if path == self._ticket_path:

@@ -138,6 +138,18 @@ Tags start at 0.2.0; every dated version below is tagged.
   - A stalled waiter whose ticket was pruned reclaimed its old number.
   - A refused read fell back to the modification time, and a refused beat was not retried.
 
+- **One stat error could end the heartbeat on Python 3.12.** The beat checked its ticket with
+  `Path.exists()` outside any `try`, and the beat loop caught nothing. On 3.12 `Path.exists`
+  re-raises any stat error but not-found (a `PermissionError` on a file whose deletion is
+  pending, an `EIO`). One such error killed the beat thread. In the second review's repro (3.12,
+  Windows), a waiter then held beside the live holder after 0.16 s, and no loss was recorded,
+  so no stop reached the holder. On 3.14 `exists` swallows the error itself and the repro's
+  fault never fires. A check that fails now records a possible loss and skips that write, and
+  the beat loop records a possible loss for any exception and keeps beating. With the fix, the
+  same repro on 3.12 has the waiter refused and the holder asked to stop. Regression tests
+  inject the error at `Path.exists`, so they hold on both interpreters. On the code before the
+  fix, `beat()` raised the `PermissionError`, and the thread died on its first failed beat.
+
 - **`fathom stop --now` refuses a pid of 1 or below.** A ticket that cannot be read and whose
   name carries no pid reads as pid 0 (the fallback above), and `--now` passes the holder's pid
   to `terminate_process_tree`, which had no guard. On POSIX `os.kill(0, …)` signals the

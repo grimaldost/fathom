@@ -750,6 +750,27 @@ class TestAWaiterStaysInTheQueue(unittest.TestCase):
         self.assertEqual([t.name for t in read_tickets(holder.dir)], [holder.ticket_name])
         self.assertIsNone(waiter._beat_thread)
 
+    def test_a_loss_recorded_mid_pass_stops_the_waiter_from_holding(self):
+        """The beat can record a loss while a pass reads the directory. That pass must
+        not hold on the place it may have lost; the next pass takes a new one first."""
+        lock = RunLock("b", lock_root=self.root, label="waiter")
+        first: list[str] = []
+        real_read = read_tickets
+
+        def read(lock_dir):
+            tickets = real_read(lock_dir)
+            if not first:
+                first.append(lock.ticket_name)
+                lock._lose("recorded by the beat while this pass read the directory")
+            return tickets
+
+        with mock.patch("fathom.runlock.read_tickets", side_effect=read):
+            lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        self.assertNotEqual(
+            lock.ticket_name, first[0], "the waiter held on a place it may have lost"
+        )
+
     def test_an_error_before_the_beat_starts_drops_the_ticket(self):
         """The ticket exists once `_take_ticket` returns. Anything raised from then on,
         including a Ctrl-C while the beat thread starts, must release it."""
@@ -919,6 +940,89 @@ class TestAGapLongerThanTheHorizon(unittest.TestCase):
         self.addCleanup(waiter.release)
         self.assertNotEqual(waiter.ticket_name, taken[0], "the waiter reclaimed its old ticket")
         self.assertFalse((waiter.dir / taken[0]).exists())
+
+    def test_a_dead_holder_is_pruned_once_the_grace_ends(self):
+        """The grace after a gap is bounded. A holder that does not beat again within it
+        is dead, and its ticket is removed rather than waited on for ever."""
+        holder = self._lock("holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        held = holder.dir / holder.ticket_name
+        waiter = self._lock("waiter")
+        self.clock.at(0.2, waiter.beat, period=0.2)  # only the waiter beats: the holder died
+        self.clock.at(0.51, lambda: self.clock.step(600.0))
+        waiter.acquire(timeout_s=3.0, poll_s=0.02)
+        self.addCleanup(waiter.release)
+        self.assertFalse(held.exists(), "the dead holder's ticket was not removed")
+
+    def test_a_holder_whose_ticket_is_still_there_records_a_loss_from_silence(self):
+        """Silence alone is enough. Past the horizon, another run could have read the
+        holder as dead and decided without it, even if nobody has removed its ticket yet."""
+        holder = self._lock("holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        held = holder.dir / holder.ticket_name
+        self.clock.step(600.0)
+        holder.beat()
+        self.assertTrue(held.exists())
+        self.assertIsNotNone(holder.lost, "silence past the horizon recorded no loss")
+        self.assertIsNotNone(holder.stop_requested())
+
+
+class TestTheBeatSurvivesItsOwnErrors(unittest.TestCase):
+    """A beat that raises must not end the beating.
+
+    `_beat_once` called `path.exists()` outside any `try`, and the beat loop caught
+    nothing. On Python 3.12 `Path.exists` re-raises any stat error other than not-found
+    (a PermissionError on a file whose deletion is pending, an EIO). One such error
+    killed the beat thread. A waiter then held beside the live holder 0.16 s later in
+    the review's repro, and nothing recorded a loss, so no stop reached the holder.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def test_a_ticket_that_cannot_be_checked_records_a_loss(self):
+        """Injected at `Path.exists`, so it holds on 3.13+ too, where `exists` swallows
+        the stat error itself."""
+        lock = RunLock("b", lock_root=self.root, label="holder")
+        lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        held = lock.dir / lock.ticket_name
+        real_exists = Path.exists
+
+        def exists(path_self, *args, **kwargs):
+            if path_self == held:
+                raise PermissionError(errno.EACCES, "Access is denied", str(path_self))
+            return real_exists(path_self, *args, **kwargs)
+
+        with mock.patch.object(Path, "exists", exists):
+            lock.beat()
+        self.assertIsNotNone(lock.lost, "a ticket whose presence is unknown recorded no loss")
+        self.assertIsNotNone(lock.stop_requested())
+
+    def test_the_beat_thread_survives_an_error_and_keeps_beating(self):
+        lock = RunLock("b", lock_root=self.root, label="holder", heartbeat_interval_s=0.05)
+        lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        thread = lock._beat_thread
+        real_beat_once = RunLock._beat_once
+        calls: list[int] = []
+
+        def first_beat_fails(lock_self):
+            calls.append(1)
+            if len(calls) == 1:
+                raise RuntimeError("an error nothing anticipated")
+            real_beat_once(lock_self)
+
+        with mock.patch.object(RunLock, "_beat_once", first_beat_fails):
+            deadline = time.monotonic() + 10.0
+            while len(calls) < 3 and time.monotonic() < deadline:
+                time.sleep(0.05)
+        self.assertTrue(thread.is_alive(), "the beat thread died")
+        self.assertGreaterEqual(len(calls), 3, "the beat stopped after its first error")
+        self.assertIsNotNone(lock.lost, "a failed beat recorded no loss")
 
 
 # ---------------------------------------------------------------------------
