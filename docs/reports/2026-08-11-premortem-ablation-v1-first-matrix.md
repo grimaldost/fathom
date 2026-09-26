@@ -6,6 +6,10 @@
   **retire every directive arm B matches.**
 - **Verdict: on the structural axis, arm B matches arm A completely, at ~80% of the cost.** The
   finding-quality axis is not measured here and the retirement should not be taken on this alone.
+- **Correction, 2026-09-19:** the matrix was run again and did **not** replicate — the core lost both
+  citation-grounding checks in 4 of 6 trials under the same configuration. The finding-lists this
+  report says exist were never kept. See
+  `docs/reports/2026-09-19-premortem-ablation-v1-replication.md`; the text below is left as written.
 
 ## The three arms
 
@@ -127,6 +131,8 @@ verdict token gets nothing to gate on. The value is overwhelmingly in *being ask
 1. **Finding quality is unmeasured.** Whether an emitted finding is an adjudicated real BLOCKER, and
    the false-positive rate, are the half the gate-banks spec assigned to a blinded human pass over the
    outputs. Eighteen blinded finding-lists now exist in the workspaces; the pass has not been run.
+   *(2026-09-19: they did not — each workspace was removed when its trial ended. The re-run kept
+   them; see the replication report.)*
    **A retirement taken on this report alone would be retiring prose on a form check.**
 2. **n = 1 per cell.** K = 6 distinct specs is the strength here (the interval is not one task's), but
    there is one trial per cell. Every observed cell is 6/6 or 0/6 with no variance at all, which is
