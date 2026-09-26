@@ -23,9 +23,32 @@ and cannot cover a hard kill, which is exactly why the heartbeat is the load-bea
 half rather than a nicety.
 
 **A FIFO ticket directory** rather than a single flag. Each acquirer creates its own
-ticket with ``O_EXCL`` — so creation never contends — and the holder is the
+uniquely named ticket, so creation never contends, and the holder is the
 lowest-ordered *live* ticket. The release-to-relock window stops being a race that the
 politest poller always loses.
+
+## Why the order is a bakery number and not a clock reading
+
+The order is Lamport's bakery: under a ``choosing`` flag an acquirer takes one more than
+the highest number visible in the directory, and tickets are ordered by
+``(number, pid, name)``. Until 0.7.0 it was ``(created_ns, pid, name)`` with
+``created_ns = time.time_ns()``. On Windows under Python 3.12 that clock advances in
+15.625 ms steps, so two tickets taken inside one step tied. The tie then fell to the pid,
+or to the random uid in the name, and a later arrival could sort ahead of a holder that
+had already decided it held. Two runs were then inside the lock at once. A number taken
+from what is visible cannot tie with a ticket that was already visible, whatever the
+clock's resolution. ``created_ns`` is still recorded, because a stop request is scoped by
+it, but it orders nothing.
+
+The number is the leading field of the ticket's file name, not a JSON field, so every
+number is read from one directory listing. Read from file contents, a ticket whose read
+failed would be missed, and a missed ticket lets the next acquirer take a number at or
+below it. A ticket written by 0.6.2 or earlier leads its name with its ``created_ns``
+in the same position, so it is read as that number, deliberately. A 0.7.0 acquirer that
+sees it takes a larger one, and a 0.6.2 ticket created after a 0.7.0 one carries a
+nanosecond timestamp far above any number counted up from an empty directory. A queue
+that mixes the two versions therefore stays in arrival order, except for two tickets
+taken inside one clock step, which is the window 0.6.2 already had.
 
 ## Why the seam is per-heartbeat and not per-trial
 
@@ -53,6 +76,7 @@ import contextlib
 import dataclasses
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -60,6 +84,7 @@ import tempfile
 import threading
 import time
 import uuid
+import warnings
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
@@ -83,6 +108,16 @@ _STOP_FILE = "stop.json"
 # phantom-holder deadlock this module exists to end.
 CHOOSING_STALE_AFTER_S = 30.0
 
+# Pauses between attempts to remove a lock file this process owns (0.785 s in total).
+# On Windows an unlink fails with a sharing violation while any other process has the
+# file open, and a waiter reading a ticket has it open for one small read. Retrying
+# across a short bounded backoff outlasts that read. Giving up at once left the ticket
+# reading as a live holder until STALE_AFTER_S.
+UNLINK_BACKOFF_S = (0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4)
+
+# A ticket's file name leads with its FIFO number.
+_TICKET_NUMBER = re.compile(r"(\d+)-", flags=re.ASCII)
+
 
 # ---------------------------------------------------------------------------
 # Records
@@ -93,12 +128,14 @@ CHOOSING_STALE_AFTER_S = 30.0
 class Ticket:
     """One acquirer's claim on a bank's lock.
 
-    ``name`` is the ticket's file name and carries the FIFO key; ``heartbeat_s`` is
-    wall-clock seconds, rewritten by the holder's own beat thread and the only
-    evidence anyone else has that the holder is alive.
+    ``name`` is the ticket's file name, and it leads with ``number``, the FIFO key.
+    ``created_ns`` is when the ticket was taken; it is recorded and orders nothing.
+    ``heartbeat_s`` is wall-clock seconds, rewritten by the holder's own beat thread
+    and the only evidence anyone else has that the holder is alive.
     """
 
     name: str
+    number: int
     pid: int
     created_ns: int
     heartbeat_s: float
@@ -107,8 +144,13 @@ class Ticket:
 
     @property
     def order_key(self) -> tuple[int, int, str]:
-        """FIFO order: creation instant, then pid, then the name — total and stable."""
-        return (self.created_ns, self.pid, self.name)
+        """FIFO order: the bakery number, then pid, then the name — total and stable.
+
+        Equal numbers only come from two acquirers choosing at the same time, and the
+        ``choosing`` flag makes every decider wait until both tickets are visible, so the
+        tie is broken the same way by everyone who reads it.
+        """
+        return (self.number, self.pid, self.name)
 
     def age_s(self, now_s: float) -> float:
         return now_s - self.heartbeat_s
@@ -190,7 +232,35 @@ def lock_dir_for(bank: str, lock_root: Path | None = None) -> Path:
     return (Path(lock_root) if lock_root is not None else LOCK_ROOT) / bank
 
 
+def ticket_number(name: str) -> int | None:
+    """The FIFO number a ticket's file name leads with; None for any other file.
+
+    A name written by 0.6.2 or earlier leads with its ``created_ns`` in the same
+    position and is read as that number (see the module docstring for why that keeps
+    a mixed queue in order).
+    """
+    if not name.endswith(_TICKET_SUFFIX):
+        return None
+    match = _TICKET_NUMBER.match(name)
+    return int(match.group(1)) if match else None
+
+
+def next_ticket_number(lock_dir: Path) -> int:
+    """One more than the highest ticket number visible in *lock_dir*; 1 when there is none.
+
+    Read from the directory listing alone. Every ticket counts, stale or unparsable
+    ones included, because a number that is too high only costs a place in the queue,
+    while one that is too low can jump it. A listing that fails raises: guessing an
+    empty directory here would put this acquirer at the front.
+    """
+    numbers = [n for p in Path(lock_dir).iterdir() if (n := ticket_number(p.name)) is not None]
+    return 1 + max(numbers, default=0)
+
+
 def _parse_ticket(path: Path) -> Ticket | None:
+    number = ticket_number(path.name)
+    if number is None:
+        return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -202,6 +272,7 @@ def _parse_ticket(path: Path) -> Ticket | None:
     try:
         return Ticket(
             name=path.name,
+            number=number,
             pid=int(data["pid"]),
             created_ns=int(data["created_ns"]),
             heartbeat_s=float(data["heartbeat_s"]),
@@ -480,6 +551,30 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
         raise
 
 
+def _unlink_retrying(path: Path) -> OSError | None:
+    """Remove *path*, retrying while another process holds it open.
+
+    Returns None once the file is gone (a file that is already missing counts, so a
+    second release is harmless), else the last error. Only ``PermissionError`` is
+    retried: that is how Windows reports a sharing violation, and a file whose
+    deletion is still pending. Any other ``OSError`` is not transient and is returned
+    at once.
+    """
+    last: OSError | None = None
+    for pause in (0.0, *UNLINK_BACKOFF_S):
+        if pause:
+            time.sleep(pause)
+        try:
+            path.unlink(missing_ok=True)
+        except PermissionError as exc:
+            last = exc
+            continue
+        except OSError as exc:
+            return exc
+        return None
+    return last
+
+
 class RunLock:
     """Serialize paid runs of one bank across processes.
 
@@ -528,29 +623,57 @@ class RunLock:
         )
 
     def _take_ticket(self) -> None:
-        """Pick a number and publish a ticket, under a `choosing` flag.
+        """Take a number and publish a ticket, under a `choosing` flag (Lamport's bakery).
 
-        The flag goes up BEFORE the number is picked and comes down only once the
+        The flag goes up BEFORE the number is taken and comes down only once the
         ticket is on disk, so no waiter can decide inside the window where this
         acquirer has a number but no visible ticket. Without it a four-process race
         put two runs inside the lock at once.
+
+        The number is one more than the highest visible, read under the flag. Any
+        ticket that was already visible, a holder's included, therefore sorts ahead of
+        this one. Two acquirers choosing at once can draw the same number; each sees the
+        other's flag, waits, and then breaks the tie by ``(pid, name)``, like everyone
+        else who reads it.
         """
         self.dir.mkdir(parents=True, exist_ok=True)
         uid = uuid.uuid4().hex[:8]
         self._choosing_path = self.dir / f"{os.getpid():07d}-{uid}{_CHOOSING_SUFFIX}"
         self._choosing_path.touch()
         try:
+            number = next_ticket_number(self.dir)
+            # Recorded, not ordering: a stop request is scoped by when this ticket
+            # was taken.
             self._created_ns = time.time_ns()
-            # A unique name means O_EXCL creation never contends; ordering is decided
-            # by the recorded instant, not by who won a filesystem race.
-            name = f"{self._created_ns:020d}-{os.getpid():07d}-{uid}{_TICKET_SUFFIX}"
+            # A unique name means creation never contends.
+            name = f"{number:020d}-{os.getpid():07d}-{uid}{_TICKET_SUFFIX}"
             self.ticket_name = name
             self._ticket_path = self.dir / name
             self._write_ticket(time.time())
         finally:
             path, self._choosing_path = self._choosing_path, None
-            with contextlib.suppress(OSError):
-                path.unlink()
+            self._remove_own(
+                path,
+                consequence=(
+                    "every acquirer on this bank, this one included, waits on it until it "
+                    f"is {CHOOSING_STALE_AFTER_S:.0f}s old"
+                ),
+            )
+
+    def _remove_own(self, path: Path, *, consequence: str) -> None:
+        """Remove a lock file this process wrote, and report a failure that outlasts the retries.
+
+        Reported as a warning, as the rest of fathom reports what it swallowed. Not
+        raised: a release runs in a ``finally``, and an exception there would replace
+        the one already in flight.
+        """
+        err = _unlink_retrying(path)
+        if err is not None:
+            warnings.warn(
+                f"run lock: could not remove {path} after {len(UNLINK_BACKOFF_S) + 1} "
+                f"attempts ({type(err).__name__}: {err}); {consequence}",
+                stacklevel=3,
+            )
 
     def _prune(self, stale: Sequence[Ticket]) -> None:
         for ticket in stale:
@@ -625,15 +748,33 @@ class RunLock:
             time.sleep(poll_s)
 
     def release(self) -> None:
-        """Drop this process's ticket and stop beating. Safe to call twice."""
+        """Drop this process's ticket and stop beating. Safe to call twice.
+
+        A ticket that a reader holds open is retried across :data:`UNLINK_BACKOFF_S`.
+        One that still cannot be removed is reported with a warning. Until 0.7.0 the
+        failure was swallowed, and the ticket then read as a live holder for up to
+        :data:`STALE_AFTER_S`.
+        """
         self._beat_stop.set()
         thread, self._beat_thread = self._beat_thread, None
         if thread is not None:
             thread.join(timeout=self.heartbeat_interval_s)
-        for path in (self._ticket_path, self._choosing_path):
-            if path is not None:
-                with contextlib.suppress(OSError):
-                    path.unlink()
+        if self._ticket_path is not None:
+            self._remove_own(
+                self._ticket_path,
+                consequence=(
+                    f"it reads as a live claim on bank {self.bank!r} until its last "
+                    f"heartbeat is {self.stale_after_s:.0f}s old"
+                ),
+            )
+        if self._choosing_path is not None:
+            self._remove_own(
+                self._choosing_path,
+                consequence=(
+                    f"acquirers on bank {self.bank!r} wait on it until it is "
+                    f"{CHOOSING_STALE_AFTER_S:.0f}s old"
+                ),
+            )
         self._ticket_path = None
         self._choosing_path = None
         self.ticket_name = None

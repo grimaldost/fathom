@@ -18,14 +18,18 @@ Three layers, cheapest first:
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import textwrap
 import time
 import unittest
+import uuid
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
@@ -44,19 +48,32 @@ from fathom.runlock import (
     descendants_of,
     holders,
     is_stale,
+    next_ticket_number,
     parse_ps_output,
     read_stop_request,
     read_tickets,
     request_stop,
     terminate_process_tree,
+    ticket_number,
 )
 
 _NOW = 1_700_000_000.0
+# Every handwritten ticket shares one clock reading unless a test says otherwise, so each
+# ordering assertion below also shows that the clock is not what orders the queue.
+_ONE_TICK_NS = 1_700_000_000_000_000_000
 
 
-def _ticket(created_ns: int, *, pid: int = 100, beat: float = _NOW, name: str | None = None):
+def _ticket(
+    number: int,
+    *,
+    pid: int = 100,
+    created_ns: int = _ONE_TICK_NS,
+    beat: float = _NOW,
+    name: str | None = None,
+):
     return Ticket(
-        name=name or f"{created_ns:020d}-{pid:07d}-abcdef01.ticket.json",
+        name=name or f"{number:020d}-{pid:07d}-abcdef01.ticket.json",
+        number=number,
         pid=pid,
         created_ns=created_ns,
         heartbeat_s=beat,
@@ -106,7 +123,15 @@ class TestDecide(unittest.TestCase):
     def test_fifo_means_the_queue_order_is_arrival_order(self):
         tickets = [_ticket(n) for n in (30, 10, 20)]
         d = decide(tickets, None, now_s=_NOW)
-        self.assertEqual(d.holder.created_ns, 10)
+        self.assertEqual(d.holder.number, 10)
+
+    def test_the_number_decides_not_the_clock_or_the_pid(self):
+        """T24d across processes: a lower number holds even when its clock reading is
+        later and its pid is higher, which is what an ordering by created_ns got wrong."""
+        earlier = _ticket(1, pid=900, created_ns=_ONE_TICK_NS + 5)
+        later = _ticket(2, pid=100, created_ns=_ONE_TICK_NS)
+        self.assertEqual(decide([later, earlier], None, now_s=_NOW).holder, earlier)
+        self.assertFalse(decide([earlier, later], later.name, now_s=_NOW).holds)
 
     def test_a_dead_holder_is_stale_and_the_next_in_line_holds(self):
         """The three observed deadlocks, in one assertion: a holder that finished
@@ -124,7 +149,9 @@ class TestDecide(unittest.TestCase):
         self.assertIsNone(d.holder)
         self.assertEqual(len(d.stale), 2)
 
-    def test_order_is_total_when_two_tickets_share_an_instant(self):
+    def test_order_is_total_when_two_tickets_share_a_number(self):
+        """Two acquirers choosing at once draw the same number; everyone breaks the tie
+        the same way."""
         a = _ticket(10, pid=1)
         b = _ticket(10, pid=2)
         self.assertEqual(decide([b, a], None, now_s=_NOW).holder, a)
@@ -260,6 +287,215 @@ class TestTicketDirectory(unittest.TestCase):
         decision = holders("b", lock_root=self.root)
         self.assertIsNotNone(decision.holder)
         self.assertIn("pid", decision.holder.describe(time.time()))
+
+
+# Windows under Python 3.12 reads `time.time_ns()` from GetSystemTimeAsFileTime, which
+# advances in 15.625 ms steps (`time.get_clock_info("time").resolution`), and CI pins 3.12.
+_COARSE_TICK_NS = 15_625_000
+
+
+class TestTicketOrderIsNotAClockReading(unittest.TestCase):
+    """T24d. Two acquirers inside one clock tick still queue in arrival order.
+
+    The CI failure this pins (windows-latest, CPython 3.12): `a second acquirer waits
+    and then holds` raised `LockTimeout not raised`, because the second acquirer held
+    while the first still did. Ordered by `(created_ns, pid, name)`, two tickets taken
+    inside one 15.625 ms tick tie on the clock. In one process the pid ties too, and the
+    order falls to the random uid in the name, so a later arrival can sort ahead of a
+    holder that has already decided it holds.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def test_a_later_arrival_in_the_same_tick_waits(self):
+        """Deterministic: the clock is read inside one tick, and the uids are chosen so
+        the later arrival's name sorts first (the losing half of the coin flip)."""
+        tick = time.time_ns() // _COARSE_TICK_NS * _COARSE_TICK_NS
+        uids = iter([uuid.UUID(int=(1 << 128) - 1), uuid.UUID(int=0)])
+        with (
+            mock.patch("fathom.runlock.time.time_ns", return_value=tick),
+            mock.patch("fathom.runlock.uuid.uuid4", side_effect=lambda: next(uids)),
+        ):
+            first = RunLock("b", lock_root=self.root, label="first")
+            first.acquire(timeout_s=2.0, poll_s=0.02)
+            self.addCleanup(first.release)
+            second = RunLock("b", lock_root=self.root, label="second")
+            with self.assertRaises(LockTimeout):
+                second.acquire(timeout_s=0.3, poll_s=0.02)
+
+    def test_a_quantised_clock_never_admits_two_holders(self):
+        """The triage's scratch repro, kept: with the clock quantised to 15.625 ms and
+        real random uids, the second acquirer held beside the first in 53 of 200.
+
+        Against the clock-ordered code this fails in most runs but not every run, since
+        the uids are random. The test above is the deterministic regression pin. Against
+        the bakery number this passes every run, because no round depends on the clock."""
+        real_time_ns = time.time_ns
+
+        def coarse() -> int:
+            return real_time_ns() // _COARSE_TICK_NS * _COARSE_TICK_NS
+
+        admitted = 0
+        with mock.patch("fathom.runlock.time.time_ns", side_effect=coarse):
+            for _ in range(50):
+                with tempfile.TemporaryDirectory(prefix="fathom-lock-") as tmp:
+                    first = RunLock("b", lock_root=Path(tmp))
+                    first.acquire(timeout_s=2.0, poll_s=0.005)
+                    second = RunLock("b", lock_root=Path(tmp))
+                    try:
+                        second.acquire(timeout_s=0.02, poll_s=0.005)
+                    except LockTimeout:
+                        pass
+                    else:
+                        admitted += 1
+                        second.release()
+                    first.release()
+        self.assertEqual(admitted, 0, "a second acquirer held while the first still did")
+
+    def test_the_next_number_is_one_more_than_the_highest_visible(self):
+        d = self.root / "b"
+        d.mkdir()
+        self.assertEqual(next_ticket_number(d), 1)
+        for name in (
+            "00000000000000000003-0000001-aaaaaaaa.ticket.json",
+            "00000000000000000007-0000002-bbbbbbbb.ticket.json",
+            "00000000000000000009-0000003-cccccccc.choosing",  # a marker is not a ticket
+            ".tmp-99999999999999999999.json",
+            "stop.json",
+        ):
+            (d / name).write_text("{}", encoding="utf-8")
+        self.assertEqual(next_ticket_number(d), 8)
+
+    def test_acquirers_take_consecutive_numbers(self):
+        first = RunLock("b", lock_root=self.root)
+        first.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(first.release)
+        self.assertEqual(ticket_number(first.ticket_name), 1)
+        self.assertEqual(next_ticket_number(first.dir), 2)
+
+    def test_a_ticket_written_by_0_6_2_keeps_its_place(self):
+        """A 0.6.2 ticket has no number of its own; its name leads with its created_ns,
+        which is read as its number. A 0.7.0 acquirer behind it takes a larger one and
+        waits, rather than sorting ahead of a holder that is still beating."""
+        d = self.root / "b"
+        d.mkdir()
+        legacy_ns = time.time_ns()
+        legacy = d / f"{legacy_ns:020d}-{4242:07d}-0a0b0c0d.ticket.json"
+        legacy.write_text(
+            json.dumps(
+                {
+                    "pid": 4242,
+                    "created_ns": legacy_ns,
+                    "heartbeat_s": time.time(),
+                    "host": "h",
+                    "label": "a 0.6.2 run",
+                }
+            ),
+            encoding="utf-8",
+        )
+        (parsed,) = read_tickets(d)
+        self.assertEqual(parsed.number, legacy_ns)
+        self.assertEqual(next_ticket_number(d), legacy_ns + 1)
+        waiter = RunLock("b", lock_root=self.root)
+        with self.assertRaises(LockTimeout):
+            waiter.acquire(timeout_s=0.3, poll_s=0.02)
+        self.assertTrue(legacy.exists())
+
+
+def _refusing_unlink(target_matches, refusals: int | None):
+    """An `os.unlink` that fails the way Windows does while another process has the
+    file open (a sharing violation surfaces as PermissionError), *refusals* times for
+    the matching path — or every time when *refusals* is None."""
+    real_unlink = os.unlink
+    refused: list[str] = []
+
+    def unlink(target, *args, **kwargs):
+        if target_matches(Path(target)) and (refusals is None or len(refused) < refusals):
+            refused.append(str(target))
+            raise PermissionError(
+                errno.EACCES, "the file is being used by another process", str(target)
+            )
+        return real_unlink(target, *args, **kwargs)
+
+    return unlink, refused
+
+
+class TestReleaseRemovesItsTicket(unittest.TestCase):
+    """T24e. A released ticket does not outlive its release.
+
+    The CI failure this pins (windows-latest): `no two holders overlap` raised
+    `LockTimeout: waited 60s … last heartbeat 60s ago`, because a contender that held
+    for 0.15 s left a ticket nobody was beating. On Windows an unlink fails with a
+    sharing violation while another process has the file open, and a waiter inside
+    `_parse_ticket` has it open for one read. `release()` swallowed that failure, so
+    the ticket read as a live holder until the 120 s staleness horizon.
+    """
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+
+    def _held(self) -> tuple[RunLock, Path]:
+        lock = RunLock("b", lock_root=self.root, label="test")
+        lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        return lock, lock.dir / lock.ticket_name
+
+    def test_a_reader_holding_the_ticket_open_does_not_keep_it(self):
+        """Real handles. On Windows the first unlink fails while the reader is open; on
+        POSIX it succeeds and this passes trivially. The reader closes inside release()'s
+        first backoff step, so the retry itself drives the close and no timing is involved."""
+        lock, path = self._held()
+        reader = open(path, encoding="utf-8")  # noqa: SIM115 - held open across release()
+        self.addCleanup(reader.close)
+        with mock.patch("fathom.runlock.time.sleep", side_effect=lambda _s: reader.close()):
+            lock.release()
+        self.assertFalse(path.exists(), "the released ticket survived its release")
+        self.assertEqual(read_tickets(lock.dir), [])
+
+    def test_a_refused_unlink_is_retried(self):
+        """The same sharing violation, simulated, so the Linux leg holds the retry too."""
+        lock, path = self._held()
+        unlink, refused = _refusing_unlink(lambda p: p == path, refusals=2)
+        with (
+            mock.patch("os.unlink", side_effect=unlink),
+            mock.patch("fathom.runlock.time.sleep"),
+        ):
+            lock.release()
+        self.assertEqual(len(refused), 2)
+        self.assertFalse(path.exists(), "the released ticket survived its release")
+
+    def test_an_unlink_that_never_succeeds_is_reported_not_swallowed(self):
+        lock, path = self._held()
+        unlink, refused = _refusing_unlink(lambda p: p == path, refusals=None)
+        with (
+            mock.patch("os.unlink", side_effect=unlink),
+            mock.patch("fathom.runlock.time.sleep"),
+            self.assertWarns(UserWarning) as caught,
+        ):
+            lock.release()
+        self.assertGreater(
+            len(refused), 1, "a refused unlink must be retried before it is reported"
+        )
+        self.assertIn(path.name, str(caught.warning))
+        self.assertIsNone(
+            lock.ticket_name, "release() still completes; it reports, it does not raise"
+        )
+
+    def test_the_choosing_marker_is_retried_too(self):
+        """A marker left behind blocks every acquirer, this one included, for
+        CHOOSING_STALE_AFTER_S — the same stall one step earlier."""
+        lock = RunLock("b", lock_root=self.root, label="test")
+        unlink, refused = _refusing_unlink(lambda p: p.name.endswith(".choosing"), refusals=1)
+        with mock.patch("os.unlink", side_effect=unlink):
+            lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        self.assertEqual(len(refused), 1)
+        self.assertEqual(choosing_now(lock.dir), [])
 
 
 # ---------------------------------------------------------------------------

@@ -32,6 +32,48 @@ Tags start at 0.2.0; every dated version below is tagged.
 
 ### Fixed
 
+- **Two runs could hold the run lock at once on Windows under Python 3.12 (T24d).** Tickets
+  were ordered by `(created_ns, pid, name)`, with `created_ns` read from `time.time_ns()`. On
+  Windows, Python 3.12 reads that clock from `GetSystemTimeAsFileTime`, which advances in
+  15.625 ms steps (`time.get_clock_info("time")`; 3.14 reads a precise clock). `requires-python`
+  allows 3.12 and CI pins it. Two tickets taken inside one step tied on the clock, the tie fell
+  to the pid or to the random uid in the file name, and a later arrival could sort ahead of a
+  holder that had already decided it held. The order is now Lamport's bakery, which the
+  `choosing` flag already cited: under the flag an acquirer takes one more than the highest
+  number visible in the directory, and tickets are ordered by `(number, pid, name)`.
+  `created_ns` is still recorded, because a stop request is scoped by it, but it orders nothing.
+  The number is the leading field of the ticket's file name, so it is read from a directory
+  listing rather than from file contents. **A ticket written by 0.6.2** leads its name with its
+  `created_ns` in that same field and is read as its number. A 0.7.0 acquirer that finds one
+  takes a larger number and waits behind it, and a 0.6.2 ticket created later still sorts after
+  the 0.7.0 tickets already queued. A queue that mixes the two versions keeps arrival order
+  except for two tickets taken inside one clock step, which is the window 0.6.2 already had.
+
+- **A released ticket could outlive its release on Windows and hold up the next run for up
+  to 120 s (T24e).** `release()` unlinked its ticket under `contextlib.suppress(OSError)`. On
+  Windows an unlink fails with a sharing violation while another process has the file open,
+  and a waiter reading the ticket has it open for one read. The failure was swallowed, nothing
+  beat the ticket again, and it read as a live holder until `STALE_AFTER_S` (120 s). A caller
+  with a shorter `--lock-wait-s` was refused instead. The unlink is now retried across a
+  bounded backoff (`UNLINK_BACKOFF_S`, 0.785 s in total), and a failure that outlasts it is
+  reported with a warning that names the file and what it blocks. The `choosing` marker, which
+  blocks every acquirer for 30 s when it is left behind, is removed the same way. It is a
+  warning and not an exception because `release()` runs in a `finally`, where raising would
+  replace an exception already in flight.
+
+- **How the two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
+  the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
+  1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The
+  two failures were these two defects, not timing noise. Each now has a deterministic
+  regression test, watched failing on the unchanged code before the fix. The T24d test reads a
+  clock quantised to 15.625 ms inside one step, with the uids ordered against arrival, and it
+  failed with `AssertionError: LockTimeout not raised`, the message CI printed. The T24e tests
+  hold the ticket open across `release()` with a real file handle (meaningful on the Windows
+  leg; on POSIX the first unlink succeeds) or refuse its unlink the way Windows does (both
+  legs), and they failed with the ticket still on disk. After the fix, on Windows, each new test
+  passed 100 of 100 runs under Python 3.12 and under 3.14, and the existing contention tests
+  passed 30 of 30 under each.
+
 - **An Opus 5.5 trial is priced at its own rate.** `routing.PRICE_PER_1K` is matched by
   substring of the model id, first match wins, and had one key per family. Opus 5.5
   ($4/$20 per MTok) now sits beside Opus 5 and 4.8 ($5/$25), so keyed by family alone an
