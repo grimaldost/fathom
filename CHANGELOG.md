@@ -6,6 +6,20 @@ Tags start at 0.2.0; every dated version below is tagged.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-26
+
+**Minor**, because `fathom run`'s default behaviour changes. T35a keeps a treatment arm's raw
+stream by default, under the untracked `.fathom/streams/`, and 0.6.0 counted a change in what a
+caller's run does as minor even when nothing already recorded changes. One flag is added,
+`fathom validate --scenarios-dir` (T35a). No verb or ledger field is added or removed.
+
+The release also carries correctness fixes to the run lock that 0.6.0 shipped (see Fixed).
+Three of them change what an operator sees:
+- Lock ticket names now lead with a queue number instead of a timestamp.
+- A run that may have lost the lock after a sleep or a clock step halts at its next trial
+  boundary, reported as a stop request.
+- 0.6.2 and 0.7.0 must not run against one bank at the same time.
+
 ### Added
 
 - **The pre-mortem ablation was run again, and it did not replicate.**
@@ -27,10 +41,183 @@ Tags start at 0.2.0; every dated version below is tagged.
   explicit `FATHOM_STREAM_DIR` (set before invocation) always wins over the default. Not
   under `ledger/`: that directory is tracked, so a stream file there would become a committed
   artifact the first time anyone runs `git add ledger/` (same reasoning as `runlock`'s
-  `LOCK_ROOT`). `fathom validate` warns, at $0 and before any spend, when such an arm is
-  planned and `FATHOM_STREAM_DIR` is not already set.
+  `LOCK_ROOT`). `fathom validate` gains a flag, `--scenarios-dir DIR` (default `scenarios/`),
+  and warns, at $0 and before any spend, when an arm in that directory is such an arm and
+  `FATHOM_STREAM_DIR` is not already set.
 
 ### Fixed
+
+- **Two runs could hold the run lock at once on Windows under Python 3.12 (T24d).** Tickets
+  were ordered by `(created_ns, pid, name)`, with `created_ns` read from `time.time_ns()`. On
+  Windows, Python 3.12 reads that clock from `GetSystemTimeAsFileTime`, which advances in
+  15.625 ms steps (`time.get_clock_info("time")`; 3.14 reads a precise clock). `requires-python`
+  allows 3.12 and CI pins it. Two tickets taken inside one step tied on the clock, the tie fell
+  to the pid or to the random uid in the file name, and a later arrival could sort ahead of a
+  holder that had already decided it held. The order is now Lamport's bakery, which the
+  `choosing` flag already cited: under the flag an acquirer takes one more than the highest
+  number visible in the directory, and tickets are ordered by `(number, pid, name)`.
+  `created_ns` is still recorded, because a stop request is scoped by it, but it orders nothing.
+  The number is the leading field of the ticket's file name, so it is read from a directory
+  listing rather than from file contents. **A ticket written by 0.6.2** leads its name with its
+  `created_ns` in that same field and is read as its number. A 0.7.0 acquirer that finds one
+  takes a larger number and waits behind it, and a 0.6.2 ticket created later still sorts after
+  the 0.7.0 tickets already queued. **Do not run 0.6.2 and 0.7.0 against one bank at the same
+  time**, though. The two order by different keys, and there is a window in which each puts
+  itself first. A 0.6.2 acquirer publishes its ticket about a millisecond after it reads its
+  clock. A 0.7.0 acquirer that takes its number inside that millisecond cannot see the 0.6.2
+  ticket, so it draws a lower number with a later `created_ns`, and both hold. An independent
+  review reproduced this deterministically by holding that window open, and the fixed code
+  still shows it. Stop 0.6.2 runs before starting 0.7.0 ones on a bank.
+
+- **A released ticket could outlive its release on Windows and hold up the next run for up
+  to 120 s (T24e).** `release()` unlinked its ticket under `contextlib.suppress(OSError)`. On
+  Windows an unlink fails with a sharing violation while another process has the file open,
+  and a waiter reading the ticket has it open for one read. The failure was swallowed, nothing
+  beat the ticket again, and it read as a live holder until `STALE_AFTER_S` (120 s). A caller
+  with a shorter `--lock-wait-s` was refused instead. The unlink is now retried across a
+  bounded backoff (`UNLINK_BACKOFF_S`, 0.785 s in total), and a failure that outlasts it is
+  reported with a warning that names the file and what it blocks. The `choosing` marker, which
+  blocks every acquirer for 30 s when it is left behind, is removed the same way. It is a
+  warning and not an exception because `release()` runs in a `finally`, where raising would
+  replace an exception already in flight. `release()` also waits for the beat thread for one
+  interval only. A beat write slower than that (a slow disk, a scan) used to land after
+  `release()` had removed the ticket and bring it back, with nothing left to beat it. A beat
+  that finds `release()` ran while it was writing now removes what it wrote.
+
+- **A holder whose ticket could not be read at that moment counted as absent.** On Windows a
+  read of a ticket fails with `PermissionError` while its owner's heartbeat replaces the file
+  (`os.replace`). With a writer replacing one ticket in a loop, 663 of 7353 reads failed.
+  `_parse_ticket` returned None for such a ticket, so a waiter that read the directory at that
+  moment found nobody ahead of it and held beside the holder. A ticket that exists but cannot be
+  read now keeps its place. Its order comes from its name (number, then pid), and its file's
+  modification time stands in for the heartbeat it hides, because every beat replaces the file,
+  so a dead ticket that stays unreadable still goes stale and is pruned. On the same measurement
+  after the fix, 486 raw reads failed and no ticket was dropped in 7992 reads. This defect
+  surfaced while testing the waiter heartbeat below. More replaces meant more collisions, and
+  the six-process contention test put two holders inside the lock in 2 of 30 runs under Python
+  3.12. It is fixed first, so no commit in the series has the wider exposure. Regression tests:
+  a waiter behind a holder whose ticket cannot be read times out instead of holding (it failed
+  on the unchanged code with `LockTimeout not raised`), and an unreadable ticket untouched past
+  the horizon is pruned instead of waited on.
+
+- **A waiter that waited longer than the staleness horizon never got the lock, and spun a CPU
+  core while it waited.** Only the holder beat its ticket, so a waiter's ticket kept the
+  heartbeat it was written with. Once a wait outlasted `STALE_AFTER_S` (120 s), the waiter
+  judged its own ticket stale and could never hold, and other waiters pruned it. The `continue`
+  after pruning, which skips the waiter's own ticket, then re-read the directory with no pause.
+  With the default unbounded `--lock-wait-s`, a second `fathom run` that waited more than two
+  minutes behind a matrix never started. An acquirer now beats its ticket from the moment the
+  ticket exists. The wait loop no longer goes straight round after pruning, because the decision
+  already leaves stale tickets out, so every pass either decides or pauses. An acquire that ends
+  in a timeout, a Ctrl-C or any other exception, from the moment its ticket exists (including
+  while its beat thread starts), now drops its ticket and stops its beat. Regression tests:
+  - With the horizon at 0.5 s and the holder releasing at 1.0 s, the waiter now holds. On the
+    unchanged code it timed out after 5 s.
+  - A dead ticket whose unlink is refused no longer makes the loop spin. The test counts
+    directory reads against pauses on the waiting thread, a ratio that does not depend on
+    machine speed. On the unchanged code it counted 540 reads and 0 pauses in 0.3 s.
+  - An interrupted wait leaves no ticket behind.
+
+- **After a sleep or a clock step longer than the horizon, a waiter could hold beside a live
+  holder.** Heartbeats are wall-clock times, so a system sleep, a suspended VM or a forward
+  clock step longer than `STALE_AFTER_S` makes every ticket look stale at once. Once waiters
+  beat (the entry above), a waiter could prune the holder's ticket after such a gap, its own
+  beat could land first, and it held while the holder, which never re-checks, still did. An
+  independent review found this before release. With its repro scripts (Python 3.12, Windows),
+  processes suspended for 2 s against a 1 s horizon held two at once in 9 of 12 trials on the
+  pre-fix branch and 0 of 12 on 0.6.2. A +600 s clock step did so in 2 of 30 on the pre-fix
+  branch and 0 of 30 on 0.6.2; the review measured 17 of 30. 0.6.2 was safe here only because
+  its waiters never beat, so they could not hold after any long wait. The fix has three parts:
+  - A waiter that finds its own pass came much later than it paused treats nothing as stale
+    and prunes nothing for `WAKE_GRACE_BEATS` (2) heartbeat intervals, so every live owner beats
+    before anyone is judged dead.
+  - An acquirer that arrives just after the wake has no gap to notice and can still find the
+    holder stale before it beats; 0.6.2 allowed this too. So an owner whose beat went unwritten
+    for longer than the horizon, or whose ticket was removed, now records that it may have lost
+    the lock, and it never writes a removed ticket back. A holder's `stop_requested()` then
+    reports the loss, and `fathom run` halts at its next trial boundary. `stop_requested()`
+    runs the same checks itself, so a boundary that comes after the wake but before the first
+    beat also sees the loss. A waiter takes a new place at the back of the queue, because the
+    acquirer that pruned it may already hold.
+  - A ticket read or a beat write that another process refuses for a moment (Windows file
+    sharing) is retried for a few milliseconds (`CONTENTION_BACKOFF_S`). The first version of
+    this fix still failed 2 of 30 clock-step trials. An instrumented run showed why: the waiter
+    had read the holder's ticket mid-replace and fell back to the file's modification time, or
+    the holder's first beat after the step had been refused.
+
+  With the fix, the same scripts gave 0 of 30 (clock step) and 0 of 12 (suspend) under Python
+  3.12 and under 3.14. An instrumented clock-step run gave 0 of 120, against 5 of 120 before the
+  retries. The regression tests run the lock on a scripted clock, with no real sleeping. Each
+  failed on the code before the fix:
+  - A waiter behind a live holder across a +600 s step failed with `LockTimeout not raised`.
+  - A holder whose ticket was pruned after the step wrote the ticket back.
+  - A stalled waiter whose ticket was pruned reclaimed its old number.
+  - A refused read fell back to the modification time, and a refused beat was not retried.
+  - Three further tests came from the second review, which found mutants the suite let
+    through. They cover: the grace ends, so a dead holder is still removed after a clock step;
+    a holder records a loss from silence alone, with its ticket still there; and a loss
+    recorded while a pass reads the directory stops that pass from holding. Each fails on its
+    mutant, and every other lock test passes on it.
+  - A third review found that the holder learned of a loss only from its beat. A trial that
+    ended after a wake but before the first beat since (up to 15 s) found `stop_requested()`
+    returning None, and `fathom run` bought one more trial. In its repro, 3 s after the wake
+    the holder's silence was already 608 s against the 120 s horizon, and its ticket had been
+    removed. The boundary tests (a newcomer after the wake, silence alone, a removed ticket, an
+    error in the check) each returned None on the code before the fix.
+
+  This bounds the harm but does not remove it. An acquirer that arrives just after a wake can
+  still hold beside the holder until the holder's next trial boundary, and once it has removed
+  the holder's ticket, queued waiters can pass too during that last trial. The overlap is at
+  most one trial. In 0.6.2 it had no bound, because the holder never learned it had lost the
+  lock.
+
+  Known limits, left for a follow-up:
+  - A holder alone in the directory still halts after a sleep longer than about 105 s: the
+    120 s horizon, less up to one 15 s beat interval.
+  - The stop after a possible loss exits with 16, the same code as `fathom stop`.
+  - Queue order is not kept across a wake, because a waiter that records a possible loss takes
+    a new place at the back.
+  - A waiter that keeps stalling starts a new grace each time, so it can go on treating
+    nothing as stale. This errs toward waiting.
+  - One transient heartbeat error also halts the holder at its next trial boundary. This errs
+    toward a re-run, and nothing already bought is lost.
+
+- **One stat error could end the heartbeat on Python 3.12.** The beat checked its ticket with
+  `Path.exists()` outside any `try`, and the beat loop caught nothing. On 3.12 `Path.exists`
+  re-raises any stat error but not-found (a `PermissionError` on a file whose deletion is
+  pending, an `EIO`). One such error killed the beat thread. In the second review's repro (3.12,
+  Windows), a waiter then held beside the live holder after 0.16 s, and no loss was recorded,
+  so no stop reached the holder. On 3.14 `exists` swallows the error itself and the repro's
+  fault never fires. A check that fails now records a possible loss and skips that write, and
+  the beat loop records a possible loss for any exception and keeps beating. With the fix, the
+  same repro on 3.12 has the waiter refused and the holder asked to stop. Regression tests
+  inject the error at `Path.exists`, so they hold on both interpreters. On the code before the
+  fix, `beat()` raised the `PermissionError`, and the thread died on its first failed beat.
+
+- **`fathom stop --now` refuses a pid of 1 or below.** A ticket that cannot be read and whose
+  name carries no pid reads as pid 0 (the fallback above), and `--now` passes the holder's pid
+  to `terminate_process_tree`, which had no guard. On POSIX `os.kill(0, …)` signals the
+  caller's own process group, -1 every process the caller may signal, and 1 is init. The
+  regression test mocks the signal calls. It failed on the unguarded code with
+  `pid 0: taskkill exited 0`.
+
+- **How the first two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
+  the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
+  1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The
+  two failures were these two defects, not timing noise. Each now has a deterministic
+  regression test, watched failing on the unchanged code before the fix. The T24d test reads a
+  clock quantised to 15.625 ms inside one step, with the uids ordered against arrival, and it
+  failed with `AssertionError: LockTimeout not raised`, the message CI printed. The T24e tests
+  hold the ticket open across `release()` with a real file handle (meaningful on the Windows
+  leg; on POSIX the first unlink succeeds) or refuse its unlink the way Windows does (both
+  legs), and they failed with the ticket still on disk.
+
+- **What the final tree was measured at** (Windows, the runs concurrent for load):
+  - Each of the 32 new run-lock tests, other than the pure decision tests, passed 100 of 100 runs
+    under Python 3.12 and under 3.14.
+  - The existing contention, ticket-directory and stop-request tests passed 50 of 50 under each.
+  - A stress run that detects overlap with an `O_EXCL` sentinel file, so it depends on no clock,
+    found 0 overlaps in 600 acquisitions under each (6 processes, 20 rounds, 5 runs).
 
 - **An Opus 5.5 trial is priced at its own rate.** `routing.PRICE_PER_1K` is matched by
   substring of the model id, first match wins, and had one key per family. Opus 5.5
