@@ -98,6 +98,40 @@ Tags start at 0.2.0; every dated version below is tagged.
     machine speed. On the unchanged code it counted 540 reads and 0 pauses in 0.3 s.
   - An interrupted wait leaves no ticket behind.
 
+- **After a sleep or a clock step longer than the horizon, a waiter could hold beside a live
+  holder.** Heartbeats are wall-clock times, so a system sleep, a suspended VM or a forward
+  clock step longer than `STALE_AFTER_S` makes every ticket look stale at once. Once waiters
+  beat (the entry above), a waiter could prune the holder's ticket after such a gap, its own
+  beat could land first, and it held while the holder, which never re-checks, still did. An
+  independent review found this before release. With its repro scripts (Python 3.12, Windows),
+  processes suspended for 2 s against a 1 s horizon held two at once in 9 of 12 trials on the
+  pre-fix branch and 0 of 12 on 0.6.2. A +600 s clock step did so in 2 of 30 on the pre-fix
+  branch and 0 of 30 on 0.6.2; the review measured 17 of 30. 0.6.2 was safe here only because
+  its waiters never beat, so they could not hold after any long wait. The fix has three parts:
+  - A waiter that finds its own pass came much later than it paused treats nothing as stale
+    and prunes nothing for `WAKE_GRACE_BEATS` (2) heartbeat intervals, so every live owner beats
+    before anyone is judged dead.
+  - An acquirer that arrives just after the wake has no gap to notice and can still find the
+    holder stale before it beats; 0.6.2 allowed this too. So an owner whose beat went unwritten
+    for longer than the horizon, or whose ticket was removed, now records that it may have lost
+    the lock, and it never writes a removed ticket back. A holder's `stop_requested()` then
+    reports the loss, and `fathom run` halts at its next trial boundary. A waiter takes a new
+    place at the back of the queue, because the acquirer that pruned it may already hold.
+  - A ticket read or a beat write that another process refuses for a moment (Windows file
+    sharing) is retried for a few milliseconds (`CONTENTION_BACKOFF_S`). The first version of
+    this fix still failed 2 of 30 clock-step trials. An instrumented run showed why: the waiter
+    had read the holder's ticket mid-replace and fell back to the file's modification time, or
+    the holder's first beat after the step had been refused.
+
+  With the fix, the same scripts gave 0 of 30 (clock step) and 0 of 12 (suspend) under Python
+  3.12 and under 3.14. An instrumented clock-step run gave 0 of 120, against 5 of 120 before the
+  retries. The regression tests run the lock on a scripted clock, with no real sleeping. Each
+  failed on the code before the fix:
+  - A waiter behind a live holder across a +600 s step failed with `LockTimeout not raised`.
+  - A holder whose ticket was pruned after the step wrote the ticket back.
+  - A stalled waiter whose ticket was pruned reclaimed its old number.
+  - A refused read fell back to the modification time, and a refused beat was not retried.
+
 - **How the first two were found and proven.** `tests/test_runlock.py`'s contention tests failed on
   the Windows leg of CI for PR #65 (run 36245250631, attempt 1, CPython 3.12.10: 2 failed,
   1060 passed, 4 skipped) and passed on attempt 2, and the PR merged on that rerun's green. The

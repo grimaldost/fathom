@@ -30,6 +30,7 @@ import time
 import unittest
 import uuid
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -459,6 +460,53 @@ class TestATicketThatCannotBeReadIsStillThere(unittest.TestCase):
         self.addCleanup(waiter.release)
         self.assertFalse(dead.exists(), "a dead, unreadable ticket must be released")
 
+    def test_a_read_refused_once_is_retried_before_falling_back(self):
+        """The fallback reads the file's modification time, which lags the heartbeat by
+        up to one interval, and after a clock step by the whole step. A read that is
+        refused for a moment (the owner's beat replacing the file) is retried first."""
+        holder = RunLock("b", lock_root=self.root, label="holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        held = holder.dir / holder.ticket_name
+        refused: list[Path] = []
+        real_read_text = Path.read_text
+
+        def read_text(path_self, *args, **kwargs):
+            if path_self == held and not refused:
+                refused.append(path_self)
+                raise PermissionError(errno.EACCES, "Permission denied", str(path_self))
+            return real_read_text(path_self, *args, **kwargs)
+
+        with mock.patch.object(Path, "read_text", read_text):
+            (ticket,) = read_tickets(holder.dir)
+        self.assertEqual(len(refused), 1)
+        self.assertEqual(ticket.label, "holder", "the ticket was read from its mtime, not its body")
+
+    def test_a_beat_refused_once_is_retried(self):
+        """On Windows the beat's replace fails while a reader has the ticket open. A beat
+        that gave up waited a whole interval, and right after a wake that is the beat
+        that has to land before the grace ends."""
+        lock = RunLock("b", lock_root=self.root, label="holder", heartbeat_interval_s=3600)
+        lock.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(lock.release)
+        before = read_tickets(lock.dir)[0].heartbeat_s
+        refused: list[Path] = []
+        real_write = runlock._atomic_write_json
+
+        def write(target, payload):
+            if not refused:
+                refused.append(target)
+                raise PermissionError(errno.EACCES, "Access is denied", str(target))
+            real_write(target, payload)
+
+        with (
+            mock.patch("fathom.runlock._atomic_write_json", side_effect=write),
+            mock.patch("fathom.runlock.time.time", return_value=before + 5.0),
+        ):
+            lock.beat()
+        self.assertEqual(len(refused), 1)
+        self.assertEqual(read_tickets(lock.dir)[0].heartbeat_s, before + 5.0)
+
 
 def _refusing_unlink(target_matches, refusals: int | None):
     """An `os.unlink` that fails the way Windows does while another process has the
@@ -731,6 +779,146 @@ class TestAWaiterStaysInTheQueue(unittest.TestCase):
         self.assertEqual(read_tickets(lock.dir), [])
         started[0].join(timeout=5.0)
         self.assertFalse(started[0].is_alive(), "the beat thread outlived the failed acquire")
+
+
+class _ScriptedClock:
+    """The wall clock, the monotonic clock and the pauses the lock sees, scripted.
+
+    Time moves only when the lock pauses. A pause fires, in order, every event that
+    falls due inside it: a beat, a clock step, a release. So the interleaving of beats
+    and waiting passes is fixed, and nothing depends on how fast the machine is.
+    """
+
+    def __init__(self) -> None:
+        self.wall = time.time()
+        self.mono = 0.0
+        self._events: list[list] = []  # [due (monotonic), period or None, action]
+        self._firing = False
+
+    def at(self, due: float, action, period: float | None = None) -> None:
+        self._events.append([due, period, action])
+
+    def step(self, seconds: float) -> None:
+        """Move the wall clock alone, as an NTP step or a resume from sleep does."""
+        self.wall += seconds
+
+    def _advance_to(self, mono: float) -> None:
+        if mono > self.mono:
+            self.wall += mono - self.mono
+            self.mono = mono
+
+    def sleep(self, seconds: float) -> None:
+        end = self.mono + seconds
+        if self._firing:  # a pause inside an event (a retried unlink) just passes time
+            self._advance_to(end)
+            return
+        while due := [e for e in self._events if e[0] <= end]:
+            event = min(due, key=lambda e: e[0])
+            self._advance_to(event[0])
+            if event[1] is None:
+                self._events.remove(event)
+            else:
+                event[0] += event[1]
+            self._firing = True
+            try:
+                event[2]()
+            finally:
+                self._firing = False
+        self._advance_to(end)
+
+    def patches(self):
+        return (
+            mock.patch("fathom.runlock.time.time", side_effect=lambda: self.wall),
+            mock.patch("fathom.runlock.time.monotonic", side_effect=lambda: self.mono),
+            mock.patch("fathom.runlock.time.sleep", side_effect=self.sleep),
+            # No beat threads: every beat below is an event the script fires.
+            mock.patch.object(RunLock, "_start_heartbeat", lambda _self: None),
+        )
+
+
+class TestAGapLongerThanTheHorizon(unittest.TestCase):
+    """A system sleep, a suspended VM or a wall-clock step longer than STALE_AFTER_S.
+
+    Every heartbeat is measured on the wall clock, so after such a gap every ticket
+    looks stale at once, the live holder's included. Waiters that beat (0.7.0) made
+    this reachable: the waiter pruned the holder's ticket, its own beat landed first,
+    and it held while the holder, which never re-checks, still did. Measured with the
+    clock stepped +600 s, a waiter held beside a live holder in 17 of 30 trials.
+    """
+
+    KW: ClassVar[dict[str, float]] = {"stale_after_s": 1.0, "heartbeat_interval_s": 0.2}
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory(prefix="fathom-lock-")
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.clock = _ScriptedClock()
+        for patch in self.clock.patches():
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def _lock(self, label: str) -> RunLock:
+        return RunLock("b", lock_root=self.root, label=label, **self.KW)
+
+    def test_a_waiter_does_not_hold_beside_a_live_holder_after_a_clock_step(self):
+        holder = self._lock("holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        held = holder.dir / holder.ticket_name
+        waiter = self._lock("waiter")
+        # Both beat every 0.2 s, the waiter first after the step: the order that lost.
+        self.clock.at(0.2, waiter.beat, period=0.2)
+        self.clock.at(0.3, holder.beat, period=0.2)
+        self.clock.at(0.51, lambda: self.clock.step(600.0))
+        with self.assertRaises(LockTimeout):
+            waiter.acquire(timeout_s=3.0, poll_s=0.02)
+        self.assertTrue(held.exists(), "the waiter pruned a live holder's ticket")
+
+    def test_a_holder_learns_it_may_have_lost_the_lock(self):
+        """An acquirer that arrives after the wake has no gap of its own to notice, and
+        can take the lock before the holder beats again (0.6.2 allowed this too). The
+        holder cannot prevent that, so it finds out and stops at the next boundary."""
+        holder = self._lock("holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        self.addCleanup(holder.release)
+        held = holder.dir / holder.ticket_name
+        self.assertIsNone(holder.stop_requested())
+        self.clock.step(600.0)
+        newcomer = self._lock("newcomer")
+        newcomer.acquire(timeout_s=1.0, poll_s=0.02)
+        self.addCleanup(newcomer.release)
+        holder.beat()
+        self.assertFalse(
+            held.exists(), "the holder's beat brought back a ticket another run pruned"
+        )
+        stop = holder.stop_requested()
+        self.assertIsNotNone(stop, "the holder did not learn that it may have lost the lock")
+        self.assertIn("lost", stop.reason)
+
+    def test_a_waiter_whose_ticket_was_removed_takes_a_new_place(self):
+        """A waiter that stalled past the horizon and had its ticket pruned must not
+        bring the old, lower number back: an acquirer that pruned it may already hold."""
+        holder = self._lock("holder")
+        holder.acquire(timeout_s=2.0, poll_s=0.02)
+        waiter = self._lock("waiter")
+        taken: list[str] = []
+
+        def waiter_beats():
+            if not 0.5 <= self.clock.mono < 2.0:  # the waiter stalls from 0.5 s to 2.0 s
+                waiter.beat()
+
+        def pruned_by_another():
+            taken.append(waiter.ticket_name)
+            (waiter.dir / waiter.ticket_name).unlink()
+
+        self.clock.at(0.2, waiter_beats, period=0.2)
+        self.clock.at(0.3, holder.beat, period=0.2)
+        self.clock.at(1.8, pruned_by_another)
+        self.clock.at(2.5, holder.release)
+        waiter.acquire(timeout_s=5.0, poll_s=0.02)
+        self.addCleanup(waiter.release)
+        self.assertNotEqual(waiter.ticket_name, taken[0], "the waiter reclaimed its old ticket")
+        self.assertFalse((waiter.dir / taken[0]).exists())
 
 
 # ---------------------------------------------------------------------------

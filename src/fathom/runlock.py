@@ -57,6 +57,23 @@ no shorter than the longest trial, which is precisely the horizon that made the 
 observed deadlocks undecidable. A background thread beating every 15s gives a 120s
 horizon — eight missed beats, so a stalled writer is not mistaken for a dead one.
 
+## After a sleep or a clock step
+
+Heartbeats are wall-clock times. A system sleep, a suspended VM or a forward clock step
+longer than :data:`STALE_AFTER_S` therefore makes every ticket look stale at once, the
+live holder's included. Two rules keep that from putting a second run inside the lock:
+
+- A waiter that finds its own pass came much later than it paused has seen such a gap.
+  For :data:`WAKE_GRACE_BEATS` heartbeat intervals after it, the waiter treats nothing as
+  stale and prunes nothing, so every live owner beats again before anyone is judged dead.
+- An acquirer that arrives just after the wake has no gap of its own to notice, and can
+  find the holder stale before the holder beats again. So an owner whose beat went
+  unwritten for longer than the horizon, or whose ticket was removed, records that it may
+  have lost the lock. It never writes a removed ticket back. A holder's
+  :meth:`RunLock.stop_requested` then reports the loss, and the run halts at its next
+  trial boundary. A waiter takes a new place at the back of the queue, because an
+  acquirer that pruned it may already hold.
+
 ## Why this is testable, when FATH-B53 said it was not
 
 The row was deferred partly because "its failure mode is multi-process on one
@@ -75,6 +92,7 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
+import math
 import os
 import re
 import socket
@@ -85,7 +103,7 @@ import threading
 import time
 import uuid
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from pathlib import Path
 
 # The lock lives OUTSIDE `ledger/`. `ledger/` is tracked and `.gitignore` has no entry
@@ -108,12 +126,25 @@ _STOP_FILE = "stop.json"
 # phantom-holder deadlock this module exists to end.
 CHOOSING_STALE_AFTER_S = 30.0
 
+# How many heartbeat intervals a waiter lets pass, after a gap in its own passes,
+# before it judges any ticket stale again. Every live owner beats within one interval
+# of waking, so two leave a margin.
+WAKE_GRACE_BEATS = 2
+
 # Pauses between attempts to remove a lock file this process owns (0.785 s in total).
 # On Windows an unlink fails with a sharing violation while any other process has the
 # file open, and a waiter reading a ticket has it open for one small read. Retrying
 # across a short bounded backoff outlasts that read. Giving up at once left the ticket
 # reading as a live holder until STALE_AFTER_S.
 UNLINK_BACKOFF_S = (0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.4)
+
+# Pauses between attempts to read a ticket, and to write one's own beat, while another
+# process holds the file (on Windows a read fails while the owner's beat replaces
+# the file, and the replace fails while a reader has it open). Each side holds the
+# file for one small read or write, so a few milliseconds outlast it. A beat that
+# failed outright waited a whole interval to try again, and right after a wake the
+# first beat is the one that matters.
+CONTENTION_BACKOFF_S = (0.001, 0.005, 0.02, 0.05)
 
 # A ticket's file name leads with its FIFO number, then the pid that took it.
 _TICKET_NUMBER = re.compile(r"(\d+)-(?:(\d+)-)?", flags=re.ASCII)
@@ -264,7 +295,7 @@ def _parse_ticket(path: Path) -> Ticket | None:
         return None
     number = int(match.group(1))
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _retrying(lambda: path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         # Released or pruned since the directory was listed.
         return None
@@ -585,6 +616,16 @@ def _atomic_write_json(path: Path, payload: dict) -> None:
         raise
 
 
+def _retrying[T](attempt: Callable[[], T]) -> T:
+    """Run *attempt*, retrying a ``PermissionError`` across :data:`CONTENTION_BACKOFF_S`."""
+    for pause in CONTENTION_BACKOFF_S:
+        try:
+            return attempt()
+        except PermissionError:
+            time.sleep(pause)
+    return attempt()
+
+
 def _unlink_retrying(path: Path) -> OSError | None:
     """Remove *path*, retrying while another process holds it open.
 
@@ -640,6 +681,19 @@ class RunLock:
         self._created_ns = 0
         self._beat_stop = threading.Event()
         self._beat_thread: threading.Thread | None = None
+        # Wall-clock time of this ticket's last successful write.
+        self._last_beat_s = 0.0
+        # Why this process may no longer hold its place (see the module docstring).
+        self._lost: str | None = None
+
+    @property
+    def lost(self) -> str | None:
+        """Why this process may have lost the lock or its place, or None."""
+        return self._lost
+
+    def _lose(self, reason: str) -> None:
+        if self._lost is None:
+            self._lost = reason
 
     # -- ticket lifecycle ---------------------------------------------------
 
@@ -682,7 +736,9 @@ class RunLock:
             name = f"{number:020d}-{os.getpid():07d}-{uid}{_TICKET_SUFFIX}"
             self.ticket_name = name
             self._ticket_path = self.dir / name
-            self._write_ticket(self._ticket_path, time.time())
+            written_s = time.time()
+            self._write_ticket(self._ticket_path, written_s)
+            self._last_beat_s = written_s
         finally:
             path, self._choosing_path = self._choosing_path, None
             self._remove_own(
@@ -735,6 +791,7 @@ class RunLock:
         Until 0.7.0 only a holder beat, so a wait longer than the horizon made the
         waiter's own ticket stale: it could never hold, and other waiters pruned it.
         """
+        self._lost = None
         try:
             self._take_ticket()
             self._start_heartbeat()
@@ -750,8 +807,16 @@ class RunLock:
         deadline = None if timeout_s is None else time.monotonic() + timeout_s
         announced = ""
         held_by = "nobody (raced)"
+        grace_until = -math.inf  # monotonic
+        previous: tuple[float, float] | None = None  # (wall time of the last pass, its pause)
         while True:
             now = time.time()
+            # A pass that came much later than its pause means this process slept, was
+            # suspended, or the wall clock stepped forward. Every heartbeat may then look
+            # stale though its owner is alive, so nothing is judged stale until every
+            # live owner has had time to beat again.
+            if previous is not None and now - sum(previous) > self.heartbeat_interval_s:
+                grace_until = time.monotonic() + WAKE_GRACE_BEATS * self.heartbeat_interval_s
             # The bound is checked FIRST, so every branch below honours it. A bound
             # applied only on one path is not a bound: a waiter blocked on an
             # abandoned `choosing` marker sat for the marker's whole horizon and
@@ -760,19 +825,23 @@ class RunLock:
                 raise LockTimeout(
                     f"waited {timeout_s:.0f}s for bank {self.bank!r}; held by {held_by}"
                 )
+            if self._lost is not None:
+                self._requeue()
             # Nobody decides while another acquirer sits between its number and its
             # published ticket: inside that window the directory understates the queue,
             # and a waiter reading it concludes it holds when it does not.
             choosing = choosing_now(self.dir, now_s=now)
             if choosing:
                 held_by = f"an acquirer still choosing ({', '.join(choosing)})"
-                time.sleep(min(poll_s, 0.02))
+                previous = (now, min(poll_s, 0.02))
+                time.sleep(previous[1])
                 continue
+            in_grace = time.monotonic() < grace_until
             decision = decide(
                 read_tickets(self.dir),
                 self.ticket_name,
                 now_s=now,
-                stale_after_s=self.stale_after_s,
+                stale_after_s=math.inf if in_grace else self.stale_after_s,
             )
             if decision.stale:
                 # No `continue`: the decision already leaves stale tickets out, so
@@ -780,7 +849,9 @@ class RunLock:
                 # without a pause whenever a stale ticket stayed: this waiter's own,
                 # which it never prunes, or one whose unlink failed.
                 self._prune(decision.stale)
-            if decision.holds:
+            # A loss recorded by the beat while this pass read the directory is acted
+            # on (by requeueing) before this acquirer may hold.
+            if decision.holds and self._lost is None:
                 return
             if decision.holder is not None:
                 held_by = decision.holder.describe(now)
@@ -794,7 +865,26 @@ class RunLock:
                         f"and its claim released",
                         file=out,  # type: ignore[arg-type]
                     )
+            previous = (now, poll_s)
             time.sleep(poll_s)
+
+    def _requeue(self) -> None:
+        """Take a new place at the back of the queue, giving up the old one.
+
+        This acquirer looked dead long enough that another may have removed its ticket
+        and decided without it. Writing the old, lower number back could put it ahead
+        of an acquirer that already holds, so it takes a new number instead.
+        """
+        old, self._lost = self._ticket_path, None
+        if old is not None:
+            self._remove_own(
+                old,
+                consequence=(
+                    f"it reads as a claim on bank {self.bank!r} until it is "
+                    f"{self.stale_after_s:.0f}s old"
+                ),
+            )
+        self._take_ticket()
 
     def release(self) -> None:
         """Drop this process's ticket and stop beating. Safe to call twice.
@@ -868,8 +958,26 @@ class RunLock:
         path = self._ticket_path
         if path is None:
             return
-        with contextlib.suppress(OSError):
-            self._write_ticket(path, time.time())
+        now = time.time()
+        silent_s = now - self._last_beat_s
+        if silent_s > self.stale_after_s:
+            self._lose(
+                f"its heartbeat went unwritten for {silent_s:.0f}s, past the "
+                f"{self.stale_after_s:.0f}s horizon, so another run could have judged it dead"
+            )
+        if not path.exists():
+            # Removed by an acquirer that judged it dead. Writing it back would restore
+            # a place that acquirer has already decided without.
+            if path == self._ticket_path:
+                self._lose("its ticket was removed by another run that judged it dead")
+            return
+        try:
+            _retrying(lambda: self._write_ticket(path, now))
+        except OSError:
+            pass
+        else:
+            if path == self._ticket_path:
+                self._last_beat_s = now
         # release() joins this thread for one interval only, so a write slower than
         # that can land after release() removed the ticket. It would recreate the
         # ticket with nobody left to beat it, so the write that outlived its release
@@ -890,7 +998,17 @@ class RunLock:
 
         Scoped by time so a request left behind by an earlier run cannot halt this one
         before it has bought anything — a stale stop is exactly as bad as a stale lock.
+
+        A holder that may have lost the lock (see :attr:`lost`) is asked to stop too,
+        so a run that slept or stalled past the horizon halts at its next trial
+        boundary rather than spending beside a run that took the lock meanwhile.
         """
+        if self._lost is not None:
+            return StopRequest(
+                requested_at_s=time.time(),
+                at_boundary=True,
+                reason=f"this run may have lost the run lock: {self._lost}",
+            )
         req = _read_stop_request(self.dir)
         if req is None:
             return None
@@ -899,6 +1017,10 @@ class RunLock:
         return req
 
     def clear_stop_request(self) -> None:
+        # A run that may have lost the lock leaves any request on disk: it would be
+        # addressed to whoever holds the lock now.
+        if self._lost is not None:
+            return
         with contextlib.suppress(OSError):
             (self.dir / _STOP_FILE).unlink()
 
