@@ -737,6 +737,12 @@ class ToolCall:
         return _comparable("\n".join(_strings(self.input)))
 
     @property
+    def answered(self) -> bool:
+        """A result came back and is not an error: for an MCP call, the server is up, whatever
+        its ``ok`` says."""
+        return self.result is not None and not self.is_error
+
+    @property
     def succeeded(self) -> bool:
         """A result came back, it is not an error, and an MCP result does not say ``ok`` false.
 
@@ -1336,8 +1342,8 @@ class Visibility:
     init_seen: bool
     mcp_servers: list[str]  # "name=status" for the plugin's servers
     mcp_connected: bool
-    mcp_connected_late: bool  # pending at init, then a successful call
-    mcp_unconfirmed: bool  # pending at init, and no call to one of its tools succeeded
+    mcp_connected_late: bool  # pending at init, then a call it answered
+    mcp_unconfirmed: bool  # pending at init, and no call to one of its tools was answered
     commands_listed: list[str]
     commands_missing: list[str]
     skill_listed: bool
@@ -1367,9 +1373,10 @@ def assess_visibility(
     """Whether the plugin's MCP server is connected, its commands listed and its skill listed.
 
     A server still pending in the init event counts as connected when a later call to one
-    of its tools succeeded, and as unconfirmed, which is not a problem, when none did: a
-    headless session starts before its servers connect, so a subject that never calls the
-    server leaves it pending. The preflight is what proves the connection. Only a server
+    of its tools was answered (an ``ok`` false answer included), and as unconfirmed, which
+    is not a problem, when none was: a headless session starts before its servers connect,
+    so a subject that never calls the server leaves it pending. The preflight is what
+    proves the connection. Only a server
     that failed, needs authentication or is not listed is an environment failure.
     """
     init = analysis.init
@@ -1381,7 +1388,7 @@ def assess_visibility(
     statuses = {str(s.get("status", "")).lower() for s in servers}
     at_init = "connected" in statuses
     pending = "pending" in statuses
-    later = any(c.surface == "mcp" and c.succeeded for c in analysis.calls)
+    later = any(c.surface == "mcp" and c.answered for c in analysis.calls)
     prefix = f"{PLUGIN}:"
     listed = sorted(
         str(n)[len(prefix) :]

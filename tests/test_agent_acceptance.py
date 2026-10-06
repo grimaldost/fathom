@@ -416,10 +416,18 @@ class VisibilityTests(unittest.TestCase):
         silent = acc.preflight_problems(self._visibility(pending))
         self.assertEqual(len(silent), 1)
         self.assertIn("never answered the probe", silent[0])
+        # From a directory with no data root the probe answers ok false: the server is up.
+        no_root = '{"ok": false, "error": "no fathom data root found"}'
         answered = self._visibility(
-            pending, _use("m", acc.PREFLIGHT_TOOL, {"bank": "probe"}), _result("m", "{}")
+            pending, _use("m", acc.PREFLIGHT_TOOL, {"bank": "probe"}), _result("m", no_root)
         )
         self.assertEqual(acc.preflight_problems(answered), [])
+        refused = self._visibility(
+            pending,
+            _use("m", acc.PREFLIGHT_TOOL, {"bank": "probe"}),
+            _result("m", "MCP server not connected", is_error=True),
+        )
+        self.assertEqual(len(acc.preflight_problems(refused)), 1)
 
     def test_a_server_needing_authentication_is_an_environment_problem(self) -> None:
         init = dict(INIT, mcp_servers=[{"name": "plugin:fathom:fathom", "status": "needs-auth"}])
