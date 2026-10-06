@@ -1,0 +1,1101 @@
+"""Tests for src/fathom/adapters/{base,claude_cli}.py — stdlib-runnable.
+
+Run directly:  python tests/test_adapter_claude_cli.py
+Run via pytest: uv run pytest tests/test_adapter_claude_cli.py
+
+No real spawns: the subprocess boundary is injected as a stub everywhere
+(real-spawn isolation is the smoke gate's job, spec §11).
+"""
+
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import types
+import unittest
+import warnings
+from pathlib import Path
+from unittest import mock
+
+# Allow `python tests/test_adapter_claude_cli.py` from the project root.
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+from fathom.adapters import claude_cli
+from fathom.adapters.base import ExitStatus, Runner, RunRecord
+from fathom.adapters.claude_cli import (
+    COST_SOURCE_NONE,
+    COST_SOURCE_REPORTED,
+    ClaudeCliRunner,
+    build_command,
+    cleanup_dir,
+    cost_and_source,
+    make_isolated_config,
+    parse_stream,
+)
+from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
+
+FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _fixture(name: str) -> str:
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def _scenario(*, effort: str = "high", model: str = "claude-opus-4-8", trial_timeout_s=None):
+    """A minimal ResolvedScenario for adapter tests (real dataclass, dummy pins)."""
+    return ResolvedScenario(
+        name="t",
+        adapter="claude-cli",
+        model=model,
+        strategy="single-session",
+        effort=effort,
+        tools=ToolsConfig(source="none"),
+        limits=LimitsOverride(trial_timeout_s=trial_timeout_s),
+        model_id=None,
+        tool_repo_sha=None,
+        tool_invocation_cmd=None,
+        config_hash="x" * 64,
+    )
+
+
+def _cp(returncode: int = 0, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(
+        args=["claude"], returncode=returncode, stdout=stdout, stderr=stderr
+    )
+
+
+class RecordingSpawn:
+    """Injectable subprocess boundary that records every call and replays a
+    per-call responder.  The responder returns a CompletedProcess or raises
+    (e.g. subprocess.TimeoutExpired / FileNotFoundError)."""
+
+    def __init__(self, responder):
+        self.responder = responder
+        self.calls: list[types.SimpleNamespace] = []
+
+    def __call__(self, argv, *, input, timeout, env, cwd):
+        cfg = env.get("CLAUDE_CONFIG_DIR")
+        contents = sorted(os.listdir(cfg)) if cfg and os.path.isdir(cfg) else None
+        self.calls.append(
+            types.SimpleNamespace(
+                argv=list(argv),
+                input=input,
+                timeout=timeout,
+                env=dict(env),
+                cwd=cwd,
+                config_contents=contents,
+            )
+        )
+        return self.responder(len(self.calls) - 1)
+
+
+class AdapterTestBase(unittest.TestCase):
+    """Provides hermetic fake config dirs and a no-op-sleep runner factory."""
+
+    def _fake_real_config(self) -> str:
+        """A stand-in for ~/.claude: the credential plus decoys that must NOT leak."""
+        real = Path(tempfile.mkdtemp(prefix="fake_real_cfg_"))
+        (real / ".credentials.json").write_text('{"token": "secret"}', encoding="utf-8")
+        (real / "CLAUDE.md").write_text("real repo paths and discipline", encoding="utf-8")
+        (real / "settings.json").write_text("{}", encoding="utf-8")
+        (real / "history.jsonl").write_text("{}\n", encoding="utf-8")
+        self.addCleanup(cleanup_dir, str(real))
+        return str(real)
+
+    def make_runner(self, spawn, **kwargs) -> ClaudeCliRunner:
+        kwargs.setdefault("real_config_dir", self._fake_real_config())
+        runner = ClaudeCliRunner(spawn=spawn, sleep=lambda _s: None, **kwargs)
+        return runner
+
+    def setUp(self):
+        self.workspace = Path(tempfile.mkdtemp(prefix="ws_"))
+        self.addCleanup(cleanup_dir, str(self.workspace))
+
+
+# ---------------------------------------------------------------------------
+# build_command — pure argv assembly (headless default-deny)
+# ---------------------------------------------------------------------------
+
+
+class TestBuildCommand(unittest.TestCase):
+    def _cmd(self, **overrides):
+        kw = {
+            "model": "claude-opus-4-8",
+            "effort": "high",
+            "max_turns": 30,
+            "max_budget_usd": 5.0,
+            "allowed_tools": ["Read", "Grep"],
+            "disallowed_tools": ["Write", "Edit", "Bash"],
+            "stream": True,
+        }
+        kw.update(overrides)
+        return build_command(**kw)
+
+    def test_no_permission_mode_flag(self):
+        """bypassPermissions nullifies the allowlist; the flag is never present."""
+        cmd = self._cmd()
+        self.assertNotIn("--permission-mode", cmd)
+        self.assertNotIn("bypassPermissions", cmd)
+
+    def test_no_dangerously_skip_permissions_flag(self):
+        self.assertNotIn("--dangerously-skip-permissions", self._cmd())
+
+    def test_no_bare_flag(self):
+        """--bare strips the config-bound subscription login; never use it."""
+        self.assertNotIn("--bare", self._cmd())
+
+    def test_exact_allowed_tools_list(self):
+        cmd = self._cmd()
+        self.assertEqual(cmd[cmd.index("--allowed-tools") + 1], "Read,Grep")
+
+    def test_exact_disallowed_tools_list(self):
+        cmd = self._cmd()
+        self.assertEqual(cmd[cmd.index("--disallowed-tools") + 1], "Write,Edit,Bash")
+
+    def test_effort_flag_present(self):
+        cmd = self._cmd(effort="medium")
+        self.assertEqual(cmd[cmd.index("--effort") + 1], "medium")
+
+    def test_model_flag_present(self):
+        cmd = self._cmd()
+        self.assertEqual(cmd[cmd.index("--model") + 1], "claude-opus-4-8")
+
+    def test_per_spawn_budget_and_turn_flags(self):
+        cmd = self._cmd()
+        self.assertEqual(cmd[cmd.index("--max-turns") + 1], "30")
+        self.assertEqual(cmd[cmd.index("--max-budget-usd") + 1], "5.0")
+
+    def test_stream_json_output_format(self):
+        cmd = self._cmd(stream=True)
+        self.assertIn("stream-json", cmd)
+        self.assertIn("--verbose", cmd)
+
+    def test_non_stream_output_format(self):
+        cmd = self._cmd(stream=False)
+        self.assertIn("json", cmd)
+        self.assertNotIn("stream-json", cmd)
+
+    def test_empty_disallowed_tools_omits_flag(self):
+        cmd = self._cmd(disallowed_tools=[])
+        self.assertNotIn("--disallowed-tools", cmd)
+
+    def test_allowed_tools_always_present_even_when_empty(self):
+        """Default-deny: an empty allowlist is still passed explicitly."""
+        cmd = self._cmd(allowed_tools=[])
+        self.assertIn("--allowed-tools", cmd)
+        self.assertEqual(cmd[cmd.index("--allowed-tools") + 1], "")
+
+    def test_zero_budget_is_passed_through_not_dropped(self):
+        """0 means "spend nothing on this spawn", and it used to fall back to $5.
+
+        The guard was ``if max_budget_usd:``, so the single most restrictive cap an
+        operator can ask for was the one value that silently reached the adapter default
+        instead. ``None`` already spells "no cap" — the default — so truthiness gave two
+        spellings for "no cap" and none for "spend nothing".
+
+        This mirrors the default-deny convention two tests above: an empty allowlist is
+        passed explicitly rather than omitted, for the same reason. A restrictive value
+        must reach the spawn.
+
+        Not verified here: whether the real `claude` CLI accepts a 0 cap. If it rejects
+        one, a deliberate 0 now fails loudly at the spawn rather than quietly spending $5,
+        which is the better of the two failures.
+        """
+        cmd = self._cmd(max_budget_usd=0)
+        self.assertIn("--max-budget-usd", cmd)
+        self.assertEqual(cmd[cmd.index("--max-budget-usd") + 1], "0")
+
+    def test_append_system_prompt_file_present_when_set(self):
+        cmd = self._cmd(append_system_prompt_file="/abs/skill.md")
+        self.assertIn("--append-system-prompt-file", cmd)
+        self.assertEqual(cmd[cmd.index("--append-system-prompt-file") + 1], "/abs/skill.md")
+
+    def test_append_system_prompt_file_absent_when_unset(self):
+        self.assertNotIn("--append-system-prompt-file", self._cmd())
+
+    def test_plugin_dir_single_mount(self):
+        cmd = self._cmd(plugin_dirs=["A"])
+        self.assertIn("--plugin-dir", cmd)
+        idx = cmd.index("--plugin-dir")
+        self.assertEqual(cmd[idx + 1], "A")
+
+    def test_plugin_dir_multiple_mounts_in_order(self):
+        cmd = self._cmd(plugin_dirs=["A", "B"])
+        indices = [i for i, x in enumerate(cmd) if x == "--plugin-dir"]
+        self.assertEqual(len(indices), 2)
+        # First --plugin-dir followed by A
+        self.assertEqual(cmd[indices[0] + 1], "A")
+        # Second --plugin-dir followed by B
+        self.assertEqual(cmd[indices[1] + 1], "B")
+
+    def test_plugin_dir_empty_omits_flag(self):
+        cmd = self._cmd(plugin_dirs=[])
+        self.assertNotIn("--plugin-dir", cmd)
+
+
+# ---------------------------------------------------------------------------
+# Isolation — credential-only temp CLAUDE_CONFIG_DIR
+# ---------------------------------------------------------------------------
+
+
+class TestIsolation(AdapterTestBase):
+    def test_make_isolated_config_is_credentials_only(self):
+        """Only .credentials.json is copied — no CLAUDE.md / settings / history leak."""
+        real = self._fake_real_config()
+        cfg = make_isolated_config(real)
+        try:
+            self.assertEqual(sorted(os.listdir(cfg)), [".credentials.json"])
+            self.assertEqual(
+                (Path(cfg) / ".credentials.json").read_text(encoding="utf-8"),
+                '{"token": "secret"}',
+            )
+        finally:
+            cleanup_dir(cfg)
+
+    def test_make_isolated_config_handles_missing_credential(self):
+        empty = Path(tempfile.mkdtemp(prefix="empty_real_"))
+        self.addCleanup(cleanup_dir, str(empty))
+        cfg = make_isolated_config(str(empty))
+        try:
+            self.assertEqual(os.listdir(cfg), [])
+        finally:
+            cleanup_dir(cfg)
+
+    def test_make_isolated_config_writes_scenario_settings(self):
+        """A scenario-declared settings_file is written as settings.json next to
+        the credential — an explicit per-arm treatment (the user's real
+        settings.json stays excluded, test above)."""
+        real = self._fake_real_config()
+        holder = Path(tempfile.mkdtemp(prefix="arm_settings_"))
+        self.addCleanup(cleanup_dir, str(holder))
+        body = '{"hooks": {"PreToolUse": []}}'
+        (holder / "arm.json").write_text(body, encoding="utf-8")
+        cfg = make_isolated_config(real, settings_file=str(holder / "arm.json"))
+        try:
+            self.assertEqual(sorted(os.listdir(cfg)), [".credentials.json", "settings.json"])
+            self.assertEqual((Path(cfg) / "settings.json").read_text(encoding="utf-8"), body)
+        finally:
+            cleanup_dir(cfg)
+
+    def test_make_isolated_config_no_settings_by_default(self):
+        """Without a settings_file the isolated config has no settings.json."""
+        real = self._fake_real_config()
+        cfg = make_isolated_config(real)
+        try:
+            self.assertNotIn("settings.json", os.listdir(cfg))
+        finally:
+            cleanup_dir(cfg)
+
+    def test_execute_spawns_with_credentials_only_config(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("do the task", self.workspace, _scenario())
+        self.assertEqual(spawn.calls[0].config_contents, [".credentials.json"])
+
+    def test_execute_sets_config_dir_env_and_cwd(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("do the task", self.workspace, _scenario())
+        call = spawn.calls[0]
+        self.assertTrue("CLAUDE_CONFIG_DIR" in call.env)
+        self.assertEqual(call.cwd, str(self.workspace))
+
+    def test_execute_cleans_up_temp_config(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("do the task", self.workspace, _scenario())
+        cfg_dir = spawn.calls[0].env["CLAUDE_CONFIG_DIR"]
+        self.assertFalse(os.path.isdir(cfg_dir))
+
+    def test_execute_strips_billing_diverters_from_spawn_env(self):
+        """A host ANTHROPIC_API_KEY (or Bedrock/Vertex routing) must NOT reach the
+        spawn: it would divert billing off the copied subscription credential and
+        break USD comparability. Benign vars still pass through. (fathom's own
+        FATHOM_* variables are stripped too: tests/test_spawn_env.py.)"""
+        keys = (
+            "ANTHROPIC_API_KEY",
+            "ANTHROPIC_BASE_URL",
+            "CLAUDE_CODE_USE_BEDROCK",
+            "SPAWN_ENV_BENIGN_DECOY",
+        )
+        saved = {k: os.environ.get(k) for k in keys}
+
+        def _restore():
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+
+        self.addCleanup(_restore)
+        os.environ["ANTHROPIC_API_KEY"] = "sk-should-not-leak"
+        os.environ["ANTHROPIC_BASE_URL"] = "https://proxy.invalid"
+        os.environ["CLAUDE_CODE_USE_BEDROCK"] = "1"
+        os.environ["SPAWN_ENV_BENIGN_DECOY"] = "keep-me"
+
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("do the task", self.workspace, _scenario())
+        env = spawn.calls[0].env
+        # Membership is asserted on a bool, never with assertIn/NotIn on the mapping: a
+        # failure message would print the whole environment, credentials included.
+        self.assertFalse("ANTHROPIC_API_KEY" in env, "API key must be stripped from the spawn env")
+        self.assertFalse("ANTHROPIC_BASE_URL" in env, "base-url override must be stripped")
+        self.assertFalse("CLAUDE_CODE_USE_BEDROCK" in env, "Bedrock routing must be stripped")
+        self.assertTrue("CLAUDE_CONFIG_DIR" in env, "the isolated config dir must still be set")
+        self.assertEqual(
+            env.get("SPAWN_ENV_BENIGN_DECOY"), "keep-me", "benign vars must pass through"
+        )
+
+
+# ---------------------------------------------------------------------------
+# execute argv — scenario-resolved flags reach the spawn
+# ---------------------------------------------------------------------------
+
+
+class TestExecuteArgv(AdapterTestBase):
+    def test_effort_resolved_from_scenario(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("p", self.workspace, _scenario(effort="medium"))
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+
+    def test_model_resolved_from_scenario(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("p", self.workspace, _scenario(model="claude-sonnet-4-6"))
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--model") + 1], "claude-sonnet-4-6")
+
+    def test_no_permission_flags_through_execute(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertNotIn("--permission-mode", argv)
+        self.assertNotIn("--dangerously-skip-permissions", argv)
+        self.assertNotIn("bypassPermissions", argv)
+
+    def test_allow_disallow_lists_through_execute(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(
+            spawn, allowed_tools=["Read", "Grep"], disallowed_tools=["Write", "Bash"]
+        )
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--allowed-tools") + 1], "Read,Grep")
+        self.assertEqual(argv[argv.index("--disallowed-tools") + 1], "Write,Bash")
+
+    def test_prompt_passed_on_stdin(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("the prompt text", self.workspace, _scenario())
+        self.assertEqual(spawn.calls[0].input, "the prompt text")
+
+    def test_max_turns_override_reaches_argv(self):
+        # A per-trial max_turns (e.g. from task.limits.max_turns) overrides the
+        # adapter default so multi-step tasks are not truncated by the low default.
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, default_max_turns=30)
+        runner.execute("p", self.workspace, _scenario(), max_turns=60)
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--max-turns") + 1], "60")
+
+    def test_max_turns_defaults_when_no_override(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, default_max_turns=25)
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--max-turns") + 1], "25")
+
+    def test_inject_path_reaches_argv(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, append_system_prompt_file="/abs/skill.md")
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--append-system-prompt-file") + 1], "/abs/skill.md")
+
+    def test_plugin_dirs_single_mount_reaches_argv(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, plugin_dirs=["/path/to/plugin1"])
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        idx = argv.index("--plugin-dir")
+        self.assertEqual(argv[idx + 1], "/path/to/plugin1")
+
+    def test_plugin_dirs_multiple_mounts_in_order(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, plugin_dirs=["/path/to/plugin-a", "/path/to/plugin-b"])
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        indices = [i for i, x in enumerate(argv) if x == "--plugin-dir"]
+        self.assertEqual(len(indices), 2)
+        self.assertEqual(argv[indices[0] + 1], "/path/to/plugin-a")
+        self.assertEqual(argv[indices[1] + 1], "/path/to/plugin-b")
+
+    def test_plugin_dirs_empty_omits_flag(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, plugin_dirs=[])
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertNotIn("--plugin-dir", argv)
+
+
+class TestStagedArmFiles(AdapterTestBase):
+    """``stage_files``: the argv names per-spawn copies of the arm's files.
+
+    tests/test_spawn_env.py checks the property end to end, through the runner `fathom
+    run` builds; these pin the copy itself.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.src = Path(tempfile.mkdtemp(prefix="arm_src_"))
+        self.addCleanup(cleanup_dir, str(self.src))
+        self.inject = self.src / "body.md"
+        self.inject.write_text("BODY", encoding="utf-8")
+        self.plugin = self.src / "a-plugin"
+        (self.plugin / ".claude-plugin").mkdir(parents=True)
+        (self.plugin / ".claude-plugin" / "plugin.json").write_text("{}", encoding="utf-8")
+        for skipped in (".git", "__pycache__", ".venv"):
+            (self.plugin / skipped).mkdir()
+            (self.plugin / skipped / "x").write_text("x", encoding="utf-8")
+        (self.plugin / "skills").mkdir()
+        (self.plugin / "skills" / "__pycache__").mkdir()
+        (self.plugin / "skills" / "SKILL.md").write_text("skill", encoding="utf-8")
+
+    def _spawn_recording_tree(self):
+        seen: dict = {}
+
+        def responder(_i):
+            argv = spawn.calls[-1].argv
+            seen["argv"] = argv
+            inject = argv[argv.index("--append-system-prompt-file") + 1]
+            seen["body"] = Path(inject).read_text(encoding="utf-8")
+            mount = Path(argv[argv.index("--plugin-dir") + 1])
+            seen["tree"] = sorted(p.relative_to(mount).as_posix() for p in mount.rglob("*"))
+            return _cp(0, _fixture("stream_complete.jsonl"))
+
+        spawn = RecordingSpawn(responder)
+        return spawn, seen
+
+    def test_copies_hold_the_content_and_skip_what_the_tree_hash_skips(self):
+        spawn, seen = self._spawn_recording_tree()
+        runner = self.make_runner(
+            spawn,
+            append_system_prompt_file=str(self.inject),
+            plugin_dirs=[str(self.plugin)],
+            stage_files=True,
+        )
+        record = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(record.status, ExitStatus.OK)
+        self.assertEqual(seen["body"], "BODY")
+        self.assertEqual(
+            seen["tree"],
+            [".claude-plugin", ".claude-plugin/plugin.json", "skills", "skills/SKILL.md"],
+        )
+        self.assertNotIn(str(self.src), " ".join(seen["argv"]))
+        # The runner keeps the declared paths; only the argv changes.
+        self.assertEqual(runner.append_system_prompt_file, str(self.inject))
+        self.assertEqual(runner.plugin_dirs, (str(self.plugin),))
+
+    def test_a_missing_declared_file_is_passed_as_a_missing_copy(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        missing = self.src / "gone.md"
+        runner = self.make_runner(spawn, append_system_prompt_file=str(missing), stage_files=True)
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        passed = argv[argv.index("--append-system-prompt-file") + 1]
+        self.assertNotIn(str(self.src), passed)
+        self.assertFalse(Path(passed).exists())
+
+    def test_a_copy_that_fails_is_infrastructure_and_nothing_spawns(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, plugin_dirs=[str(self.plugin)], stage_files=True)
+        with mock.patch.object(claude_cli.shutil, "copytree", side_effect=OSError("disk full")):
+            record = runner.execute("p", self.workspace, _scenario())
+        self.assertIs(record.status, ExitStatus.INFRASTRUCTURE)
+        self.assertIn("disk full", record.result_text)
+        self.assertEqual(spawn.calls, [])
+
+    def test_off_by_default(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn, append_system_prompt_file=str(self.inject))
+        runner.execute("p", self.workspace, _scenario())
+        argv = spawn.calls[0].argv
+        self.assertEqual(argv[argv.index("--append-system-prompt-file") + 1], str(self.inject))
+
+
+# ---------------------------------------------------------------------------
+# Stream parsing — complete + truncated into RunRecords
+# ---------------------------------------------------------------------------
+
+
+class TestParseComplete(AdapterTestBase):
+    def _record(self) -> RunRecord:
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        return runner.execute("p", self.workspace, _scenario())
+
+    def test_status_ok(self):
+        self.assertEqual(self._record().status, ExitStatus.OK)
+
+    def test_tokens(self):
+        rec = self._record()
+        self.assertEqual(rec.tokens_in, 1500)
+        self.assertEqual(rec.tokens_out, 350)
+        self.assertEqual(rec.tokens_cache, 700)  # cache_read 600 + cache_creation 100
+
+    def test_turns(self):
+        self.assertEqual(self._record().num_turns, 3)
+
+    def test_duration(self):
+        self.assertEqual(self._record().duration_s, 45.2)  # duration_ms 45200
+
+    def test_cost(self):
+        self.assertEqual(self._record().cost_usd_est, 0.1234)
+
+    def test_model_id_from_stream(self):
+        self.assertEqual(self._record().model_id, "claude-opus-4-8-20260115")
+
+    def test_cli_version_from_stream(self):
+        self.assertEqual(self._record().cli_version, "1.2.3")
+
+    def test_raw_usage_preserved(self):
+        self.assertEqual(self._record().usage.get("cache_creation_input_tokens"), 100)
+
+
+class TestParseTruncated(AdapterTestBase):
+    def _record(self) -> RunRecord:
+        def responder(i):
+            raise subprocess.TimeoutExpired(
+                cmd=["claude"], timeout=123, output=_fixture("stream_truncated.jsonl")
+            )
+
+        spawn = RecordingSpawn(responder)
+        runner = self.make_runner(spawn)
+        return runner.execute("p", self.workspace, _scenario(trial_timeout_s=123))
+
+    def test_status_timeout(self):
+        self.assertEqual(self._record().status, ExitStatus.TIMEOUT)
+
+    def test_partial_usage_recovered_from_assistant_messages(self):
+        rec = self._record()
+        self.assertEqual(rec.tokens_in, 900)
+        self.assertEqual(rec.tokens_out, 75)
+        self.assertEqual(rec.tokens_cache, 150)
+
+    def test_partial_turns_recovered(self):
+        self.assertEqual(self._record().num_turns, 2)
+
+    def test_duration_falls_back_to_timeout(self):
+        self.assertEqual(self._record().duration_s, 123.0)
+
+    def test_timeout_marker_in_result_text(self):
+        self.assertIn("[TIMEOUT after 123s]", self._record().result_text)
+
+    def test_truncated_does_not_crash_on_partial_line(self):
+        # The fixture's final line is a JSON fragment cut off by the kill.
+        self.assertIsInstance(self._record(), RunRecord)
+
+
+class TestParseStreamUnit(unittest.TestCase):
+    """parse_stream is the pure core — exercise it directly too."""
+
+    def test_tolerates_garbage_lines(self):
+        parsed = parse_stream(["not json", "", '{"type": "result", "num_turns": 1}'])
+        self.assertEqual(parsed.num_turns, 1)
+
+    def test_empty_stream(self):
+        parsed = parse_stream([])
+        self.assertEqual(parsed.num_turns, 0)
+        self.assertFalse(parsed.saw_result)
+
+
+# ---------------------------------------------------------------------------
+# Cost source — a reported cost, or a labelled gap
+# ---------------------------------------------------------------------------
+
+
+class TestCostAndSource(unittest.TestCase):
+    """The pure helper that labels a cost instead of inventing one.
+
+    It replaces a token x price estimator whose premise expired: the adapter used to
+    substitute a local-table figure whenever the provider reported 0.0. That no longer
+    occurs, so the substitution is gone and absent costs are labelled as gaps.
+    """
+
+    def test_a_reported_cost_is_reported(self):
+        self.assertEqual(cost_and_source(0.031, 1000, 1000), (0.031, COST_SOURCE_REPORTED))
+
+    def test_zero_tokens_means_zero_is_the_true_cost(self):
+        # An errored spawn that ran nothing: zero is its true cost, so it must not
+        # read as a gap.
+        self.assertEqual(cost_and_source(0.0, 0, 0), (0.0, COST_SOURCE_REPORTED))
+
+    def test_tokens_with_no_cost_is_a_labelled_gap_not_an_estimate(self):
+        cost, source = cost_and_source(0.0, 1000, 1000)
+        self.assertEqual(cost, 0.0)
+        self.assertEqual(source, COST_SOURCE_NONE)
+
+
+class TestCostSourceEndToEnd(AdapterTestBase):
+    """End-to-end: a run reporting total_cost_usd == 0 on non-zero tokens records a
+    labelled gap, never a price-table figure standing in for a measurement."""
+
+    def _zero_cost_stream(self) -> str:
+        return (
+            "\n".join(
+                json.dumps(obj)
+                for obj in (
+                    {
+                        "type": "system",
+                        "subtype": "init",
+                        "model": "claude-opus-4-8",
+                        "version": "1.2.3",
+                    },
+                    {"type": "assistant", "message": {"usage": {"input_tokens": 1000}}},
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "num_turns": 2,
+                        "duration_ms": 1000,
+                        "total_cost_usd": 0.0,
+                        "result": "done",
+                        "usage": {"input_tokens": 1000, "output_tokens": 1000},
+                    },
+                )
+            )
+            + "\n"
+        )
+
+    def test_a_missing_cost_on_real_tokens_is_recorded_as_missing(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, self._zero_cost_stream()))
+        runner = self.make_runner(spawn)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.OK)
+        # An absent reported cost is now labelled as a gap rather than substituted.
+        self.assertEqual(rec.cost_usd_est, 0.0)
+        self.assertEqual(rec.cost_source, COST_SOURCE_NONE)
+        self.assertTrue(
+            any("cost_source=none" in str(w.message) for w in caught),
+            "a gap must be announced, not only labelled",
+        )
+
+    def test_reported_cost_preferred_over_fallback(self):
+        # When the CLI DOES report a cost, it wins — the fallback never overrides.
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.cost_usd_est, 0.1234)
+
+
+# ---------------------------------------------------------------------------
+# Retry — transient failures retried up to the cap, then ERROR
+# ---------------------------------------------------------------------------
+
+
+class TestRetry(AdapterTestBase):
+    def test_transient_retried_to_cap(self):
+        spawn = RecordingSpawn(lambda i: _cp(1, "", "Error: 529 overloaded_error"))
+        runner = self.make_runner(spawn, max_attempts=3)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(len(spawn.calls), 3)
+        self.assertEqual(rec.status, ExitStatus.ERROR)
+
+    def test_transient_then_success(self):
+        def responder(i):
+            if i == 0:
+                return _cp(1, "", "transient 503 error")
+            return _cp(0, _fixture("stream_complete.jsonl"))
+
+        spawn = RecordingSpawn(responder)
+        runner = self.make_runner(spawn, max_attempts=3)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(len(spawn.calls), 2)
+        self.assertEqual(rec.status, ExitStatus.OK)
+
+    def test_non_transient_error_not_retried(self):
+        spawn = RecordingSpawn(lambda i: _cp(1, "", "TypeError: bad task"))
+        runner = self.make_runner(spawn, max_attempts=3)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(len(spawn.calls), 1)
+        self.assertEqual(rec.status, ExitStatus.ERROR)
+
+
+# ---------------------------------------------------------------------------
+# Infrastructure classification — auth + usage-limit never score, never retry
+# ---------------------------------------------------------------------------
+
+
+class TestInfrastructureClassification(AdapterTestBase):
+    def test_auth_failure_is_infrastructure(self):
+        spawn = RecordingSpawn(
+            lambda i: _cp(1, "", "Invalid API key · Please run /login to authenticate")
+        )
+        runner = self.make_runner(spawn, max_attempts=3)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.INFRASTRUCTURE)
+        self.assertTrue(rec.is_infrastructure)
+
+    def test_auth_failure_not_retried(self):
+        spawn = RecordingSpawn(lambda i: _cp(1, "", "authentication failed"))
+        runner = self.make_runner(spawn, max_attempts=3)
+        runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(len(spawn.calls), 1)
+
+    def test_usage_limit_is_infrastructure(self):
+        # rc==0 but the result event reports the subscription cap — the simple
+        # returncode check would miss this; classification reads result_text.
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_usage_limit.jsonl")))
+        runner = self.make_runner(spawn, max_attempts=3)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.INFRASTRUCTURE)
+
+    def test_usage_limit_not_retried(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_usage_limit.jsonl")))
+        runner = self.make_runner(spawn, max_attempts=3)
+        runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(len(spawn.calls), 1)
+
+    def test_usage_limit_not_scored_flag(self):
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_usage_limit.jsonl")))
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertTrue(rec.is_infrastructure)
+
+    def test_session_limit_phrasing_is_infrastructure(self):
+        # Session limit messages indicate infrastructure failure, not task failure.
+        # A neutral time zone stands in here for the machine's local one.
+        # Without this classification it would score as an ERRORED trial
+        # and the matrix would consume money ineffectively.
+        from fathom.adapters.claude_cli import _classify_infrastructure, _spawn_is_infrastructure
+
+        msg = "You've hit your session limit · resets 11:10pm (UTC)"
+        self.assertTrue(_classify_infrastructure(msg))
+        self.assertTrue(_spawn_is_infrastructure("", msg, success=False))
+
+    def test_missing_cli_is_infrastructure(self):
+        def responder(i):
+            raise FileNotFoundError("claude")
+
+        spawn = RecordingSpawn(responder)
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.INFRASTRUCTURE)
+
+    def test_successful_task_reporting_auth_status_is_scored(self):
+        # A clean success (rc=0, is_error=False) whose RESULT TEXT merely reports that a data
+        # source needs auth (an env-setup task) must be SCORED, not misread as a spawn auth
+        # failure. Regression: an env-setup task whose result text reports a data source needs auth.
+        stream = (
+            "\n".join(
+                json.dumps(o)
+                for o in (
+                    {"type": "system", "subtype": "init", "model": "m", "version": "1.2.3"},
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "num_turns": 5,
+                        "duration_ms": 1000,
+                        "result": "dataset_a needs authentication (auth provider not "
+                        "configured); unauthorized for dataset_b. result.json written.",
+                        "usage": {"input_tokens": 100, "output_tokens": 50},
+                    },
+                )
+            )
+            + "\n"
+        )
+        spawn = RecordingSpawn(lambda i: _cp(0, stream))
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.OK)
+
+    def test_auth_on_stderr_is_infrastructure_even_if_stdout_ok(self):
+        # The spawn's OWN stderr carrying an auth failure is infrastructure regardless of a
+        # clean stdout — that is the CLI's auth, not task content.
+        spawn = RecordingSpawn(
+            lambda i: _cp(0, _fixture("stream_complete.jsonl"), "Invalid API key")
+        )
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(rec.status, ExitStatus.INFRASTRUCTURE)
+
+    def test_successful_task_mentioning_usage_limit_is_scored(self):
+        # A clean success (rc=0, is_error=False) whose RESULT TEXT merely mentions a
+        # quota/usage-limit phrase — the agent wrote an error handler, a test named
+        # test_quota_exceeded, or a CLI hint "Upgrade to Pro" — must be SCORED, not
+        # misread as a subscription-cap infra failure. Misreading it discards a good
+        # trial, halts the matrix, and re-burns money on resume. Mirror of the auth
+        # version above; the usage-limit branch previously ignored `success`.
+        stream = (
+            "\n".join(
+                json.dumps(o)
+                for o in (
+                    {"type": "system", "subtype": "init", "model": "m", "version": "1.2.3"},
+                    {
+                        "type": "result",
+                        "subtype": "success",
+                        "is_error": False,
+                        "num_turns": 3,
+                        "duration_ms": 900,
+                        "result": "Added handler raising QuotaError('quota exceeded'); "
+                        "CLI prints 'Upgrade to Pro' when the limit reached. Done.",
+                        "usage": {"input_tokens": 100, "output_tokens": 40},
+                    },
+                )
+            )
+            + "\n"
+        )
+        spawn = RecordingSpawn(lambda i: _cp(0, stream))
+        runner = self.make_runner(spawn)
+        rec = runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(
+            rec.status,
+            ExitStatus.OK,
+            "a successful task whose output mentions usage-limit text must be scored",
+        )
+        self.assertFalse(rec.is_infrastructure)
+
+    def test_spawn_infra_classification_keys_on_success(self):
+        from fathom.adapters.claude_cli import _spawn_is_infrastructure
+
+        # success + quota phrase in RESULT TEXT → task content, NOT infrastructure.
+        self.assertFalse(
+            _spawn_is_infrastructure("", "quota exceeded handled gracefully", success=True)
+        )
+        self.assertFalse(
+            _spawn_is_infrastructure(
+                "", "prints 'Upgrade to Pro' on 401 unauthorized", success=True
+            )
+        )
+        # a FAILED spawn with the same phrase IS infrastructure (the real cap).
+        self.assertTrue(_spawn_is_infrastructure("", "Claude usage limit reached", success=False))
+        # the CLI's OWN stderr carrying the signature is infra regardless of success.
+        self.assertTrue(_spawn_is_infrastructure("usage limit reached", "", success=True))
+        self.assertTrue(_spawn_is_infrastructure("Invalid API key", "", success=True))
+
+
+# ---------------------------------------------------------------------------
+# Protocol conformance
+# ---------------------------------------------------------------------------
+
+
+class TestProtocol(unittest.TestCase):
+    def test_runner_satisfies_protocol(self):
+        # ClaudeCliRunner satisfies the runtime-checkable Runner protocol.
+        cfg = tempfile.mkdtemp(prefix="proto_")
+        self.addCleanup(cleanup_dir, cfg)
+        runner = ClaudeCliRunner(real_config_dir=cfg)
+        self.assertIsInstance(runner, Runner)
+        self.assertTrue(callable(runner.execute))
+
+    def test_run_record_is_infrastructure_property(self):
+        self.assertTrue(RunRecord(status=ExitStatus.INFRASTRUCTURE).is_infrastructure)
+        self.assertFalse(RunRecord(status=ExitStatus.OK).is_infrastructure)
+
+    def test_run_record_is_error_property(self):
+        self.assertFalse(RunRecord(status=ExitStatus.OK).is_error)
+        self.assertTrue(RunRecord(status=ExitStatus.ERROR).is_error)
+        self.assertTrue(RunRecord(status=ExitStatus.TIMEOUT).is_error)
+        self.assertTrue(RunRecord(status=ExitStatus.INFRASTRUCTURE).is_error)
+
+
+class TestSubprocessSpawnKillsTree(unittest.TestCase):
+    """The default subprocess boundary kills the whole process tree on timeout.
+
+    Token-free: a python parent that spawns a grandchild sleeper stands in for the
+    claude CLI and its tool subprocesses. Regression for the adapter timeout path
+    (unlike the engine path) orphaning tool grandchildren that keep mutating the
+    workspace the verifier is about to score.
+    """
+
+    def test_timeout_kills_grandchild(self):
+        import time
+
+        from fathom.adapters.claude_cli import _subprocess_spawn, pid_alive, terminate_process_tree
+
+        work = Path(tempfile.mkdtemp(prefix="fathom-adapter-tree-"))
+        child_pidfile = work / "child.pid"
+        try:
+            parent_src = (
+                "import subprocess, sys, time\n"
+                "cpf = sys.argv[1]\n"
+                "child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(120)'])\n"
+                "with open(cpf, 'w') as f:\n"
+                "    f.write(str(child.pid))\n"
+                "    f.flush()\n"
+                "time.sleep(120)\n"
+            )
+            with self.assertRaises(subprocess.TimeoutExpired):
+                _subprocess_spawn(
+                    [sys.executable, "-c", parent_src, str(child_pidfile)],
+                    input="",
+                    timeout=3,
+                    env=os.environ.copy(),
+                    cwd=str(work),
+                )
+            self.assertTrue(child_pidfile.exists(), "grandchild never recorded its pid")
+            child_pid = int(child_pidfile.read_text().strip())
+            deadline = time.monotonic() + 5.0
+            while pid_alive(child_pid) and time.monotonic() < deadline:
+                time.sleep(0.1)
+            self.assertFalse(pid_alive(child_pid), "grandchild (tool stand-in) was orphaned")
+        finally:
+            if child_pidfile.exists():
+                cpid = int(child_pidfile.read_text().strip())
+                if pid_alive(cpid):
+                    terminate_process_tree(cpid)
+            cleanup_dir(str(work))
+
+
+class TestRunShellBounded(unittest.TestCase):
+    """The shared runner for gate commands stops the command's whole tree.
+
+    ``subprocess.run``'s timeout kills the shell alone. On Windows it then waits for every
+    process still holding the output pipes, so a hung child holds the caller until it is
+    done; on POSIX the child runs on, orphaned, after the call returned. A shell stands
+    between the caller and the command here, as it does for every gate.
+    """
+
+    def setUp(self):
+        self.work = Path(tempfile.mkdtemp(prefix="fathom-shell-tree-"))
+        self.addCleanup(cleanup_dir, str(self.work))
+        self.pidfile = self.work / "child.pid"
+        self.addCleanup(self._stop_leftover)
+        # A child that records its pid and then outlives any timeout here; `&& echo`
+        # keeps a POSIX shell from replacing itself with the child.
+        self.cmd = (
+            f'"{sys.executable}" -c "import os, sys, time; '
+            f"open(sys.argv[1], 'w').write(str(os.getpid())); time.sleep(60)\" "
+            f'"{self.pidfile}" && echo done'
+        )
+
+    def _stop_leftover(self):
+        from fathom.adapters.claude_cli import pid_alive, terminate_process_tree
+
+        if self.pidfile.exists():
+            text = self.pidfile.read_text().strip()
+            if text and pid_alive(int(text)):
+                terminate_process_tree(int(text))
+
+    def _child_gone(self, within: float = 5.0) -> bool:
+        import time
+
+        from fathom.adapters.claude_cli import pid_alive
+
+        text = self.pidfile.read_text().strip()
+        deadline = time.monotonic() + within
+        while pid_alive(int(text)) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        return not pid_alive(int(text))
+
+    def test_a_finished_command_returns_its_code_and_output(self):
+        from fathom.adapters.claude_cli import run_shell_bounded
+
+        proc = run_shell_bounded(
+            f'"{sys.executable}" -c "print(42); raise SystemExit(3)"',
+            cwd=self.work,
+            env=os.environ,
+            timeout=60,
+        )
+        self.assertEqual(proc.returncode, 3)
+        self.assertIn("42", proc.stdout)
+
+    def test_a_timeout_stops_the_tree_and_returns_promptly(self):
+        import time
+
+        from fathom.adapters.claude_cli import run_shell_bounded
+
+        start = time.monotonic()
+        with self.assertRaises(subprocess.TimeoutExpired):
+            run_shell_bounded(self.cmd, cwd=self.work, env=os.environ, timeout=2)
+        elapsed = time.monotonic() - start
+        self.assertLess(elapsed, 15, "the caller waited for the child")
+        self.assertTrue(self.pidfile.exists(), "the child never started")
+        self.assertTrue(self._child_gone(), "the shell's child outlived the timeout")
+
+    def test_an_interruption_stops_the_tree_too(self):
+        # Ctrl+C in fathom's console: the command's tree must not run on unattended.
+        import time
+
+        from fathom.adapters.claude_cli import run_shell_bounded
+
+        pidfile = self.pidfile
+        real_communicate = subprocess.Popen.communicate
+        calls: list[int] = []
+
+        def interrupted(self_, *args, **kwargs):
+            # Only the gate's own wait is interrupted; stopping the tree runs taskkill
+            # through subprocess as well, and that must work.
+            calls.append(1)
+            if len(calls) > 1:
+                return real_communicate(self_, *args, **kwargs)
+            deadline = time.monotonic() + 20
+            while not (pidfile.exists() and pidfile.read_text().strip()):
+                if time.monotonic() > deadline:
+                    break
+                time.sleep(0.05)
+            raise KeyboardInterrupt
+
+        with (
+            mock.patch.object(subprocess.Popen, "communicate", interrupted),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            run_shell_bounded(self.cmd, cwd=self.work, env=os.environ, timeout=60)
+        self.assertTrue(self._child_gone(), "the shell's child outlived the interruption")
+
+
+if __name__ == "__main__":
+    loader = unittest.TestLoader()
+    suite = loader.loadTestsFromModule(sys.modules[__name__])
+    runner = unittest.TextTestRunner(verbosity=2)
+    result = runner.run(suite)
+    sys.exit(0 if result.wasSuccessful() else 1)
+
+
+# --- FATHOM_STREAM_DIR opt-in raw-stream tee (post-hoc activation analysis) ---
+
+
+def test_tee_stream_inert_without_env(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.delenv("FATHOM_STREAM_DIR", raising=False)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_tee_stream_writes_tagged_file(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm/tier--task--r0")
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2)
+    files = list(tmp_path.iterdir())
+    assert len(files) == 1
+    name = files[0].name
+    assert name.startswith("bank--arm_tier--task--r0--a2--"), name  # '/' sanitized
+    assert files[0].read_text(encoding="utf-8").count('"type"') == 2
+
+
+def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    blocker = tmp_path / "afile"
+    blocker.write_text("x", encoding="utf-8")
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(blocker / "sub"))  # dir under a file
+    ClaudeCliRunner._tee_stream("data", 1)  # must not raise
+
+
+def test_tee_stream_skips_empty_stdout(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    ClaudeCliRunner._tee_stream("", 1)
+    assert list(tmp_path.iterdir()) == []

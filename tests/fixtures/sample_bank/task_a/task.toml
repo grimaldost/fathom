@@ -1,0 +1,9 @@
+id = "task_a"
+instruction = "Implement the add function in main.py so that it returns the sum of its two arguments."
+
+[limits]
+max_turns = 10
+timeout_seconds = 300
+
+[verify]
+entry = "verify.py"

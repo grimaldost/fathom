@@ -1,0 +1,9 @@
+id = "task_b"
+instruction = "Implement the subtract function in main.py so that it returns the difference of its two arguments."
+
+[limits]
+max_turns = 10
+timeout_seconds = 300
+
+[verify]
+entry = "verify.py"

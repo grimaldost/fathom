@@ -1,0 +1,20 @@
+# A treatment arm: the control's spawn with a short note appended to the system prompt.
+# It differs from bare.toml only in its name and the [context] table, so a difference
+# between the two arms is attributable to the note.
+name = "nudge"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "low"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep"]
+
+[context]
+# Relative to this file. The file's content (its sha256), not its path, enters
+# config_hash: editing the note starts a new history for this arm, moving it does not.
+inject = "assets/nudge.md"
+
+[limits]
+trial_timeout_s = 300

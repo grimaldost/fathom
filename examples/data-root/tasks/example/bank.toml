@@ -1,0 +1,12 @@
+# The bank manifest. All three keys are required.
+#
+# name            must equal this directory's name: it names ledger/<name>.jsonl, and
+#                 `fathom report` and `fathom stop` take the directory name.
+# dataset_version is part of every trial's resume key. Bump it on any change that could
+#                 change a trial's outcome (an instruction, a fixture, a verifier, a limit),
+#                 so the next run buys the changed tasks fresh.
+# holdout         task ids sealed from ordinary runs; `fathom run --include-holdout` spends
+#                 them and marks those trials in the ledger. May be empty.
+name = "example"
+dataset_version = "1"
+holdout = []

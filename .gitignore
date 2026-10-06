@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+/dist/
+
+# Git worktrees created inside the checkout.
+.worktrees/
+
+# Runtime state fathom writes in the data root it runs from: run-lock tickets, stop
+# requests, kept spawn streams. This repository is not a data root, but the example one
+# under examples/data-root/ is, and running fathom there writes this directory.
+.fathom/
+
+# Scorecards `fathom report` renders into the example data root.
+/examples/data-root/report/

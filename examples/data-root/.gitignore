@@ -1,0 +1,4 @@
+# Runtime state fathom writes here: run locks, stop requests, kept spawn streams.
+.fathom/
+# Scorecards `fathom report` renders. They regenerate from the ledger at any time.
+report/

@@ -1,0 +1,19 @@
+# The control arm: the task instruction alone. The report uses the arm named "bare" as
+# its anchor.
+#
+# Every value below enters this arm's config_hash, and so its trials' resume key; comments
+# do not. Changing a value (or the order of `allowed`) starts the arm's history afresh.
+name = "bare"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "single-session"
+effort = "low"
+
+[tools]
+source = "none"
+# Headless spawns are default-deny: an empty list would leave the agent no tools at all.
+allowed = ["Read", "Write", "Edit", "Glob", "Grep"]
+
+[limits]
+# Wall-clock seconds per spawn (default 1800).
+trial_timeout_s = 300

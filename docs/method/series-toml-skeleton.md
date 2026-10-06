@@ -1,0 +1,77 @@
+# series.toml skeleton
+
+The `series.toml` schema is the **engine-agnostic series contract**
+(`docs/specs/2026-07-03-series-engine-contract.md` §3; convoy, the reference engine,
+documents its own format in its repository). fathom **regenerates** this file per trial —
+rewriting `[paths]` to absolute, pinning `[governance]`, and stripping any per-PR
+`model`/`tier`/`effort`/`budget` override — so keep it to the contract's plain value types.
+
+```toml
+[series]
+id = "<series-name>"
+version = "1"
+
+[branches]
+base = "main"                      # fathom stages the fixture here
+integration = "<topic>/integration"  # the engine leaves this checked out — fathom scores it
+
+[paths]
+prompts = "prompts"                # fathom rewrites to an absolute path outside the workspace
+outputs = "outputs"                # spawns.jsonl telemetry lands here
+
+[governance]                       # fathom PINS model / effort / permission_mode / budgets
+model = "claude-opus-5-5"        # <- overwritten from the resolved scenario
+effort = "high"                    # <- overwritten from the resolved scenario
+permission_mode = "default"        # <- overwritten; never bypassPermissions (§6 parity)
+timeout_seconds = 1800             #    NOT pinned — the template's value is used as authored;
+                                   #    the trial's own wall-clock ceiling is the scenario's
+                                   #    [limits] trial_timeout_s, applied to the engine subprocess
+# tier = "strong"                  #    dropped, not overwritten — fathom removes `tier` so the
+                                   #    explicit model pin is authoritative. That is deliberate and
+                                   #    it is why a lineup change never reaches a fathom trial: an
+                                   #    engine resolving a tier could route one arm somewhere else
+                                   #    mid-matrix, and an experiment cannot have its treatment
+                                   #    moved by a release. The pins below are examples; the
+                                   #    scenario supplies the real ones.
+
+[governance.budgets]               # per-phase USD ceilings — TOML numbers, not strings.
+implementation = 20.0              # a spawn that exceeds its cap halts un-integrated
+review = 5.0                       # (outcome="budget" / exit 4, §7) rather than overspending —
+fix = 3.0                          # this IS the wave-budget guard (no separate [budget] block).
+
+[review]
+blocking = false
+max_fix_attempts = 0
+
+[[checks]]                         # a blocking red stops the phase (never silently skipped)
+name = "tests"
+run = "python -B -m pytest -q -p no:cacheprovider"   # writes no cache into the scored workspace (FATH-B73)
+blocking = true
+independent = false
+
+# Per-PR definitions: the DAG. NO per-PR model/tier/effort/budget — fathom strips them
+# (`_PER_PR_PINS`) before spawning so an arm can't silently use a stronger model per PR.
+# (convoy itself ACCEPTS per-PR model/tier/effort as part of its per-PR governance, and
+# rejects only budget/budgets, so the parity guard here is fathom's strip, not convoy's.)
+[[prs]]
+id = "PR01"
+branch = "<topic>/pr01"
+prompt = "PR01.md"                 # relative to [paths].prompts
+phase = "1"
+depends_on = []
+
+[[prs]]
+id = "PR02"
+branch = "<topic>/pr02"
+prompt = "PR02.md"
+phase = "2"
+depends_on = ["PR01"]
+```
+
+## Wave budget
+
+There is no wave-level `[budget]`/drift block that any engine reads. Cost is bounded per
+spawn by `[governance.budgets]` (which fathom pins): when a spawn exceeds its cap, convoy
+halts that PR **un-integrated** and reports `outcome = "budget"` / exit 4 (series contract §7).
+fathom records that trial `errored` (excluded from the pass rate, re-runnable after raising
+the cap) rather than scoring truncated work — the wave never quietly blows past its forecast.

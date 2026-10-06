@@ -1,0 +1,14 @@
+# Synthetic series arm: the engine is named by a repository path, resolved to a SHA
+# and an explicit `uv run --project <repo> ...` command at run time.
+name = "series"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "series"
+effort = "high"
+
+[tools]
+source = "repo"
+repo = "../example-series-engine"
+
+[limits]
+trial_timeout_s = 3600

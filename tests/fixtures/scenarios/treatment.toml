@@ -1,0 +1,17 @@
+# Synthetic treatment arm: the same tools as bare.toml, plus an injected context file.
+name = "treatment"
+adapter = "claude-cli"
+model = "claude-opus-4-8"
+strategy = "single-session"
+effort = "high"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
+
+[context]
+# Relative to this file. Its content sha256, not its path, enters config_hash.
+inject = "assets/treatment.md"
+
+[limits]
+trial_timeout_s = 600

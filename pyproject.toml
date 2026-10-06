@@ -1,0 +1,56 @@
+[project]
+name = "fathom"
+version = "0.8.0"
+description = "Scenario-blind tool-effectiveness evals"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.12"
+dependencies = []
+
+[project.scripts]
+fathom = "fathom.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = ["ruff", "pytest", "pre-commit"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# Rule families: pycodestyle, pyflakes, bugbear, isort, pyupgrade, bandit, ruff-specific,
+# simplify, comprehensions, implicit string concatenation, and unspecified-encoding.
+select = ["E", "F", "W", "B", "I", "UP", "S", "RUF", "SIM", "C4", "ISC", "PLW1514"]
+ignore = [
+    "S603",   # subprocess-without-shell-equals-true: every call here is a fixed argv
+    "S607",   # (claude/uv/git), never a shell string built from untrusted input.
+    "RUF001", "RUF002", "RUF003",  # ambiguous-unicode-character-*: fires on this repo's
+              # own deliberate typography (alpha/times signs in stats prose, em dashes and
+              # curly quotes throughout comments and docstrings), not on typos or homoglyphs.
+    "S311",   # suspicious-non-cryptographic-random-usage: every hit is `random.Random(<seed>)`
+              # for a deterministic Monte Carlo simulation or property-test data generator,
+              # never a token/credential -- the seed itself is the point (reproducibility).
+    "S105",   # hardcoded-password-string: both hits are `STATUS_PASS = "pass"`-style status
+              # constants (pass/fail/warn), matched on the substring "pass", not a credential.
+]
+preview = true            # PLW1514 is preview-only; explicit-preview-rules scopes preview
+explicit-preview-rules = true  # to just that rule.
+
+[tool.ruff.lint.per-file-ignores]
+# Bare `assert` is the normal test-assertion idiom; this suite is never run under `-O`, so
+# bandit's stripped-assertion premise does not apply. `mcp/test_server_schema.py` is a test
+# by every other measure (name, shape, intent) but sits outside tests/ because it exercises
+# the MCP server wrapper specifically.
+"tests/**" = ["S101"]
+"mcp/test_server_schema.py" = ["S101"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"

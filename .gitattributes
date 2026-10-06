@@ -1,0 +1,9 @@
+* text=auto
+*.md text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# A ledger's bytes are LF on every platform: the ledger index stamps each file by its bytes
+# (src/fathom/ledgerindex.py), including the example ledger under examples/data-root/ledger/.
+*.jsonl text eol=lf

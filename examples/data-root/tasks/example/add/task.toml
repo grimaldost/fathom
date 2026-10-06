@@ -1,0 +1,26 @@
+# One task. `id`, `instruction`, [limits] and [verify] are required.
+#
+# The instruction is the prompt every arm receives, in a workspace staged from fixtures/.
+id = "add"
+instruction = "Implement add() in calc.py so that it returns the sum of its two arguments."
+
+[limits]
+# Accepted and ignored: each spawn's timeout comes from the arm's own [limits].
+trial_timeout_s = 300
+# Turns per spawn (default 30). A trial that reaches it is truncated, and the scorecard's
+# Arm Health table flags the arm.
+max_turns = 10
+
+[verify]
+# Run as `python verify.py <result view>`; see verify.py. Optional: timeout_s (default 60).
+entry = "verify.py"
+
+# Optional tables this task does not use:
+#
+# [gate]
+# run = "python -m unittest -q"   # a check the gated strategies run in the workspace after
+#                                 # each attempt, and that `fathom validate` runs on the fixture
+#
+# [naive]
+# must_pass = ["..."]             # the naive-fix contract read by tools/check_naive_refs.py,
+# must_fail = ["..."]             # with the naive fix itself in refs/naive/

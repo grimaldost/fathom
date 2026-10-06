@@ -1,0 +1,104 @@
+# The commit lane — the fast half of CI, run before a commit lands instead of after a push.
+# Formatting, lint, a stale committed index and version sites out of step are fast, local
+# and deterministic to check, so they are caught here rather than on the default branch.
+#
+# Every hook checks what its name says whatever the committer's environment holds. In
+# particular FATHOM_HOME, which names a data root and wins over the working directory, is
+# cleared or overridden by each hook that runs fathom (see the reconcile hooks below).
+#
+# Install (one-off, per clone):
+#     git config core.hooksPath tools/git-hooks
+#
+# NOT `pre-commit install`: that writes a hook invoking the bare `pre-commit` executable
+# shim, and in environments where the console-script shim is blocked the hook silently
+# never runs. The tracked hooks in tools/git-hooks/ call this config through
+# `uv run python -m pre_commit`, pinned by uv.lock.
+#
+# ruff runs as a local `language: system` hook so the version is uv.lock's, never a second
+# pinned copy drifting from CI. pytest stays CI-owned: the suite takes minutes, and the
+# commit lane must not. The one exception is a single test that takes about a second and
+# runs only when the arm-hashing code or the example data root is staged.
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format (check)
+        entry: uv run ruff format --check .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check .
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      # `fathom reconcile` at the engine root, with no data root named or found, checks the
+      # engine's version sites, so it runs when one of them is staged. A FATHOM_HOME in the
+      # committer's environment would name a data root and the hook would check that
+      # instead (or fail on a stale path), so the entry clears it: fathom reads an empty
+      # FATHOM_HOME as unset. `bash -c` because an inline assignment needs a shell. Git runs
+      # hooks with its own bash first on PATH on every platform, Git for Windows included;
+      # outside a hook on Windows, `bash` can resolve to WSL's instead, so run pre-commit by
+      # hand from Git Bash there.
+      - id: reconcile
+        name: fathom reconcile (engine version sites)
+        entry: bash -c 'FATHOM_HOME= uv run fathom reconcile'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        files: ^(pyproject\.toml|\.claude-plugin/plugin\.json|CHANGELOG\.md)$
+
+      # The example data root, named with --home, which wins over FATHOM_HOME. A header,
+      # rendering or counting change in the index code makes its committed index stale, so
+      # those modules trigger it too (ledger.py applies voids before the index counts
+      # completed trials). CI also reconciles it found from inside, and named by
+      # FATHOM_HOME.
+      - id: reconcile-example-data-root
+        name: fathom reconcile (examples/data-root)
+        entry: uv run fathom --home examples/data-root reconcile
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        files: ^(examples/data-root/|src/fathom/(reconcile|ledgerindex|ledger)\.py$)
+
+      # The example data root's ledger rows record the config_hash the engine computed for
+      # each arm. `fathom reconcile` only re-digests each row's stored preimage, so a change
+      # to how an arm is hashed leaves it green; this test resolves the fixture's arms again
+      # and compares. (tests/conftest.py clears FATHOM_HOME for every test.)
+      - id: example-data-root-hashes
+        name: example data root config hashes (one pytest test)
+        entry: uv run pytest -q tests/test_reconcile.py -k test_the_fixture_rows_carry_the_hash_the_engine_computes
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+        files: ^(examples/data-root/(scenarios|ledger)/|src/fathom/scenario\.py$)
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - docs
+          - style
+          - refactor
+          - perf
+          - test
+          - chore
+          - build
+          - ci
+          - release
+
+  - repo: local
+    hooks:
+      - id: no-ai-attribution
+        name: Reject AI attribution trailers in commit messages
+        entry: bash -c 'if grep -Ei "^(Co-Authored-By|Co-authored-by):.*(Claude|GPT|Anthropic|noreply@anthropic)" "$1"; then echo "Commit message contains a forbidden AI attribution trailer — the contribution guidelines forbid these. Remove the line and re-commit."; exit 1; fi' --
+        language: system
+        stages: [commit-msg]

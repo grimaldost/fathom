@@ -1,0 +1,14 @@
+# Marks this directory as a fathom data root. fathom finds it through `--home`, FATHOM_HOME,
+# or by walking up from the current directory to the nearest fathom.toml with a [data_root]
+# table, and reads tasks/, scenarios/, ledger/ and docs/reports/ relative to it.
+[data_root]
+schema = 1
+
+# A discrepancy `fathom reconcile` accepts, with its reason. The check, subject and key are
+# the three values the reconcile output prints for the discrepancy. An entry whose
+# discrepancy no longer occurs fails the reconcile as a stale exception.
+[[reconcile.known]]
+check = "scenario-known"
+subject = "example"
+key = "nudge-draft"
+reason = "An early version of the nudge arm, run once before its scenario file was committed. The trial stays in the ledger and is not cited as a result."

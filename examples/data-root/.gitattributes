@@ -1,0 +1,11 @@
+# LF line endings on every platform, for every text file. An arm's injected files
+# ([context], [settings]) and every file of a mounted plugin are hashed by their bytes into
+# the arm's config_hash, whatever their extension, so a checkout that rewrote line endings
+# would change the hash, and with it every resume key of that arm. The first rule covers
+# every file git sees as text; the rules after it name the common ones explicitly.
+* text=auto eol=lf
+*.md text eol=lf
+*.toml text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.jsonl text eol=lf
