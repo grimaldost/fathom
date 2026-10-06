@@ -1,159 +1,160 @@
-# Fresh-Agent Acceptance Test for fathom
+# Fresh-agent acceptance test
 
-This document describes the acceptance test for the installed fathom plugin. It answers one question: **can a fresh Claude Code agent, given only a user's goal and the fathom plugin's exposed surfaces, actually use fathom end-to-end without fathom-specific instructions?**
+`tools/agent_acceptance.py` answers one question with evidence: can a fresh Claude Code
+agent, given only a user's goal and whatever the installed plugin exposes, use fathom end to
+end? It is the acceptance test for the promise that an agent can build and run a bank from
+the shipped skill, commands and MCP tools alone.
 
 ## What it measures
 
-The test spawns headless Claude agents with three real-world scenarios:
+Each scenario starts one headless Claude Code session, the subject, in a workspace of its
+own. The prompt is a user's goal in plain words. It names no fathom command, flag, path,
+skill or MCP tool, and the harness appends no system prompt. The harness refuses to spawn a
+prompt that contains `/fathom:`, `--dry-run`, `fathom-eval`, `mcp__`, `python -m`, `--home`,
+`FATHOM_HOME`, `fathom init` or `fathom run`.
 
-- **S1: existing-data** — Explore a data root, run consistency checks, and plan a dry-run cost estimate (no spend allowed).
-- **S2: from-scratch** — Author a bank with two arms from scratch, run it within budget, and render the scorecard.
-- **S3: unnamed-discovery** — Discover fathom without being told its name and show what a measurement would look like on existing data.
+| Scenario | Workspace | The prompt asks the subject to |
+|---|---|---|
+| S1 existing-data | a clone of your data root; `FATHOM_HOME` names it | say which evaluations ran and what each concluded, whether the data is consistent, and what re-running the smallest would cost, spending nothing |
+| S2 from-scratch | an empty directory; `FATHOM_HOME` unset | build a one-task, two-arm measurement with fathom, run each arm once for at most $1, and show the scorecard |
+| S3 unnamed-discovery | a clone, as S1 | find whatever installed tool measures whether a skill helps, without being told its name, and show what a measurement would look like, spending nothing |
 
-Agents learn to use fathom by:
-- Reading available tool names and skills (Skill tool, MCP servers, slash commands).
-- Exploring the plugin's documentation.
-- Calling the exposed surfaces: `fathom:` slash commands, the `fathom-eval` skill, or MCP tools like `plan` and `report`.
+The prompts and each scenario's checks are data, in `tools/agent_acceptance_scenarios.toml`.
 
-No agent receives a fathom command, flag, skill name, or MCP tool name in its prompt. Everything it learns comes from what the plugin exposes.
+The harness judges each session three ways.
 
-## Cost and safety rails
+- **Visibility**, from the stream's init event: the plugin's MCP server
+  (`plugin:fathom:fathom`) is connected, every command in the plugin's `commands/` is
+  listed as `fathom:<name>`, and the `fathom:fathom-eval` skill is listed. A visibility
+  failure is an environment failure, reported apart from the agent's behaviour.
+- **Behaviour**, from the tool calls in the stream. Each call is classified by the fathom
+  surface it used: `skill` (the Skill tool on `fathom-eval`), `command` (a `fathom:` command
+  through the Skill or SlashCommand tool), `mcp` (a tool of the plugin's server), `cli`
+  (a Bash command that runs fathom, with its subcommand read from the argv), or `docs` (a
+  Read of a file in the plugin's tree). Results are paired with their calls, and errors on
+  a fathom surface are kept, 300 characters each.
+- **Ground truth**, read by the harness after the subject exits: files in the workspace, the
+  real data root's git state, and for S2 a `fathom reconcile` the harness runs itself.
 
-- **Spend limit per scenario**: $0.20 (S1, S3 no-spend check) or $1.50 (S2 budget × 1.5 buffer).
-- **Wall-clock timeout**: 30 minutes per scenario.
-- **Permission mode**: agents run headless with explicit allow/disallow lists (no WebFetch, WebSearch, `git push`, or `gh`).
-- **Real-spawn isolation**: each agent runs in an isolated `CLAUDE_CONFIG_DIR` with no inherited `FATHOM_HOME` or working-directory state.
-- **Workspace preservation**: workspaces live under `--out` and are kept for inspection.
+## Checks
+
+Every scenario gets `session_finished`: the stream has a result event that is not an error,
+and the session was not killed at the wall-clock limit. Every clone scenario also gets
+`data_root_untouched`: the real data root's `git status --porcelain` and HEAD are the same
+after the subject as just before it.
+
+| Check | Kind | Passes when |
+|---|---|---|
+| `no_ledger_change` | ground truth | nothing under the clone's `ledger*/` is new or modified (`report/` and `.fathom/` are ignored) |
+| `no_paid_run` | ground truth | no `fathom run` without `--dry-run` was executed |
+| `reconcile_ran` | behaviour | a reconcile ran through the CLI and returned, either clean or reporting a disagreement |
+| `plan_ran` | behaviour | a dry-run plan succeeded, through the CLI or the MCP `plan` tool |
+| `answer_names_banks` | answer | the final answer names at least half of the banks that have a `ledger/<bank>.jsonl` in the clone |
+| `fathom_used` | behaviour | any fathom surface was used |
+| `data_root_created` | ground truth | a `fathom.toml` with a `[data_root]` table exists under the workspace |
+| `bank_authored` | ground truth | that data root has a bank with at least one task whose `[verify] entry` file exists |
+| `arms_authored` | ground truth | at least two scenario files that declare a `strategy` |
+| `trials_completed` | ground truth | at least two `completed` trial rows across at least two `config_hash` values |
+| `measurement_within_budget` | ground truth | the ledger's summed `cost_usd_est` is at most 1.5 times the budget the prompt states |
+| `reconcile_passes` | ground truth | `fathom reconcile`, run by the harness in that data root, exits 0 |
+| `scorecard_rendered` | ground truth | a non-empty `report/scorecard-<bank>.md` exists |
+
+A command call (`/fathom:reconcile` through the Skill tool) only expands the command's text;
+the engine runs in the Bash call that follows it. That is why `reconcile_ran`, `plan_ran` and
+`no_paid_run` count CLI and MCP calls only.
+
+The verdict also records, without passing or failing on them: the surfaces used in order,
+how many tool calls came before the first fathom use, every fathom operation, and for a
+paid run whether a budget rail (`--max-run-usd`, `--max-spawn-usd`) was passed and whether
+smoke and a dry-run plan came first.
+
+## Cost
+
+Each subject session is capped with `--max-budget-usd` (`--budget-usd`, default $3), so the
+three sessions cost at most $9. S1 and S3 spend nothing on fathom. S2's own fathom spawns
+(its smoke check, the arming check and the two trials) are separate processes outside that
+cap: the prompt allows $1, and `measurement_within_budget` fails above $1.50. The preflight
+is one session capped at $0.20. `--dry-run` prints the ceiling for the scenarios selected.
+
+## Safety rails
+
+- **The real data root is never handed to a subject.** S1 and S3 get
+  `git clone --local --no-hardlinks <data root> <workspace>/data`, with the clone's
+  `origin` remote removed, and the session starts in the clone's parent so it finds the data
+  through `FATHOM_HOME`. The harness reads the real data root's git state just before each
+  subject and again after it, with `--no-optional-locks`, so even that read writes nothing.
+  Work of your own in the data root while a subject runs fails that subject's check.
+- **It refuses** an engine checkout or plugin tree (a `.claude-plugin/plugin.json` or a
+  `src/fathom/` in it), a plugin cache directory, a directory without a `[data_root]` table,
+  and a directory that is not the top of a git work tree.
+- **Environment.** A subject starts from the environment the engine gives its own trial
+  spawns (`env_for_agent_code`): every `FATHOM_*` variable, `PWD`, `OLDPWD` and the billing
+  and routing variables are removed, along with any variable whose value names the real
+  data root. The variables a running Claude Code session sets for its children are removed
+  too (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, the parent session's identity and host
+  channel, `MCP_CONNECTION_NONBLOCKING` and others; the full list is
+  `PARENT_SESSION_VARS`). `FATHOM_HOME` is then set per scenario or left unset, never
+  inherited. `--dry-run` prints every name it removes.
+- **Permissions.** `--permission-mode acceptEdits`, allowed tools `Bash`, `Read`, `Write`,
+  `Edit`, `Glob`, `Grep`, `Skill`, `SlashCommand`, `ToolSearch` (which loads a deferred MCP
+  tool's schema) and the plugin's MCP server; disallowed `Bash(git push:*)`, `Bash(gh:*)`,
+  `WebFetch` and `WebSearch`. The subject never sees these lists. A call to any other tool
+  is refused and shows in the verdict's `permission_denials`.
+- **Wall clock.** Each subject is killed with its whole process tree at `--timeout-s`
+  (default 1800 s), with the engine adapter's `taskkill /T /F` on Windows.
+
+A subject runs with your own Claude Code configuration, since that is where the installed
+plugin lives: your user settings, permissions, hooks and `CLAUDE.md` apply as they would to a
+session you started. A user-scope `CLAUDE.md` that mentions fathom makes S3 easier, and a
+`settings.json` `env` table applies after the harness's environment.
 
 ## How to run
 
-### Dry run (prepare workspaces, print commands, no spawn)
+From an engine checkout, with your data root as an argument (it defaults to `FATHOM_HOME`):
 
 ```sh
-uv run python tools/agent_acceptance.py --dry-run --data-root <your-data-root>
+# Prepare the workspaces and print each subject's command, env changes and prompt.
+uv run python tools/agent_acceptance.py --dry-run --data-root DIR
+
+# One trivial session: is the plugin visible at all? Cents.
+uv run python tools/agent_acceptance.py --preflight-only --data-root DIR
+
+# The scenarios, in the order given.
+uv run python tools/agent_acceptance.py --data-root DIR --scenarios S1,S3,S2
 ```
 
-Shows:
-- Exact `claude` command lines for each scenario.
-- Environment deltas.
-- Workspace paths.
+Other options: `--model` (default `sonnet`; `haiku` is the stress variant), `--out DIR` and
+`--run-id ID` (the default output is `<temp>/fathom-agent-acceptance/<run id>/`, and a
+directory that is not empty is refused), `--budget-usd`, `--timeout-s`, and `--plugin-dir DIR`
+to test a development tree. With `--plugin-dir`, the installed plugin may load as well, and
+the verdict lists every fathom plugin the init event reported.
 
-### Preflight only (spawn one trivial session, check visibility)
-
-```sh
-uv run python tools/agent_acceptance.py --preflight-only --data-root <your-data-root>
-```
-
-Spawns a single "Reply with the word ready." session and reports whether the fathom MCP server is visible.
-
-### Run all scenarios
-
-```sh
-uv run python tools/agent_acceptance.py --data-root <your-data-root>
-```
-
-Spawns three agents, one per scenario. On completion:
-- Prints workspace paths.
-- Writes `verdict.json` per scenario.
-- Writes `report.md` (summary table and details).
-- Exit code: 0 if all scenarios passed, 1 if any failed, 2 if environment failure, 3 if usage error.
-
-### Selective scenarios
-
-```sh
-uv run python tools/agent_acceptance.py --scenarios s1_existing_data,s2_from_scratch \
-  --data-root <your-data-root>
-```
-
-### Custom model, plugin, budget
-
-```sh
-uv run python tools/agent_acceptance.py \
-  --model haiku \
-  --plugin-dir /path/to/dev/fathom \
-  --budget-usd 5.0 \
-  --data-root <your-data-root>
-```
+A scenario that finds a visibility failure stops the run: the remaining scenarios are marked
+skipped, since their behaviour would say nothing about the plugin.
 
 ## Reading the verdict
 
-Each scenario produces:
+The output directory holds `report.md` and one directory per scenario,
+`<id>-<name>/`, with:
 
-- **`transcript.jsonl`** — raw stream-json output from the agent.
-- **`verdict.json`** — structured results: checks (pass/fail + evidence), surfaces used, cost, duration.
-- **`stderr.txt`** — agent's stderr (timeouts, errors).
-- **`report.md`** — summary table and per-scenario details.
+- `workspace/`, the subject's working directory, kept for inspection;
+- `transcript.jsonl`, the raw stream;
+- `stderr.txt`, the CLI's stderr;
+- `verdict.json`: the status, each check with its evidence, visibility, behaviour, the
+  fathom-surface errors, cost, turns, duration, the command and the removed environment
+  names, and the final answer.
 
-### Verdict checks
+`report.md` starts with a table of scenario, verdict, cost and duration, then the visibility
+of each scenario, then each scenario's checks, behaviour and final answer.
 
-Each scenario has scenario-specific checks:
+| Exit | Meaning |
+|---|---|
+| 0 | every scenario passed |
+| 1 | a check failed |
+| 2 | an environment or preflight failure: the plugin was not visible, the stream had no init event (for example, `claude` could not start), `claude` is not on `PATH`, or a workspace could not be prepared |
+| 3 | a usage error: a bad option, an unusable data root, a used output directory, or a scenario file or prompt the harness refuses |
 
-**All scenarios:**
-- `prompt_guard` — the prompt contains no forbidden terms (e.g., `/fathom:`, `--dry-run`, `fathom-eval`).
-- `visibility` — the fathom MCP server is connected and the `fathom-eval` skill is listed.
-
-**S1 (existing-data):**
-- `no_spend` — no changes to ledger files (git status unchanged).
-
-**S2 (from-scratch):**
-- `bank_structure` — `fathom.toml` with `[data_root]`, a bank, ≥2 arms, and a ledger with ≥2 completed trials across ≥2 configs.
-- `reconcile` — `fathom reconcile` exits 0.
-- `scorecard` — a rendered scorecard exists in `report/`.
-
-**S3 (unnamed-discovery):**
-- `no_spend` — same as S1.
-- `fathom_surface_used` — at least one fathom surface (skill, command, MCP, or CLI) was called.
-
-### Understanding failure
-
-If a scenario fails:
-1. **Check `verdict.json`** for which checks failed and their evidence.
-2. **Read `transcript.jsonl`** to see what the agent actually did (stream-json events).
-3. **Check `stderr.txt`** for timeouts or permission errors.
-4. **Read the agent's final result** in the `result` field of the last event in `transcript.jsonl`.
-
-Common failures:
-- **visibility failed** — the fathom MCP server did not start or the skill is not listed. Check the plugin is enabled and the `--plugin-dir` is correct.
-- **bank_structure failed** — the agent did not author a valid bank. Check the agent's transcript to see what went wrong (missing tasks, arms, or verifier).
-- **no_spend failed** — the agent ran a paid matrix (S1/S3 disallow this). The agent learned to spend despite the prompt saying not to.
-- **prompt_guard failed** — the spec's prompt validation failed before spawn (the prompt contained a forbidden term).
-
-## Implementation notes
-
-The harness is implemented in `tools/agent_acceptance.py`:
-
-- **Pure functions** (parsing, classification, checks) are unit-tested in `tests/test_agent_acceptance.py` with synthetic data (no real spawns).
-- **Workspace management** handles both `clone` (local git clone of data root) and `empty` (fresh directory) modes.
-- **Stream parsing** is tolerant of malformed lines and unknown event types.
-- **Tool classification** distinguishes fathom surfaces: skill, slash command, MCP tool, CLI invocation, or documentation reads.
-- **Ground-truth checks** validate bank structure, ledger contents, reconciliation, and scorecard rendering.
-
-## Gates (all must pass before commit)
-
-```sh
-uv run ruff format --check .
-uv run ruff check .
-uv run pytest -q
-FATHOM_HOME= uv run fathom reconcile
-python tools/changelog_currency.py [changed files]
-```
-
-## Data protection
-
-- The real data root is never modified: workspaces are clones (for S1/S3) or empty directories (S2).
-- Before and after S1/S3 runs, git status and HEAD are recorded and verified unchanged.
-- The harness refuses to run if `--data-root` is an engine checkout (detected by `.claude-plugin/plugin.json`).
-
-## Limitations and non-goals
-
-- Does not test `fathom run` itself (no real paid matrix in the test).
-- Does not test the series engine or gated-session strategies (only single-session, simple enough for an agent to author from scratch).
-- Does not measure how much hand-holding a user needs to understand fathom's full feature set (only whether the installed surfaces work).
-- Does not test user-facing CLI help text (covered by docs alone).
-
-## Next steps
-
-To extend the test:
-1. Add more scenarios (e.g., test a gated-session or series strategy if agents can author them).
-2. Increase trial budget and repeats for statistical confidence.
-3. Add a stress variant (haiku model, tight timeouts) to test robustness.
+Start with the visibility row. If the MCP server is `failed` or `pending`, or a command is
+missing, fix the installation (`/plugin`, `/mcp`) and run `--preflight-only` again before
+reading any behaviour. A failed check names its evidence, and `#N` in it is the tool call's
+position in the stream, counting from 0.

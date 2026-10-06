@@ -8,7 +8,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
-- **Fresh-agent acceptance test** for the fathom plugin (`tools/agent_acceptance.py`). Spawns headless Claude agents with three scenarios (existing-data, from-scratch, unnamed-discovery) to verify that agents can use fathom end-to-end by discovering its exposed surfaces (skills, MCP tools, slash commands) without fathom-specific instructions. Includes unit tests (`tests/test_agent_acceptance.py`), scenarios configuration, and documentation (`docs/agent-acceptance.md`).
+- **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
+  headless Claude Code sessions whose prompt is a user's goal in plain words, with no fathom
+  command, flag, skill or tool name and no appended system prompt, and checks whether each
+  session can use fathom from what the installed plugin shows it: reading an existing data
+  root (on a clone of it), building and running a measurement from an empty directory, and
+  finding the tool without being told its name. Each session is judged on what it could see
+  (the init event), what it did (its tool calls, by fathom surface) and what is true
+  afterwards (the workspace, the real data root's git state, a reconcile the harness runs).
+  The scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
+  `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
+  It is run by hand; the test suite covers it offline and never spawns `claude`.
 
 ## [0.8.0] - 2026-09-26
 

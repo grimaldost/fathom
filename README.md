@@ -243,7 +243,7 @@ with it. Details: [`README-plugin.md`](README-plugin.md).
 | `examples/` | The example data root. |
 | `docs/` | Specs, ADRs and the development method. |
 | `skills/`, `commands/`, `mcp/`, `.claude-plugin/` | The Claude Code plugin. |
-| `tools/` | Repository tooling: git hooks, the changelog check, the naive-fix check, the ledger-index shim. |
+| `tools/` | Repository tooling: git hooks, the changelog check, the naive-fix check, the ledger-index shim, the fresh-agent acceptance test. |
 | `assets/` | The visual identity; see [`assets/README.md`](assets/README.md). |
 
 ## License

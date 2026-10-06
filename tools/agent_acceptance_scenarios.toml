@@ -1,39 +1,60 @@
-# Scenarios for fresh-agent acceptance test.
+# Scenarios for tools/agent_acceptance.py. Each table is one subject session; its key is the
+# scenario id that --scenarios takes.
 #
-# Each scenario spawns a headless Claude agent with a user prompt, allowed/disallowed tools,
-# and measurement constraints. Agents learn to use fathom by exploring available surfaces
-# (skills, MCP tools, slash commands, CLI); no fathom-specific instructions are given.
+#   name                    short name, used in the output directory
+#   workspace               "clone": a local git clone of the data root at workspace/data,
+#                           with the session started in workspace/ (the clone's parent);
+#                           "empty": an empty directory, which is also the session's cwd
+#   fathom_home             "clone" sets FATHOM_HOME to the clone; "unset" (the default)
+#                           leaves it unset
+#   names_tool              false: the prompt must not contain the word "fathom" at all
+#   measurement_budget_usd  what the prompt allows the measurement itself to spend; the
+#                           measurement_within_budget check allows 1.5 times it
+#   checks                  pass/fail checks by name, beside the ones every scenario gets
+#                           (docs/agent-acceptance.md lists them all)
+#   prompt                  the user's goal in plain words. It never names a fathom command,
+#                           flag, path, skill or MCP tool; the harness refuses a prompt that
+#                           does, before anything is spawned.
 
-[s1_existing_data]
-# Test: can the agent explore a data root, run consistency checks, and plan a dry run?
-# Ground truth: no new or modified files in the clone's ledgers, and a consistency check + dry-run plan ran.
+[S1]
 name = "existing-data"
-prompt = """I keep my evaluations of AI coding tools with fathom. Without spending any money, tell me which evaluations have been run in my data and what each concluded, whether my recorded data is internally consistent, and what re-running the smallest one once would cost."""
-workspace_kind = "clone"
-allow_spend = false
-tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
-tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
-timeout_s = 1800
+workspace = "clone"
+fathom_home = "clone"
+checks = ["no_ledger_change", "no_paid_run", "reconcile_ran", "plan_ran", "answer_names_banks"]
+prompt = """\
+I keep my evaluations of AI coding tools with fathom. Without spending any money, tell me \
+which evaluations have been run in my data and what each concluded, whether my recorded \
+data is internally consistent, and what re-running the smallest one once would cost.\
+"""
 
-[s2_from_scratch]
-# Test: can the agent author a bank, run it within budget, and render results?
-# Ground truth: bank structure, ledger with >=2 completed trials across >=2 configs, cost <=budget*1.5, reconcile passes.
+[S2]
 name = "from-scratch"
-prompt = """I want a real measurement of whether telling a coding agent to write a test first changes whether it gets a tiny Python bug fix right. Use fathom. Keep it tiny: one small task, two variants (with and without that instruction), one run of each, and spend at most $1 on the measurement itself. Put everything in this directory and show me the scorecard."""
-workspace_kind = "empty"
-allow_spend = true
-budget_usd = 1.0
-tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
-tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
-timeout_s = 1800
+workspace = "empty"
+measurement_budget_usd = 1.0
+checks = [
+    "data_root_created",
+    "bank_authored",
+    "arms_authored",
+    "trials_completed",
+    "measurement_within_budget",
+    "reconcile_passes",
+    "scorecard_rendered",
+]
+prompt = """\
+I want a real measurement of whether telling a coding agent to write a test first changes \
+whether it gets a tiny Python bug fix right. Use fathom. Keep it tiny: one small task, two \
+variants (with and without that instruction), one run of each, and spend at most $1 on the \
+measurement itself. Put everything in this directory and show me the scorecard.\
+"""
 
-[s3_unnamed_discovery]
-# Test: can the agent discover fathom without being told its name?
-# Ground truth: same no-spend ledger check as S1; fathom surface is used.
+[S3]
 name = "unnamed-discovery"
-prompt = """Is there something installed here that can measure whether a Claude Code skill actually improves an agent's results? Find it and, without spending money, show me what such a measurement would look like on my existing data."""
-workspace_kind = "clone"
-allow_spend = false
-tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
-tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
-timeout_s = 1800
+workspace = "clone"
+fathom_home = "clone"
+names_tool = false
+checks = ["no_ledger_change", "no_paid_run", "fathom_used", "plan_ran"]
+prompt = """\
+Is there something installed here that can measure whether a Claude Code skill actually \
+improves an agent's results? Find it and, without spending money, show me what such a \
+measurement would look like on my existing data.\
+"""
