@@ -400,6 +400,32 @@ class VisibilityTests(unittest.TestCase):
         )
         self.assertTrue(visibility.ok)
         self.assertTrue(visibility.mcp_connected_late)
+        self.assertFalse(visibility.mcp_unconfirmed)
+
+    def test_a_pending_server_nobody_called_is_unconfirmed_not_a_failure(self) -> None:
+        """A headless session starts before its servers connect; a subject that works through
+        the command line never calls the server, and that is no reason to stop the run."""
+        init = dict(INIT, mcp_servers=[{"name": "plugin:fathom:fathom", "status": "pending"}])
+        visibility = self._visibility(init)
+        self.assertTrue(visibility.ok)
+        self.assertFalse(visibility.mcp_connected)
+        self.assertTrue(visibility.mcp_unconfirmed)
+
+    def test_the_preflight_requires_the_probe_to_answer(self) -> None:
+        pending = dict(INIT, mcp_servers=[{"name": "plugin:fathom:fathom", "status": "pending"}])
+        silent = acc.preflight_problems(self._visibility(pending))
+        self.assertEqual(len(silent), 1)
+        self.assertIn("never answered the probe", silent[0])
+        answered = self._visibility(
+            pending, _use("m", acc.PREFLIGHT_TOOL, {"bank": "probe"}), _result("m", "{}")
+        )
+        self.assertEqual(acc.preflight_problems(answered), [])
+
+    def test_a_server_needing_authentication_is_an_environment_problem(self) -> None:
+        init = dict(INIT, mcp_servers=[{"name": "plugin:fathom:fathom", "status": "needs-auth"}])
+        visibility = self._visibility(init)
+        self.assertFalse(visibility.ok)
+        self.assertFalse(visibility.mcp_unconfirmed)
 
     def test_missing_commands_and_skill_are_named(self) -> None:
         init = dict(INIT, slash_commands=["fathom:plan"], skills=[])

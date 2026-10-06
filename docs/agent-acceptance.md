@@ -171,7 +171,7 @@ From an engine checkout, with your data root as an argument (it defaults to `FAT
 # Prepare the workspaces and print each subject's command, env changes and prompt.
 uv run python tools/agent_acceptance.py --dry-run --data-root DIR
 
-# One trivial session: is the plugin visible at all? Cents.
+# One short session: is the plugin visible, and does its MCP server answer? Cents.
 uv run python tools/agent_acceptance.py --preflight-only --data-root DIR
 
 # The scenarios, in the order given.
@@ -180,8 +180,12 @@ uv run python tools/agent_acceptance.py --data-root DIR --scenarios S1,S3,S2
 
 The preflight runs in the configuration mode given, with `FATHOM_HOME` unset (the MCP server
 must start without a data root, as it does for S2) and with every tool that could change
-something denied. Run it with `--config user` as well to check the installation as your own
-sessions see it.
+something denied. Its prompt names one MCP tool, `plan`, which answers there that no data
+root resolves; a headless session does not wait for its MCP servers, so the init event
+alone often says `pending`, and only an answer proves the server works. Run it with
+`--config user` as well to check the installation as your own sessions see it. In that mode
+a server that failed to start in any of your sessions in the last 15 minutes shows as
+`failed`, because Claude Code caches the failure in your configuration directory.
 
 Other options: `--model` (default `sonnet`; `haiku` is the stress variant), `--effort`,
 `--config`, `--out DIR` and `--run-id ID` (the default output is
@@ -223,7 +227,9 @@ of each scenario, then each scenario's checks, behaviour and final answer.
 | 2 | an environment or preflight failure: the plugin was not visible, the stream had no init event (for example, `claude` could not start), `claude` is not on `PATH`, the plugin is not installed or the credential is missing in isolated mode, or a workspace could not be prepared |
 | 3 | a usage error: a bad option, an unusable data root, a used output directory, a workspace that would show the subject something it must not see, or a scenario file or prompt the harness refuses |
 
-Start with the visibility row. If the MCP server is `failed` or `pending`, or a command is
-missing, fix the installation (`/plugin`, `/mcp`) and run `--preflight-only` again before
-reading any behaviour. A failed check names its evidence, and `#N` in it is the tool call's
+Start with the visibility row. If the MCP server is `failed`, `needs-auth` or not listed, or
+a command is missing, fix the installation (`/plugin`, `/mcp`) and run `--preflight-only`
+again before reading any behaviour. A server that was `pending` at init and that no
+successful call confirmed shows as "no call confirmed it" and is not a failure: the subject
+did not use it, and the preflight is what proves it answers. A failed check names its evidence, and `#N` in it is the tool call's
 position in the stream, counting from 0.

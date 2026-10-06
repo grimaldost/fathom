@@ -147,11 +147,20 @@ ALLOWED_TOOLS = (
 # Prefix rules, so a speed bump rather than a boundary: the subject also runs without
 # GitHub credentials (GITHUB_CREDENTIAL_VARS, and an empty GH_CONFIG_DIR).
 DISALLOWED_TOOLS = ("Bash(git push:*)", "Bash(gh:*)", "Bash(gh.exe:*)", "WebFetch", "WebSearch")
-# The preflight session needs no tool at all. Denied outright, so that allow rules in the
-# user's own settings cannot give it one.
+# The preflight session needs one MCP tool and nothing else. The rest that could change
+# something is denied outright, so that allow rules in the user's own settings cannot
+# give it to the session.
 PREFLIGHT_DISALLOWED = ("Bash", "PowerShell", "Write", "Edit", "NotebookEdit")
-
-PREFLIGHT_PROMPT = "Reply with the word ready."
+# The init event cannot show that the MCP server works: a headless session does not wait
+# for it, so a short one sees "pending" (MCP_CONNECTION_NONBLOCKING=false does not change
+# that). One call can: from a directory with no data root, `plan` answers that none
+# resolves, which spawns, spends and writes nothing. The preflight is not a scenario, so
+# its prompt may name the tool.
+PREFLIGHT_TOOL = MCP_TOOL_PREFIX + "plan"
+PREFLIGHT_PROMPT = (
+    "Call the plan tool of the fathom MCP server with bank set to probe, then reply with "
+    "the value of the ok field it returns and nothing else."
+)
 PREFLIGHT_BUDGET_USD = 0.20
 PREFLIGHT_TIMEOUT_S = 300
 
@@ -1228,6 +1237,7 @@ class Visibility:
     mcp_servers: list[str]  # "name=status" for the plugin's servers
     mcp_connected: bool
     mcp_connected_late: bool  # pending at init, then a successful call
+    mcp_unconfirmed: bool  # pending at init, and no call to one of its tools succeeded
     commands_listed: list[str]
     commands_missing: list[str]
     skill_listed: bool
@@ -1241,7 +1251,7 @@ class Visibility:
         if not self.init_seen:
             return ["the stream has no init event"]
         out: list[str] = []
-        if not self.mcp_connected:
+        if not self.mcp_connected and not self.mcp_unconfirmed:
             seen = ", ".join(self.mcp_servers) or "not listed"
             out.append(f"the fathom MCP server is not connected ({seen})")
         if self.commands_missing:
@@ -1257,7 +1267,10 @@ def assess_visibility(
     """Whether the plugin's MCP server is connected, its commands listed and its skill listed.
 
     A server still pending in the init event counts as connected when a later call to one
-    of its tools succeeded; the verdict says so.
+    of its tools succeeded, and as unconfirmed, which is not a problem, when none did: a
+    headless session starts before its servers connect, so a subject that never calls the
+    server leaves it pending. The preflight is what proves the connection. Only a server
+    that failed, needs authentication or is not listed is an environment failure.
     """
     init = analysis.init
     servers = [
@@ -1265,7 +1278,9 @@ def assess_visibility(
         for s in _init_list(init, "mcp_servers")
         if isinstance(s, dict) and str(s.get("name", "")).startswith(MCP_SERVER_PREFIX)
     ]
-    at_init = any(str(s.get("status", "")).lower() == "connected" for s in servers)
+    statuses = {str(s.get("status", "")).lower() for s in servers}
+    at_init = "connected" in statuses
+    pending = "pending" in statuses
     later = any(c.surface == "mcp" and c.succeeded for c in analysis.calls)
     prefix = f"{PLUGIN}:"
     listed = sorted(
@@ -1280,6 +1295,7 @@ def assess_visibility(
         mcp_servers=[f"{s.get('name')}={s.get('status')}" for s in servers],
         mcp_connected=at_init or later,
         mcp_connected_late=later and not at_init,
+        mcp_unconfirmed=pending and not (at_init or later),
         commands_listed=listed,
         commands_missing=[c for c in expected_commands if c not in listed],
         skill_listed=f"{PLUGIN}:{SKILL}" in skills or SKILL in skills,
@@ -2165,6 +2181,8 @@ def render_report(run: Mapping[str, Any], verdicts: Sequence[Mapping[str, Any]])
             continue
         plugins = ", ".join(f"{p.get('version')} at {p.get('path')}" for p in vis["plugins"])
         late = " (after init)" if vis["mcp_connected_late"] else ""
+        if vis.get("mcp_unconfirmed"):
+            late = " (no call confirmed it)"
         lines.append(
             f"| {v['scenario']} | {', '.join(vis['mcp_servers']) or 'not listed'}{late} | "
             f"{', '.join(vis['commands_missing']) or 'none'} | "
@@ -2804,6 +2822,15 @@ def additional_directories(config_dir: Path) -> list[str]:
     return [str(d) for d in dirs] if isinstance(dirs, list) else []
 
 
+def preflight_problems(visibility: Visibility) -> list[str]:
+    """What stops the preflight: every visibility problem, and an MCP server that no call
+    confirmed, which a scenario tolerates but the preflight exists to rule out."""
+    problems = visibility.problems()
+    if visibility.mcp_unconfirmed:
+        problems.append("the fathom MCP server was pending at init and never answered the probe")
+    return problems
+
+
 def run_preflight(
     *,
     claude: str,
@@ -2816,11 +2843,12 @@ def run_preflight(
     data_root: Path | None,
     workspace_base: Path | None,
 ) -> int:
-    """One trivial session from an empty directory; report the plugin's visibility only.
+    """One short session from an empty directory; report the plugin's visibility only.
 
     It runs in the configuration mode the scenarios would, with ``FATHOM_HOME`` unset (the
-    MCP server starts without a data root, as it must for the empty-workspace scenario)
-    and with every tool that could change something denied.
+    MCP server starts without a data root, as it must for the empty-workspace scenario),
+    with every tool that could change something denied, and makes one call to the MCP
+    server (:data:`PREFLIGHT_TOOL`), which must answer.
     """
     directory = out / "preflight"
     directory.mkdir(parents=True)
@@ -2833,7 +2861,7 @@ def run_preflight(
         model=model,
         budget_usd=PREFLIGHT_BUDGET_USD,
         effort=effort,
-        allowed=(),
+        allowed=(PREFLIGHT_TOOL,),
         disallowed=(*DISALLOWED_TOOLS, *PREFLIGHT_DISALLOWED),
         plugin_dirs=plugin_dirs,
     )
@@ -2856,8 +2884,9 @@ def run_preflight(
             cleanup_dir(str(config_dir))
     analysis = analyze(read_transcript(transcript), doc_roots=plugin_dirs)
     visibility = assess_visibility(analysis, plugin_commands(fathom_plugins(analysis.init)))
+    problems = preflight_problems(visibility)
     record = {
-        "status": "pass" if visibility.ok else "environment",
+        "status": "environment" if problems else "pass",
         "config_mode": config_mode,
         "plugin_dirs": list(plugin_dirs),
         "command": cmd,
@@ -2865,7 +2894,7 @@ def run_preflight(
         "timed_out": run.timed_out,
         "cost_usd": (analysis.result or {}).get("total_cost_usd"),
         "session": session_facts(analysis.init),
-        "visibility": {**dataclasses.asdict(visibility), "problems": visibility.problems()},
+        "visibility": {**dataclasses.asdict(visibility), "problems": problems},
     }
     (directory / "verdict.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     print(f"Preflight transcript: {transcript}")
@@ -2875,10 +2904,10 @@ def run_preflight(
     print(f"Skill listed: {'yes' if visibility.skill_listed else 'no'}")
     for plugin in visibility.plugins:
         print(f"Plugin: {plugin.get('name')} {plugin.get('version')} at {plugin.get('path')}")
-    if visibility.ok:
-        print("PREFLIGHT: OK (the plugin is visible)")
+    if not problems:
+        print("PREFLIGHT: OK (the plugin is visible and its MCP server answered)")
         return EXIT_PASSED
-    print("PREFLIGHT: ENVIRONMENT FAILURE: " + "; ".join(visibility.problems()))
+    print("PREFLIGHT: ENVIRONMENT FAILURE: " + "; ".join(problems))
     return EXIT_ENVIRONMENT
 
 
@@ -3133,7 +3162,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 model=args.model,
                 budget_usd=PREFLIGHT_BUDGET_USD,
                 effort=args.effort,
-                allowed=(),
+                allowed=(PREFLIGHT_TOOL,),
                 disallowed=(*DISALLOWED_TOOLS, *PREFLIGHT_DISALLOWED),
                 plugin_dirs=plugin_dirs,
             )
