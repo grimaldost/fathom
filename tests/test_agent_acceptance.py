@@ -1329,7 +1329,8 @@ class DryRunTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
         self.addCleanup(self._tmp.cleanup)
-        tmp = Path(self._tmp.name)
+        # Resolved: a Windows runner's TEMP can be an 8.3 short path, which the harness prints long.
+        tmp = Path(self._tmp.name).resolve()
         self.root = tmp / "data-root"
         _write(self.root / "fathom.toml", "[data_root]\nschema = 1\n")
         _write(self.root / "ledger" / "alpha-v1.jsonl", '{"kind": "trial"}\n')
