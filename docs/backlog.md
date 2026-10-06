@@ -13,6 +13,26 @@ still cites is listed under "Closed ids" at the end, so the reference resolves.
 
 These can put a wrong number on a scorecard without any visible error, so they come first.
 
+**FATH-B83 — On Windows, every trial spawn reads the user's own CLAUDE.md.** *(M)*
+Claude Code reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in the working directory
+and in every directory above it, whatever `CLAUDE_CONFIG_DIR` says. `taskbank.stage_task` makes a
+trial's workspace with `tempfile.mkdtemp`, and on Windows the temporary directory lies inside the
+user's profile, so the profile's `.claude/CLAUDE.md`, the user's own global instructions, reaches
+every arm as the memory of a directory above the workspace. The credential-only configuration
+directory (`_CONFIG_COPY_ALLOWLIST` in `adapters/claude_cli.py`) exists to keep exactly that file
+out. Verified with the adapter's own `make_isolated_config` and `build_command` and a workspace
+made the way `stage_task` makes it: the spawn quoted the first heading of the user's file, and
+with the workspace outside the profile it reported none. `--setting-sources project,local` and a
+redirected `HOME` and `USERPROFILE` do not stop it. The arming probe and `fathom smoke` stage
+their workspaces the same way. Every arm in a run shares the file, so a comparison within one run
+stays fair, but no arm is bare, and a treatment can repeat or contradict what the user's
+instructions already say. On POSIX the temporary directory lies outside the home and is not
+affected. Change: stage workspaces under a root with no such file at or above it (configurable,
+and outside the profile by default on Windows); refuse to spawn when the root has one; and add a
+smoke check that a spawn is given no instruction file. A data root measured on Windows should
+record which of its runs predate the fix. `tools/agent_acceptance.py` already guards its own
+subjects this way (`ancestor_instructions`, `default_workspace_base`).
+
 **FATH-B51 — Economy on the delegated path is a floor.** *(M)*
 A trial that delegates work through the Task tool records the parent session's usage; the
 subagents' own consumption does not reach the ledger. Economy for a delegating arm is therefore a
