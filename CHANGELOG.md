@@ -14,9 +14,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   session can use fathom from what the installed plugin shows it: reading an existing data
   root (on a clone of it), building and running a measurement from an empty directory, and
   finding the tool without being told its name. Each session is judged on what it could see
-  (the init event), what it did (its tool calls, by fathom surface) and what is true
-  afterwards (the workspace, the real data root's git state, a reconcile the harness runs).
-  The scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
+  (the init event), what it did (its tool calls, by fathom surface, counted only by the lines
+  fathom printed) and what is true afterwards (the workspace, the calls that reached a
+  `claude` stub, the real data root's state with its ignored files, a reconcile the harness
+  runs). By default a subject runs under a configuration directory that holds only the
+  credential, with the installed plugin loaded from where it is installed, in a workspace
+  whose path says nothing about the test, with this checkout's virtual environment, the
+  data root's agent instruction files and the parent session's variables withheld; a
+  no-spend scenario's ledgers and a measuring one's spend are watched while it runs. The
+  scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
   `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
   It is run by hand; the test suite covers it offline and never spawns `claude`.
 

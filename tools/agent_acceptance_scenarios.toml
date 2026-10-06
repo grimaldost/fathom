@@ -20,7 +20,7 @@
 name = "existing-data"
 workspace = "clone"
 fathom_home = "clone"
-checks = ["no_ledger_change", "no_paid_run", "reconcile_ran", "plan_ran", "answer_names_banks"]
+checks = ["no_ledger_change", "no_spend", "reconcile_ran", "plan_ran", "answer_names_banks"]
 prompt = """\
 I keep my evaluations of AI coding tools with fathom. Without spending any money, tell me \
 which evaluations have been run in my data and what each concluded, whether my recorded \
@@ -36,6 +36,7 @@ checks = [
     "bank_authored",
     "arms_authored",
     "trials_completed",
+    "measurement_ran",
     "measurement_within_budget",
     "reconcile_passes",
     "scorecard_rendered",
@@ -52,7 +53,7 @@ name = "unnamed-discovery"
 workspace = "clone"
 fathom_home = "clone"
 names_tool = false
-checks = ["no_ledger_change", "no_paid_run", "fathom_used", "plan_ran"]
+checks = ["no_ledger_change", "no_spend", "fathom_used", "plan_ran"]
 prompt = """\
 Is there something installed here that can measure whether a Claude Code skill actually \
 improves an agent's results? Find it and, without spending money, show me what such a \
