@@ -19,8 +19,9 @@ subagents' own consumption does not reach the ledger. Economy for a delegating a
 lower bound of unknown depth, and the shortfall need not be the same across arms. Change: fold
 subagent usage into the trial's economy at parse time, and record which stream events were
 folded so the figure can be audited. Until then, report delegated economy as a floor and draw no
-arm-to-arm economy conclusion from it. Saved streams (`FATHOM_STREAM_DIR`) are enough to build
-and test this; it needs no spawns.
+arm-to-arm economy conclusion from it. Building it needs a delegating-session stream fixture,
+synthetic or captured from one small spawn, added under `tests/fixtures/`; after that the work
+and its tests need no paid spawns.
 
 **FATH-B49 — Economy views pool two configurations that share an arm name.** *(S)*
 `report.py` maps each `config_hash` to its arm name and keys every view by the name. Pass rates
@@ -90,6 +91,16 @@ flags rows outside a stated band. It is only exact for rows that carry `config_p
 it needs a decision on whether subagent spend belongs in the parent's usage (FATH-B51) before
 its band can be set.
 
+**FATH-B79 — The scorecard counts a run with no reported cost as free.** *(S)*
+A run row whose spawn consumed tokens but reported no cost is written with `cost_source = "none"`
+and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py` sums
+`cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it, then
+reads low with nothing on the page saying so. `calibration.py` (`_arm_cost`) sums the same field the
+same way, so the calibration views count the row as free too. Change: count the `cost_source =
+"none"` rows per arm, render that arm's USD as a floor with the count (or as unknown), and show the
+count in Arm Health, in `report.py` and `calibration.py` alike. This is a report-rendering change
+that ships independently of FATH-B63, which is a reconcile check; the two pair well.
+
 **FATH-B11 — Environment identity is declared, not fingerprinted at execution time.** *(M)*
 A plugin mounted from a path dependency can serve stale code (a cached wheel, say) under an
 unchanged `config_hash`, and new server code behind a `file://` mount forks neither the hash nor
@@ -129,6 +140,15 @@ what a run cost; per-trial economy is the most-asked question of the ledger and 
 today. Change: one flushed progress line per trial; a closing summary naming the ledger path, the
 completed and skipped counts, total USD and the resume command; and a `fathom report --per-trial`
 view (or a cost field on new trial rows). All additive.
+
+**FATH-B80 — The plan prints a worst-case ceiling and no expected spend.** *(S)*
+The dry-run ceiling is each planned trial's worst case summed: the per-spawn cap in force times the
+spawns the trial may make (one for a single-spawn strategy, more for `series`). It is the right
+bound, but it is usually far above what trials cost, so it does not help size a run. Change: beside
+the ceiling, print an expected figure from the data root's own completed run rows: the median cost
+per trial, per strategy (and per model, where enough rows exist), with the number of rows it rests
+on. Print nothing when there is no history. The figure is information labelled with its provenance,
+never a gate, so the ceiling keeps its meaning.
 
 **FATH-B12 — Two smoke-gate gaps.** *(S)*
 Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
@@ -179,6 +199,19 @@ right as a default, but an older view cannot be asked for. Add a flag that selec
 accepts `--tasks-dir`, `--scenarios-dir` and `--ledger-dir`. A bank run from an alternate tasks
 directory renders a scorecard with its calibration section silently missing. Thread the same
 flags through `report`, or warn on the asymmetry.
+
+**FATH-B78 — The scorecard does not show whether an MCP-serving arm's tools were actually
+used.** *(S)*
+Arm Health reports trials at or over the turn cap, but nothing about tool use. An arm that mounts an
+MCP server can have the server registered while every call to it is denied, or never made, and its
+pass rate and economy then describe the control, not the treatment. The kept streams hold the
+evidence (each `tool_use` event and its result), but the report does not read them. Change: for each
+arm that declares a mount, count per trial the `mcp__*` calls that returned without a permission
+denial, read from the kept streams (`.fathom/streams/<bank>/` or `FATHOM_STREAM_DIR`). Render the
+count in Arm Health, and flag an arm whose calls were all denied or absent. Where a trial's stream
+is missing, say "no streams kept" for that trial rather than printing zero; where it is truncated,
+mark the count as partial. `streams.py` and `arming.tools_served_by` already parse and attribute
+these events.
 
 ## Ledger and schema
 
@@ -266,6 +299,14 @@ The `Runner` protocol is in place, but `claude-cli` is the only adapter, so the 
 framework is not coupled to the subscription CLI (ADR-0001) is a design intent that nothing
 exercises. State it as "designed for, not yet exercised" now (S), and build a second adapter for
 another agent CLI when a question needs a non-Claude arm.
+
+**FATH-B81 — ADR-0008 has stayed Proposed with nothing built on it.** *(S)*
+ADR-0008 adds oracle quality as a third calibration factor crossed against model tier, and states
+that its Proposed status is the build gate; ADR-0009 refers to a slicer gated behind it. A
+proposal left open indefinitely reads as a live plan. Change: decide it. Either accept it with
+the slicer it gates (a factor slicer in the calibration views), or withdraw it, with the reason
+recorded. Then update the references in ADR-0009 and in the authoring guide's calibration
+section.
 
 ## Retire or fold
 
