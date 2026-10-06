@@ -92,15 +92,14 @@ it needs a decision on whether subagent spend belongs in the parent's usage (FAT
 its band can be set.
 
 **FATH-B79 — The scorecard counts a run with no reported cost as free.** *(S)*
-A run row whose spawn consumed tokens but reported no cost is written with `cost_source =
-"none"` and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py`
-sums `cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it,
-then reads low with nothing on the page saying so. The calibration views already render a
-missing cost as "not measured", so the two renderers disagree. Change: count the `cost_source =
-"none"` rows per arm, render that arm's USD as a floor with the count (or as unknown), and show
-the count in Arm Health, so that `report.py` and `calibration.py` treat a missing cost the same
-way. This is a report-rendering change that ships independently of FATH-B63, which is a
-reconcile check; the two pair well.
+A run row whose spawn consumed tokens but reported no cost is written with `cost_source = "none"`
+and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py` sums
+`cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it, then
+reads low with nothing on the page saying so. `calibration.py` (`_arm_cost`) sums the same field the
+same way, so the calibration views count the row as free too. Change: count the `cost_source =
+"none"` rows per arm, render that arm's USD as a floor with the count (or as unknown), and show the
+count in Arm Health, in `report.py` and `calibration.py` alike. This is a report-rendering change
+that ships independently of FATH-B63, which is a reconcile check; the two pair well.
 
 **FATH-B11 — Environment identity is declared, not fingerprinted at execution time.** *(M)*
 A plugin mounted from a path dependency can serve stale code (a cached wheel, say) under an
@@ -143,12 +142,13 @@ completed and skipped counts, total USD and the resume command; and a `fathom re
 view (or a cost field on new trial rows). All additive.
 
 **FATH-B80 — The plan prints a worst-case ceiling and no expected spend.** *(S)*
-The dry-run ceiling is planned trials times the per-spawn cap in force. It is the right bound,
-but it is usually far above what trials cost, so it does not help size a run. Change: beside the
-ceiling, print an expected figure from the data root's own completed run rows: the median cost
-per trial, per strategy (and per model, where enough rows exist), with the number of rows it
-rests on. Print nothing when there is no history. The figure is information labelled with its
-provenance, never a gate, so the ceiling keeps its meaning.
+The dry-run ceiling is each planned trial's worst case summed: the per-spawn cap in force times the
+spawns the trial may make (one for a single-spawn strategy, more for `series`). It is the right
+bound, but it is usually far above what trials cost, so it does not help size a run. Change: beside
+the ceiling, print an expected figure from the data root's own completed run rows: the median cost
+per trial, per strategy (and per model, where enough rows exist), with the number of rows it rests
+on. Print nothing when there is no history. The figure is information labelled with its provenance,
+never a gate, so the ceiling keeps its meaning.
 
 **FATH-B12 — Two smoke-gate gaps.** *(S)*
 Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
@@ -202,15 +202,15 @@ flags through `report`, or warn on the asymmetry.
 
 **FATH-B78 — The scorecard does not show whether an MCP-serving arm's tools were actually
 used.** *(S)*
-Arm Health reports trials at or over the turn cap, but nothing about tool use. An arm that mounts
-an MCP server can have the server registered while every call to it is denied, or never made,
-and its pass rate and economy then describe the control, not the treatment. The kept streams
-hold the evidence (each `tool_use` event and its result), but the report does not read them.
-Change: for each arm that declares a mount, count per trial the `mcp__*` calls that returned
-without a permission denial, read from the kept streams (`.fathom/streams/<bank>/` or
-`FATHOM_STREAM_DIR`). Render the count in Arm Health, and flag an arm whose calls were all denied
-or absent. Where a trial's stream is missing or truncated, say "no streams kept" for that trial
-rather than printing zero. `streams.py` and `arming.tools_served_by` already parse and attribute
+Arm Health reports trials at or over the turn cap, but nothing about tool use. An arm that mounts an
+MCP server can have the server registered while every call to it is denied, or never made, and its
+pass rate and economy then describe the control, not the treatment. The kept streams hold the
+evidence (each `tool_use` event and its result), but the report does not read them. Change: for each
+arm that declares a mount, count per trial the `mcp__*` calls that returned without a permission
+denial, read from the kept streams (`.fathom/streams/<bank>/` or `FATHOM_STREAM_DIR`). Render the
+count in Arm Health, and flag an arm whose calls were all denied or absent. Where a trial's stream
+is missing, say "no streams kept" for that trial rather than printing zero; where it is truncated,
+mark the count as partial. `streams.py` and `arming.tools_served_by` already parse and attribute
 these events.
 
 ## Ledger and schema
