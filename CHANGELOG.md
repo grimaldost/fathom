@@ -6,6 +6,10 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Fresh-agent acceptance test** for the fathom plugin (`tools/agent_acceptance.py`). Spawns headless Claude agents with three scenarios (existing-data, from-scratch, unnamed-discovery) to verify that agents can use fathom end-to-end by discovering its exposed surfaces (skills, MCP tools, slash commands) without fathom-specific instructions. Includes unit tests (`tests/test_agent_acceptance.py`), scenarios configuration, and documentation (`docs/agent-acceptance.md`).
+
 ## [0.8.0] - 2026-09-26
 
 The first release of fathom as a standalone engine: the `fathom` package and command, and the

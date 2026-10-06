@@ -1,0 +1,39 @@
+# Scenarios for fresh-agent acceptance test.
+#
+# Each scenario spawns a headless Claude agent with a user prompt, allowed/disallowed tools,
+# and measurement constraints. Agents learn to use fathom by exploring available surfaces
+# (skills, MCP tools, slash commands, CLI); no fathom-specific instructions are given.
+
+[s1_existing_data]
+# Test: can the agent explore a data root, run consistency checks, and plan a dry run?
+# Ground truth: no new or modified files in the clone's ledgers, and a consistency check + dry-run plan ran.
+name = "existing-data"
+prompt = """I keep my evaluations of AI coding tools with fathom. Without spending any money, tell me which evaluations have been run in my data and what each concluded, whether my recorded data is internally consistent, and what re-running the smallest one once would cost."""
+workspace_kind = "clone"
+allow_spend = false
+tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
+tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
+timeout_s = 1800
+
+[s2_from_scratch]
+# Test: can the agent author a bank, run it within budget, and render results?
+# Ground truth: bank structure, ledger with >=2 completed trials across >=2 configs, cost <=budget*1.5, reconcile passes.
+name = "from-scratch"
+prompt = """I want a real measurement of whether telling a coding agent to write a test first changes whether it gets a tiny Python bug fix right. Use fathom. Keep it tiny: one small task, two variants (with and without that instruction), one run of each, and spend at most $1 on the measurement itself. Put everything in this directory and show me the scorecard."""
+workspace_kind = "empty"
+allow_spend = true
+budget_usd = 1.0
+tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
+tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
+timeout_s = 1800
+
+[s3_unnamed_discovery]
+# Test: can the agent discover fathom without being told its name?
+# Ground truth: same no-spend ledger check as S1; fathom surface is used.
+name = "unnamed-discovery"
+prompt = """Is there something installed here that can measure whether a Claude Code skill actually improves an agent's results? Find it and, without spending money, show me what such a measurement would look like on my existing data."""
+workspace_kind = "clone"
+allow_spend = false
+tools_allowed = ["Bash", "Read", "Write", "Edit", "Glob", "Grep", "Skill", "SlashCommand", "mcp__plugin_fathom_fathom"]
+tools_disallowed = ["Bash(git push:*)", "Bash(gh:*)", "WebFetch", "WebSearch"]
+timeout_s = 1800
