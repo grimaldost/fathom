@@ -150,6 +150,17 @@ per trial, per strategy (and per model, where enough rows exist), with the numbe
 on. Print nothing when there is no history. The figure is information labelled with its provenance,
 never a gate, so the ceiling keeps its meaning.
 
+**FATH-B82 — A plan with nothing left to run says nothing about running more.** *(S)*
+When every requested trial is in the ledger, the dry run prints `planned:  0 trials (N already
+done)  ceiling: $0.00` and stops. The question that follows, what one more repeat would cost, is
+left to the reader, and the "already done" count covers only the requested repeats while the
+scorecard counts every completed trial of those arms, so the two disagree for a bank that was run
+at more repeats than asked. Fresh agents asked what re-running a finished bank would cost priced
+it from the ledger rows by hand, and one reported the count mismatch as a possible inconsistency.
+Change: when nothing is planned, print the ceiling of one more trial per arm and task with the
+`--repeats` value that would plan it, and the number of completed trials the ledger holds for
+these arms. Additive output lines; no new flag.
+
 **FATH-B12 — Two smoke-gate gaps.** *(S)*
 Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
 code page can crash a print on a Windows console; `smoke.py` and `cli.py` should reconfigure

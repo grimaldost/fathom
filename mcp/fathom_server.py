@@ -46,9 +46,22 @@ def _home() -> pathlib.Path:
     return resolve_fathom_home(dict(os.environ))
 
 
+def _engine_env() -> dict[str, str]:
+    """The server's environment without ``VIRTUAL_ENV``.
+
+    The server runs in the temporary environment ``uv run --with fastmcp`` makes, which
+    sets ``VIRTUAL_ENV``. Passed on, it makes the engine's ``uv run --project <plugin root>``
+    print on every call that it does not match the project environment and will be ignored,
+    a warning the agent then reads in each tool's ``stderr``.
+    """
+    return {k: v for k, v in os.environ.items() if k.upper() != "VIRTUAL_ENV"}
+
+
 def _run_fathom(args: list[str], home: pathlib.Path, timeout: float) -> dict[str, Any]:
     cmd = fathom_command(home, args)
-    proc = subprocess.run(cmd, cwd=home, capture_output=True, text=True, timeout=timeout)
+    proc = subprocess.run(
+        cmd, cwd=home, env=_engine_env(), capture_output=True, text=True, timeout=timeout
+    )
     return {
         "cmd": " ".join(cmd),
         "exit_code": proc.returncode,
