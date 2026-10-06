@@ -430,8 +430,9 @@ def subject_env(
     *hidden* directories (:func:`withheld_dirs`); a PATH entry inside one is dropped. Then
     the parent session's variables, what ``uv run`` set for the harness and the GitHub
     credentials go (:func:`_session_var`). Last, the harness sets ``FATHOM_HOME`` to
-    *fathom_home* (left unset when it is ``None``), ``CLAUDE_CONFIG_DIR`` and
-    ``GH_CONFIG_DIR`` when given, and puts *path_prepend* first on PATH. Names are compared
+    *fathom_home* (left unset when it is ``None``), ``CLAUDE_CONFIG_DIR`` (with the claude.ai
+    connectors turned off) and ``GH_CONFIG_DIR`` when given, and puts *path_prepend* first on
+    PATH. Names are compared
     case-insensitively, as Windows compares them.
     """
     with hidden_from_children(*hidden):
@@ -449,6 +450,9 @@ def subject_env(
         harness["FATHOM_HOME"] = str(fathom_home)
     if config_dir is not None:
         harness["CLAUDE_CONFIG_DIR"] = str(config_dir)
+        # The account's claude.ai connectors reach a session whatever its configuration
+        # directory; an isolated subject is shown the plugin's MCP server only.
+        harness["ENABLE_CLAUDEAI_MCP_SERVERS"] = "false"
     if gh_config_dir is not None:
         harness["GH_CONFIG_DIR"] = str(gh_config_dir)
     env.update(harness)
@@ -533,6 +537,39 @@ def installed_plugin_path(config_dir: Path) -> Path | None:
         path = Path(entry["installPath"])
         if path.is_dir():
             return path
+    return None
+
+
+# The memory files Claude Code reads in the working directory and in every directory
+# above it, whatever its configuration directory says. On Windows the temporary directory
+# lies inside the user's profile, so the profile's `.claude/CLAUDE.md`, the user's own
+# instructions, is read as the memory of a directory above every workspace made there.
+MEMORY_FILES = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md", "AGENTS.md")
+
+
+def ancestor_instructions(directory: Path) -> list[Path]:
+    """The instruction files in *directory* and in every directory above it, nearest first."""
+    found: list[Path] = []
+    for folder in (directory, *directory.parents):
+        for name in MEMORY_FILES:
+            path = folder / name
+            with contextlib.suppress(OSError):
+                if path.is_file():
+                    found.append(path)
+    return found
+
+
+def default_workspace_base(temp: Path, environ: Mapping[str, str]) -> Path | None:
+    """Where an isolated subject's workspace goes when ``--workspace-root`` is not given:
+    the temporary directory when no instruction file lies at or above it, else the public
+    profile directory (``%PUBLIC%`` on Windows) when none lies at or above that. ``None``
+    when neither is clean, which the caller refuses."""
+    candidates = [temp]
+    if environ.get("PUBLIC"):
+        candidates.append(Path(environ["PUBLIC"]))
+    for candidate in candidates:
+        if candidate.is_dir() and not ancestor_instructions(candidate):
+            return candidate
     return None
 
 
@@ -1171,17 +1208,80 @@ def cli_invocation(argv: Sequence[str]) -> Invocation:
     return Invocation(sub if sub in SUBCOMMANDS else "other", args)
 
 
+# A shell function definition, `name() { body; }` or `function name { body; }`.
+_FUNCTION_DEF = re.compile(
+    r"(?:\bfunction\s+([A-Za-z_][\w-]*)\s*(?:\(\s*\))?|\b([A-Za-z_][\w-]*)\s*\(\s*\))"
+    r"\s*\{([^{}]*)\}"
+)
+# A command word that is a variable's value: `$F`, `${F}` (quotes are gone after _split).
+_EXPANSION = re.compile(r"^\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))$")
+_ALL_ARGS = frozenset({"$@", "$*", "${@}", "${*}"})
+
+
+def _shell_functions(command: str) -> tuple[str, dict[str, list[str]]]:
+    """The command line without the definitions of functions whose body runs fathom, and
+    those bodies as tokens, by function name."""
+    functions: dict[str, list[str]] = {}
+
+    def record(match: re.Match[str]) -> str:
+        name = match.group(1) or match.group(2)
+        for segment in shell_segments(match.group(3)):
+            tokens = _split(segment)
+            if _fathom_argv(tokens) is not None:
+                functions[name] = tokens
+                return " "
+        return match.group(0)
+
+    return _FUNCTION_DEF.sub(record, command), functions
+
+
+def _expand_alias(
+    tokens: list[str], variables: Mapping[str, list[str]], functions: Mapping[str, list[str]]
+) -> list[str]:
+    """*tokens* with a command word that names a fathom variable or function replaced by
+    what it stands for, the function's ``"$@"`` by the call's arguments."""
+    start = _command_start(tokens)
+    if start >= len(tokens):
+        return tokens
+    head, word, args = tokens[:start], tokens[start], tokens[start + 1 :]
+    match = _EXPANSION.match(word)
+    name = match and (match.group(1) or match.group(2))
+    if name and name in variables:
+        return [*head, *variables[name], *args]
+    if word in functions:
+        body = functions[word]
+        if any(t in _ALL_ARGS for t in body):
+            return [*head, *(x for t in body for x in (args if t in _ALL_ARGS else [t]))]
+        return [*head, *body, *args]
+    return tokens
+
+
 def cli_invocations(command: str, _depth: int = 0) -> list[Invocation]:
     """Every fathom invocation in a shell command line, in order ([] when there is none).
 
     The line is cut into simple commands (:func:`shell_segments`) and each is read as one
     command; a command line handed to another shell (``bash -c``, ``cmd /c``) is read in
     turn. A word that merely contains "fathom" (a path, a grep pattern, a quoted string)
-    is not an invocation.
+    is not an invocation. Agents often keep the long plugin invocation in a variable
+    (``F="uv run ... python -m fathom"; $F run b``) or a function
+    (``F() { uv run ... python -m fathom "$@"; }; F run b``); a call through either is read
+    as the command it stands for, and the definition itself is not an invocation.
     """
+    command, functions = _shell_functions(command)
+    variables: dict[str, list[str]] = {}
     out: list[Invocation] = []
     for segment in shell_segments(command):
         tokens = _split(segment)
+        if tokens and all(_ASSIGNMENT.match(t) for t in tokens):
+            for token in tokens:
+                name, _, value = token.partition("=")
+                value_tokens = _split(value)
+                if _fathom_argv(value_tokens) is not None:
+                    variables[name] = value_tokens
+                else:
+                    variables.pop(name, None)
+            continue
+        tokens = _expand_alias(tokens, variables, functions)
         payload = _shell_payload(tokens)
         if payload is not None:
             if _depth < 3:
@@ -1679,11 +1779,13 @@ def context_naming_tool(
     init: Mapping[str, Any] | None,
     config_dir: Path | None,
     env: Mapping[str, str],
+    workspace: Path | None = None,
 ) -> list[str]:
     """What the subject was given, besides the plugin and its prompt, that names fathom: the
-    configuration's CLAUDE.md lines and user skills, other plugins' skill, command and agent
-    descriptions, and environment variables. A discovery scenario can only credit the
-    plugin when this is empty."""
+    lines of the configuration's CLAUDE.md and of the instruction files at or above
+    *workspace* (:func:`ancestor_instructions`), user skills, other plugins' skill, command
+    and agent descriptions, and environment variables. A discovery scenario can only credit
+    the plugin when this is empty."""
     found: list[str] = []
 
     def scan_descriptions(label: str, base: Path) -> None:
@@ -1693,12 +1795,19 @@ def context_naming_tool(
                     if PLUGIN in _frontmatter(path.read_text(encoding="utf-8")).lower():
                         found.append(f"{label}: {path.relative_to(base).as_posix()}")
 
-    if config_dir is not None:
-        memory = config_dir / "CLAUDE.md"
+    memories = [config_dir / "CLAUDE.md"] if config_dir is not None else []
+    memories += ancestor_instructions(workspace) if workspace is not None else []
+    seen: set[str] = set()
+    for memory in memories:
+        key = os.path.normcase(str(memory.resolve()))
+        if key in seen:
+            continue
+        seen.add(key)
         with contextlib.suppress(OSError, UnicodeDecodeError):
             for number, line in enumerate(memory.read_text(encoding="utf-8").splitlines(), 1):
                 if PLUGIN in line.lower():
                     found.append(f"{memory} line {number}")
+    if config_dir is not None:
         scan_descriptions("user configuration", config_dir)
     for plugin in _init_list(init, "plugins"):
         if isinstance(plugin, dict) and plugin.get("name") != PLUGIN and plugin.get("path"):
@@ -2789,6 +2898,7 @@ def run_scenario(
         init=analysis.init,
         config_dir=None if prepared.config_mode == "isolated" else real_config,
         env=prepared.env.env,
+        workspace=prepared.workspace,
     )
     setup = setup_record(prepared, cmd)
     if prepared.config_mode == "user":
@@ -3032,8 +3142,9 @@ def _parser() -> argparse.ArgumentParser:
         "--workspace-root",
         type=Path,
         default=None,
-        help="where the subjects' workspaces are made (default: the temporary directory); "
-        "never inside the output directory",
+        help="where the subjects' workspaces are made (default: the temporary directory, or "
+        "in isolated mode the first of it and %%PUBLIC%% with no instruction file at or above "
+        "it); never inside the output directory",
     )
     parser.add_argument("--run-id", default=None, help="run id (default: a timestamp)")
     parser.add_argument(
@@ -3127,6 +3238,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             return EXIT_USAGE
         workspace_base.mkdir(parents=True, exist_ok=True)
+    elif args.config == "isolated":
+        workspace_base = default_workspace_base(Path(tempfile.gettempdir()), os.environ)
+    if args.config == "isolated":
+        # A file found here would reach every subject, whatever its configuration directory.
+        above = ancestor_instructions(workspace_base or Path(tempfile.gettempdir()))
+        if above:
+            print(
+                "error: instruction files at or above the workspace root would reach every "
+                f"subject: {', '.join(map(str, above))}; pass --workspace-root DIR with none "
+                "at or above it",
+                file=sys.stderr,
+            )
+            return EXIT_USAGE
     if out.exists() and any(out.iterdir()):
         print(f"error: {out} is not empty; pass another --out or --run-id", file=sys.stderr)
         return EXIT_USAGE

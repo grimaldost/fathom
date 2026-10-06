@@ -476,6 +476,27 @@ class ClassificationTests(unittest.TestCase):
             with self.subTest(command):
                 self.assertEqual(self.ops(command), expected)
 
+    def test_calls_through_a_variable_or_a_function_are_read_as_the_command(self) -> None:
+        """Agents keep the long plugin invocation in a variable or a function."""
+        cases = {
+            f'F="{PLUGIN_CMD} --home /d"; $F run b --dry-run; "$F" report b': [
+                "run --dry-run",
+                "report",
+            ],
+            f"F='{PLUGIN_CMD} --home '\"$FATHOM_HOME\"; ${{F}} index | tail -5": ["index"],
+            f'cd /w && F() {{ {PLUGIN_CMD} --home "/w" "$@"; }}\nF --version && F init .': [
+                "--version",
+                "init",
+            ],
+            f"function fa {{ {PLUGIN_CMD} --home /d; }}; fa reconcile": ["reconcile"],
+            f'F="{PLUGIN_CMD}"; F=ls; $F run b': [],
+            f'F="{PLUGIN_CMD}"; G=$F; $G run b': [],
+            "g() { ls; }; g run b": [],
+        }
+        for command, expected in cases.items():
+            with self.subTest(command):
+                self.assertEqual(self.ops(command), expected)
+
     def test_a_word_that_only_contains_fathom_is_not_an_invocation(self) -> None:
         for command in (
             "grep -r fathom .",
@@ -952,6 +973,56 @@ class ContextTests(unittest.TestCase):
         self.assertEqual(found[2], "environment variable A")
         self.assertEqual(acc.context_naming_tool(init=INIT, config_dir=None, env={}), [])
 
+    def test_an_instruction_file_above_the_workspace_is_read_once(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            workspace = base / "ws" / "project"
+            workspace.mkdir(parents=True)
+            _write(base / ".claude" / "CLAUDE.md", "# Mine\nreport to fathom\n")
+            found = acc.context_naming_tool(
+                init=INIT, config_dir=base / ".claude", env={}, workspace=workspace
+            )
+        ours = [f for f in found if str(base) in f]  # the machine's own may be above tmp too
+        self.assertEqual(len(ours), 1, found)
+        self.assertTrue(ours[0].endswith("CLAUDE.md line 2"))
+
+
+class MemoryFileTests(unittest.TestCase):
+    """Claude Code reads a CLAUDE.md in every directory above the working directory,
+    whatever its configuration directory says."""
+
+    def test_files_at_and_above_a_directory_are_found_nearest_first(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            deep = base / "a" / "b"
+            deep.mkdir(parents=True)
+            _write(deep / "AGENTS.md", "x\n")
+            _write(base / "a" / "CLAUDE.md", "x\n")
+            _write(base / "a" / "notes.md", "x\n")
+            _write(base / ".claude" / "CLAUDE.md", "x\n")
+            found = [p for p in acc.ancestor_instructions(deep) if base in p.parents]
+        expected = [deep / "AGENTS.md", base / "a" / "CLAUDE.md", base / ".claude" / "CLAUDE.md"]
+        self.assertEqual(found, expected)
+
+    def test_the_default_workspace_base_is_the_first_with_none_above_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            temp, public = Path(tmp) / "temp", Path(tmp) / "public"
+            temp.mkdir()
+            public.mkdir()
+            dirty = {temp}
+
+            def fake(directory: Path) -> list[Path]:
+                return [directory / "CLAUDE.md"] if directory in dirty else []
+
+            env = {"PUBLIC": str(public)}
+            with mock.patch.object(acc, "ancestor_instructions", side_effect=fake):
+                self.assertEqual(acc.default_workspace_base(temp, env), public)
+                self.assertIsNone(acc.default_workspace_base(temp, {}))
+                dirty.add(public)
+                self.assertIsNone(acc.default_workspace_base(temp, env))
+                dirty.clear()
+                self.assertEqual(acc.default_workspace_base(temp, env), temp)
+
 
 BASE_ENV = {
     "PATH": "/usr/bin",
@@ -1039,6 +1110,8 @@ class SubjectEnvTests(unittest.TestCase):
             path_prepend=[Path("/scratch/bin")],
         )
         self.assertEqual(senv.env["CLAUDE_CONFIG_DIR"], str(Path("/scratch/config")))
+        self.assertEqual(senv.env["ENABLE_CLAUDEAI_MCP_SERVERS"], "false")
+        self.assertNotIn("ENABLE_CLAUDEAI_MCP_SERVERS", acc.subject_env(base, None).env)
         self.assertEqual(senv.env["GH_CONFIG_DIR"], str(Path("/scratch/gh")))
         self.assertNotIn("GH_TOKEN", senv.env)
         self.assertNotIn("GITHUB_TOKEN", senv.env)
@@ -1278,7 +1351,14 @@ class DryRunTests(unittest.TestCase):
             *extra,
         ]
         env = {"FATHOM_HOME": "/stale", "CLAUDECODE": "1", "CLAUDE_CONFIG_DIR": str(self.config)}
+        real, tmp = acc.ancestor_instructions, Path(self._tmp.name).resolve()
+
+        def inside_test(directory: Path) -> list[Path]:
+            # The machine's own instruction files may lie above the temporary directory.
+            return [p for p in real(directory) if tmp in p.resolve().parents]
+
         with (
+            mock.patch.object(acc, "ancestor_instructions", side_effect=inside_test),
             mock.patch.object(acc, "run_subject", side_effect=AssertionError("spawned")),
             mock.patch.dict(os.environ, env),
             contextlib.redirect_stdout(stdout),
@@ -1291,6 +1371,14 @@ class DryRunTests(unittest.TestCase):
         clones = list(self.workspaces.glob("ws-*/project/data"))
         self.assertEqual(len(clones), 2)  # S1 and S3
         return clones[0]
+
+    def test_instruction_files_above_the_workspace_root_are_refused(self) -> None:
+        """In isolated mode they would reach every subject as an ancestor's memory."""
+        _write(self.workspaces.parent / ".claude" / "CLAUDE.md", "my own rules\n")
+        code, text, err = self._main()
+        self.assertEqual(code, acc.EXIT_USAGE, text + err)
+        self.assertIn("instruction files at or above the workspace root", err)
+        self.assertEqual(list(self.workspaces.glob("ws-*")), [])
 
     def test_dry_run_prepares_workspaces_and_spawns_nothing(self) -> None:
         before = acc.git_state(self.root)

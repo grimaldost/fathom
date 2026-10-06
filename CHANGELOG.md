@@ -18,9 +18,11 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   fathom printed) and what is true afterwards (the workspace, the calls that reached a
   `claude` stub, the real data root's state with its ignored files, a reconcile the harness
   runs). By default a subject runs under a configuration directory that holds only the
-  credential, with the installed plugin loaded from where it is installed, in a workspace
-  whose path says nothing about the test, with this checkout's virtual environment, the
-  data root's agent instruction files and the parent session's variables withheld; a
+  credential, with the installed plugin loaded from where it is installed and the
+  account's claude.ai connectors off, in a workspace whose path says nothing about the test
+  and with no instruction file in any directory above it, with this checkout's virtual
+  environment, the data root's agent instruction files and the parent session's variables
+  withheld; a
   no-spend scenario's ledgers and a measuring one's spend are watched while it runs. The
   scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
   `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.

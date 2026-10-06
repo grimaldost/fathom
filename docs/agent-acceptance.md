@@ -29,14 +29,20 @@ The harness judges each session three ways.
 - **Visibility**, from the stream's init event: the plugin's MCP server
   (`plugin:fathom:fathom`) is connected, every command in the plugin's `commands/` is
   listed as `fathom:<name>`, and the `fathom:fathom-eval` skill is listed. A visibility
-  failure is an environment failure, reported apart from the agent's behaviour.
+  failure is an environment failure, reported apart from the agent's behaviour. A server
+  that is still `pending` in the init event, which a headless session often shows because
+  it does not wait for its servers, counts as connected once a call to it succeeds and as
+  unconfirmed, not failed, when the subject never calls it.
 - **Behaviour**, from the tool calls in the stream. Each call is classified by the fathom
   surface it used: `skill` (the Skill tool on `fathom-eval`), `command` (a `fathom:` command
   through the Skill or SlashCommand tool), `mcp` (a tool of the plugin's server), `cli`
   (a Bash command that runs fathom, with its subcommand read from the argv), or `docs` (a
   Read of a file in the plugin's tree). A command line is cut into simple commands with
   quotes, here-documents and comments respected, so a note or commit message that mentions
-  `fathom run` is not a run. Results are paired with their calls, and errors on a fathom
+  `fathom run` is not a run. A call through a shell variable or function that holds the
+  plugin's long invocation (`F="uv run ... python -m fathom"; $F run b`, or
+  `F() { uv run ... python -m fathom "$@"; }; F run b`), as agents often write it, is read as
+  the command it stands for. Results are paired with their calls, and errors on a fathom
   surface are kept, 300 characters each.
 - **Ground truth**, read by the harness after the subject exits: files in the workspace, the
   calls that reached the `claude` stub, the real data root's state, and for S2 a
@@ -121,20 +127,30 @@ scenarios selected. The preflight is one session capped at $0.20.
   subject's check.
 - **Workspaces are kept apart.** Each workspace is `<random>/project` and each subject's
   scratch directory (its configuration, the stub, an empty GitHub configuration) another
-  random directory, under the temporary directory or `--workspace-root`, never inside the
-  output directory, so walking up from the working directory finds no transcript or
-  verdict.
+  random directory, under `--workspace-root` or a default root, never inside the output
+  directory, so walking up from the working directory finds no transcript or verdict.
+- **No instruction file above the workspace.** Claude Code reads `CLAUDE.md`,
+  `CLAUDE.local.md`, `.claude/CLAUDE.md` and `AGENTS.md` in the working directory and in
+  every directory above it, whatever its configuration directory says. On Windows the
+  temporary directory lies inside your profile, so your own `~/.claude/CLAUDE.md` would be
+  read as the memory of a directory above every workspace made there. In isolated mode the
+  default root is therefore the first of the temporary directory and `%PUBLIC%` with no
+  such file at or above it, and the harness refuses to start when the root it would use
+  has one; pass `--workspace-root` to choose another.
 - **It refuses** an engine checkout or plugin tree (a `.claude-plugin/plugin.json` or a
   `src/fathom/` in it), a plugin cache directory, a directory without a `[data_root]` table,
   and a directory that is not the top of a git work tree.
 - **Configuration.** By default (`--config isolated`) each subject runs under a
   configuration directory that holds only the credential file, as fathom's own trial spawns
   do, with the plugin loaded from where it is installed (read from the CLI's
-  `plugins/installed_plugins.json`) through `--plugin-dir`. None of your CLAUDE.md, other
-  plugins, hooks, settings, permission grants or extra directories reach it. `--config
+  `plugins/installed_plugins.json`) through `--plugin-dir`, and with the account's claude.ai
+  connectors turned off (`ENABLE_CLAUDEAI_MCP_SERVERS=false`). With the workspace placed as
+  above, none of your CLAUDE.md, other plugins, hooks, settings, permission grants, extra
+  directories or connectors reach it. `--config
   user` runs the subjects with your own configuration instead, as a session you started
-  would; the verdict then lists what in it names fathom (CLAUDE.md lines, other plugins'
-  skill, command and agent descriptions) and your extra directories, and S3's discovery is
+  would; the verdict then lists what in it names fathom (lines of your CLAUDE.md and of any
+  instruction file above the workspace, other plugins' skill, command and agent
+  descriptions) and your extra directories, and S3's discovery is
   marked not attributable to the plugin when that list is not empty.
 - **Environment.** A subject starts from the environment the engine gives its own trial
   spawns (`env_for_agent_code`): every `FATHOM_*` variable, `PWD`, `OLDPWD` and the billing
@@ -215,7 +231,9 @@ with:
 
 The workspaces are kept for inspection at the paths the verdicts give. The scratch
 directories keep the stub and its call log; the configuration directory with the credential
-is deleted as soon as each subject exits.
+is deleted as soon as each subject exits. A clone workspace holds a copy of your data, and
+under `%PUBLIC%` every local account can read it, so delete the workspaces when you are done,
+or pass a `--workspace-root` of your own.
 
 `report.md` starts with a table of scenario, verdict, cost and duration, then the visibility
 of each scenario, then each scenario's checks, behaviour and final answer.
