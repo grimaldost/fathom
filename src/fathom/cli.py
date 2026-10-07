@@ -725,6 +725,51 @@ def _default_stream_dir(bank_name: str) -> pathlib.Path:
     return pathlib.Path.cwd() / _STREAM_ROOT / bank_name
 
 
+def _order_by_comparator(
+    scenarios: Sequence[ResolvedScenario],
+) -> tuple[list[ResolvedScenario], str | None]:
+    """The arms with each comparator moved ahead of its dependents, or why they are refused.
+
+    A ``comparator`` must name exactly one loaded arm other than the arm itself, and the
+    declarations must not form a cycle; otherwise the second value is the error and the
+    list is empty. The order is stable: an arm keeps its place unless its comparator has to
+    move ahead of it, so a set that declares no comparator comes back unchanged.
+    """
+    index_of: dict[str, list[int]] = {}
+    for i, sc in enumerate(scenarios):
+        index_of.setdefault(sc.name, []).append(i)
+    for sc in scenarios:
+        if sc.comparator is None:
+            continue
+        if sc.comparator == sc.name:
+            return [], f"scenario '{sc.name}' names itself as its comparator"
+        matches = index_of.get(sc.comparator, [])
+        if len(matches) != 1:
+            found = "no loaded arm" if not matches else f"{len(matches)} loaded arms"
+            return [], (
+                f"scenario '{sc.name}' has comparator '{sc.comparator}', which names "
+                f"{found}; loaded: {', '.join(sorted(index_of))}"
+            )
+
+    ordered: list[ResolvedScenario] = []
+    placed: set[int] = set()
+    for start in range(len(scenarios)):
+        # Walk the comparator chain up to an arm already placed, then place it root first.
+        chain: list[int] = []
+        i: int | None = start
+        while i is not None and i not in placed:
+            if i in chain:
+                cycle = " -> ".join(scenarios[j].name for j in [*chain, i])
+                return [], f"comparator cycle: {cycle}"
+            chain.append(i)
+            comparator = scenarios[i].comparator
+            i = index_of[comparator][0] if comparator is not None else None
+        for j in reversed(chain):
+            ordered.append(scenarios[j])
+            placed.add(j)
+    return ordered, None
+
+
 def run_matrix(
     bank: Bank,
     resolved_scenarios: list[ResolvedScenario],
@@ -768,11 +813,27 @@ def run_matrix(
     ending in ``resume_cmd`` (default ``fathom run <bank> --repeats <n>``; ``_cmd_run``
     passes the command it was invoked as). A dry run, an empty plan and the gates before
     the loop print neither.
+
+    An arm that declares ``comparator`` runs after that arm, and a cell of it (task,
+    repeat) is bought only once the comparator has a completed trial for the same cell, in
+    the ledger or from this invocation. Otherwise the cell is blocked: a flushed
+    ``blocked:`` line, no spawn, no ledger row, and a count in the summary (FATH-B58). A
+    comparator that names no loaded arm, or the arm itself, or that forms a cycle returns
+    1 before the plan, dry run included.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
     _stage_fn = stage_task_fn if stage_task_fn is not None else stage_task
     _verifier = verifier_fn if verifier_fn is not None else run_verifier
+
+    # A dependent arm bought against an incomplete comparator measures a comparison that
+    # does not exist. The comparator goes first, and each dependent cell is gated below.
+    resolved_scenarios, comparator_error = _order_by_comparator(resolved_scenarios)
+    if comparator_error is not None:
+        print(f"ERROR: {comparator_error}", file=sys.stderr)
+        return 1
+    dependents = [sc for sc in resolved_scenarios if sc.comparator is not None]
+    hash_of = {sc.name: sc.config_hash for sc in resolved_scenarios}
 
     # --- Build and filter the planned matrix ---
     # Holdouts are excluded by default (ADR-0005 sealing). --include-holdout is the
@@ -849,6 +910,12 @@ def run_matrix(
         f"arms:     {', '.join(f'{sc.name} [{sc.config_hash[:12]}]' for sc in resolved_scenarios)}",
         file=_out,
     )
+    for sc in dependents:
+        print(
+            f"depends:  {sc.name} on {sc.comparator} (a cell runs only after "
+            f"{sc.comparator} completed the same task and repeat)",
+            file=_out,
+        )
     print(
         f"planned:  {num_planned} trials ({already_done} already done)"
         f"  ceiling: ${ceiling_usd:.2f}",
@@ -1007,6 +1074,10 @@ def run_matrix(
     started = 0
     completed = 0
     errored = 0
+    blocked = 0
+    # Resume keys this invocation completed, so a dependent cell can follow its comparator
+    # within one run; `done` holds the ones earlier invocations completed.
+    completed_now: set[tuple[str, str, str, str, int]] = set()
     _resume = resume_cmd or f"fathom run {bank.name} --repeats {repeats}"
 
     def _finish(code: int) -> int:
@@ -1018,9 +1089,10 @@ def run_matrix(
             completed=completed,
             errored=errored,
             skipped=already_done,
-            not_started=num_planned - completed - errored,
+            not_started=num_planned - completed - errored - blocked,
             spent_usd=spent_usd,
             resume_cmd=_resume,
+            blocked=blocked if dependents else None,
         )
         return code
 
@@ -1066,6 +1138,20 @@ def run_matrix(
                     file=_out,
                 )
                 return _finish(EXIT_STOPPED)
+        # A dependent cell is bought only against a completed comparator cell (FATH-B58).
+        # Checked before the executor exists, so a blocked cell spends nothing and writes
+        # no row; a later run buys it once the comparator has completed that cell.
+        if sc.comparator is not None:
+            cell = (bank.name, bank.dataset_version, task.id, hash_of[sc.comparator], repeat)
+            if cell not in done and cell not in completed_now:
+                blocked += 1
+                print(
+                    f"blocked: {sc.name}/{task.id} r{repeat} — comparator {sc.comparator} "
+                    "has no completed trial for this cell; nothing spent",
+                    file=_out,
+                    flush=True,
+                )
+                continue
         # Default FATHOM_STREAM_DIR, per trial, for an arm whose scenario
         # declares a [context] inject or a non-default tool allowance — the
         # kind of arm where the stream is the only record of what the agent
@@ -1211,6 +1297,9 @@ def run_matrix(
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
             if valid:
                 completed += 1
+                completed_now.add(
+                    (bank.name, bank.dataset_version, task.id, sc.config_hash, repeat)
+                )
             else:
                 errored += 1
             _progress(sc, task, repeat, status_value)
@@ -1237,6 +1326,7 @@ def _print_run_summary(
     not_started: int,
     spent_usd: float,
     resume_cmd: str,
+    blocked: int | None = None,
 ) -> None:
     """The one closing line of a run that reached its trial loop, flushed.
 
@@ -1244,11 +1334,15 @@ def _print_run_summary(
     is what the ledger already held for the plan; ``not_started`` is the rest of the plan
     (a trial an infrastructure error stopped has no row, so it counts here and a resume
     runs it). ``spent_usd`` is this invocation's observed spend, not the ledger's total.
+    ``blocked`` counts the dependent cells whose comparator had no completed trial; it is
+    printed only when an arm declares a comparator (``None`` otherwise), so a run without
+    one prints the line it always did.
     """
+    blocked_part = "" if blocked is None else f"blocked {blocked} (comparator incomplete); "
     print(
         f"run summary: ledger {ledger_path.resolve()}; completed {completed}, errored "
-        f"{errored} this invocation; skipped {skipped} (already done); not started "
-        f"{not_started}; spent ${spent_usd:.2f} this invocation; resume: {resume_cmd}",
+        f"{errored} this invocation; {blocked_part}skipped {skipped} (already done); not "
+        f"started {not_started}; spent ${spent_usd:.2f} this invocation; resume: {resume_cmd}",
         file=out,
         flush=True,
     )

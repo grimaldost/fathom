@@ -8,6 +8,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **A dependent arm is never bought against an incomplete comparator.** An arm file may set
+  a top-level `comparator = "bare"`. `fathom run` then checks, before the plan and on
+  `--dry-run` too, that the comparator names exactly one loaded arm, not the arm itself, with
+  no cycle, and exits 1 otherwise. It orders each comparator ahead of the arms that depend on
+  it (a set of arms without the key keeps its order and its plan output byte for byte), and
+  prints one `depends:  nudge on bare (a cell runs only after bare completed the same task
+  and repeat)` line per dependent arm after `arms:`. Before each trial of a dependent arm it
+  checks that the comparator has a completed trial for the same task and repeat, in the
+  ledger or from this invocation; when it has none, the run prints a flushed `blocked:
+  nudge/add r0 — comparator bare has no completed trial for this cell; nothing spent` line,
+  starts no spawn, writes no ledger row and goes on. Blocked cells leave the exit code at 0,
+  and the run summary counts them as `blocked N (comparator incomplete)`, a field present
+  only when an arm declares the key. `comparator` is run-ordering metadata: it enters neither
+  `config_hash` nor the preimage, so adding it to an arm that already has trials keeps the
+  arm's history. Closes T20a (FATH-B58).
+
 - **A progress line per trial and a closing summary on `fathom run`.** After each trial,
   `fathom run` prints `trial done: i/N arm/task r<k> <status> [$spent]`, flushed so it reaches
   a pipe or a log as it happens; `i` counts the planned trials started, `status` is

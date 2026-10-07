@@ -2912,7 +2912,8 @@ def _summary_fields(text: str) -> dict:
     line = lines[0]
     m = re.fullmatch(
         r"run summary: ledger (?P<ledger>.+?); completed (?P<c>\d+), errored (?P<e>\d+) "
-        r"this invocation; skipped (?P<s>\d+) \(already done\); not started (?P<u>\d+); "
+        r"this invocation; (?:blocked (?P<b>\d+) \(comparator incomplete\); )?"
+        r"skipped (?P<s>\d+) \(already done\); not started (?P<u>\d+); "
         r"spent \$(?P<usd>\d+\.\d\d) this invocation; resume: (?P<resume>.+)",
         line,
     )
@@ -2921,6 +2922,8 @@ def _summary_fields(text: str) -> dict:
         "ledger": m["ledger"],
         "completed": int(m["c"]),
         "errored": int(m["e"]),
+        # Present only when the run's arms declare a comparator (T20a).
+        "blocked": int(m["b"]) if m["b"] is not None else None,
         "skipped": int(m["s"]),
         "not_started": int(m["u"]),
         "usd": float(m["usd"]),
@@ -3248,6 +3251,240 @@ class TestResumeCommand(unittest.TestCase):
         resume = rm.call_args.kwargs["resume_cmd"]
         self.assertTrue(resume.startswith("fathom run b --repeats 1 --tasks-dir "), resume)
         self.assertIn("--ledger-dir", resume)
+
+
+# ---------------------------------------------------------------------------
+# Comparator dependency (T20a, FATH-B58)
+# ---------------------------------------------------------------------------
+
+
+def _errored_result(task=None, ws=None, sc=None) -> TrialResult:
+    return TrialResult(
+        status=TrialStatus.ERRORED,
+        runs=[_ok_run()],
+        pin_level=PIN_STRONG,
+        detail="engine exited 1",
+    )
+
+
+class TestComparatorDependency(_Base):
+    """An arm with `comparator = "bare"` is bought for a cell (task, repeat) only after
+    bare completed that cell, in an earlier invocation or this one. Otherwise the cell is
+    blocked: no executor, no spawn, no ledger row, and a count in the run summary."""
+
+    def setUp(self):
+        super().setUp()
+        self.nudge = _make_scenario("nudge", config_hash="c" * 64, comparator="bare")
+        self.factory_calls: list[str] = []
+
+    def _executors(self, **result_fns) -> dict[str, StubExecutor]:
+        return {
+            name: StubExecutor(result_fn=result_fns.get(name))
+            for name in ("bare", "single-long", "nudge")
+        }
+
+    def _factory(self, executors: dict[str, StubExecutor]):
+        def factory(sc):
+            self.factory_calls.append(sc.name)
+            return executors[sc.name]
+
+        return factory
+
+    def _rows_with_hash(self, config_hash: str) -> list[dict]:
+        path = self.ledger_dir / "test-bank.jsonl"
+        if not path.exists():
+            return []
+        rows = [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines() if ln]
+        return [r for r in rows if r.get("config_hash") == config_hash]
+
+    def test_a_failed_comparator_buys_nothing_for_its_dependent(self):
+        executors = self._executors(bare=_errored_result)
+        out = _FlushCountingStream()
+        code, _ = _run_matrix(
+            self.bank,
+            [self.sc_a, self.nudge],
+            repeats=2,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            executor_factory=self._factory(executors),
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(len(executors["bare"].calls), 4)
+        self.assertEqual(len(executors["nudge"].calls), 0, "the dependent arm spawned")
+        self.assertNotIn("nudge", self.factory_calls)
+        self.assertEqual(self._rows_with_hash("c" * 64), [], "a ledger row for a blocked cell")
+        blocked = out.flushed_lines("blocked:")
+        self.assertEqual(len(blocked), 4)
+        self.assertTrue(all(flushed for _, flushed in blocked))
+        self.assertEqual(
+            blocked[0][0],
+            "blocked: nudge/task-1 r0 — comparator bare has no completed trial for this cell; "
+            "nothing spent",
+        )
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(fields["blocked"], 4)
+        self.assertEqual((fields["completed"], fields["errored"]), (0, 4))
+        self.assertEqual(fields["not_started"], 0)
+        self.assertAlmostEqual(fields["usd"], 0.20, msg="only the comparator's spawns cost")
+
+    def test_only_the_cells_the_comparator_missed_are_blocked(self):
+        def bare(task, ws, sc):
+            bare.n += 1
+            return _errored_result() if bare.n == 1 else _ok_result()
+
+        bare.n = 0
+        executors = self._executors(bare=bare)
+        out = io.StringIO()
+        code, _ = _run_matrix(
+            self.bank,
+            [self.sc_a, self.nudge],
+            repeats=2,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            executor_factory=self._factory(executors),
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(len(executors["nudge"].calls), 3)
+        self.assertEqual(
+            [ln for ln in out.getvalue().splitlines() if ln.startswith("blocked:")],
+            [
+                (
+                    "blocked: nudge/task-1 r0 — comparator bare has no completed trial for "
+                    "this cell; nothing spent"
+                )
+            ],
+        )
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual((fields["completed"], fields["errored"], fields["blocked"]), (6, 1, 1))
+
+    def test_a_comparator_completed_in_an_earlier_ledger_lets_the_dependent_run(self):
+        _run_matrix(self.bank, [self.sc_a], repeats=2, ledger_dir=self.ledger_dir)
+        executors = self._executors()
+        code, text = _run_matrix(
+            self.bank,
+            [self.sc_a, self.nudge],
+            repeats=2,
+            ledger_dir=self.ledger_dir,
+            executor_factory=self._factory(executors),
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(len(executors["bare"].calls), 0, "bare was already done")
+        self.assertEqual(len(executors["nudge"].calls), 4)
+        self.assertNotIn("blocked:", text)
+        fields = _summary_fields(text)
+        self.assertEqual((fields["completed"], fields["skipped"], fields["blocked"]), (4, 4, 0))
+        self.assertEqual(len(self._rows_with_hash("c" * 64)), 8, "4 run rows and 4 trial rows")
+
+    def test_the_comparator_runs_before_its_dependent(self):
+        shared = StubExecutor()
+        code, text = _run_matrix(
+            self.bank,
+            [self.nudge, self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            executor_factory=lambda sc: shared,
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(
+            [c.scenario.name for c in shared.calls], ["bare", "bare", "nudge", "nudge"]
+        )
+        self.assertIn("arms:     bare [aaaaaaaaaaaa], nudge [cccccccccccc]\n", text)
+        self.assertIn(
+            "\ndepends:  nudge on bare (a cell runs only after bare completed the same task "
+            "and repeat)\n",
+            text,
+        )
+
+    def test_the_depends_line_is_on_the_dry_run_plan(self):
+        code, text = _run_matrix(
+            self.bank, [self.sc_a, self.nudge], ledger_dir=self.ledger_dir, dry_run=True
+        )
+        self.assertEqual(code, EXIT_OK)
+        lines = text.splitlines()
+        self.assertEqual(
+            lines[2],
+            "depends:  nudge on bare (a cell runs only after bare completed the same task and "
+            "repeat)",
+        )
+        self.assertTrue(lines[3].startswith("planned:  8 trials (0 already done)"))
+
+    def test_without_the_key_the_plan_is_byte_identical(self):
+        code, text = _run_matrix(
+            self.bank, self.scenarios, repeats=2, ledger_dir=self.ledger_dir, dry_run=True
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(
+            text,
+            "fathom run: bank=test-bank  scenarios=2  tasks=2  repeats=2\n"
+            "arms:     bare [aaaaaaaaaaaa], single-long [bbbbbbbbbbbb]\n"
+            "planned:  8 trials (0 already done)  ceiling: $40.00\n"
+            "[dry-run] no spawns\n",
+        )
+
+    def test_without_the_key_the_call_order_is_untouched(self):
+        shared = StubExecutor()
+        code, text = _run_matrix(
+            self.bank,
+            [self.sc_b, self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            executor_factory=lambda sc: shared,
+        )
+        self.assertEqual(code, EXIT_OK)
+        self.assertEqual(
+            [(c.scenario.name, c.task.id) for c in shared.calls],
+            [
+                ("single-long", "task-1"),
+                ("single-long", "task-2"),
+                ("bare", "task-1"),
+                ("bare", "task-2"),
+            ],
+        )
+        self.assertNotIn("depends:", text)
+        self.assertNotIn("blocked:", text)
+        self.assertIsNone(_summary_fields(text)["blocked"])
+
+    def _refused(self, scenarios: list[ResolvedScenario], **kw) -> tuple[int, str]:
+        from contextlib import redirect_stderr
+
+        err = io.StringIO()
+        shared = StubExecutor()
+        with redirect_stderr(err):
+            code, out = _run_matrix(
+                self.bank,
+                scenarios,
+                ledger_dir=self.ledger_dir,
+                executor_factory=lambda sc: shared,
+                **kw,
+            )
+        self.assertEqual(shared.calls, [])
+        self.assertNotIn("planned:", out)
+        return code, err.getvalue()
+
+    def test_an_unknown_comparator_returns_1_on_dry_run(self):
+        missing = _make_scenario("nudge", config_hash="c" * 64, comparator="missing")
+        code, err = self._refused([self.sc_a, missing], dry_run=True)
+        self.assertEqual(code, 1)
+        self.assertIn("'nudge'", err)
+        self.assertIn("'missing'", err)
+
+    def test_an_unknown_comparator_returns_1_on_a_real_run(self):
+        missing = _make_scenario("nudge", config_hash="c" * 64, comparator="missing")
+        code, _ = self._refused([self.sc_a, missing])
+        self.assertEqual(code, 1)
+
+    def test_a_comparator_on_itself_returns_1(self):
+        selfish = _make_scenario("nudge", config_hash="c" * 64, comparator="nudge")
+        code, err = self._refused([self.sc_a, selfish], dry_run=True)
+        self.assertEqual(code, 1)
+        self.assertIn("itself", err)
+
+    def test_a_comparator_cycle_returns_1(self):
+        one = _make_scenario("one", config_hash="c" * 64, comparator="two")
+        two = _make_scenario("two", config_hash="d" * 64, comparator="one")
+        code, err = self._refused([self.sc_a, one, two], dry_run=True)
+        self.assertEqual(code, 1)
+        self.assertIn("cycle", err)
 
 
 if __name__ == "__main__":

@@ -594,6 +594,7 @@ adapter = "claude-cli"         # required; the only adapter
 model = "claude-haiku-4-5"     # required; passed to `claude --model`
 strategy = "single-session"    # required; see the strategy table
 effort = "low"                 # required; passed to `claude --effort` unchanged
+# comparator = "bare"          # optional; buy a cell only after bare completed it ("Comparator")
 
 [tools]
 source = "none"                # "none" (default) or "repo" (series arms)
@@ -622,9 +623,9 @@ inject = "assets/nudge.md"     # relative to this file
 trial_timeout_s = 300          # optional; wall-clock seconds per spawn (default 1800)
 ```
 
-Only the five top-level keys are required; every table is optional. The five keys sit at the
-top of the file, before any table. A file that wraps them in a table has no top-level keys at
-all:
+Only the five keys commented `required` must be set; `comparator` and every table are
+optional. The top-level keys sit at the top of the file, before any table. A file that wraps
+them in a table has no top-level keys at all:
 
 ```toml
 # Wrong: under [scenario], `name` is scenario.name, and the file has no top-level `name`.
@@ -642,6 +643,8 @@ What `fathom run` does with a faulty arm file:
   treatment table (`[contxt]` for `[context]`) leaves the arm without its treatment, so it
   runs as the control would, under its own name. Check the spelling of every table.
 - An unknown `strategy` stops the run (including `--dry-run`) before anything spawns.
+- So does a `comparator` that names no loaded arm, names the arm itself, or forms a cycle
+  ("Comparator", below).
 
 ### Tools and default-deny
 
@@ -847,6 +850,41 @@ and the directory `fathom run` will use; it needs no action.
 series arm it is the limit for the whole engine run, and there is no limit when it is unset,
 so always set it there.
 
+### Comparator
+
+A treatment arm is only worth buying where its control was bought too: a cell (one task and
+repeat) that the control did not complete leaves the treatment's trial with nothing to be
+compared against. An arm declares that dependency with a top-level key, before any table:
+
+```toml
+name = "nudge"
+comparator = "bare"            # the arm this one is compared against
+```
+
+With it, `fathom run`:
+
+- checks the declarations before the plan, `--dry-run` included. A `comparator` must name
+  exactly one arm loaded from the same scenarios directory, not the arm itself, and the
+  declarations must not form a cycle (`one` on `two` and `two` on `one`). Otherwise the run
+  stops with exit 1 before anything spawns. A value that is not a string makes the file
+  faulty, so the arm is skipped with a warning like any other faulty file.
+- runs the comparator's trials before the dependent's. The arms otherwise keep the order they
+  were loaded in (by file name); a comparator moves just ahead of the first arm that depends
+  on it, and a set of arms with no `comparator` keeps its order.
+- prints one line per dependent arm after the `arms:` line:
+  `depends:  nudge on bare (a cell runs only after bare completed the same task and repeat)`.
+- buys a cell of the dependent arm only when the comparator, as its file stands now (its
+  current `config_hash`), has a completed trial for the same task and repeat at the bank's
+  current `dataset_version`, recorded by an earlier run or earlier in this one. An errored
+  comparator trial does not count. Otherwise the run prints
+  `blocked: nudge/add r0 — comparator bare has no completed trial for this cell; nothing spent`,
+  starts no spawn, writes no ledger row and goes on to the next trial. Blocked cells do not
+  change the exit code; the run summary counts them (section 13). Run the same command again
+  once the comparator's cell has completed, and the blocked cell is bought.
+
+`comparator` is not part of `config_hash` (section 11), so adding it to, or removing it from,
+an arm that already has trials keeps that arm's history.
+
 ## 11. `config_hash` and the resume key
 
 Each trial is recorded under the key `(bank, dataset_version, task_id, config_hash, repeat)`.
@@ -861,7 +899,7 @@ What an edit does to trials already recorded:
 | In an arm file: its name, model, effort, strategy, `[tools]` (including the order of `allowed`), `trial_timeout_s`; adding or removing a treatment table; an `[env]` template or a `[gate] extra` command | A new `config_hash`. The arm's old trials stop counting as done, and the next run buys the arm again from its first repeat. |
 | The content of an injected context or settings file; any file inside a mounted plugin; a new commit in, or a move of, a series engine repository | The same: a new `config_hash`. |
 | In a bank: an instruction, a fixture, a verifier, a limit, a gate, a criterion | Nothing automatic. Bump `dataset_version` (section 4) and every trial of the bank is bought again; without the bump, new trials mix with results measured on the old task. |
-| Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
+| Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs; adding, changing or removing `comparator` | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
 
 `config_hash` is the sha256 of a canonical JSON rendering (sorted keys) of the resolved arm.
 That exact string, the text that was hashed, is called the **preimage** and is stored on every
@@ -881,6 +919,9 @@ row as `config_preimage`. It contains:
 
 An absent table and an empty one produce the same hash, so adding an optional table to the
 schema never changes existing arms.
+
+`comparator` (section 10) is not in the preimage. It orders the run and decides which cells
+are bought, and changes nothing an arm measures, so declaring it never re-buys an arm.
 
 **Provenance.** Every row also records `engine_version`, the fathom version that wrote it,
 `cli_version`, and `written_at`, the UTC time it was written (ISO 8601, to the second). A run
@@ -984,7 +1025,8 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   $5; the older spelling `--max-budget-usd` still works); raising it loosens the only runaway
   guard, and the printed ceiling rises with it. `--max-run-usd USD` stops this invocation
   between trials once it has spent that much (exit 14). `--limit N` caps the number of new
-  trials; the plan is ordered arm by arm, so `--limit` cuts whole arms off the end.
+  trials; the plan is ordered arm by arm, with each comparator ahead of the arms that depend
+  on it (section 10), so `--limit` cuts whole arms off the end.
   `--tasks ID[,ID…]` restricts the run to named tasks, which is how to buy a screen.
 - **Before the first spawn** `fathom run` checks that the credential has life left (exit 15),
   that the bank validates (exit 12) and that treatment arms are armed (exit 11); the
@@ -1004,14 +1046,18 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   the trials not started, the amount spent this invocation, and the command that resumes
   it. The counts come from the rows this invocation appended, not from the whole ledger. A
   trial stopped by an infrastructure error has no row, so it counts as not started and a
-  resume runs it. A dry run, and a plan with nothing to buy, print neither line.
+  resume runs it. When an arm declares a `comparator`, a cell it blocks prints a `blocked:`
+  line instead of a `trial done:` line, and the summary adds `blocked N (comparator
+  incomplete)` after the errored count; without a `comparator` the summary has no such
+  field. A dry run, and a plan with nothing to buy, print neither line.
 - **Resuming.** Every nonzero exit leaves the ledger as the checkpoint. Run the same command
   again to continue; the `resume:` command in the summary is that command, with the bank,
   `--repeats`, and the path, `--tasks`, `--include-holdout` and cost-rail flags the run was
   given. An authentication or usage-limit failure stops the matrix with exit 10
   and records nothing for that trial.
-- **Exit codes of `fathom run`:** 0 done; 1 usage error (bank not loadable, no scenarios,
-  unknown strategy, unknown `--tasks` id); 10 infrastructure (auth, usage limit, fixture drift,
+- **Exit codes of `fathom run`:** 0 done (blocked cells included); 1 usage error (bank not
+  loadable, no scenarios, unknown strategy, unknown `--tasks` id, a `comparator` that names
+  no loaded arm, the arm itself or a cycle); 10 infrastructure (auth, usage limit, fixture drift,
   lock timeout, an arm's files that could not be copied for a spawn); 11 unarmed arm; 12 bank invalid; 14 run budget reached; 15 credential
   expiring; 16 stopped by `fathom stop`.
 - **Removing a bad trial.** The ledger is append-only (ADR-0002): never edit it.

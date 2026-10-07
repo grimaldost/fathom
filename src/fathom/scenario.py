@@ -138,6 +138,13 @@ class ScenarioConfig:
     plugins: PluginsConfig = dataclasses.field(default_factory=PluginsConfig)
     env: EnvConfig = dataclasses.field(default_factory=EnvConfig)
     gate: GateConfig = dataclasses.field(default_factory=GateConfig)
+    # The arm this one is bought against (`comparator = "bare"`): `fathom run` orders it
+    # first and buys a cell of this arm only after the comparator completed the same task
+    # and repeat. Run-ordering metadata, not configuration: it changes nothing the arm
+    # measures, so it never enters config_hash or the preimage, and adding it to a
+    # committed arm must not fork that arm's history (ADR-0002; the "Resume keys" item of
+    # docs/method/review-checklist.md).
+    comparator: str | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -169,6 +176,9 @@ class ResolvedScenario:
     plugins: PluginsConfig = dataclasses.field(default_factory=PluginsConfig)
     env: EnvConfig = dataclasses.field(default_factory=EnvConfig)
     gate: GateConfig = dataclasses.field(default_factory=GateConfig)
+    # Carried from ScenarioConfig.comparator. Not part of config_hash or the preimage:
+    # run-ordering metadata, kept out so that adding it shifts no resume key (ADR-0002).
+    comparator: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +393,10 @@ def load_scenario(path: Path) -> ScenarioConfig:
     gate_raw = data.get("gate", {})
     gate = GateConfig(extra=tuple(str(c) for c in gate_raw.get("extra", ())))
 
+    comparator = data.get("comparator")
+    if comparator is not None and not isinstance(comparator, str):
+        raise ValueError(f"comparator must be an arm name (a string), got {comparator!r}")
+
     return ScenarioConfig(
         name=data["name"],
         adapter=data["adapter"],
@@ -396,6 +410,7 @@ def load_scenario(path: Path) -> ScenarioConfig:
         plugins=plugins,
         env=env,
         gate=gate,
+        comparator=comparator,
     )
 
 
@@ -480,4 +495,6 @@ def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> Reso
         plugins=config.plugins,
         env=config.env,
         gate=config.gate,
+        # Deliberately not passed to _resolved_to_dict above: see ScenarioConfig.comparator.
+        comparator=config.comparator,
     )
