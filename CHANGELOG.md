@@ -6,6 +6,34 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-07
+
+A minor release, pre-1.0: it adds a ledger field, splits the authoring guide into three
+files, and changes what a kept stream file's name means and how the engine writes its output,
+so a data root or caller that relied on the old behaviour needs a change. The release serves
+runs that record what they used and a guide an agent can read in parts: a run row says every
+model its spawn's output named, the authoring guide is three files with a line budget each,
+the engine's output survives any character on Windows, and a run that leaves the ledger index
+stale says how to refresh it. It also carries the acceptance harness's fix for a `fathom` call
+made through a function defined in a sourced file.
+
+What changes behaviour for an existing data root or caller:
+
+- Run rows written from now on carry a `models_seen` key; a reader that checks a row against a
+  fixed set of keys sees one more. Old rows load unchanged and are never rewritten, and
+  `config_hash` and the resume key do not change.
+- A citation of a guide section outside `authoring.md` must name its new file (`arming.md` or
+  `bank-design.md`); section numbers are unchanged. A citation kept outside this repository,
+  in a data root's notes for example, needs the file name added.
+- The `<ms>` in a kept stream file's name is the time its spawn started, not the time it
+  ended; a tool that reads it as the end time reads the start time now.
+- `fathom` and `fathom smoke` write stdout and stderr as UTF-8 on every platform; a program
+  that reads their output through a pipe on Windows and decodes it in the locale's code page
+  must decode it as UTF-8. The plugin's MCP server now does.
+- The `run summary:` line gains a stale-index clause, before `resume:`, when a run left the
+  data root's ledger index out of date; a parser of that line sees one more field in that
+  case only.
+
 ### Added
 
 - **Every model a spawn's output names, on its run row.** `RunRecord` gains an additive
