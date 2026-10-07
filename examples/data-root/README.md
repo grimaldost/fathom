@@ -6,9 +6,12 @@ page. The ledger rows are synthetic: they were written by the engine's own scena
 ledger code with made-up usage figures, and nothing was measured. The engine's tests and CI
 run against this directory.
 
-The full authoring guide is
-[`skills/fathom-eval/reference/authoring.md`](../../skills/fathom-eval/reference/authoring.md);
-the sections cited below are its sections.
+The full authoring guide starts at
+[`skills/fathom-eval/reference/authoring.md`](../../skills/fathom-eval/reference/authoring.md)
+and continues in [`arming.md`](../../skills/fathom-eval/reference/arming.md) and
+[`bank-design.md`](../../skills/fathom-eval/reference/bank-design.md). The sections cited
+below are its sections, which are numbered across the three files; one outside
+`authoring.md` is cited with its file's name.
 
 ## Layout
 
@@ -98,15 +101,15 @@ as the complete verifier shown in section 7.
 
 A real task usually emits several criteria, some that a first attempt meets and at least one
 that only a careful attempt does, so the per-criterion table can show where arms differ
-(section 9). This task has one criterion and would ceiling quickly; it exists to show the
-shape.
+(`bank-design.md`, section 9). This task has one criterion and would ceiling quickly; it
+exists to show the shape.
 
 ### `scenarios/bare.toml`
 
 The control arm: one `single-session` spawn of `claude-haiku-4-5` at `effort = "low"`, with
 the tools `Read`, `Write`, `Edit`, `Glob` and `Grep` allowed. Spawns are default-deny, so the
 allowlist is the agent's whole toolset. The report uses the arm named `bare` as its anchor.
-See section 10.
+See `arming.md`, section 10.
 
 ### `scenarios/nudge.toml` and `scenarios/assets/nudge.md`
 
@@ -114,7 +117,7 @@ The treatment arm. It is `bare.toml` with a different name and a `[context]` tab
 appends `assets/nudge.md` to the spawn's system prompt. The sha256 of that file's content
 enters the arm's `config_hash`, so editing the note would start a new history for the arm;
 the rows in the ledger would stop counting as done. Before a paid run, `fathom run` makes one
-cheap spawn to prove the note actually reaches the spawn (section 10).
+cheap spawn to prove the note actually reaches the spawn (`arming.md`, section 10).
 
 ### `ledger/example.jsonl`
 

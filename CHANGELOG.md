@@ -17,6 +17,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   before it load with an empty list and are never rewritten; series-strategy runs, which
   are built from the engine's spawn events rather than a CLI stream, carry an empty list.
 
+### Changed
+
+- **The authoring guide is three files, each with a line budget.** The guide, one file of
+  1280 lines, now starts at `skills/fathom-eval/reference/authoring.md` (the data root, the
+  bank and its tasks, fixtures, the verifier, `fathom validate`, running an analysis and
+  reading the scorecard) and continues in `arming.md` (arms, their tools and treatments,
+  `config_hash` and the resume key, series arms) and `bank-design.md` (making a bank
+  discriminate, the checklist before the first paid run). Sections were moved whole and keep
+  their numbers, so a section number names the same text it did before; a citation of a
+  section outside `authoring.md` now names its file (`arming.md`, section 10), in the guide,
+  the skill, the READMEs, `CLAUDE.md`, ADR-0003, the backlog and the `validate.py`
+  docstrings. Each file states a line budget in its header (800,
+  450 and 175 lines), so an addition past it has to displace something, and a test holds
+  each file to its budget and checks that every cited section is in the file the citation
+  names. The skill links all three files.
+
 ### Fixed
 
 - **No crash on a character outside the console's code page.** `fathom` and `fathom smoke`

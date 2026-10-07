@@ -5,7 +5,10 @@ Map of the engine's documentation. Start elsewhere for everyday use:
 - [`README.md`](../README.md) — what fathom is, install, `fathom init`, how the data root is
   found, the commands, the plugin.
 - [`skills/fathom-eval/reference/authoring.md`](../skills/fathom-eval/reference/authoring.md) —
-  the guide to building a bank and its arms, from `fathom init` to reading the scorecard.
+  the guide to building a bank and its arms, from `fathom init` to reading the scorecard. It
+  continues in [`arming.md`](../skills/fathom-eval/reference/arming.md) (arms) and
+  [`bank-design.md`](../skills/fathom-eval/reference/bank-design.md) (making a bank
+  discriminate, and the checklist before the first paid run).
 - [`examples/data-root/`](../examples/data-root/) — a complete example data root, explained
   file by file.
 - [`CLAUDE.md`](../CLAUDE.md) — for agents working on the engine: architecture, invariants,

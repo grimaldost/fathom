@@ -39,9 +39,10 @@ A **bank** is a set of coding tasks, each a starting repository, an instruction,
 of attempting those tasks: model, effort, allowed tools, execution strategy, and any
 treatment such as injected context. **To build a bank and its arms, read the authoring guide:
 [`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md).** It
-covers the data root, `bank.toml` and `task.toml`, fixtures, the verifier contract, reference
-solutions and validation, what makes a bank able to discriminate, every arm field and
-strategy, `config_hash`, running, and reading the scorecard.
+starts there, continues in `arming.md` and `bank-design.md` beside it, and covers the data
+root, `bank.toml` and `task.toml`, fixtures, the verifier contract, reference solutions and
+validation, what makes a bank able to discriminate, every arm field and strategy,
+`config_hash`, running, and reading the scorecard.
 [`examples/data-root/`](examples/data-root/) is a complete working example, explained file by
 file in its [README](examples/data-root/README.md). The quickest first bank is a copy of it:
 create a data root, copy the example's bank and arms into it, and edit them.
@@ -77,8 +78,8 @@ What each step does:
   run. One of its checks drives a series engine against a stub `claude` and needs the data
   root's `scenarios/series.toml`, so it fails in a data root without one.
   `--no-engine-boundary` skips that check; pass it unless you have a series arm (authoring
-  guide, section 12). The check is then left out, not reported as skipped, so the smoke can
-  still end in `SMOKE RESULT: ALL PASS`.
+  guide, `arming.md` section 12). The check is then left out, not reported as skipped, so the
+  smoke can still end in `SMOKE RESULT: ALL PASS`.
 - **`fathom index --write`** re-renders `docs/reports/LEDGER-INDEX.md`, which records each
   ledger's hash and completed trials per arm. Run it after each paid run and commit it with
   the ledger; `fathom reconcile` fails while it is out of date.
@@ -180,8 +181,8 @@ taskbank → scenario (resolve + config_hash) → Runner (claude-cli adapter) �
   does not tell them the arm or where the data root is. The files an arm injects or mounts
   are passed to each spawn as copies of its own, so the command line does not name the data
   root either. An agent that goes looking can still find the data root, through the process
-  tree for one; the authoring guide (section 10) lists these routes and what a bank author can
-  do about them.
+  tree for one; the authoring guide (`arming.md`, section 10) lists these routes and what a
+  bank author can do about them.
 - **Scoring is blind**: the verifier sees only a copy of the final workspace, and cost data is
   joined after scoring.
 - Every result is appended to the **ledger** in your data root. Scorecards are regenerated
@@ -229,7 +230,7 @@ with it. Details: [`README-plugin.md`](README-plugin.md).
 
 | Document | What it covers |
 |---|---|
-| [`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) | Building a bank and its arms, end to end. |
+| [`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) | Building a bank and its arms, end to end; it continues in `arming.md` and `bank-design.md` beside it. |
 | [`examples/`](examples/) | The example data root, explained file by file. |
 | [`README-plugin.md`](README-plugin.md) | The plugin, its commands and its MCP server. |
 | [`CLAUDE.md`](CLAUDE.md) | Guide for agents working on the engine: architecture, invariants, the data-root contract. |

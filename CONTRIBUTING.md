@@ -161,11 +161,15 @@ Tests use synthetic data only: the fixtures under `tests/fixtures/` and the exam
 root under `examples/data-root/`. Do not copy a real bank, arm, ledger or report into this
 repository.
 
-The guide to building a bank is
-[`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md). It
-describes as-built behaviour, so a change to a parser, a default, a flag, an exit code or to
-what enters `config_hash` updates it in the same pull request. The parsers
-(`src/fathom/taskbank.py`, `src/fathom/scenario.py`) remain the source of truth.
+The guide to building a bank starts at
+[`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) and
+continues in `arming.md` and `bank-design.md` beside it. It describes as-built behaviour, so a
+change to a parser, a default, a flag, an exit code or to what enters `config_hash` updates it
+in the same pull request. The parsers
+(`src/fathom/taskbank.py`, `src/fathom/scenario.py`) remain the source of truth. Each of the
+three files states a line budget in its header; an addition that would pass it displaces
+something first, and `tests/test_authoring_guide.py` fails otherwise. The same test checks
+that every citation of a guide section names the file that holds it.
 
 ## Releasing
 

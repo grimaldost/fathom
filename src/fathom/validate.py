@@ -18,7 +18,7 @@ The triad, and what each property protects against:
    What this property does NOT catch: a bank whose tasks are simply too EASY, so
    every arm succeeds.  That ceiling is invisible before the spend and stays
    authoring judgement (turn budget, task scale, a pilot's discrimination); see
-   "What no check covers" in ``skills/fathom-eval/reference/authoring.md``.
+   "What no check covers" in ``skills/fathom-eval/reference/bank-design.md``.
 2. :data:`PROP_SOLUTION_PASSES` — **the verifier must PASS on a reference
    solution** (``<task>/solution/`` overlaid on the fixture).  Guards the mirror
    failure: an unsatisfiable verifier no arm can ever satisfy.
@@ -57,7 +57,7 @@ ambiguous red-gate case is ``warn`` rather than ``fail``.
 
 What stays out: the measured turn budget, the scale of the task material and a
 pilot's discrimination are authoring judgement, not machine checks, and are
-written down under "What no check covers" in the authoring reference.
+written down under "What no check covers" in the authoring guide's ``bank-design.md``.
 
 Free — every check runs the verifier locally against a staged fixture.  No spawn,
 no spend.
