@@ -1201,7 +1201,7 @@ def test_tee_stream_inert_without_env(tmp_path, monkeypatch):
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     monkeypatch.delenv("FATHOM_STREAM_DIR", raising=False)
-    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1, 1.0)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -1210,12 +1210,48 @@ def test_tee_stream_writes_tagged_file(tmp_path, monkeypatch):
 
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
     monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm/tier--task--r0")
-    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2, 1.0)
     files = list(tmp_path.iterdir())
     assert len(files) == 1
     name = files[0].name
     assert name.startswith("bank--arm_tier--task--r0--a2--"), name  # '/' sanitized
     assert files[0].read_text(encoding="utf-8").count('"type"') == 2
+
+
+def test_tee_stream_names_the_file_by_the_start_time(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm--task--r0")
+    monkeypatch.setattr("fathom.adapters.claude_cli.time.time", lambda: 9999.0)  # write time
+    ClaudeCliRunner._tee_stream("data", 1, 1700000000.25)
+    assert [f.name for f in tmp_path.iterdir()] == ["bank--arm--task--r0--a1--1700000000250.ndjson"]
+
+
+class TestStreamFileNames(AdapterTestBase):
+    def test_each_attempt_is_named_by_when_its_spawn_started(self):
+        # The wall clock runs on while a spawn does; the name must carry the reading taken
+        # before the spawn, so a retry's file is not stamped with its predecessor's end.
+        now = [1000.0]
+
+        def responder(i):
+            now[0] += 5.0  # the spawn takes five seconds
+            if i == 0:
+                return _cp(1, '{"type": "system"}', "transient 503 error")
+            return _cp(0, _fixture("stream_complete.jsonl"))
+
+        spawn = RecordingSpawn(responder)
+        runner = self.make_runner(spawn, max_attempts=3, wall_clock=lambda: now[0])
+        streams = self.workspace / "streams"
+        with mock.patch.dict(
+            os.environ,
+            {"FATHOM_STREAM_DIR": str(streams), "FATHOM_STREAM_TAG": "b--a--t--r0"},
+        ):
+            runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(
+            sorted(f.name for f in streams.iterdir()),
+            ["b--a--t--r0--a1--1000000.ndjson", "b--a--t--r0--a2--1005000.ndjson"],
+        )
 
 
 def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
@@ -1224,12 +1260,12 @@ def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
     blocker = tmp_path / "afile"
     blocker.write_text("x", encoding="utf-8")
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(blocker / "sub"))  # dir under a file
-    ClaudeCliRunner._tee_stream("data", 1)  # must not raise
+    ClaudeCliRunner._tee_stream("data", 1, 1.0)  # must not raise
 
 
 def test_tee_stream_skips_empty_stdout(tmp_path, monkeypatch):
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
-    ClaudeCliRunner._tee_stream("", 1)
+    ClaudeCliRunner._tee_stream("", 1, 1.0)
     assert list(tmp_path.iterdir()) == []

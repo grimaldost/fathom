@@ -23,6 +23,13 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   now write stdout and stderr as UTF-8, replacing what cannot be encoded, so a non-ASCII path
   or reply no longer ends a run with a UnicodeEncodeError on a Windows console.
 
+- **A kept stream is named by when its spawn started.** The file `fathom run` keeps
+  for a trial's agent stream (`<tag>--a<attempt>--<ms>.ndjson`) carried the time the stream
+  was written, which is the end of the spawn, so the files of a trial's retries and of
+  trials that overlapped sorted by their ends. The `<ms>` part is now the wall-clock time
+  just before the spawn began. The name keeps its shape, so `fathom report` finds the
+  files as before; the adapter takes an optional `wall_clock` for tests.
+
 ## [0.9.0] - 2026-10-07
 
 A minor release, pre-1.0: it adds ledger fields, scorecard sections, a fresh-agent acceptance

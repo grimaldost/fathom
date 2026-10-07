@@ -2269,7 +2269,7 @@ def test_a_stream_the_adapter_tees_is_found_by_its_trial(tmp_path, monkeypatch):
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(streams_dir))
     monkeypatch.setenv("FATHOM_STREAM_TAG", "mcp-bank--with mcp+--t1--r0")
     body = (_STREAM_FIXTURES / "served.ndjson").read_text(encoding="utf-8")
-    ClaudeCliRunner._tee_stream(body, 1)
+    ClaudeCliRunner._tee_stream(body, 1, 1.0)
     assert len(list(streams_dir.glob("*.ndjson"))) == 1
     table = _mcp_table(_mcp_render(tmp_path, [_mcp_trial("with mcp+", "t1", 0)]))
     assert table[2:] == ["| with mcp+ | 1/1 | 1/1/1 |  |"]
