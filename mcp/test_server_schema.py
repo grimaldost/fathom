@@ -3,12 +3,15 @@
 This imports fastmcp, so it is NOT part of fathom's stdlib-only core suite — it
 lives at plugin scope. Run it under an env that has fastmcp:
 
-    uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+    uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 
-Two guards:
+and again pinned at the floor the plugin manifest declares (``fastmcp==2.11.3``).
+
+Three guards:
 
 - every tool parameter carries a schema description, because a parameter
   without one is a feature that does not exist for a blind agent;
+- the server reports fathom's version and starts without a banner on stderr;
 - every tool runs the engine the plugin ships against the data root,
   ``uv run --no-dev --frozen --project <plugin root> python -m fathom --home <data root>
   ...``, with the
@@ -19,6 +22,7 @@ Two guards:
 from __future__ import annotations
 
 import asyncio
+import json
 import pathlib
 import subprocess
 import sys
@@ -49,6 +53,60 @@ def test_every_tool_parameter_is_described() -> None:
             assert spec.get("description", "").strip(), (
                 f"{tool_name}.{param} has no schema description"
             )
+
+
+# --- what the server says about itself --------------------------------------------
+
+
+def _plugin_version() -> str:
+    import _resolve
+
+    manifest = _resolve.PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
+    return json.loads(manifest.read_text(encoding="utf-8"))["version"]
+
+
+def test_the_server_reports_fathoms_version() -> None:
+    """``serverInfo.version`` is fathom's, not the version of the framework serving it.
+
+    The server is started as a subprocess and asked over stdio, through the ``mcp`` SDK
+    every fastmcp release is built on: fastmcp's own client reads the handshake result
+    differently from one major version to the next.
+    """
+    from mcp.client.stdio import stdio_client
+
+    from mcp import ClientSession, StdioServerParameters
+
+    here = pathlib.Path(__file__).resolve().parent
+    params = StdioServerParameters(command=sys.executable, args=[str(here / "fathom_server.py")])
+
+    async def initialize():
+        async with stdio_client(params) as (read, write), ClientSession(read, write) as session:
+            return await session.initialize()
+
+    result = asyncio.run(initialize())
+    info = getattr(result, "serverInfo", None) or result.server_info  # the SDK renamed it
+    assert info.name == "fathom"
+    assert info.version == _plugin_version()
+
+
+def test_starting_the_server_prints_no_banner() -> None:
+    """With stdin closed the stdio server starts and stops; stderr carries no banner.
+
+    stdout is the JSON-RPC stream and diagnostics go to stderr, where the framework's
+    start-up banner would otherwise be read by the agent as noise on every launch.
+    """
+    here = pathlib.Path(__file__).resolve().parent
+    proc = subprocess.run(
+        [sys.executable, str(here / "fathom_server.py")],
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=60,
+    )
+    assert "FastMCP" not in proc.stderr, proc.stderr
+    assert proc.stdout == ""
 
 
 # --- the commands each tool runs -------------------------------------------------

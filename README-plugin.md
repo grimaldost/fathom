@@ -30,7 +30,7 @@ resolves inside it.
 The engine version is the plugin's version, and each ledger row it writes records that
 version as `engine_version`.
 
-The MCP server itself starts as `uv run --no-project --with "fastmcp>=2.0" python <plugin
+The MCP server itself starts as `uv run --no-project --with "fastmcp>=2.11.3" python <plugin
 root>/mcp/fathom_server.py` (`.claude-plugin/plugin.json`). `--no-project` keeps uv from
 reading a `pyproject.toml` in the directory Claude Code was opened in, which is usually a
 project of your own; the server needs only `fastmcp`, and the engine calls above name their
@@ -132,7 +132,7 @@ little.
 uv run pytest tests/test_packaging.py
 
 # MCP tool-schema descriptions and the commands each tool runs (needs fastmcp)
-uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 
 # manifest lint
 claude plugin validate .

@@ -269,6 +269,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `tools/check_naive_refs.py` part of the engine repository and asked for an engine clone, so
   an agent working from the installed plugin concluded it could not run the check. The
   plugin's directory is a copy of the repository and ships the tool; the guide now says so.
+- **The MCP server reports fathom's version, and starts without a banner.** Its handshake
+  carried the version of the framework serving it, so a client read the framework's release
+  as fathom's, and the framework printed its start-up banner to stderr on every launch. The
+  server now reports the version in `.claude-plugin/plugin.json`, which `fathom reconcile`
+  keeps equal to `pyproject.toml`'s, and starts with the banner off. Both arguments need
+  `fastmcp` 2.11.3 or later, so the floor in the plugin manifest moves from 2.0 to 2.11.3,
+  the oldest release that accepts them and installs against current dependencies. CI runs
+  the MCP schema tests a second time pinned at the floor; the tests now also check the
+  reported version and that stderr carries no banner.
 
 ## [0.8.0] - 2026-09-26
 

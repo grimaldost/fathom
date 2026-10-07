@@ -20,12 +20,17 @@ data root is the directory holding ``tasks/``, ``scenarios/`` and the committed
 ``ledger/``, marked by a ``fathom.toml`` with a ``[data_root]`` table; ``FATHOM_HOME``
 names it, or the server finds it at or above its working directory. It is never the
 plugin's own tree or a plugin cache directory (``_resolve.py``). stdout carries the
-JSON-RPC stream only; diagnostics go to stderr.
+JSON-RPC stream only; diagnostics go to stderr, and the framework's start-up banner is off.
+
+The server reports fathom's version, read from the plugin manifest, as its own in the
+handshake, not the version of the framework serving it. That needs ``fastmcp`` 2.11.3 or
+later, the floor named in ``.claude-plugin/plugin.json``.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import pathlib
 import subprocess
@@ -37,9 +42,22 @@ from pydantic import Field
 
 # _resolve.py sits beside this file; import it without a package install.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import _resolve
 from _resolve import FathomHomeError, fathom_command, resolve_fathom_home
 
-mcp = FastMCP("fathom")
+
+def _plugin_version() -> str:
+    """fathom's version, read from the plugin manifest at the plugin root.
+
+    The server runs in a temporary environment that has fastmcp and not the fathom package,
+    so ``importlib.metadata`` cannot see it. ``fathom reconcile`` keeps the manifest's
+    version equal to ``pyproject.toml``'s.
+    """
+    manifest = _resolve.PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
+    return str(json.loads(manifest.read_text(encoding="utf-8"))["version"])
+
+
+mcp = FastMCP("fathom", version=_plugin_version())
 
 
 def _home() -> pathlib.Path:
@@ -224,4 +242,5 @@ async def smoke(
 
 
 if __name__ == "__main__":
-    mcp.run()
+    # The banner is the framework's own start-up text on stderr, not diagnostics of ours.
+    mcp.run(show_banner=False)

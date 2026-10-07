@@ -30,7 +30,8 @@ uv lock --check
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest
-uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp==2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 FATHOM_HOME= uv run fathom reconcile                # the engine checkout: version sites
 uv run fathom --home examples/data-root reconcile   # the example data root
 uv run fathom smoke --no-engine-boundary            # manual: real spawns, a few cents
@@ -44,7 +45,12 @@ first, which removes the variable for the rest of the session.
   before pytest could read the file. CI runs it before `uv sync`.
 - `pytest` collects `tests/` only. The MCP server's tests import `fastmcp`, which the core
   does not depend on, so they run as their own step with `fastmcp` added for that command
-  alone. They check each tool's parameter descriptions and the command each tool runs.
+  alone. They check each tool's parameter descriptions, the command each tool runs, the
+  version the server reports and that starting it prints no banner. They run twice: at the
+  newest `fastmcp` and pinned at the floor, 2.11.3, the oldest release that accepts the
+  `version` constructor argument and the `show_banner` run argument the server passes and
+  that installs against current dependencies. Raising the floor means changing the
+  `fastmcp` string in `.claude-plugin/plugin.json`, in both CI steps and in this list.
 - `fathom reconcile` is free and spawns nothing. Every fact the tree records twice must
   agree; exit 13 means one does not. It runs twice. At the engine root it holds the version
   sites (`pyproject.toml`, `.claude-plugin/plugin.json` and the newest `CHANGELOG.md`
