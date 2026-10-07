@@ -825,6 +825,8 @@ def run_matrix(
     out: TextIO | None = None,
     resume_cmd: str | None = None,
     interleave: bool = False,
+    data_root: pathlib.Path | None = None,
+    index_cmd: str = "fathom index --write",
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -845,7 +847,9 @@ def run_matrix(
     every return prints one flushed ``run summary:`` line (:func:`_print_run_summary`),
     ending in ``resume_cmd`` (default ``fathom run <bank> --repeats <n>``; ``_cmd_run``
     passes the command it was invoked as). A dry run, an empty plan and the gates before
-    the loop print neither.
+    the loop print neither. When ``data_root`` is given and the rows this invocation
+    appended left that root's committed ledger index stale, the summary adds one clause
+    naming ``index_cmd`` as the command that refreshes it (:func:`_index_stale_clause`).
 
     An arm that declares ``comparator`` runs after that arm, and a cell of it (task,
     repeat) is bought only once the comparator has a completed trial for the same cell, in
@@ -1153,6 +1157,7 @@ def run_matrix(
             spent_usd=spent_usd,
             resume_cmd=_resume,
             blocked=blocked if dependents else None,
+            index_note=_index_stale_clause(data_root, _ledger_dir, completed + errored, index_cmd),
         )
         return code
 
@@ -1377,6 +1382,38 @@ def run_matrix(
     return _finish(EXIT_OK)
 
 
+def _index_stale_clause(
+    data_root: pathlib.Path | None,
+    ledger_dir: pathlib.Path,
+    appended: int,
+    index_cmd: str,
+) -> str | None:
+    """The run-summary clause for a ledger index the appended rows left stale, else ``None``.
+
+    The derived index (``docs/reports/LEDGER-INDEX.md``) stamps every ledger of the data
+    root, so a run that appends rows to the root's own ledger invalidates it, and ``fathom
+    reconcile`` then fails until ``fathom index --write`` re-renders it. The clause is
+    silent when nothing was appended, when the run wrote to a ledger other than the root's
+    (a side study the index never covers), when the root keeps no index, and when the index
+    is current. Reading the index must never fail a finished run, so an unreadable ledger
+    or index also gives ``None``; ``fathom reconcile`` reports that case on its own.
+    """
+    if data_root is None or appended <= 0:
+        return None
+    from fathom import ledgerindex as _ledgerindex
+
+    try:
+        if ledger_dir.resolve() != (data_root / _ledgerindex.LEDGER_DIR).resolve():
+            return None
+        if not (data_root / _ledgerindex.INDEX_PATH).is_file():
+            return None
+        if _ledgerindex.is_current(data_root):
+            return None
+    except (OSError, ValueError):
+        return None
+    return f"ledger index is now stale: refresh it with {index_cmd}"
+
+
 def _print_run_summary(
     out: TextIO,
     *,
@@ -1388,6 +1425,7 @@ def _print_run_summary(
     spent_usd: float,
     resume_cmd: str,
     blocked: int | None = None,
+    index_note: str | None = None,
 ) -> None:
     """The one closing line of a run that reached its trial loop, flushed.
 
@@ -1397,13 +1435,16 @@ def _print_run_summary(
     runs it). ``spent_usd`` is this invocation's observed spend, not the ledger's total.
     ``blocked`` counts the dependent cells whose comparator had no completed trial; it is
     printed only when an arm declares a comparator (``None`` otherwise), so a run without
-    one prints the line it always did.
+    one prints the line it always did. ``index_note`` is the stale-index clause, printed
+    before ``resume:`` so the resume command stays the last field; ``None`` prints nothing.
     """
     blocked_part = "" if blocked is None else f"blocked {blocked} (comparator incomplete); "
+    index_part = "" if index_note is None else f"{index_note}; "
     print(
         f"run summary: ledger {ledger_path.resolve()}; completed {completed}, errored "
         f"{errored} this invocation; {blocked_part}skipped {skipped} (already done); not "
-        f"started {not_started}; spent ${spent_usd:.2f} this invocation; resume: {resume_cmd}",
+        f"started {not_started}; spent ${spent_usd:.2f} this invocation; {index_part}"
+        f"resume: {resume_cmd}",
         file=out,
         flush=True,
     )
@@ -1788,6 +1829,21 @@ def _shell_arg(value: object) -> str:
     return f'"{text}"' if any(ch.isspace() for ch in text) else text
 
 
+def _command_head(args: argparse.Namespace) -> list[str]:
+    """``fathom``, plus ``--home ROOT`` when the invocation gave one, so a command printed
+    for the operator means the same from any directory."""
+    head = ["fathom"]
+    root = getattr(args, "data_root", None)
+    if getattr(args, "home", None) is not None and root is not None:
+        head += ["--home", _shell_arg(root)]
+    return head
+
+
+def _index_command(args: argparse.Namespace) -> str:
+    """The command that re-renders the ledger index of the root this invocation resolved."""
+    return " ".join([*_command_head(args), "index", "--write"])
+
+
 def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
     """The command that continues this ``fathom run`` from its ledger.
 
@@ -1802,10 +1858,7 @@ def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
     run again.
     """
     root = getattr(args, "data_root", None)
-    head = ["fathom"]
-    if getattr(args, "home", None) is not None and root is not None:
-        head += ["--home", _shell_arg(root)]
-    parts = [*head, "run", _shell_arg(args.bank), "--repeats", str(args.repeats)]
+    parts = [*_command_head(args), "run", _shell_arg(args.bank), "--repeats", str(args.repeats)]
     for name, default in _PATH_DEFAULTS.items():
         value = getattr(args, name, None)
         if value is None or (root is not None and pathlib.Path(value) == root / default):
@@ -1942,6 +1995,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
             run_lock=run_lock,
             resume_cmd=_resume_command(args, spawn_cap),
             interleave=getattr(args, "interleave", False),
+            data_root=data_root,
+            index_cmd=_index_command(args),
         )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------

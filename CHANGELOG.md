@@ -55,6 +55,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Fixed
 
+- **The run summary names the command that refreshes a stale ledger index.** `fathom run`
+  appends ledger rows, which leaves the derived index (`docs/reports/LEDGER-INDEX.md`) out of
+  date, and `fathom reconcile` then fails; an agent that ran a measurement and skipped
+  `fathom index --write` met exactly that. When the run appended rows to the data root's own
+  ledger and the root keeps an index those rows left stale, the `run summary:` line now adds
+  `ledger index is now stale: refresh it with fathom index --write` (`fathom --home ROOT
+  index --write` when the run was given `--home`), placed before `resume:` so the resume
+  command is still the last field. It says nothing on a dry run, when the run appended no
+  rows, when the index is current, when the root keeps no index, or when `--ledger-dir` sent
+  the rows to a side ledger. Nothing else changes: the exit code, the other fields and the
+  order of the line are as before.
 - **No crash on a character outside the locale's code page.** On Windows, Python encodes
   output sent to a pipe or a file in the locale's code page (cp1252, for example), so a path,
   task name or reply holding a character outside it ended `fathom` or `fathom smoke` with a

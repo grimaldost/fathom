@@ -169,7 +169,12 @@ After a run, keep the data root's derived records current:
 
 - `fathom index --write` re-renders `docs/reports/LEDGER-INDEX.md`, the stamp of each
   ledger's hash and completed trials per arm; commit it with the ledgers. Without
-  `--write` it only checks, and exits 1 when stale.
+  `--write` it only checks, and exits 1 when stale. A `fathom run` whose appended rows
+  left a kept index stale says so on its `run summary:` line (`ledger index is now stale:
+  refresh it with fathom index --write`, or `fathom --home ROOT index --write` when the
+  run was given `--home`); it says nothing on a dry run, when the run appended no rows,
+  when the index is current, when the root keeps no index, or for a `--ledger-dir` side
+  ledger.
 - `fathom reconcile` checks every fact the data root records twice; exit 13 means a
   disagreement or a stale accepted exception.
 - Write the result up under `docs/reports/` and list it in `docs/STATUS.md`.
