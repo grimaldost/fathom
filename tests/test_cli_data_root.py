@@ -49,7 +49,7 @@ from fathom import ledger as _ledger  # noqa: E402
 from fathom import reconcile as _reconcile  # noqa: E402
 from fathom.adapters.base import ExitStatus  # noqa: E402
 from fathom.adapters.base import RunRecord as AdapterRunRecord  # noqa: E402
-from fathom.cli import EXIT_UNRECONCILED, main  # noqa: E402
+from fathom.cli import EXIT_INFRASTRUCTURE, EXIT_UNRECONCILED, main  # noqa: E402
 from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus  # noqa: E402
 
 BANK = "example"
@@ -142,10 +142,27 @@ class _StubExecutor:
         )
 
 
+class _InfrastructureExecutor:
+    """An auth or usage-limit failure on the first trial: the matrix stops, and the trial
+    gets no ledger row."""
+
+    def run_trial(self, task, workspace, scenario, runner):
+        return TrialResult(
+            status=TrialStatus.INFRASTRUCTURE,
+            runs=[],
+            pin_level=PIN_STRONG,
+            detail="usage limit reached (stub)",
+        )
+
+
 @contextlib.contextmanager
-def _no_spawns():
+def _no_spawns(executor: object | None = None):
+    """Stub the executor and the runner; *executor* replaces :class:`_StubExecutor`."""
     with (
-        mock.patch("fathom.cli._default_executor_factory", lambda sc, **kw: _StubExecutor()),
+        mock.patch(
+            "fathom.cli._default_executor_factory",
+            lambda sc, **kw: _StubExecutor() if executor is None else executor,
+        ),
         mock.patch("fathom.cli._default_runner_factory", lambda sc, **kw: object()),
     ):
         yield
@@ -300,10 +317,10 @@ class RunSummaryIndexHintTests(unittest.TestCase):
             ledgerindex.is_current(self.root), "the fixture starts with a current index"
         )
 
-    def _summary(self, argv: list[str]) -> str:
-        with _no_spawns():
+    def _summary(self, argv: list[str], *, executor: object | None = None, expect: int = 0) -> str:
+        with _no_spawns(executor):
             code, out, err = _call(argv, cwd=self.root)
-        self.assertEqual(code, 0, out + err)
+        self.assertEqual(code, expect, out + err)
         lines = [ln for ln in out.splitlines() if ln.startswith("run summary:")]
         self.assertEqual(len(lines), 1, out)
         return lines[0]
@@ -352,9 +369,32 @@ class RunSummaryIndexHintTests(unittest.TestCase):
     def test_a_side_ledger_leaves_the_roots_index_alone_and_says_nothing(self) -> None:
         side = self.root.parent / "side-ledger"
         shutil.copytree(self.root / "ledger", side)
+        # A plain run first leaves the root's own index stale, so the side run's line can
+        # stay silent only because its rows went to a ledger the index does not cover.
+        self.assertIn("ledger index is now stale", self._summary(RUN))
+        root_rows = _lines(_ledger_path(self.root))
+        index_text = (self.root / ledgerindex.INDEX_PATH).read_bytes()
+        side_rows = len(_lines(side / f"{BANK}.jsonl"))
         line = self._summary([*RUN, "--ledger-dir", str(side)])
-        self.assertNotIn("index", line)
-        self.assertTrue(ledgerindex.is_current(self.root))
+        self.assertGreater(len(_lines(side / f"{BANK}.jsonl")), side_rows, "rows were appended")
+        self.assertNotIn("ledger index is now stale", line)
+        self.assertNotIn("index --write", line)
+        self.assertEqual(_lines(_ledger_path(self.root)), root_rows)
+        self.assertEqual((self.root / ledgerindex.INDEX_PATH).read_bytes(), index_text)
+
+    def test_a_run_that_appended_no_rows_says_nothing_over_a_stale_index(self) -> None:
+        # A first run leaves the index stale, so the second run's line can stay silent only
+        # because that run appended nothing.
+        self.assertIn("ledger index is now stale", self._summary(RUN))
+        rows = _lines(_ledger_path(self.root))
+        # One repeat more than the first run, so there is a trial to buy; the executor stops
+        # it as an infrastructure failure, which records no row.
+        more = ["run", BANK, "--repeats", "4", "--skip-arming-check", "--skip-credential-check"]
+        line = self._summary(more, executor=_InfrastructureExecutor(), expect=EXIT_INFRASTRUCTURE)
+        self.assertEqual(_lines(_ledger_path(self.root)), rows, "no row was appended")
+        self.assertFalse(ledgerindex.is_current(self.root), "the index is still stale")
+        self.assertIn("completed 0, errored 0 this invocation", line)
+        self.assertNotIn("ledger index is now stale", line)
 
     def test_a_current_index_or_no_appended_rows_says_nothing(self) -> None:
         from fathom.cli import _index_stale_clause
