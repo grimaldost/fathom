@@ -71,6 +71,13 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   just before the spawn began. The name keeps its shape, so `fathom report` finds the
   files as before; the adapter takes an optional `wall_clock` for tests. A tool of your own
   that reads `<ms>` as the time a stream ended now reads the time its spawn started.
+- **The acceptance test reads a fathom call made through a function from a sourced file.** An
+  agent wrote its helper function into a file in one call (`cat > /tmp/fx.sh <<'EOF' ... EOF`)
+  and called it from another (`. /tmp/fx.sh && fx run b`). `tools/agent_acceptance.py` read
+  only definitions made in the same command, so it missed that paid run and failed a check the
+  agent had met. It now keeps what the session writes, through a here-document or the Write
+  tool, and reads a sourced file's functions, variables and top-level commands where it is
+  sourced.
 
 ## [0.9.0] - 2026-10-07
 

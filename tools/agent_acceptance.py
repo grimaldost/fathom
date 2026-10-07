@@ -877,9 +877,11 @@ def analyze(lines: Iterable[str], *, doc_roots: Sequence[str] = ()) -> Analysis:
         if isinstance(r["tool_use_id"], str)
     }
     calls: list[ToolCall] = []
+    files: dict[str, str] = {}  # what the session wrote, by path as written
     for index, use in enumerate(streams.tool_uses(events)):
+        files.update(written_files(use["name"], use["input"]))
         surface, invocations = classify(
-            use["name"], use["input"], commands=commands, doc_roots=roots
+            use["name"], use["input"], commands=commands, doc_roots=roots, files=files
         )
         calls.append(
             ToolCall(
@@ -926,8 +928,12 @@ def classify(
     *,
     commands: Sequence[str] = DEFAULT_COMMANDS,
     doc_roots: Sequence[str] = (),
+    files: Mapping[str, str] | None = None,
 ) -> tuple[str | None, list[Invocation]]:
     """The fathom surface a tool call used, and the fathom operations it asked for.
+
+    *files* are what the session wrote before or in this call (:func:`written_files`), so a
+    command that sources one of them is read with its functions and variables.
 
     - ``mcp``: a tool of the plugin's MCP server;
     - ``command``: a Skill or SlashCommand call naming one of the plugin's *commands*
@@ -952,7 +958,7 @@ def classify(
             return "skill", []
         return None, []
     if name in ("Bash", "PowerShell"):
-        invocations = cli_invocations(str(inp.get("command") or ""))
+        invocations = cli_invocations(str(inp.get("command") or ""), files=files)
         return ("cli", invocations) if invocations else (None, [])
     if name == "Read" and is_plugin_doc(str(inp.get("file_path") or ""), doc_roots):
         return "docs", []
@@ -1262,7 +1268,55 @@ def _expand_alias(
     return tokens
 
 
-def cli_invocations(command: str, _depth: int = 0) -> list[Invocation]:
+# A here-document written to a file: `cat > PATH <<'EOF'` or `cat <<'EOF' > PATH`.
+_PATH_WORD = r"""(?:"[^"]+"|'[^']+'|[^\s;&|<>]+)"""
+_HEREDOC_WRITE = re.compile(
+    r"\bcat\s*>{1,2}\s*(?P<p1>" + _PATH_WORD + r")\s*<<(?P<t1>-?)\s*(?P<q1>['\"]?)"
+    r"(?P<d1>[A-Za-z_][\w-]*)(?P=q1)"
+    r"|\bcat\s*<<(?P<t2>-?)\s*(?P<q2>['\"]?)(?P<d2>[A-Za-z_][\w-]*)(?P=q2)\s*>{1,2}\s*"
+    r"(?P<p2>" + _PATH_WORD + r")"
+)
+
+
+def heredoc_writes(command: str) -> dict[str, str]:
+    """The files a shell command line writes with ``cat`` and a here-document, by path
+    as written (quotes removed), with the here-document's body as their content."""
+    out: dict[str, str] = {}
+    lines = command.split("\n")
+    i = 0
+    while i < len(lines):
+        match = _HEREDOC_WRITE.search(lines[i])
+        i += 1
+        if match is None:
+            continue
+        path = (match.group("p1") or match.group("p2")).strip("'\"")
+        delimiter = match.group("d1") or match.group("d2")
+        strip_tabs = bool(match.group("t1") or match.group("t2"))
+        body: list[str] = []
+        while i < len(lines):
+            line = lines[i].rstrip("\r")
+            i += 1
+            if (line.lstrip("\t") if strip_tabs else line) == delimiter:
+                break
+            body.append(line)
+        out[path] = "\n".join(body) + "\n"
+    return out
+
+
+def written_files(name: str, tool_input: Any) -> dict[str, str]:
+    """What one tool call writes, by path as written: a Write call's content, or the
+    here-documents a shell command writes with ``cat``."""
+    inp = tool_input if isinstance(tool_input, dict) else {}
+    if name == "Write" and isinstance(inp.get("file_path"), str):
+        return {inp["file_path"]: str(inp.get("content") or "")}
+    if name in ("Bash", "PowerShell"):
+        return heredoc_writes(str(inp.get("command") or ""))
+    return {}
+
+
+def cli_invocations(
+    command: str, _depth: int = 0, *, files: Mapping[str, str] | None = None
+) -> list[Invocation]:
     """Every fathom invocation in a shell command line, in order ([] when there is none).
 
     The line is cut into simple commands (:func:`shell_segments`) and each is read as one
@@ -1271,10 +1325,25 @@ def cli_invocations(command: str, _depth: int = 0) -> list[Invocation]:
     is not an invocation. Agents often keep the long plugin invocation in a variable
     (``F="uv run ... python -m fathom"; $F run b``) or a function
     (``F() { uv run ... python -m fathom "$@"; }; F run b``); a call through either is read
-    as the command it stands for, and the definition itself is not an invocation.
+    as the command it stands for, and the definition itself is not an invocation. Such
+    definitions may also live in a file the session wrote earlier and sources here
+    (``. /tmp/f.sh && F run b``): with that file among *files*, its definitions and any
+    fathom command it runs at its top level are read in place.
     """
-    command, functions = _shell_functions(command)
-    variables: dict[str, list[str]] = {}
+    return _scan(command, files or {}, {}, {}, _depth)
+
+
+def _scan(
+    command: str,
+    files: Mapping[str, str],
+    functions: dict[str, list[str]],
+    variables: dict[str, list[str]],
+    depth: int,
+) -> list[Invocation]:
+    """:func:`cli_invocations` over one command line, adding the definitions it makes to
+    *functions* and *variables*, which a sourced file shares with the line that sources it."""
+    command, defined = _shell_functions(command)
+    functions.update(defined)
     out: list[Invocation] = []
     for segment in shell_segments(command):
         tokens = _split(segment)
@@ -1287,11 +1356,18 @@ def cli_invocations(command: str, _depth: int = 0) -> list[Invocation]:
                 else:
                     variables.pop(name, None)
             continue
+        start = _command_start(tokens)
+        if start + 1 < len(tokens) and tokens[start] in (".", "source"):
+            sourced = files.get(tokens[start + 1])
+            if sourced is not None and depth < 3:
+                out += _scan(sourced, files, functions, variables, depth + 1)
+            continue
         tokens = _expand_alias(tokens, variables, functions)
         payload = _shell_payload(tokens)
         if payload is not None:
-            if _depth < 3:
-                out += cli_invocations(payload, _depth + 1)
+            if depth < 3:
+                # Another shell starts with no functions or variables of this one.
+                out += _scan(payload, files, {}, {}, depth + 1)
             continue
         argv = _fathom_argv(tokens)
         if argv is not None:
