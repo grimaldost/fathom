@@ -8,6 +8,23 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **`fathom run --interleave` orders the plan repeat by repeat.** By default the plan is
+  ordered arm by arm (each arm's tasks, then its repeats), so a run cut short holds every
+  repeat of the first arm and none of the last, and `--limit` cuts whole arms off the end.
+  With `--interleave` the plan runs repeat 0 of every arm and task, then repeat 1, and so on,
+  with the arms in the order they already run in (each comparator ahead of its dependents).
+  `--limit` then counts from the start of that order, so `--limit` of arms x tasks buys
+  repeat 0 of every arm, and a run stopped by `--limit`, `fathom stop` or a spend rail has
+  still compared the arms. The flag changes the order only: the same trials are bought, and
+  the same resume keys are written with and without it. The plan prints `order:    interleaved
+  (repeat, then arm, then task); --limit keeps the first N of this order` and a `first:` line
+  with the first planned cells; without the flag no new line is printed and the order and
+  output are unchanged byte for byte. The resume command at the end of the run summary keeps
+  the flag when it was given. `run_matrix` takes `interleave=False`. The `--limit` and
+  `--tasks` help and the skill, command and authoring-guide text now say what `--limit` cuts
+  with and without the flag. Making repeat-major the default is a separate decision and is not
+  made here. Closes T28a.
+
 - **A dependent arm is never bought against an incomplete comparator.** An arm file may set
   a top-level `comparator = "bare"`. `fathom run` then checks, before the plan and on
   `--dry-run` too, that the comparator names exactly one loaded arm, not the arm itself, with

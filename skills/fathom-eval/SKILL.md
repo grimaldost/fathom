@@ -131,7 +131,7 @@ fathom smoke
 fathom verify-arming [--scenarios-dir DIR]
 
 # 4. Paid: the matrix. Resumable; re-invoking skips completed trials.
-fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--tasks ID,ID] \
+fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--tasks ID,ID] [--interleave] \
     [--max-spawn-usd USD] [--max-run-usd USD] [--include-holdout]
 
 # 5. Free: render report/scorecard-<bank>.md from the ledger. Regenerate any time.
@@ -182,10 +182,16 @@ After a run, keep the data root's derived records current:
 - **`--max-run-usd`** stops one invocation between trials once it has spent that
   much (exit 14). For a guard across several invocations of a resumable matrix,
   stage the matrix and sum `cost_usd_est` from the ledger's run rows between stages.
-- **`--limit N`** caps new trials (after resume filtering). The plan is ordered arm
-  by arm, so `--limit` cuts whole arms off the end. **`--tasks ID[,ID...]`**
-  restricts the run to named tasks — the way to buy a small screen before a full
-  matrix.
+- **`--limit N`** caps new trials (after resume filtering), counted from the start of
+  the plan's order. By default the plan is ordered arm by arm, so `--limit` cuts whole
+  arms off the end. With **`--interleave`** it is ordered repeat by repeat (repeat 0 of
+  every arm and task, then repeat 1, and so on), so `--limit` keeps whole repeats:
+  `--limit` of arms × tasks buys repeat 0 of every arm, and a run stopped early has
+  still compared the arms. The flag changes the order only; the same trials are bought
+  and the same resume keys are written. The plan then prints an `order:` line and a
+  `first:` line with the first planned cells. **`--tasks ID[,ID...]`** restricts the run
+  to named tasks — the way to buy a small screen before a full matrix; `--limit` cannot
+  select tasks.
 - **`--tasks-dir` / `--ledger-dir`** relocate the bank source and the ledger.
   `--ledger-dir` writes the record somewhere other than the committed `ledger/`; use
   it only for a side study kept apart on purpose, since `fathom report` has no

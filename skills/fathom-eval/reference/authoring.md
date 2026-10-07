@@ -1025,8 +1025,13 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   $5; the older spelling `--max-budget-usd` still works); raising it loosens the only runaway
   guard, and the printed ceiling rises with it. `--max-run-usd USD` stops this invocation
   between trials once it has spent that much (exit 14). `--limit N` caps the number of new
-  trials; the plan is ordered arm by arm, with each comparator ahead of the arms that depend
-  on it (section 10), so `--limit` cuts whole arms off the end.
+  trials, counted from the start of the plan's order. By default the plan is ordered arm by
+  arm, with each comparator ahead of the arms that depend on it (section 10), so `--limit`
+  cuts whole arms off the end. With `--interleave` the plan is ordered repeat by repeat
+  (repeat, then arm in that same order, then task), so `--limit` keeps whole repeats and
+  `--limit` of arms × tasks runs repeat 0 of every arm. The flag changes the order only: the
+  same trials are bought and the same resume keys are written. It prints an `order:` line and
+  a `first:` line after `arms:`; without it neither is printed.
   `--tasks ID[,ID…]` restricts the run to named tasks, which is how to buy a screen.
 - **Before the first spawn** `fathom run` checks that the credential has life left (exit 15),
   that the bank validates (exit 12) and that treatment arms are armed (exit 11); the

@@ -1,6 +1,6 @@
 ---
 description: Plan a fathom matrix (dry-run) — arms, trial count, USD ceiling, and resume state; spawns nothing
-argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--limit N] [--tasks ID,ID] [--max-spawn-usd USD] [--include-holdout]"
+argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--limit N] [--tasks ID,ID] [--interleave] [--max-spawn-usd USD] [--include-holdout]"
 allowed-tools: Bash
 ---
 

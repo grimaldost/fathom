@@ -3201,7 +3201,8 @@ class TestResumeCommand(unittest.TestCase):
             f'--ledger-dir "{Path("/my data/led")}"', _resume_command(args, spawn_cap=None)
         )
 
-    def test_cmd_run_hands_the_resume_command_to_run_matrix(self):
+    def _cmd_run_kwargs(self, **extra) -> dict:
+        """The keyword arguments ``_cmd_run`` hands to ``run_matrix`` for a one-arm bank."""
         from unittest import mock
 
         from fathom.cli import _cmd_run
@@ -3245,12 +3246,22 @@ class TestResumeCommand(unittest.TestCase):
                 skip_credential_check=True,
                 no_lock=True,
                 lock_wait_s=None,
+                **extra,
             )
             with mock.patch("fathom.cli.run_matrix", return_value=EXIT_OK) as rm:
                 self.assertEqual(_cmd_run(args), EXIT_OK)
-        resume = rm.call_args.kwargs["resume_cmd"]
+        return rm.call_args.kwargs
+
+    def test_cmd_run_hands_the_resume_command_to_run_matrix(self):
+        resume = self._cmd_run_kwargs()["resume_cmd"]
         self.assertTrue(resume.startswith("fathom run b --repeats 1 --tasks-dir "), resume)
         self.assertIn("--ledger-dir", resume)
+
+    def test_cmd_run_hands_the_interleave_flag_to_run_matrix(self):
+        self.assertIs(self._cmd_run_kwargs()["interleave"], False)
+        kwargs = self._cmd_run_kwargs(interleave=True)
+        self.assertIs(kwargs["interleave"], True)
+        self.assertTrue(kwargs["resume_cmd"].endswith(" --interleave"), kwargs["resume_cmd"])
 
 
 # ---------------------------------------------------------------------------
@@ -3485,6 +3496,176 @@ class TestComparatorDependency(_Base):
         code, err = self._refused([self.sc_a, one, two], dry_run=True)
         self.assertEqual(code, 1)
         self.assertIn("cycle", err)
+
+
+class TestInterleave(unittest.TestCase):
+    """``--interleave``: repeat-major trial order, opt-in (T28a).
+
+    The default plan is arm by arm, so a trial list cut short (``--limit``, a stop, a
+    spend rail) holds every repeat of the first arm and none of the last. With the flag the
+    plan runs repeat 0 of every arm before repeat 1 of any, so a partial run still compares
+    the arms.
+    """
+
+    # The dry run and the call order of today's plan: 2 arms, 1 task, 2 repeats, with
+    # the flag absent. Captured from the code before the flag existed.
+    _DEFAULT_DRY_RUN = (
+        "fathom run: bank=test-bank  scenarios=2  tasks=1  repeats=2\n"
+        "arms:     bare [aaaaaaaaaaaa], nudge [bbbbbbbbbbbb]\n"
+        "planned:  4 trials (0 already done)  ceiling: $20.00\n"
+        "[dry-run] no spawns\n"
+    )
+    _DEFAULT_ORDER = ("bare/add r0", "bare/add r1", "nudge/add r0", "nudge/add r1")
+    _ORDER_LINE = (
+        "order:    interleaved (repeat, then arm, then task); "
+        "--limit keeps the first N of this order"
+    )
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self._tmp, ignore_errors=True)
+        self.task = _make_task("add", Path(self._tmp))
+        self.bank = _make_bank("test-bank", [self.task])
+        self.bare = _make_scenario("bare", config_hash="a" * 64)
+        self.nudge = _make_scenario("nudge", config_hash="b" * 64)
+
+    def _ledger(self) -> Path:
+        d = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, str(d), ignore_errors=True)
+        return d
+
+    def _order(self, output: str) -> list[str]:
+        """The cells in the order they ran, from the progress lines."""
+        return [
+            line.split()[3] + " " + line.split()[4]
+            for line in output.splitlines()
+            if line.startswith("trial done:")
+        ]
+
+    def _run(self, repeats=2, scenarios=None, **kw):
+        kw.setdefault("ledger_dir", self._ledger())
+        return _run_matrix(self.bank, scenarios or [self.bare, self.nudge], repeats, **kw)
+
+    def test_without_the_flag_the_dry_run_is_unchanged(self):
+        _, output = self._run(dry_run=True)
+        self.assertEqual(output, self._DEFAULT_DRY_RUN)
+
+    def test_without_the_flag_the_call_order_is_unchanged(self):
+        calls: list[str] = []
+
+        def factory(sc):
+            return StubExecutor(result_fn=lambda t, w, s: calls.append(s.name) or _ok_result())
+
+        _, output = self._run(executor_factory=factory)
+        self.assertEqual(self._order(output), list(self._DEFAULT_ORDER))
+        self.assertEqual(calls, ["bare", "bare", "nudge", "nudge"])
+        self.assertNotIn("order:", output)
+
+    def test_with_the_flag_the_arms_alternate_within_a_repeat_ahead_of_the_next(self):
+        calls: list[str] = []
+
+        def factory(sc):
+            return StubExecutor(result_fn=lambda t, w, s: calls.append(s.name) or _ok_result())
+
+        _, output = self._run(interleave=True, executor_factory=factory)
+        self.assertEqual(calls, ["bare", "nudge", "bare", "nudge"])
+        self.assertEqual(
+            self._order(output), ["bare/add r0", "nudge/add r0", "bare/add r1", "nudge/add r1"]
+        )
+
+    def test_with_the_flag_a_repeat_runs_its_tasks_in_bank_order_before_the_next_arm(self):
+        bank = _make_bank("test-bank", [self.task, _make_task("sub", Path(self._tmp))])
+        _, output = _run_matrix(
+            bank,
+            [self.bare, self.nudge],
+            2,
+            ledger_dir=self._ledger(),
+            interleave=True,
+        )
+        self.assertEqual(
+            self._order(output),
+            [
+                "bare/add r0",
+                "bare/sub r0",
+                "nudge/add r0",
+                "nudge/sub r0",
+                "bare/add r1",
+                "bare/sub r1",
+                "nudge/add r1",
+                "nudge/sub r1",
+            ],
+        )
+
+    def test_with_the_flag_limit_of_arms_times_tasks_runs_repeat_zero_of_every_arm(self):
+        calls: list[str] = []
+
+        def factory(sc):
+            return StubExecutor(result_fn=lambda t, w, s: calls.append(s.name) or _ok_result())
+
+        _, output = self._run(repeats=3, interleave=True, limit=2, executor_factory=factory)
+        self.assertEqual(calls, ["bare", "nudge"])
+        self.assertEqual(self._order(output), ["bare/add r0", "nudge/add r0"])
+
+    def test_without_the_flag_the_same_limit_cuts_the_last_arm_off(self):
+        _, output = self._run(repeats=3, limit=2)
+        self.assertEqual(self._order(output), ["bare/add r0", "bare/add r1"])
+
+    def test_a_comparator_still_runs_ahead_of_its_dependent_in_each_repeat(self):
+        dependent = _make_scenario("nudge", config_hash="b" * 64, comparator="bare")
+        # Listed dependent-first: the comparator ordering puts bare first, and the
+        # interleaving keeps it.
+        _, output = self._run(scenarios=[dependent, self.bare], interleave=True)
+        self.assertEqual(
+            self._order(output), ["bare/add r0", "nudge/add r0", "bare/add r1", "nudge/add r1"]
+        )
+        self.assertNotIn("blocked:", output)
+
+    def test_the_resume_keys_written_are_the_same_with_and_without_the_flag(self):
+        plain, flagged = self._ledger(), self._ledger()
+        self._run(repeats=3, ledger_dir=plain)
+        self._run(repeats=3, ledger_dir=flagged, interleave=True)
+        keys = _ledger.completed_keys("test-bank", ledger_dir=plain)
+        self.assertEqual(len(keys), 6)
+        self.assertEqual(_ledger.completed_keys("test-bank", ledger_dir=flagged), keys)
+
+    def test_the_dry_run_names_the_order_and_the_first_cells(self):
+        _, output = self._run(dry_run=True, interleave=True)
+        self.assertIn(self._ORDER_LINE, output.splitlines())
+        self.assertIn("first:    bare/add r0, nudge/add r0, bare/add r1, nudge/add r1", output)
+        # The count line is the one the default prints, whole.
+        self.assertIn("planned:  4 trials (0 already done)  ceiling: $20.00", output)
+
+    def test_the_first_cells_follow_the_limit_and_stop_at_six(self):
+        _, output = self._run(repeats=5, dry_run=True, interleave=True, limit=2)
+        self.assertIn("first:    bare/add r0, nudge/add r0\n", output)
+        _, longer = self._run(repeats=5, dry_run=True, interleave=True)
+        first = next(line for line in longer.splitlines() if line.startswith("first:"))
+        self.assertEqual(first.count(" r"), 6)
+        self.assertTrue(first.endswith(", ..."))
+
+    def test_the_flag_is_on_the_run_parser_and_off_by_default(self):
+        from fathom.cli import _build_parser
+
+        parser = _build_parser()
+        self.assertFalse(parser.parse_args(["run", "b"]).interleave)
+        self.assertTrue(parser.parse_args(["run", "b", "--interleave"]).interleave)
+
+    def test_a_resume_command_keeps_the_flag_when_it_was_given(self):
+        from fathom.cli import _resume_command
+
+        args = types.SimpleNamespace(
+            bank="b",
+            repeats=3,
+            tasks=None,
+            include_holdout=False,
+            max_run_usd=None,
+            data_root=None,
+            home=None,
+            interleave=True,
+        )
+        self.assertEqual(
+            _resume_command(args, spawn_cap=None), "fathom run b --repeats 3 --interleave"
+        )
 
 
 if __name__ == "__main__":

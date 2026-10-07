@@ -129,7 +129,17 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Cap planned trials to N",
+        help="Cap planned trials to N, counted from the start of the plan's order: by "
+        "default arm by arm, so it cuts whole arms off the end; with --interleave repeat "
+        "by repeat, so N = arms x tasks runs repeat 0 of every arm",
+    )
+    run_p.add_argument(
+        "--interleave",
+        action="store_true",
+        help="Order the plan repeat by repeat (every arm and task of repeat 0, then repeat "
+        "1, ...) instead of arm by arm, so a run cut short by --limit, a stop or a spend "
+        "rail still compares the arms. Changes the order only: the same trials are bought "
+        "and the same resume keys are written",
     )
     run_p.add_argument(
         "--tasks",
@@ -137,8 +147,9 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ID[,ID...]",
         help="Run only these task ids. The way to buy a SCREEN before the full matrix "
         "(e.g. one band, or the positive control, at higher repeats). --limit cannot do "
-        "it: the plan is scenario-major, so --limit cuts whole arms off the end. Unknown "
-        "ids are an error, never a silent empty run.",
+        "it: it counts trials from the start of the plan's order (arm by arm unless "
+        "--interleave) and selects no task. Unknown ids are an error, never a silent "
+        "empty run.",
     )
     run_p.add_argument(
         "--repeats",
@@ -792,6 +803,7 @@ def run_matrix(
     run_lock: Any | None = None,
     out: TextIO | None = None,
     resume_cmd: str | None = None,
+    interleave: bool = False,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -820,6 +832,13 @@ def run_matrix(
     ``blocked:`` line, no spawn, no ledger row, and a count in the summary (FATH-B58). A
     comparator that names no loaded arm, or the arm itself, or that forms a cycle returns
     1 before the plan, dry run included.
+
+    The plan is ordered arm by arm (each arm's tasks, then its repeats), so ``limit`` cuts
+    whole arms off the end. With ``interleave`` it is ordered repeat by repeat (repeat, then
+    arm, then task), so ``limit`` keeps whole repeats and a run cut short has compared the
+    arms. The order is the only difference: the same trials are planned and the same resume
+    keys are written. The plan then prints an ``order:`` line and a ``first:`` line; without
+    it nothing new is printed (T28a).
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
@@ -871,12 +890,21 @@ def run_matrix(
 
     done = _ledger.completed_keys(bank.name, ledger_dir=_ledger_dir)
 
-    all_tuples: list[tuple[ResolvedScenario, Task, int]] = [
-        (sc, task, repeat)
-        for sc in resolved_scenarios
-        for task in tasks_to_run
-        for repeat in range(repeats)
-    ]
+    all_tuples: list[tuple[ResolvedScenario, Task, int]]
+    if interleave:
+        all_tuples = [
+            (sc, task, repeat)
+            for repeat in range(repeats)
+            for sc in resolved_scenarios
+            for task in tasks_to_run
+        ]
+    else:
+        all_tuples = [
+            (sc, task, repeat)
+            for sc in resolved_scenarios
+            for task in tasks_to_run
+            for repeat in range(repeats)
+        ]
     total = len(all_tuples)
 
     planned = [
@@ -916,6 +944,15 @@ def run_matrix(
             f"{sc.comparator} completed the same task and repeat)",
             file=_out,
         )
+    if interleave:
+        print(
+            "order:    interleaved (repeat, then arm, then task); "
+            "--limit keeps the first N of this order",
+            file=_out,
+        )
+        if planned:
+            head = ", ".join(f"{sc.name}/{task.id} r{repeat}" for sc, task, repeat in planned[:6])
+            print(f"first:    {head}{', ...' if num_planned > 6 else ''}", file=_out)
     print(
         f"planned:  {num_planned} trials ({already_done} already done)"
         f"  ceiling: ${ceiling_usd:.2f}",
@@ -1718,7 +1755,8 @@ def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
 
     Rebuilt from the parsed *args*: the bank, ``--repeats``, and the flags that shaped
     what runs or what may be spent (``--scenarios-dir``, ``--tasks-dir``, ``--ledger-dir``,
-    ``--tasks``, ``--include-holdout``, ``--max-spawn-usd``, ``--max-run-usd``). A path
+    ``--tasks``, ``--include-holdout``, ``--interleave``, ``--max-spawn-usd``,
+    ``--max-run-usd``). A path
     option that is the data root's own default was not given, since :func:`_anchor_paths`
     has already filled it in, and is left out. ``--home`` leads the command when it was
     given, so the command means the same from any directory. ``--limit`` and the
@@ -1739,6 +1777,8 @@ def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
         parts += ["--tasks", _shell_arg(args.tasks)]
     if args.include_holdout:
         parts.append("--include-holdout")
+    if getattr(args, "interleave", False):
+        parts.append("--interleave")
     if spawn_cap is not None:
         parts += ["--max-spawn-usd", f"{spawn_cap:g}"]
     if args.max_run_usd is not None:
@@ -1863,6 +1903,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             skip_bank_validation=args.skip_bank_validation,
             run_lock=run_lock,
             resume_cmd=_resume_command(args, spawn_cap),
+            interleave=getattr(args, "interleave", False),
         )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
