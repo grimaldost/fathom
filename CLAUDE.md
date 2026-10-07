@@ -185,8 +185,10 @@ same change. `examples/data-root/` is its worked example; keep the two consisten
   before writing anything, an engine checkout or a directory inside one, and an existing
   `fathom.toml` that is unreadable, has no `[data_root]`, or has a schema other than 1.
 - **Provenance.** Every new ledger row records `engine_version` (from
-  `importlib.metadata`). It is not part of `config_hash`, the preimage or the resume key;
-  readers ignore it; old rows are never rewritten.
+  `importlib.metadata`) and `written_at` (UTC, set in `append_record`), and a run row records
+  `scenario`, the arm's name. None is part of `config_hash`, the preimage or the resume key;
+  readers ignore them; old rows are never rewritten. `written_at` is the one field that
+  differs between otherwise identical runs, so a comparison of rows across runs sets it aside.
 - **The engine checkout is not a data root.** It carries no marker. `fathom reconcile` run at
   the engine root checks the version sites (`pyproject.toml`, `.claude-plugin/plugin.json`, the
   newest `CHANGELOG.md` heading); at a data root that check is skipped. Anywhere else reconcile

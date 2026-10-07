@@ -132,8 +132,9 @@ Explicit path options (`--tasks-dir`, `--scenarios-dir`, `--ledger-dir`) resolve
 current directory, as command-line paths usually do, so from outside the data root give them
 as absolute paths. One engine install serves any number of data roots.
 
-Each ledger row records the `engine_version` that wrote it. The version is provenance only: it
-is not part of the resume key, so upgrading the engine does not re-buy completed trials.
+Each ledger row records the `engine_version` that wrote it and a `written_at` time. Both are
+provenance only: neither is part of the resume key, so upgrading the engine does not re-buy
+completed trials.
 
 ## Commands
 

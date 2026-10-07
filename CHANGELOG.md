@@ -8,6 +8,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **Write time on every ledger row, and the arm name on run rows.** `append_record` now adds
+  `written_at`, the UTC time the row was written (ISO 8601, to the second, the format a void
+  row's `voided_at` already uses), beside `engine_version`, unless the record names one.
+  `RunRecord` gains an additive `scenario` field, which the run loop fills with the arm's
+  name, so a run row says which arm produced it without a join through `config_hash`. Both
+  are provenance only: neither enters `config_hash`, its preimage or the resume key, and
+  neither changes a scorecard. Rows written before them load as they did, with `scenario`
+  empty, and are never rewritten. `written_at` is the one field that differs between two
+  otherwise identical runs, so a byte comparison of appended rows across runs must set it
+  aside.
+
 - **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
   headless Claude Code sessions whose prompt is a user's goal in plain words, with no fathom
   command, flag, skill or tool name and no appended system prompt, and checks whether each

@@ -3,6 +3,7 @@
 Run via pytest or directly:  python tests/test_ledger.py
 """
 
+import dataclasses
 import json
 import pathlib
 import sys
@@ -607,3 +608,101 @@ def test_engine_version_says_unknown_without_package_metadata():
             assert _ledger.engine_version() == "unknown"
     finally:
         _ledger.engine_version.cache_clear()
+
+
+# ---------------------------------------------------------------------------
+# written_at: write-time provenance on every appended row; scenario on run rows
+# ---------------------------------------------------------------------------
+
+
+def _read_rows(d: pathlib.Path, bank: str = "test-bank") -> list[dict]:
+    text = (d / f"{bank}.jsonl").read_text(encoding="utf-8")
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
+def test_every_appended_row_carries_a_utc_write_time():
+    import datetime
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        trial = make_trial()
+        append_record("test-bank", trial, ledger_dir=d)
+        append_record("test-bank", make_run(), ledger_dir=d)
+        append_record("test-bank", _void_for(trial), ledger_dir=d)
+        rows = _read_rows(d)
+        assert [r["kind"] for r in rows] == ["trial", "run", "void"]
+        for row in rows:
+            stamp = datetime.datetime.fromisoformat(row["written_at"])
+            assert stamp.utcoffset() == datetime.timedelta(0), row["kind"]
+
+
+def test_the_write_time_comes_from_the_clock_seam():
+    from unittest import mock
+
+    from fathom import ledger as _ledger
+
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        with mock.patch.object(_ledger, "_utc_now", lambda: "2026-01-02T03:04:05+00:00"):
+            append_record("test-bank", make_trial(), ledger_dir=d)
+        assert _read_rows(d)[0]["written_at"] == "2026-01-02T03:04:05+00:00"
+
+
+def test_an_explicit_written_at_is_kept():
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        row = {**dataclasses.asdict(make_trial()), "written_at": "2020-05-06T07:08:09+00:00"}
+        append_record("test-bank", row, ledger_dir=d)
+        assert _read_rows(d)[0]["written_at"] == "2020-05-06T07:08:09+00:00"
+
+
+def test_the_write_time_is_not_a_record_field():
+    trial = make_trial()
+    assert "written_at" not in {f.name for f in dataclasses.fields(TrialRecord)}
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        append_record("test-bank", trial, ledger_dir=d)
+        assert list(iter_records("test-bank", ledger_dir=d)) == [trial]
+
+
+def test_a_legacy_line_without_write_time_or_scenario_still_loads():
+    """No old line is rewritten: a run row from before both fields loads, and the resume
+    set built from a ledger with and without written_at is the same."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        trial = make_trial()
+        run = make_run()
+        legacy_run = {
+            k: v
+            for k, v in dataclasses.asdict(run).items()
+            if k not in ("scenario", "cost_usd_est")
+        }
+        legacy_trial = dataclasses.asdict(trial)
+        assert "written_at" not in legacy_run and "scenario" not in legacy_run
+        path = d / "test-bank.jsonl"
+        path.write_text(
+            json.dumps(legacy_run, sort_keys=True) + "\n" + json.dumps(legacy_trial) + "\n",
+            encoding="utf-8",
+        )
+        before = completed_keys("test-bank", ledger_dir=d)
+        records = list(iter_records("test-bank", ledger_dir=d))
+        assert isinstance(records[0], RunRecord) and records[0].scenario == ""
+        assert records[1] == trial
+        # A new row appended beside the legacy ones changes nothing about the old keys.
+        append_record("test-bank", make_trial(task_id="task-002"), ledger_dir=d)
+        assert completed_keys("test-bank", ledger_dir=d) == before | {
+            ("test-bank", "v1", "task-002", "abc123", 0)
+        }
+
+
+def test_a_run_record_built_without_scenario_defaults_to_empty():
+    assert make_run().scenario == ""
+
+
+def test_a_run_rows_scenario_round_trips():
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        append_record("test-bank", make_run(scenario="bare"), ledger_dir=d)
+        assert _read_rows(d)[0]["scenario"] == "bare"
+        (record,) = iter_records("test-bank", ledger_dir=d)
+        assert isinstance(record, RunRecord) and record.scenario == "bare"

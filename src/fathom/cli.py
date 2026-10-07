@@ -911,6 +911,7 @@ def run_matrix(
                     tool_git_sha=sc.tool_repo_sha or "",
                     cli_version=run_rec.cli_version,
                     pin_level=trial_result.pin_level,
+                    scenario=sc.name,
                     cost_usd_est=run_rec.cost_usd_est,
                     cost_source=run_rec.cost_source,
                     model_id=run_rec.model_id,

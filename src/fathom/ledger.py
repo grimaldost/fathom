@@ -5,6 +5,13 @@ distribution that wrote it, read from the installed package metadata. It is prov
 only. It is not part of ``config_hash``, the config preimage or the resume key, the
 record dataclasses do not carry it (so :func:`iter_records` drops it), and rows written
 before it existed are read exactly as before and never rewritten.
+
+Every row also records ``written_at``, the UTC moment :func:`append_record` wrote it, as an
+ISO-8601 string with an offset and second precision (the format of a void's ``voided_at``).
+It carries the same standing as ``engine_version``: provenance only, outside ``config_hash``,
+the preimage and the resume key, not a dataclass field, so :func:`iter_records` drops it, and
+absent from every row written before it existed. It is the only field that differs between
+two otherwise identical runs, so a comparison of rows across runs sets it aside.
 """
 
 from __future__ import annotations
@@ -15,6 +22,7 @@ import json
 import pathlib
 import warnings
 from collections.abc import Iterator
+from datetime import UTC, datetime
 from typing import Any
 
 LEDGER_DIR = pathlib.Path("ledger")
@@ -22,6 +30,12 @@ LEDGER_DIR = pathlib.Path("ledger")
 # The key every appended row carries; see the module docstring.
 ENGINE_VERSION_KEY = "engine_version"
 UNKNOWN_ENGINE_VERSION = "unknown"
+WRITTEN_AT_KEY = "written_at"
+
+
+def _utc_now() -> str:
+    """The write time stamped on a row; the one place the clock is read, so tests can pin it."""
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 @functools.cache
@@ -76,6 +90,9 @@ class RunRecord:
     tool_git_sha: str
     cli_version: str
     pin_level: str  # "strong" | "series"
+    scenario: str = ""  # name of the arm that ran; additive (ADR-0002). Provenance for a reader
+    # of the raw row: identity stays config_hash, and the report still joins on it. Legacy
+    # lines load with "" and are never rewritten.
     cost_usd_est: float = 0.0  # USD as the provider reported it; additive (ADR-0002).
     # Defaults to 0.0 so pre-existing lines without the field still load — no old
     # line is ever rewritten (append-only invariant).
@@ -187,8 +204,8 @@ def _from_dict(data: dict[str, Any]) -> TrialRecord | RunRecord | GradingRecord 
 def append_record(bank: str, record: Any, *, ledger_dir: pathlib.Path = LEDGER_DIR) -> None:
     """Append one record to the per-bank JSONL file. Only ever opens in append mode.
 
-    The row gains ``engine_version`` (:func:`engine_version`) unless the record already
-    names one.
+    The row gains ``engine_version`` (:func:`engine_version`) and ``written_at``
+    (:func:`_utc_now`) unless the record already names them.
     """
     ledger_dir.mkdir(parents=True, exist_ok=True)
     path = ledger_dir / f"{bank}.jsonl"
@@ -197,6 +214,7 @@ def append_record(bank: str, record: Any, *, ledger_dir: pathlib.Path = LEDGER_D
     else:
         data = dict(record)
     data.setdefault(ENGINE_VERSION_KEY, engine_version())
+    data.setdefault(WRITTEN_AT_KEY, _utc_now())
     line = json.dumps(data, sort_keys=True)
     with open(path, "a", encoding="utf-8", newline="\n") as f:
         f.write(line + "\n")

@@ -882,10 +882,12 @@ row as `config_preimage`. It contains:
 An absent table and an empty one produce the same hash, so adding an optional table to the
 schema never changes existing arms.
 
-**Provenance.** Every row also records `engine_version`, the fathom version that wrote it, and
-`cli_version`. Neither is part of `config_hash`, its preimage or the resume key, so upgrading
-the engine does not re-buy completed trials. Rows written before `engine_version` existed are
-never rewritten.
+**Provenance.** Every row also records `engine_version`, the fathom version that wrote it,
+`cli_version`, and `written_at`, the UTC time it was written (ISO 8601, to the second). A run
+row also records `scenario`, the name of the arm that ran. None of these is part of
+`config_hash`, its preimage or the resume key, so upgrading the engine does not re-buy
+completed trials; `written_at` is the one field that differs between two otherwise identical
+runs. Rows written before a field existed are never rewritten, and read as they always did.
 
 **Keep every arm committed.** `fathom reconcile` holds each completed trial's arm name against
 the scenario files in the data root (`scenario-known`) and each row's `config_hash` against the

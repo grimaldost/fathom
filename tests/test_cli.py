@@ -773,6 +773,45 @@ class TestLedgerWrites(_Base):
 
 
 # ---------------------------------------------------------------------------
+# Run rows name their arm: the scenario is provenance, the config_hash is identity
+# ---------------------------------------------------------------------------
+
+
+class TestRunRowsNameTheirScenario(_Base):
+    def test_each_run_row_carries_the_name_of_the_arm_that_ran(self):
+        _run_matrix(self.bank, self.scenarios, repeats=1, ledger_dir=self.ledger_dir)
+        runs = [
+            r
+            for r in _ledger.iter_records(self.bank.name, ledger_dir=self.ledger_dir)
+            if isinstance(r, _ledger.RunRecord)
+        ]
+        self.assertEqual(len(runs), 4, "two tasks x two arms, one run each")
+        by_hash = {sc.config_hash: sc.name for sc in self.scenarios}
+        for r in runs:
+            self.assertEqual(r.scenario, by_hash[r.config_hash])
+        self.assertEqual({r.scenario for r in runs}, {"bare", "single-long"})
+
+    def test_identity_is_what_it_was_before_the_field(self):
+        """The resume key and the hash on the rows come from the arm, not from scenario."""
+        _run_matrix(self.bank, self.scenarios, repeats=1, ledger_dir=self.ledger_dir)
+        expected = {
+            (self.bank.name, "v1", task.id, sc.config_hash, 0)
+            for task in (self.task1, self.task2)
+            for sc in self.scenarios
+        }
+        self.assertEqual(
+            _ledger.completed_keys(self.bank.name, ledger_dir=self.ledger_dir), expected
+        )
+        rows = [
+            json.loads(line)
+            for line in (self.ledger_dir / f"{self.bank.name}.jsonl")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+        self.assertEqual({r["config_hash"] for r in rows}, {"a" * 64, "b" * 64})
+
+
+# ---------------------------------------------------------------------------
 # Holdout tasks excluded from run_matrix
 # ---------------------------------------------------------------------------
 
