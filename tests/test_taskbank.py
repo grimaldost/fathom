@@ -296,6 +296,48 @@ def test_bank_holdout_scalar_raises():
 
 
 # ---------------------------------------------------------------------------
+# Task tags — optional bank-declared metadata
+# ---------------------------------------------------------------------------
+
+
+def _load_one_task(tmp: str, task_toml: str) -> Task:
+    bank_dir = _make_bank_dir(
+        Path(tmp), bank_toml=VALID_BANK_TOML, tasks=[("task_x", task_toml, {})]
+    )
+    return load_bank(bank_dir).tasks[0]
+
+
+def test_task_tags_are_parsed_from_the_tags_table():
+    with tempfile.TemporaryDirectory() as tmp:
+        task = _load_one_task(tmp, VALID_TASK_TOML + "\n[tags]\nsize = 'small'\nkind = 'bugfix'\n")
+        assert task.tags == {"size": "small", "kind": "bugfix"}
+
+
+def test_a_task_without_a_tags_table_has_no_tags():
+    with tempfile.TemporaryDirectory() as tmp:
+        assert _load_one_task(tmp, VALID_TASK_TOML).tags == {}
+
+
+def test_a_non_string_tag_value_is_rejected_naming_the_task_and_key():
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            _load_one_task(tmp, VALID_TASK_TOML + "\n[tags]\nsize = 3\n")
+            raise AssertionError("expected ValueError")
+        except ValueError as exc:
+            assert "task_x" in str(exc) and "size" in str(exc)
+
+
+def test_a_tags_value_that_is_not_a_table_is_rejected():
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            # A top-level scalar has to come before the first table.
+            _load_one_task(tmp, 'tags = "small"\n' + VALID_TASK_TOML)
+            raise AssertionError("expected ValueError")
+        except ValueError as exc:
+            assert "task_x" in str(exc) and "tags" in str(exc)
+
+
+# ---------------------------------------------------------------------------
 # Staging
 # ---------------------------------------------------------------------------
 

@@ -17,6 +17,7 @@ from fathom.calibration import hard_fraction
 LEDGER_DIR = pathlib.Path("ledger")
 REPORT_DIR = pathlib.Path("report")
 TASKS_DIR = pathlib.Path("tasks")
+_UNTAGGED = "(untagged)"
 
 _BARE = "bare"
 _SERIES_KEY = "series"
@@ -181,6 +182,25 @@ def _load_task_criteria(
         hard = t.verify.get("hard_criteria")
         criteria[t.id] = [str(c) for c in hard] if isinstance(hard, list) and hard else None
     return criteria
+
+
+def _load_task_tags(bank: str, tasks_dir: pathlib.Path = TASKS_DIR) -> dict[str, dict[str, str]]:
+    """{task_id: its ``[tags]`` table, {} when it declares none} from tasks/<bank>/.
+
+    Returns {} when the tasks dir or the bank is absent, or the bank cannot be loaded (the
+    Hard-Criteria Fraction's loader already warns about that), so an unreadable bank renders
+    no tag table.
+    """
+    bank_dir = pathlib.Path(tasks_dir) / bank
+    if not bank_dir.is_dir():
+        return {}
+    from fathom.taskbank import load_bank
+
+    try:
+        loaded = load_bank(bank_dir)
+    except Exception:
+        return {}
+    return {t.id: dict(t.tags) for t in loaded.tasks}
 
 
 # --- Spread and health: qualify the point estimates the ledger already lets us qualify ---
@@ -370,6 +390,7 @@ def render(
     raw = scoped
     turn_caps = _load_turn_caps(bank, tasks_dir)
     task_criteria = _load_task_criteria(bank, tasks_dir)
+    task_tags = _load_task_tags(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
@@ -579,6 +600,31 @@ def render(
                 v += f"; arm deltas vs bare: {', '.join(_ARM_DELTAS)}"
             lines.append(v)
         lines.append("")
+
+        # Per-tag pass rates: one table per tag key the bank declares on this section's
+        # tasks, one row per tag value (tasks without the key group as "(untagged)"), one
+        # column per arm. Counts are the Pass Rates table's, restricted to those tasks. A
+        # bank that declares no tags renders none of this.
+        tag_keys = sorted({k for tid in task_list for k in task_tags.get(tid, {})})
+        tag_arms = [sc for sc in all_sc if _stats(sc, task_list)[1] or _stats(sc, task_list)[2]]
+        for key in tag_keys:
+            groups: dict[str, list[str]] = {}
+            for tid in task_list:
+                groups.setdefault(task_tags.get(tid, {}).get(key, _UNTAGGED), []).append(tid)
+            ordered = sorted(v for v in groups if v != _UNTAGGED)
+            if _UNTAGGED in groups:
+                ordered.append(_UNTAGGED)
+            lines.append(f"### By tag: {key}")
+            lines.append("")
+            lines.append(f"| {key} | " + " | ".join(tag_arms) + " |")
+            lines.append("|---|" + "|".join(["---"] * len(tag_arms)) + "|")
+            for value in ordered:
+                cells = []
+                for sc in tag_arms:
+                    passes, n, _infra, _k = _stats(sc, groups[value])
+                    cells.append(f"{passes}/{n} ({_pct(passes / n)})" if n else "—")
+                lines.append(f"| {value} | " + " | ".join(cells) + " |")
+            lines.append("")
 
         # Per-criterion pass rates: separate compliance criteria from correctness
         # (the blended all-truthy pass-rate cannot show which criteria a scenario moved).

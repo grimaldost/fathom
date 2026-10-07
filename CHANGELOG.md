@@ -29,6 +29,16 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   carries it, and the golden scorecard gains that one line. A single-arm ledger and a section
   where some arm falls short of K print no banner.
 
+- **Bank-declared task tags, grouped in the scorecard.** A `task.toml` may carry an optional
+  `[tags]` table of string values (`size = "small"`, say), parsed into `Task.tags`; a value that
+  is not a string, or a `tags` entry that is not a table, fails the load and names the task.
+  When any task in a scorecard section declares tags, the section gains a `### By tag: <key>`
+  table for each key, after Verdicts: one row per tag value plus `(untagged)`, one column per
+  arm, each cell passes/completed trials and the rate. A bank that declares no tags renders the
+  same scorecard as before. Tags are task metadata and no scenario field reads them, so they
+  never change a `config_hash`; they do not change `dataset_version` either. The authoring
+  guide documents the table in sections 5 and 14.
+
 ### Changed
 
 - **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only

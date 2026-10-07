@@ -1943,3 +1943,118 @@ def test_the_calibration_section_is_unchanged_by_the_fraction(tmp_path):
     content = _calibration_bank_scorecard(tmp_path)
     section = content[content.index("## Model-Tier Calibration") :]
     assert section == _CALIBRATION_SECTION.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Task tags: a per-tag grouping of the pass rates when the bank declares tags
+# ---------------------------------------------------------------------------
+
+
+def _tag_tasks(tasks_dir: pathlib.Path, tags: dict[str, dict[str, str] | None]) -> None:
+    """tasks/hc-bank/ with one task.toml per id; a dict declares that task's [tags]."""
+    bank = tasks_dir / "hc-bank"
+    bank.mkdir(parents=True)
+    (bank / "bank.toml").write_text(
+        'name = "hc-bank"\ndataset_version = "v1"\nholdout = []\n', encoding="utf-8"
+    )
+    for tid, declared in tags.items():
+        (bank / tid).mkdir()
+        body = f'id = "{tid}"\ninstruction = "x"\n[limits]\n[verify]\nentry = "verify.py"\n'
+        if declared is not None:
+            body += "[tags]\n" + "".join(f'{k} = "{v}"\n' for k, v in declared.items())
+        (bank / tid / "task.toml").write_text(body, encoding="utf-8")
+
+
+def _tag_records() -> list[dict]:
+    # t1: bare 1/2, nudge 2/2.  t2: bare 0/2, nudge 1/2.  t3: bare 1/1, nudge 1/1.
+    ok, bad = {"a": True}, {"a": False}
+    return [
+        _hc_trial("bare", "t1", 0, ok),
+        _hc_trial("bare", "t1", 1, bad),
+        _hc_trial("nudge", "t1", 0, ok),
+        _hc_trial("nudge", "t1", 1, ok),
+        _hc_trial("bare", "t2", 0, bad),
+        _hc_trial("bare", "t2", 1, bad),
+        _hc_trial("nudge", "t2", 0, ok),
+        _hc_trial("nudge", "t2", 1, bad),
+        _hc_trial("bare", "t3", 0, ok),
+        _hc_trial("nudge", "t3", 0, ok),
+    ]
+
+
+def _tag_render(tmp_path, tags: dict[str, dict[str, str] | None]) -> str:
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True)
+    with open(ldgr / "hc-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in _tag_records():
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    tasks_dir = tmp_path / "tasks"
+    _tag_tasks(tasks_dir, tags)
+    out = render("hc-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", tasks_dir=tasks_dir)
+    return out.read_text(encoding="utf-8")
+
+
+def _tag_table(content: str, key: str) -> list[str]:
+    lines = content.splitlines()
+    start = lines.index(f"### By tag: {key}")
+    table: list[str] = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        table.append(line)
+    return table
+
+
+def test_a_tagged_bank_renders_a_per_tag_table_with_per_arm_counts(tmp_path):
+    content = _tag_render(tmp_path, {"t1": {"size": "small"}, "t2": {"size": "large"}, "t3": None})
+    assert _tag_table(content, "size") == [
+        "| size | bare | nudge |",
+        "|---|---|---|",
+        "| large | 0/2 (0.0%) | 1/2 (50.0%) |",
+        "| small | 1/2 (50.0%) | 2/2 (100.0%) |",
+        "| (untagged) | 1/1 (100.0%) | 1/1 (100.0%) |",
+    ]
+
+
+def test_each_tag_key_gets_its_own_table_after_the_verdicts(tmp_path):
+    content = _tag_render(
+        tmp_path,
+        {"t1": {"size": "small", "kind": "fix"}, "t2": {"size": "large"}, "t3": None},
+    )
+    assert (
+        content.index("### Verdicts")
+        < content.index("### By tag: kind")
+        < content.index("### By tag: size")
+        < content.index("### Per-Criterion Pass Rates")
+    )
+    # t2 and t3 carry no kind, so both are untagged for that key.
+    assert _tag_table(content, "kind")[2:] == [
+        "| fix | 1/2 (50.0%) | 2/2 (100.0%) |",
+        "| (untagged) | 1/3 (33.3%) | 2/3 (66.7%) |",
+    ]
+
+
+def test_a_bank_that_declares_no_tags_has_no_tag_table(tmp_path):
+    content = _tag_render(tmp_path, {"t1": None, "t2": None, "t3": None})
+    assert "By tag" not in content
+
+
+def test_a_tag_value_with_no_trials_in_the_section_is_not_listed(tmp_path):
+    # t9 declares size=huge but has no trials, so it never reaches the table.
+    tags = {
+        "t1": {"size": "small"},
+        "t2": {"size": "small"},
+        "t3": {"size": "small"},
+        "t9": {"size": "huge"},
+    }
+    content = _tag_render(tmp_path, tags)
+    assert _tag_table(content, "size")[2:] == ["| small | 2/5 (40.0%) | 4/5 (80.0%) |"]
+
+
+def test_task_tags_are_read_without_a_scores_file(tmp_path):
+    from fathom.report import _load_task_tags
+
+    _tag_tasks(tmp_path / "tasks", {"t1": {"size": "small"}, "t2": None})
+    assert _load_task_tags("hc-bank", tmp_path / "tasks") == {"t1": {"size": "small"}, "t2": {}}
+    assert _load_task_tags("other-bank", tmp_path / "tasks") == {}
+    assert _load_task_tags("hc-bank", tmp_path / "missing") == {}

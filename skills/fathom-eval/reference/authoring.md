@@ -264,6 +264,10 @@ timeout_s = 60                             # optional; bounds the verifier subpr
 # [naive]                                  # optional; read by tools/check_naive_refs.py (section 9)
 # must_pass = ["correctness"]
 # must_fail = ["handles_overflow"]
+
+# [tags]                                   # optional; your own labels, string values only
+# size = "small"                           # the scorecard groups pass rates by each key
+# kind = "bugfix"
 ```
 
 | Key | Read by | Notes |
@@ -277,6 +281,7 @@ timeout_s = 60                             # optional; bounds the verifier subpr
 | `[verify] hard_criteria` | scorecard, calibration views | The criteria the scorecard's Hard-Criteria Fraction counts for this task; a task without it counts every criterion (section 14). The calibration views read only the tasks that declare it (section 9). |
 | `[gate] run` | gated-session, gated-review, validate | A shell command run in the workspace; exit 0 is green. The gated strategies stop it, with every process still under it, after 120 seconds, a fixed limit with no setting, and count that as red; `fathom validate` allows it 300 seconds. Keep a gate well inside 120 seconds. In a trial, whatever the command creates in the workspace is removed when it exits, so an arm's `[gate] extra` command cannot use it (section 10, "Tools and default-deny"). It runs without any variable that names the data root, so it cannot find its tools through a virtual environment kept there. |
 | `[naive]` | `tools/check_naive_refs.py` | Section 9. |
+| `[tags]` | scorecard | Labels you give the task, as `key = "value"` pairs. When any task of a section declares tags, the scorecard adds a "By tag" table for each key (section 14). A value that is not a string, or a `tags` entry that is not a table, fails the bank load and names the task. Tags are not part of any arm, so they never change a `config_hash`; they do not change `dataset_version` either, so bump it yourself if relabelling should start a new history (section 4). |
 | `[context] size`, `pair` | calibration views | Section 9. |
 
 `[limits]`, `[verify]` and `[gate]` are read as open tables: unknown keys are kept and ignored.
@@ -1150,6 +1155,12 @@ one for holdout tasks. Each contains:
   or make the bank harder (section 9). With one task (N = 1) it prints when every arm passes
   that task, which is often the case in a holdout section.
 - **Verdicts** — the same numbers in a sentence, with the number of distinct tasks behind them.
+- **By tag: `<key>`** — appears only when a task in the section declares `[tags]` (section 5),
+  once per tag key, in key order. One row per tag value, with a final `(untagged)` row for the
+  tasks that do not declare that key, and one column per arm showing passes/completed trials
+  and the rate, counted as in Pass Rates. A dash means the arm has no completed trial on those
+  tasks. It is a point estimate with no interval, and a tag value that covers one task is that
+  task's own result, so read small groups as anecdotes.
 - **Per-Criterion Pass Rates** — each criterion's rate per arm. This is where arms usually
   differ; lead with it.
 - **Hard-Criteria Fraction** — per arm, criteria true over criteria present, summed over its
