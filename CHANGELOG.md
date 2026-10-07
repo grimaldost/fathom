@@ -6,6 +6,39 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Added
+
+- **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
+  headless Claude Code sessions whose prompt is a user's goal in plain words, with no fathom
+  command, flag, skill or tool name and no appended system prompt, and checks whether each
+  session can use fathom from what the installed plugin shows it: reading an existing data
+  root (on a clone of it), building and running a measurement from an empty directory, and
+  finding the tool without being told its name. Each session is judged on what it could see
+  (the init event), what it did (its tool calls, by fathom surface, counted only by the lines
+  fathom printed) and what is true afterwards (the workspace, the calls that reached a
+  `claude` stub, the real data root's state with its ignored files, a reconcile the harness
+  runs). By default a subject runs under a configuration directory that holds only the
+  credential, with the installed plugin loaded from where it is installed and the
+  account's claude.ai connectors off, in a workspace whose path says nothing about the test
+  and with no instruction file in any directory above it, with this checkout's virtual
+  environment, the data root's agent instruction files and the parent session's variables
+  withheld; a no-spend scenario's ledgers and a measuring one's spend are watched while it
+  runs. The scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
+  `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
+  It is run by hand; the test suite covers it offline and never spawns `claude`.
+
+### Fixed
+
+- **The MCP server's tool results no longer carry a warning about its own environment.** The
+  server runs in the temporary environment `uv run --with fastmcp` makes and passed its
+  `VIRTUAL_ENV` to the engine it starts, so every `plan`, `report` and `smoke` result's
+  `stderr` said that `VIRTUAL_ENV` did not match the plugin's project environment and would be
+  ignored. The engine now starts without it.
+- **The authoring guide says where the naive-fix check is.** It called
+  `tools/check_naive_refs.py` part of the engine repository and asked for an engine clone, so
+  an agent working from the installed plugin concluded it could not run the check. The
+  plugin's directory is a copy of the repository and ships the tool; the guide now says so.
+
 ## [0.8.0] - 2026-09-26
 
 The first release of fathom as a standalone engine: the `fathom` package and command, and the

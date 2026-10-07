@@ -29,6 +29,9 @@ here.
 Specs are dated records. Correct one with a dated note rather than rewriting it; where a spec
 and the code disagree, the code and the authoring guide describe current behaviour.
 
+[`agent-acceptance.md`](agent-acceptance.md) explains the fresh-agent acceptance test of the
+installed plugin: what it measures, its cost and safety rails, and how to read its verdict.
+
 [`backlog.md`](backlog.md) lists open improvements to the engine by area, with the items
 declined and the ids already closed.
 

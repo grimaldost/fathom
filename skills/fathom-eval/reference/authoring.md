@@ -528,12 +528,13 @@ tool copies the overlay over a staged fixture, runs the verifier, and reports fo
 | `CONTROL` | a declared control: the obvious fix meets `must_pass` by design; never counted as discriminating |
 | `UNVERIFIABLE` | no usable `[naive]` table, or no `refs/naive/` directory; blocks only under `--strict` |
 
-It exits `0` when nothing blocks and `3` otherwise, and spends nothing. The tool is part of the
-engine repository, not the installed package; it needs only a Python 3.12 interpreter and an
-engine clone. From the data root:
+It exits `0` when nothing blocks and `3` otherwise, and spends nothing. The tool is not in the
+installed Python package, but it is in the engine repository and so in the installed plugin,
+whose directory is a copy of the repository: run it from either with a Python 3.12 interpreter.
+From the data root:
 
 ```sh
-python <engine clone>/tools/check_naive_refs.py <bank> [--tasks-dir tasks] [--strict]
+python <engine clone or plugin directory>/tools/check_naive_refs.py <bank> [--tasks-dir tasks] [--strict]
 ```
 
 `--tasks-dir` defaults to `tasks` under the current directory.

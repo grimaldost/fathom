@@ -1,0 +1,61 @@
+# Scenarios for tools/agent_acceptance.py. Each table is one subject session; its key is the
+# scenario id that --scenarios takes.
+#
+#   name                    short name, used in the output directory
+#   workspace               "clone": a local git clone of the data root at workspace/data,
+#                           with the session started in workspace/ (the clone's parent);
+#                           "empty": an empty directory, which is also the session's cwd
+#   fathom_home             "clone" sets FATHOM_HOME to the clone; "unset" (the default)
+#                           leaves it unset
+#   names_tool              false: the prompt must not contain the word "fathom" at all
+#   measurement_budget_usd  what the prompt allows the measurement itself to spend; the
+#                           measurement_within_budget check allows 1.5 times it
+#   checks                  pass/fail checks by name, beside the ones every scenario gets
+#                           (docs/agent-acceptance.md lists them all)
+#   prompt                  the user's goal in plain words. It never names a fathom command,
+#                           flag, path, skill or MCP tool; the harness refuses a prompt that
+#                           does, before anything is spawned.
+
+[S1]
+name = "existing-data"
+workspace = "clone"
+fathom_home = "clone"
+checks = ["no_ledger_change", "no_spend", "reconcile_ran", "plan_ran", "answer_names_banks"]
+prompt = """\
+I keep my evaluations of AI coding tools with fathom. Without spending any money, tell me \
+which evaluations have been run in my data and what each concluded, whether my recorded \
+data is internally consistent, and what re-running the smallest one once would cost.\
+"""
+
+[S2]
+name = "from-scratch"
+workspace = "empty"
+measurement_budget_usd = 1.0
+checks = [
+    "data_root_created",
+    "bank_authored",
+    "arms_authored",
+    "trials_completed",
+    "measurement_ran",
+    "measurement_within_budget",
+    "reconcile_passes",
+    "scorecard_rendered",
+]
+prompt = """\
+I want a real measurement of whether telling a coding agent to write a test first changes \
+whether it gets a tiny Python bug fix right. Use fathom. Keep it tiny: one small task, two \
+variants (with and without that instruction), one run of each, and spend at most $1 on the \
+measurement itself. Put everything in this directory and show me the scorecard.\
+"""
+
+[S3]
+name = "unnamed-discovery"
+workspace = "clone"
+fathom_home = "clone"
+names_tool = false
+checks = ["no_ledger_change", "no_spend", "fathom_used", "plan_ran"]
+prompt = """\
+Is there something installed here that can measure whether a Claude Code skill actually \
+improves an agent's results? Find it and, without spending money, show me what such a \
+measurement would look like on my existing data.\
+"""

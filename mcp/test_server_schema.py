@@ -76,8 +76,8 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
     seen: list[dict] = []
 
-    def fake_run(cmd, *, cwd, capture_output, text, timeout):
-        seen.append({"cmd": list(cmd), "cwd": pathlib.Path(cwd)})
+    def fake_run(cmd, *, cwd, env, capture_output, text, timeout):
+        seen.append({"cmd": list(cmd), "cwd": pathlib.Path(cwd), "env": dict(env)})
         return subprocess.CompletedProcess(cmd, 0, stdout="stdout text", stderr="")
 
     monkeypatch.setattr(fathom_server.subprocess, "run", fake_run)
@@ -147,6 +147,21 @@ def test_report_runs_in_the_data_root_and_finds_the_scorecard(data_root, calls) 
     assert call["cwd"] == data_root
     assert call["cmd"] == [*_prefix(data_root), "report", "example-v1"]
     assert out["scorecard_path"] == str(data_root / "report" / "scorecard-example-v1.md")
+
+
+def test_the_engine_does_not_inherit_the_server_virtual_environment(
+    data_root, calls, monkeypatch
+) -> None:
+    """The server's own temporary environment would make every engine call warn."""
+    import fathom_server
+
+    monkeypatch.setenv("VIRTUAL_ENV", str(data_root / "server-env"))
+    monkeypatch.setenv("KEEP_ME", "yes")
+    _call(fathom_server.plan, bank="example-v1")
+    [call] = calls
+    assert not {k for k in call["env"] if k.upper() == "VIRTUAL_ENV"}
+    assert call["env"]["KEEP_ME"] == "yes"
+    assert "FATHOM_HOME" in call["env"]
 
 
 def test_smoke_passes_its_flags(data_root, calls) -> None:
