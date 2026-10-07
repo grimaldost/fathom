@@ -31,6 +31,11 @@ reference solutions, arms, `config_hash` — follow
 [`reference/authoring.md`](reference/authoring.md). It is the complete guide. This
 file covers running what is built.
 
+For a worked example of one common design, a guardrail injected into the system prompt and
+compared across two model tiers, with every command runnable against the example data root
+without spending, see
+[`reference/recipe-guardrail-tiers.md`](reference/recipe-guardrail-tiers.md).
+
 A few bright lines, because breaking them spends money wrongly or corrupts the
 record:
 
@@ -116,7 +121,8 @@ An **analysis** is a scenario matrix run against a task **bank**, scored into a
 # 0. Free: which engine version runs.
 fathom --version
 
-# 1. Free: can the bank tell arms apart? (fixture fails, solution passes, gate runs)
+# 1. Free: can the bank tell arms apart? (fixture fails, solution passes, gate runs,
+#    the paths the gate commands name exist)
 fathom validate <bank> [--strict]
 
 # 2. Free: arms, trial count, worst-case USD ceiling, resume state. Spawns nothing.
@@ -131,7 +137,7 @@ fathom smoke
 fathom verify-arming [--scenarios-dir DIR]
 
 # 4. Paid: the matrix. Resumable; re-invoking skips completed trials.
-fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--tasks ID,ID] \
+fathom run <bank> [--repeats K] [--scenarios-dir DIR] [--limit N] [--tasks ID,ID] [--interleave] \
     [--max-spawn-usd USD] [--max-run-usd USD] [--include-holdout]
 
 # 5. Free: render report/scorecard-<bank>.md from the ledger. Regenerate any time.
@@ -165,6 +171,16 @@ After a run, keep the data root's derived records current:
   count: per PR, one implementation, the template's fix attempts, and under a
   blocking review one review more than the fix attempts, each at its cap ($20, $3 and
   $5 unless `--max-spawn-usd` is given). It is a worst case, not an estimate.
+- **The `expected:` line** under the plan's `planned:` line is the estimate: what a trial
+  of the same strategy has cost in this bank's own ledger. It is the median over completed
+  trials (a trial's cost is the sum of its run rows), per strategy and, where a model has
+  at least 5 trials, per model, with the trial count `n`; planned trials times that median
+  is the expected spend. A trial with no run rows, a run whose cost the provider did not
+  report, an errored trial and a voided one are left out, and a strategy with no history
+  is named as unpriced. Nothing is printed on an empty ledger. It is information only:
+  no exit code or rail depends on it, and the ceiling and `--max-run-usd` still bound the
+  spend. Read the two together: a ceiling far above the expected spend says how loose the
+  cap is, not that the run will cost the ceiling.
 - **`--max-spawn-usd`** (older spelling `--max-budget-usd`) is the cap for each
   **spawn**, not a run total. Raising it loosens the runaway guard, which is why the
   printed ceiling tracks it. A series trial spawns several agents, each under the
@@ -172,10 +188,16 @@ After a run, keep the data root's derived records current:
 - **`--max-run-usd`** stops one invocation between trials once it has spent that
   much (exit 14). For a guard across several invocations of a resumable matrix,
   stage the matrix and sum `cost_usd_est` from the ledger's run rows between stages.
-- **`--limit N`** caps new trials (after resume filtering). The plan is ordered arm
-  by arm, so `--limit` cuts whole arms off the end. **`--tasks ID[,ID...]`**
-  restricts the run to named tasks — the way to buy a small screen before a full
-  matrix.
+- **`--limit N`** caps new trials (after resume filtering), counted from the start of
+  the plan's order. By default the plan is ordered arm by arm, so `--limit` cuts whole
+  arms off the end. With **`--interleave`** it is ordered repeat by repeat (repeat 0 of
+  every arm and task, then repeat 1, and so on), so `--limit` keeps whole repeats:
+  `--limit` of arms × tasks buys repeat 0 of every arm, and a run stopped early has
+  still compared the arms. The flag changes the order only; the same trials are bought
+  and the same resume keys are written. The plan then prints an `order:` line and a
+  `first:` line with the first planned cells. **`--tasks ID[,ID...]`** restricts the run
+  to named tasks — the way to buy a small screen before a full matrix; `--limit` cannot
+  select tasks.
 - **`--tasks-dir` / `--ledger-dir`** relocate the bank source and the ledger.
   `--ledger-dir` writes the record somewhere other than the committed `ledger/`; use
   it only for a side study kept apart on purpose, since `fathom report` has no
@@ -274,6 +296,9 @@ After `fathom report <bank>`, read `report/scorecard-<bank>.md` in the data root
 
 - **Per-Criterion Pass Rates** — where arms usually differ. Lead with it; the headline
   pass rate counts a trial as a pass only when every criterion is true.
+- **Hard-Criteria Fraction** — partial credit per arm: criteria true over criteria
+  present, counting a task's `[verify] hard_criteria` when it declares them and every
+  criterion when it does not. Two arms with the same pass rate can differ here.
 - **Economy** — per arm: tokens, turns, wall-clock, spawns per trial, estimated USD,
   with min/median/max. Overlapping ranges mean the arms are not separated at this
   number of trials.

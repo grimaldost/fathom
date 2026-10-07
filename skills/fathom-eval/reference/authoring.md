@@ -224,6 +224,14 @@ The bank itself needs only `bank.toml`. Each task needs:
 name = "example"          # required; must equal the bank's directory name
 dataset_version = "1"     # required; a string, part of the resume key
 holdout = []              # required; an array of task ids, may be empty
+
+# [contrasts]             # optional; arm comparisons the scorecard tests (section 14)
+# alpha = 0.05            # optional; the level Holm's step-down shares among the pairs
+#
+# [[contrasts.pair]]      # one table per comparison
+# treatment = "nudge"     # arm names, as the ledger records them
+# control = "bare"
+# criterion = "correctness"  # optional; without it the pair compares the all-criteria pass
 ```
 
 - **`name`** names the ledger file (`ledger/<name>.jsonl`) and the run lock. `fathom report
@@ -238,6 +246,13 @@ holdout = []              # required; an array of task ids, may be empty
   `--include-holdout`, which marks those trials `holdout` in the ledger; the scorecard reports
   them in a separate section. `--tasks` cannot name a holdout without `--include-holdout`. Once
   spent, a holdout is ordinary development data. Every holdout id must name a task in the bank.
+- **`[contrasts]`** (optional) lists the arm comparisons the scorecard tests (section 14). Each
+  `[[contrasts.pair]]` names a `treatment` arm and a `control` arm, and optionally a
+  `criterion`; without one, the pair compares the all-criteria pass. `alpha` (default 0.05) is
+  the level Holm's step-down shares among a section's pairs. Only `fathom report` reads the
+  table and nothing hashes `bank.toml`, so adding or changing it changes no trial and needs no
+  `dataset_version` bump. An `alpha` that is not a number between 0 and 1 warns and renders no
+  contrasts; a pair without a string `treatment` and `control` warns and is skipped.
 
 Loading fails on a missing field, a scalar `holdout`, a holdout id that names no task, or two
 task directories that declare the same `id`.
@@ -256,7 +271,7 @@ max_turns = 10                             # turns per spawn; default 30
 [verify]                                   # required table
 entry = "verify.py"                        # required; path relative to the task directory
 timeout_s = 60                             # optional; bounds the verifier subprocess (default 60)
-# hard_criteria = ["correctness"]          # optional; calibration banks only (section 9)
+# hard_criteria = ["correctness"]          # optional; sections 9 and 14
 
 # [gate]                                   # optional; the task's own deterministic check
 # run = "python -m unittest -q"            # used by the gated strategies and `fathom validate`
@@ -264,6 +279,10 @@ timeout_s = 60                             # optional; bounds the verifier subpr
 # [naive]                                  # optional; read by tools/check_naive_refs.py (section 9)
 # must_pass = ["correctness"]
 # must_fail = ["handles_overflow"]
+
+# [tags]                                   # optional; your own labels, string values only
+# size = "small"                           # the scorecard groups pass rates by each key
+# kind = "bugfix"
 ```
 
 | Key | Read by | Notes |
@@ -274,9 +293,10 @@ timeout_s = 60                             # optional; bounds the verifier subpr
 | `[limits] trial_timeout_s` | nothing | Accepted and ignored. The spawn timeout is the arm's `[limits] trial_timeout_s` (section 10). |
 | `[verify] entry` | run, validate, naive check | Run as `python <entry> <result view>` (section 7). |
 | `[verify] timeout_s` | run, validate, naive check | Raise it for a verifier that shells out to a heavy harness (a full test-suite collection, say); a timeout scores the trial as errored. |
-| `[verify] hard_criteria` | calibration views | Ignored by other banks. |
+| `[verify] hard_criteria` | scorecard, calibration views | The criteria the scorecard's Hard-Criteria Fraction counts for this task; a task without it counts every criterion (section 14). The calibration views read only the tasks that declare it (section 9). |
 | `[gate] run` | gated-session, gated-review, validate | A shell command run in the workspace; exit 0 is green. The gated strategies stop it, with every process still under it, after 120 seconds, a fixed limit with no setting, and count that as red; `fathom validate` allows it 300 seconds. Keep a gate well inside 120 seconds. In a trial, whatever the command creates in the workspace is removed when it exits, so an arm's `[gate] extra` command cannot use it (section 10, "Tools and default-deny"). It runs without any variable that names the data root, so it cannot find its tools through a virtual environment kept there. |
 | `[naive]` | `tools/check_naive_refs.py` | Section 9. |
+| `[tags]` | scorecard | Labels you give the task, as `key = "value"` pairs. When any task of a section declares tags, the scorecard adds a "By tag" table for each key (section 14). A value that is not a string, or a `tags` entry that is not a table, fails the bank load and names the task. Tags are not part of any arm, so they never change a `config_hash`; they do not change `dataset_version` either, so bump it yourself if relabelling should start a new history (section 4). |
 | `[context] size`, `pair` | calibration views | Section 9. |
 
 `[limits]`, `[verify]` and `[gate]` are read as open tables: unknown keys are kept and ignored.
@@ -446,7 +466,7 @@ A reference solution is an overlay: `<task>/solution/` holds only the files a co
 changes or adds, laid out as in the workspace. fathom copies it over a freshly staged fixture
 and runs the verifier on the result. It is used only for validation; no arm ever sees it.
 
-`fathom validate <bank> [--tasks-dir DIR] [--scenarios-dir DIR] [--strict]` checks three
+`fathom validate <bank> [--tasks-dir DIR] [--scenarios-dir DIR] [--strict]` checks four
 properties for each task. It is free: it stages fixtures and runs the verifier and the gate
 locally, and spawns nothing. The verifier and the gate run as they do in a trial: the verifier
 in its reduced environment and empty working directory (section 7), the gate in the workspace
@@ -459,12 +479,49 @@ would in a run.
 | The verifier fails on the unmodified fixture | at least one criterion is false | the verifier errored, emitted no criteria, or every criterion is already true | — |
 | The verifier passes on the reference solution | outcome `pass` (exit 0) | any other outcome | `unverifiable` when there is no `solution/` |
 | The task gate runs on the fixture | the gate exits 0 | exit 127 or 9009 (the command was not found) | `warn` for any other nonzero exit; `unverifiable` when there is no `[gate] run` |
+| The gate commands name paths that exist | every path a gate command names exists | a missing path under `${task_dir}`; a missing absolute path the gate runs (a command word, or a word with a script suffix); a `${NAME}` that is not filled in | `warn` for any other missing absolute word and for a missing path relative to the workspace; no line when neither the task nor a gated arm has a gate command |
 
 The first property reads the criteria, not the exit code: it asks whether an arm has something
 left to do. A red gate on the fixture is reported as `warn` rather than `fail`, because a task
 whose visible tests describe the requested feature starts red on purpose; confirm which case
 yours is. `unverifiable` is not a pass. It is reported on its own and blocks only under
 `--strict`.
+
+The fourth property reads the task's `[gate] run` and the `[gate] extra` of every arm that runs
+it (`gated-session`, `gated-review`): the arms in `scenarios/` or `--scenarios-dir` for `fathom
+validate`, and the arms about to run for `fathom run`. A gate command whose script is missing
+still runs, finds nothing and counts for nothing, so the gated arm runs as an ungated one; this
+check finds that before the spend. Each command is split into words as the shell that runs it
+reads them (`/bin/sh`, or `cmd.exe` on Windows). A word is a path when it holds `/` or `\`,
+ends in a script suffix such as `.py` or `.sh`, or holds a `${...}`; options, the word after
+`-c` or `-m`, the target of an output redirection and URLs are not paths. An arm's
+`${task_dir}` and `${workspace}` are filled in for each task as the arm fills them (section 10,
+"Treatments"), and a relative path resolves against the staged fixture, which is the gate's
+working directory. The check reads the fixture before the verifier or the gate has run on it.
+
+- **fail**: a missing path under `${task_dir}`, or a missing absolute path that the gate runs:
+  the command word (the first word, or the first after `&&`, `||`, `;`, `|` or `!`), or a word
+  with a script suffix such as `.py` or `.sh`. The agent cannot create either, so the gate
+  could never have run it. Also a `${NAME}` that nothing fills: an
+  arm's `[gate] extra` takes `${task_dir}` and `${workspace}` only, and the task's own `[gate]
+  run` takes none, so a misspelt `${taskdir}` or a `${task_dir}` in the task's gate fails. To
+  use an environment variable, write it the shell's way (`$NAME` or `%NAME%`).
+- **warn**: any other missing absolute word, which may be a pattern rather than a path
+  (`grep -q "/health" app.py`, `grep -rn "/usr/local/secret" src`); and a missing path
+  relative to the workspace, or under `${workspace}`, which the task may ask the agent to
+  create. Confirm which, as with a red gate.
+
+The check errs toward missing a broken gate rather than refusing a working one. A word holding a
+shell variable (`$NAME`, `%NAME%`), a glob or a leading `~` is left to the shell and not
+checked, and so is a word holding pattern syntax (`^`, `{`, `}`, `,` or `|`), such as the sed
+address `/start/,/end/p` or the awk program `'/^def /{n++}'`. A command that changes directory
+(`cd sub && python run.py`) is still resolved against the workspace, so such a path can warn
+but never fails. Three kinds of working gate do fail it: a command that creates an absolute
+path and then runs it (create such a file in the workspace, with a relative path); a pattern
+that reads as an absolute script path, such as `grep -q "/app/main.py" log.txt` (drop the
+leading `/` or match on less of it); and, on POSIX, a `${NAME}` that `/bin/sh` would fill
+(write it `$NAME`). A gate that passes this check can still be red for other reasons; the
+third property and a pilot cover those.
 
 It may also print a `note:` line naming the arms that declare injected context or a tool list
 (nearly every arm) and saying that `fathom run` will keep their spawn streams under the data
@@ -594,6 +651,7 @@ adapter = "claude-cli"         # required; the only adapter
 model = "claude-haiku-4-5"     # required; passed to `claude --model`
 strategy = "single-session"    # required; see the strategy table
 effort = "low"                 # required; passed to `claude --effort` unchanged
+# comparator = "bare"          # optional; buy a cell only after bare completed it ("Comparator")
 
 [tools]
 source = "none"                # "none" (default) or "repo" (series arms)
@@ -622,9 +680,9 @@ inject = "assets/nudge.md"     # relative to this file
 trial_timeout_s = 300          # optional; wall-clock seconds per spawn (default 1800)
 ```
 
-Only the five top-level keys are required; every table is optional. The five keys sit at the
-top of the file, before any table. A file that wraps them in a table has no top-level keys at
-all:
+Only the five keys commented `required` must be set; `comparator` and every table are
+optional. The top-level keys sit at the top of the file, before any table. A file that wraps
+them in a table has no top-level keys at all:
 
 ```toml
 # Wrong: under [scenario], `name` is scenario.name, and the file has no top-level `name`.
@@ -642,6 +700,8 @@ What `fathom run` does with a faulty arm file:
   treatment table (`[contxt]` for `[context]`) leaves the arm without its treatment, so it
   runs as the control would, under its own name. Check the spelling of every table.
 - An unknown `strategy` stops the run (including `--dry-run`) before anything spawns.
+- So does a `comparator` that names no loaded arm, names the arm itself, or forms a cycle
+  ("Comparator", below).
 
 ### Tools and default-deny
 
@@ -847,6 +907,41 @@ and the directory `fathom run` will use; it needs no action.
 series arm it is the limit for the whole engine run, and there is no limit when it is unset,
 so always set it there.
 
+### Comparator
+
+A treatment arm is only worth buying where its control was bought too: a cell (one task and
+repeat) that the control did not complete leaves the treatment's trial with nothing to be
+compared against. An arm declares that dependency with a top-level key, before any table:
+
+```toml
+name = "nudge"
+comparator = "bare"            # the arm this one is compared against
+```
+
+With it, `fathom run`:
+
+- checks the declarations before the plan, `--dry-run` included. A `comparator` must name
+  exactly one arm loaded from the same scenarios directory, not the arm itself, and the
+  declarations must not form a cycle (`one` on `two` and `two` on `one`). Otherwise the run
+  stops with exit 1 before anything spawns. A value that is not a string makes the file
+  faulty, so the arm is skipped with a warning like any other faulty file.
+- runs the comparator's trials before the dependent's. The arms otherwise keep the order they
+  were loaded in (by file name); a comparator moves just ahead of the first arm that depends
+  on it, and a set of arms with no `comparator` keeps its order.
+- prints one line per dependent arm after the `arms:` line:
+  `depends:  nudge on bare (a cell runs only after bare completed the same task and repeat)`.
+- buys a cell of the dependent arm only when the comparator, as its file stands now (its
+  current `config_hash`), has a completed trial for the same task and repeat at the bank's
+  current `dataset_version`, recorded by an earlier run or earlier in this one. An errored
+  comparator trial does not count. Otherwise the run prints
+  `blocked: nudge/add r0 — comparator bare has no completed trial for this cell; nothing spent`,
+  starts no spawn, writes no ledger row and goes on to the next trial. Blocked cells do not
+  change the exit code; the run summary counts them (section 13). Run the same command again
+  once the comparator's cell has completed, and the blocked cell is bought.
+
+`comparator` is not part of `config_hash` (section 11), so adding it to, or removing it from,
+an arm that already has trials keeps that arm's history.
+
 ## 11. `config_hash` and the resume key
 
 Each trial is recorded under the key `(bank, dataset_version, task_id, config_hash, repeat)`.
@@ -861,7 +956,7 @@ What an edit does to trials already recorded:
 | In an arm file: its name, model, effort, strategy, `[tools]` (including the order of `allowed`), `trial_timeout_s`; adding or removing a treatment table; an `[env]` template or a `[gate] extra` command | A new `config_hash`. The arm's old trials stop counting as done, and the next run buys the arm again from its first repeat. |
 | The content of an injected context or settings file; any file inside a mounted plugin; a new commit in, or a move of, a series engine repository | The same: a new `config_hash`. |
 | In a bank: an instruction, a fixture, a verifier, a limit, a gate, a criterion | Nothing automatic. Bump `dataset_version` (section 4) and every trial of the bank is bought again; without the bump, new trials mix with results measured on the old task. |
-| Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
+| Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs; adding, changing or removing `comparator` | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
 
 `config_hash` is the sha256 of a canonical JSON rendering (sorted keys) of the resolved arm.
 That exact string, the text that was hashed, is called the **preimage** and is stored on every
@@ -882,10 +977,15 @@ row as `config_preimage`. It contains:
 An absent table and an empty one produce the same hash, so adding an optional table to the
 schema never changes existing arms.
 
-**Provenance.** Every row also records `engine_version`, the fathom version that wrote it, and
-`cli_version`. Neither is part of `config_hash`, its preimage or the resume key, so upgrading
-the engine does not re-buy completed trials. Rows written before `engine_version` existed are
-never rewritten.
+`comparator` (section 10) is not in the preimage. It orders the run and decides which cells
+are bought, and changes nothing an arm measures, so declaring it never re-buys an arm.
+
+**Provenance.** Every row also records `engine_version`, the fathom version that wrote it,
+`cli_version`, and `written_at`, the UTC time it was written (ISO 8601, to the second). A run
+row also records `scenario`, the name of the arm that ran. None of these is part of
+`config_hash`, its preimage or the resume key, so upgrading the engine does not re-buy
+completed trials; `written_at` is the one field that differs between two otherwise identical
+runs. Rows written before a field existed are never rewritten, and read as they always did.
 
 **Keep every arm committed.** `fathom reconcile` holds each completed trial's arm name against
 the scenario files in the data root (`scenario-known`) and each row's `config_hash` against the
@@ -939,7 +1039,7 @@ fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 fathom smoke [--no-engine-boundary]                     # a few cents: spawn isolation on real spawns
 fathom verify-arming [--scenarios-dir DIR]              # optional, a little: are the treatments armed?
 fathom run <bank> --repeats K [--scenarios-dir DIR]     # paid; resumable
-fathom report <bank>                                    # free: report/scorecard-<bank>.md
+fathom report <bank> [--dataset-version V] [--per-trial] # free: report/scorecard-<bank>.md
 fathom index --write                                    # free: re-render the ledger index
 fathom reconcile                                        # free: do the derived records agree?
 ```
@@ -949,14 +1049,30 @@ and `reconcile` never start a model. `fathom smoke` is the first step that spend
 cents. It tests the spawn environment on this machine (the login, isolation, the lock), not
 the bank, so it belongs just before paid runs rather than in the authoring loop.
 
-- **Plan first, and read the arm names.** `--dry-run` prints the data root, the arm names, the
-  number of trials still to buy (and how many are already done), and a ceiling of
-  `trials × the per-spawn cap` (series trials priced as in section 12). It spawns nothing and
-  takes no lock. The ceiling is a worst case, not an estimate. A bank whose arms sit in a
-  subdirectory needs `--scenarios-dir` on every `fathom run` and `fathom verify-arming`.
-  Without it, the command takes every `*.toml` directly under `scenarios/` with no warning and
-  runs those arms instead; only when there are none there does it stop, with
-  `no scenarios found`.
+- **Plan first, and read the arm names.** `--dry-run` prints the data root, the arm names
+  (each with a config_hash prefix to distinguish forks: arms that differ show different
+  prefixes; arms that pool show the same one), the number of trials still to buy (and how
+  many are already done), and a ceiling of `trials × the per-spawn cap` (series trials
+  priced as in section 12). It spawns nothing and takes no lock. The ceiling is a worst
+  case, not an estimate. When the bank's ledger already holds completed trials, an
+  `expected:` line follows the `planned:` line with the estimate: the median cost per
+  trial for each planned strategy (per strategy and model once a model has 5 trials), its
+  trial count, and the planned trials priced at that median. Trials with no run rows, with
+  a run whose cost was not reported, errored or voided are left out, a strategy with no
+  history is named as unpriced, and an empty ledger prints nothing. It never gates a run:
+  the rails stay on observed spend. A bank whose arms sit in a subdirectory needs `--scenarios-dir` on
+  every `fathom run` and `fathom verify-arming`. Without it, the command takes every `*.toml`
+  directly under `scenarios/` with no warning and runs those arms instead; only when there
+  are none there does it stop, with `no scenarios found`.
+- **A finished plan prices one more repeat.** When every requested trial is already done,
+  the plan prints two lines after `planned:` and before `nothing to do` (or `[dry-run] no
+  spawns`), with no new flag. `one more repeat:` gives the ceiling of one more trial per
+  arm and task, the number of those trials, and the `--repeats` value that plans them (the
+  highest completed repeat index among these cells, plus two). When the cells hold different
+  numbers of repeats it says `at least one more repeat`, because that value also fills the
+  lagging cells. `completed in the ledger for these arms:` counts every completed trial for
+  these arms and tasks at the current dataset version, across all repeats, which is the
+  count the scorecard uses. Nothing is printed while any trial is still planned.
 - **Smoke before any paid run**, and again when resuming later. It proves on tiny real spawns
   that the credential works, that the temporary config holds only the credential, that a
   disallowed tool is refused, that stream parsing works, that a plugin mount reaches the CLI,
@@ -966,7 +1082,13 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   $5; the older spelling `--max-budget-usd` still works); raising it loosens the only runaway
   guard, and the printed ceiling rises with it. `--max-run-usd USD` stops this invocation
   between trials once it has spent that much (exit 14). `--limit N` caps the number of new
-  trials; the plan is ordered arm by arm, so `--limit` cuts whole arms off the end.
+  trials, counted from the start of the plan's order. By default the plan is ordered arm by
+  arm, with each comparator ahead of the arms that depend on it (section 10), so `--limit`
+  cuts whole arms off the end. With `--interleave` the plan is ordered repeat by repeat
+  (repeat, then arm in that same order, then task), so `--limit` keeps whole repeats and
+  `--limit` of arms × tasks runs repeat 0 of every arm. The flag changes the order only: the
+  same trials are bought and the same resume keys are written. It prints an `order:` line and
+  a `first:` line after `arms:`; without it neither is printed.
   `--tasks ID[,ID…]` restricts the run to named tasks, which is how to buy a screen.
 - **Before the first spawn** `fathom run` checks that the credential has life left (exit 15),
   that the bank validates (exit 12) and that treatment arms are armed (exit 11); the
@@ -977,11 +1099,27 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   for a run on another credential). `fathom stop <bank>` asks the holder to stop after the
   trial in flight, and the run then exits 16; `--now` also ends its process tree and discards
   that trial.
+- **Progress and the closing summary.** A paid run prints one flushed line per trial,
+  `trial done: i/N arm/task r<k> <status> [$spent]`, where `i` counts the planned trials
+  started, `status` is `completed`, `errored` or `infrastructure`, and the amount is what
+  this invocation has spent so far. When the run ends, at any exit once the trial loop
+  has begun, it prints one `run summary:` line: the absolute ledger path,
+  the trials completed and errored by this invocation, the trials skipped as already done,
+  the trials not started, the amount spent this invocation, and the command that resumes
+  it. The counts come from the rows this invocation appended, not from the whole ledger. A
+  trial stopped by an infrastructure error has no row, so it counts as not started and a
+  resume runs it. When an arm declares a `comparator`, a cell it blocks prints a `blocked:`
+  line instead of a `trial done:` line, and the summary adds `blocked N (comparator
+  incomplete)` after the errored count; without a `comparator` the summary has no such
+  field. A dry run, and a plan with nothing to buy, print neither line.
 - **Resuming.** Every nonzero exit leaves the ledger as the checkpoint. Run the same command
-  again to continue. An authentication or usage-limit failure stops the matrix with exit 10
+  again to continue; the `resume:` command in the summary is that command, with the bank,
+  `--repeats`, and the path, `--tasks`, `--include-holdout` and cost-rail flags the run was
+  given. An authentication or usage-limit failure stops the matrix with exit 10
   and records nothing for that trial.
-- **Exit codes of `fathom run`:** 0 done; 1 usage error (bank not loadable, no scenarios,
-  unknown strategy, unknown `--tasks` id); 10 infrastructure (auth, usage limit, fixture drift,
+- **Exit codes of `fathom run`:** 0 done (blocked cells included); 1 usage error (bank not
+  loadable, no scenarios, unknown strategy, unknown `--tasks` id, a `comparator` that names
+  no loaded arm, the arm itself or a cycle); 10 infrastructure (auth, usage limit, fixture drift,
   lock timeout, an arm's files that could not be copied for a spawn); 11 unarmed arm; 12 bank invalid; 14 run budget reached; 15 credential
   expiring; 16 stopped by `fathom stop`.
 - **Removing a bad trial.** The ledger is append-only (ADR-0002): never edit it.
@@ -991,7 +1129,14 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
 
 After a run:
 
-- Render the scorecard with `fathom report <bank>`.
+- Render the scorecard with `fathom report <bank>`. It shows the bank's current
+  `dataset_version`, the last one a trial was recorded under, and warns which older versions it
+  left out. To read an older version, add `--dataset-version V`: the scorecard goes to
+  `report/scorecard-<bank>--<V>.md` (any character other than a letter, digit, `-`, `_` or `.`
+  becomes `_`), so it never overwrites the current one. The version must be one the ledger
+  holds, or the command exits 1 and lists the versions it does. Task metadata (calibration,
+  turn caps) is read from the current `tasks/` tree, so an older version's calibration section
+  describes today's tasks; the file opens with a note saying so.
 - Re-render the ledger index with `fathom index --write` and commit it with the ledgers.
   `docs/reports/LEDGER-INDEX.md` stamps each ledger's sha256 and its completed trials per arm,
   so any document quoting a count can be checked against it. Without `--write`,
@@ -1024,9 +1169,41 @@ one for holdout tasks. Each contains:
   trials, the pass rate, a Wilson 95% interval, and infrastructure errors. Errored trials are
   excluded, neither pass nor fail. The interval pools repeats and tasks, which are correlated,
   so read it as a rough width.
+- **Saturated banner** — a line after the Pass Rates table, printed only when the section has
+  at least two arms with completed trials and every one of them passes at least K of the
+  section's N tasks, with K = ceil(0.9 x N). An arm passes a task when at least half of its
+  completed trials on that task have every criterion true. The line names K and N. It means
+  the pass rate cannot separate the arms on this bank: compare them on Economy and Efficiency,
+  or make the bank harder (section 9). With one task (N = 1) it prints when every arm passes
+  that task, which is often the case in a holdout section.
 - **Verdicts** — the same numbers in a sentence, with the number of distinct tasks behind them.
+- **By tag: `<key>`** — appears only when a task in the section declares `[tags]` (section 5),
+  once per tag key, in key order. One row per tag value, with a final `(untagged)` row for the
+  tasks that do not declare that key, and one column per arm showing passes/completed trials
+  and the rate, counted as in Pass Rates. A dash means the arm has no completed trial on those
+  tasks. It is a point estimate with no interval, and a tag value that covers one task is that
+  task's own result, so read small groups as anecdotes.
 - **Per-Criterion Pass Rates** — each criterion's rate per arm. This is where arms usually
   differ; lead with it.
+- **Hard-Criteria Fraction** — per arm, criteria true over criteria present, summed over its
+  completed trials, with infra and errored trials left out. A task that declares
+  `[verify] hard_criteria` counts only those; a task that declares none counts every
+  criterion its verifier returned. The last column says which: `hard_criteria`,
+  `all criteria (no hard_criteria declared)` or `mixed`. Two arms with the same pass rate
+  can differ here, since a trial that misses one criterion still counts the ones it met. It
+  is a point estimate with no interval: criteria within a trial tend to pass or fail
+  together (ADR-0009).
+- **Contrasts** — appears only when `bank.toml` declares `[contrasts]` (section 4). One row
+  per pair: each arm's passes over completed trials on the pair's criterion (the all-criteria
+  pass when it names none; on a criterion, the trials whose verifier returned it), with the
+  rate and a Wilson 95% interval; a one-sided Fisher exact p for the treatment passing more
+  often than the control; and Holm's step-down over the section's pairs. In ascending p order
+  the thresholds are alpha/m, alpha/(m-1), and so on up to alpha, and `Below threshold` reads
+  `yes` while a pair's p and every smaller p are at or under their thresholds. Rows are in p
+  order. A pair with an arm that has no completed trial in the section shows `N/A` and is left
+  out of the family; a pair naming an arm the ledger does not hold gets a `Not compared` line
+  instead of a row. Trials pool tasks and repeats, which are correlated, and N per cell is
+  small, so read a contrast as directional.
 - **Pairwise vs Bare Anchor** — appears only when the ledger holds pairwise grading rows. The
   pairwise judge is not part of `fathom run`, so it is normally absent.
 - **Economy** — per arm: total tokens, turns, wall-clock, spawns per trial and estimated USD,
@@ -1034,6 +1211,21 @@ one for holdout tasks. Each contains:
   number of trials.
 - **Arm Health** — appears when trials reached `max_turns`. Such an arm's pass rate is a lower
   bound; raise the budget before comparing it.
+- **Arm Health: MCP calls** — appears only when an arm mounts a plugin (`[plugins] mount`,
+  recorded in its trial rows' `config_preimage`). One row per such arm: how many of its
+  completed trials have a kept stream (section 10, "Streams"), and per such trial the
+  `mcp__*` calls to a server the spawn reported that returned without an error, as
+  min/median/max. Streams are read from `FATHOM_STREAM_DIR` when it is set, else from the
+  data root's `.fathom/streams/<bank>/`. `no streams kept` means none was found for any of the
+  arm's trials: an arm with neither a tool grant nor a `[context]` inject keeps none unless
+  `FATHOM_STREAM_DIR` is set. `(k partial)` counts trials with a stream that has no closing
+  `result` event (the spawn was cut off); their counts are lower bounds. The flag
+  `all calls denied or absent` means every trial with a stream made no such call: the
+  plugin's tools were denied or never used, so the arm's numbers describe the arm without its
+  treatment. Check the allowlist (section 10) before reading anything else about that arm.
+  Trial rows written before fathom recorded `config_preimage` are left out, and a line names
+  their arms. A cell run more than once (a resumed error, a voided trial) keeps every run's
+  streams under one name, so its count sums them all.
 - **Efficiency** — per-trial means, quality per 100k tokens, and a Pareto mark: `★` when no
   other arm is at least as good on both quality and tokens and better on one, `★?` when that
   holds on the means but the per-trial token ranges overlap.
@@ -1041,6 +1233,20 @@ one for holdout tasks. Each contains:
 
 With few trials, treat every difference as directional. The scorecard says so beside each
 verdict.
+
+A scorecard written with `--dataset-version` for a version other than the current one opens
+with a line naming that version and the current one. Quote it only with that line; its numbers
+describe the older task definition, not the bank as it stands.
+
+The Economy section sums an arm over all its trials. For one trial at a time, add
+`--per-trial`: the scorecard is written as before, and a table follows on stdout with a line
+per (arm, task, repeat) giving its status, run rows, estimated USD, input and output tokens,
+turns and wall-clock seconds, each summed over that trial's run rows. A `*` after the USD
+means a run of the trial reported no cost (`cost_source` `none`), so the figure leaves it out.
+The table keys trials by config hash, not by arm name: when one name carries more than one
+hash, each line is labelled `name (hash prefix)` so the two do not pool. The flag combines
+with `--dataset-version`. To keep the table, redirect the output of `fathom report`; the
+scorecard file holds none of it.
 
 ## 15. Checklist before the first paid run
 
@@ -1056,7 +1262,8 @@ verdict.
 - [ ] No hook script a `[settings]` file runs, and no `[env]` value, names a path in the
       data root (section 10).
 - [ ] Every task ships `solution/`, and `fathom validate <bank> --strict` passes (or its
-      warnings are understood).
+      warnings are understood), with `--scenarios-dir` naming the arms you will run when
+      they are not in `scenarios/`, so their `[gate] extra` paths are checked (section 8).
 - [ ] Every task whose results will inform a decision declares `[naive]` with `refs/naive/`,
       and the naive-fix check passes. A task kept only to demonstrate or test the setup may
       skip this; nothing enforces it (section 9).

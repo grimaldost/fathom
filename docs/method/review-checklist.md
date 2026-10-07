@@ -54,11 +54,11 @@ recurs across rounds, add a line here so it is caught next time. That is how
 
 ### Silent-failure items
 
-Three questions aimed at false negatives: a gate that passes while never running,
+Four questions aimed at false negatives: a gate that passes while never running,
 an arm that is absent while the plan looks clean, a check that reads unarmed on an
 arm that works. Calibrating a new gate against a known answer tends to catch its
 false positives; nothing catches its false negatives unless someone asks. These
-three make the question part of review.
+four make the question part of review.
 
 - [ ] **Rails bind** — for any change touching a rail, budget or cap: name the spawn
       path the value actually reaches, and state what it does **not** cap. A rail
@@ -73,6 +73,11 @@ three make the question part of review.
       aggregation: state which trials leave the denominator, and which way that
       biases the arm. *(Mapping an engine's "blocked" exit to `errored` rather than
       to a scored failure conditions the pass rate on the engine succeeding.)*
+- [ ] **Dated claims** — a claim of observed external behaviour, or that an artifact
+      exists, carries the date it was checked and the path or command that showed it.
+      *(A docstring that says what an external CLI emits, checked once against an
+      older release, reads as current long after the CLI changed; "the report exists"
+      with no path cannot be checked at all.)*
 
 ---
 *Keep this file in version control with the project. Each promoted item should

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
+from pathlib import Path
 from typing import Any
 
 Event = dict[str, Any]
@@ -62,6 +63,26 @@ def parse_events(lines: Iterable[str]) -> list[Event]:
         if isinstance(obj, dict):
             out.append(obj)
     return out
+
+
+def read_stream_file(path: str | Path) -> list[Event]:
+    """The events of a kept stream file (the NDJSON ``fathom run`` tees per spawn).
+
+    Parsed as :func:`parse_events` parses lines, so a file cut off mid-line keeps the
+    events before the cut. Raises ``OSError`` when the file cannot be read.
+    """
+    text = Path(path).read_text(encoding="utf-8", errors="replace")
+    return parse_events(text.splitlines())
+
+
+def stream_completed(events: Sequence[Event]) -> bool:
+    """True when the stream holds the closing ``result`` event.
+
+    The CLI writes it last, once the session ends; a spawn killed before then (a
+    timeout, a crash) leaves a stream without it, so what the stream shows is only
+    part of what the spawn did.
+    """
+    return any(ev.get("type") == "result" for ev in events)
 
 
 # ---------------------------------------------------------------------------

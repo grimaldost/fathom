@@ -1,6 +1,6 @@
 ---
 description: Plan a fathom matrix (dry-run) — arms, trial count, USD ceiling, and resume state; spawns nothing
-argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--limit N] [--tasks ID,ID] [--max-spawn-usd USD] [--include-holdout]"
+argument-hint: "<bank> [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--limit N] [--tasks ID,ID] [--interleave] [--max-spawn-usd USD] [--include-holdout]"
 allowed-tools: Bash
 ---
 
@@ -20,10 +20,24 @@ Plan a fathom eval matrix without spawning or spending anything.
    Keep both uv flags: `--no-dev` stops the first call from installing the
    development tools into the plugin's environment, and `--frozen` uses the
    plugin's lock file as shipped instead of rewriting it.
-3. Report the arm names the plan printed, the trial count (and how many are
+3. Report the arm names the plan printed (each arm shows its name and config_hash
+   prefix to distinguish forks from pools), the trial count (and how many are
    already done), and the USD ceiling: planned trials × the per-spawn cap in force
    (`--max-spawn-usd` if given, else $5), with series trials priced by their spawn
    count.
+   When the bank's ledger already holds completed trials, the plan also prints one
+   `expected:` line after the `planned:` line: the median cost per trial for the
+   planned strategies (and per model where a group holds at least 5 trials), with
+   its trial count, and that median times the planned trials. Report it beside the
+   ceiling, as an estimate from this ledger's own history. It is not a cap, and no
+   run is refused or stopped by it. With no history, no line is printed.
+   When nothing is planned (the bank is finished for the requested repeats), two more
+   lines follow the `planned:` line: `one more repeat:` gives the ceiling of one more
+   trial per arm and task and the `--repeats` value that plans it ("at least one more"
+   when the cells hold different numbers of repeats), and `completed in the ledger for
+   these arms:` gives the count of completed trials across all repeats, which is the
+   count the scorecard uses. Report both, so the user can decide on one more repeat
+   without a second planning run.
 
 Guardrails to surface:
 - If the bank's arms live in a subdirectory of `scenarios/` (for example
@@ -31,6 +45,7 @@ Guardrails to surface:
   planned: the run reads `<dir>/*.toml` non-recursively. Check the arm names in
   the plan against what the user intends, and `ls scenarios/` in the data root if
   unsure.
-- The ceiling is a worst case, not a spend cap. The real per-spawn cap is
+- The ceiling is a worst case, not a spend cap, and the `expected:` line is a past
+  median, not a promise. The real per-spawn cap is
   `--max-spawn-usd`, and `--max-run-usd` caps what one invocation may spend; both
   apply to the actual run.

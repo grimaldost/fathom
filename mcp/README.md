@@ -63,7 +63,7 @@ The root `README.md` spells out each file.
 ## Run it standalone (dev / debugging)
 
 ```sh
-FATHOM_HOME=/path/to/my-evals uv run --with "fastmcp>=2.0" python mcp/fathom_server.py
+FATHOM_HOME=/path/to/my-evals uv run --with "fastmcp>=2.11.3" python mcp/fathom_server.py
 ```
 
 ## Tests
@@ -76,5 +76,5 @@ FATHOM_HOME=/path/to/my-evals uv run --with "fastmcp>=2.0" python mcp/fathom_ser
   (with `subprocess.run` replaced, so nothing spawns). CI runs this file:
 
 ```sh
-uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 ```

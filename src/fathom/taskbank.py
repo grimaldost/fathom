@@ -34,6 +34,7 @@ class Task:
     verify: dict[str, Any]
     task_dir: Path
     gate: dict[str, Any] = field(default_factory=dict)
+    tags: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -42,6 +43,23 @@ class Bank:
     dataset_version: str
     tasks: list[Task]
     holdout: list[str]
+
+
+def _parse_tags(task_id: str, raw: Any) -> dict[str, str]:
+    """The optional ``[tags]`` table of a task.toml: string keys to string values.
+
+    Tags are the bank author's metadata about a task (for example ``size = "small"``). The
+    scorecard groups pass rates by them; no scenario field reads them, so they never move a
+    ``config_hash``.
+    """
+    if not isinstance(raw, dict):
+        raise ValueError(f"task '{task_id}': 'tags' must be a TOML table, got {type(raw).__name__}")
+    for key, value in raw.items():
+        if not isinstance(value, str):
+            raise ValueError(
+                f"task '{task_id}': tag '{key}' must be a string, got {type(value).__name__}"
+            )
+    return dict(raw)
 
 
 def _load_task(task_dir: Path) -> Task:
@@ -69,6 +87,8 @@ def _load_task(task_dir: Path) -> Task:
             f"task.toml in {task_dir} has [verify] but is missing required field 'entry'"
         )
 
+    tags = _parse_tags(data["id"], data.get("tags", {}))
+
     return Task(
         id=data["id"],
         instruction=data["instruction"],
@@ -76,6 +96,7 @@ def _load_task(task_dir: Path) -> Task:
         verify=dict(verify),
         task_dir=task_dir,
         gate=dict(data.get("gate", {})),
+        tags=tags,
     )
 
 

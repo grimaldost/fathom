@@ -696,6 +696,64 @@ class TestSettingsInjection(unittest.TestCase):
             self.assertNotEqual(as_ctx.config_hash, as_set.config_hash)
 
 
+class TestComparator(unittest.TestCase):
+    """The top-level `comparator` key names the arm a dependent arm is bought against
+    (FATH-B58). It orders the run and gates its trials, and changes nothing the
+    arm measures, so it enters neither config_hash nor the preimage: adding it to a
+    committed arm must not fork that arm's history (ADR-0002)."""
+
+    def _write(self, tmp: Path, top: str = "") -> Path:
+        p = tmp / "nudge.toml"
+        p.write_text(
+            'name = "nudge"\n'
+            'adapter = "claude-cli"\n'
+            'model = "m"\n'
+            'strategy = "single-session"\n'
+            'effort = "high"\n'
+            f"{top}\n"
+            '[tools]\nsource = "none"\nallowed = ["Read"]\n',
+            encoding="utf-8",
+        )
+        return p
+
+    def test_load_scenario_parses_the_key(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            self.assertEqual(
+                load_scenario(self._write(tmp, 'comparator = "bare"')).comparator, "bare"
+            )
+            self.assertIsNone(load_scenario(self._write(tmp)).comparator)
+
+    def test_the_resolved_arm_carries_the_key(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            cfg = load_scenario(self._write(Path(td), 'comparator = "bare"'))
+            self.assertEqual(resolve_scenario(cfg, STUB).comparator, "bare")
+
+    def test_with_and_without_the_key_resolve_to_the_same_hash_and_preimage(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            without = resolve_scenario(load_scenario(self._write(tmp)), STUB)
+            with_key = resolve_scenario(
+                load_scenario(self._write(tmp, 'comparator = "bare"')), STUB
+            )
+        self.assertEqual(with_key.config_hash, without.config_hash)
+        self.assertEqual(with_key.config_preimage, without.config_preimage)
+        self.assertNotIn("comparator", with_key.config_preimage)
+
+    def test_a_value_that_is_not_a_string_is_refused(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as td, self.assertRaises(ValueError) as ctx:
+            load_scenario(self._write(Path(td), 'comparator = ["bare"]'))
+        self.assertIn("comparator", str(ctx.exception))
+
+
 if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromModule(sys.modules[__name__])

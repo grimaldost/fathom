@@ -13,7 +13,7 @@
         "run",
         "--no-project",
         "--with",
-        "fastmcp>=2.0",
+        "fastmcp>=2.11.3",
         "python",
         "${CLAUDE_PLUGIN_ROOT}/mcp/fathom_server.py"
       ]

@@ -1,6 +1,6 @@
 ---
 description: Run the paid fathom scenario matrix against a bank (real spend; resumable)
-argument-hint: "<bank> [--dry-run] [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--ledger-dir DIR] [--limit N] [--tasks ID,ID] [--max-spawn-usd USD] [--max-run-usd USD] [--include-holdout] [--skip-credential-check] [--skip-bank-validation] [--skip-arming-check] [--no-lock] [--lock-wait-s SECONDS]"
+argument-hint: "<bank> [--dry-run] [--repeats K] [--scenarios-dir DIR] [--tasks-dir DIR] [--ledger-dir DIR] [--limit N] [--tasks ID,ID] [--interleave] [--max-spawn-usd USD] [--max-run-usd USD] [--include-holdout] [--skip-credential-check] [--skip-bank-validation] [--skip-arming-check] [--no-lock] [--lock-wait-s SECONDS]"
 allowed-tools: Bash
 ---
 
@@ -50,8 +50,11 @@ Tell the user before and while running:
   resuming loses nothing already bought. `fathom stop <bank>` (same invocation
   form, `stop` in place of `run`) asks a running matrix to halt after the trial in
   flight (the run exits 16).
-- `--limit N` caps new trials; the plan is ordered arm by arm, so `--limit` cuts
-  whole arms off the end. `--tasks ID[,ID...]` restricts the run to named tasks,
+- `--limit N` caps new trials, counted from the start of the plan's order: arm by
+  arm by default, so `--limit` cuts whole arms off the end; with `--interleave`,
+  repeat by repeat, so `--limit` keeps whole repeats (arms × tasks runs repeat 0 of
+  every arm). `--interleave` changes the order only, not which trials are bought.
+  `--tasks ID[,ID...]` restricts the run to named tasks,
   the way to buy a small screen first. `--max-spawn-usd USD` is the cap for each
   **spawn** (default $5), not a run total; a series trial makes several spawns,
   each under the cap. Raising it loosens the runaway guard and raises the printed

@@ -18,6 +18,7 @@ import dataclasses
 import json
 import os
 import pathlib
+import statistics
 import sys
 import tomllib
 from collections.abc import Callable, Iterator, Sequence
@@ -128,7 +129,17 @@ def _build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Cap planned trials to N",
+        help="Cap planned trials to N, counted from the start of the plan's order: by "
+        "default arm by arm, so it cuts whole arms off the end; with --interleave repeat "
+        "by repeat, so N = arms x tasks runs repeat 0 of every arm",
+    )
+    run_p.add_argument(
+        "--interleave",
+        action="store_true",
+        help="Order the plan repeat by repeat (every arm and task of repeat 0, then repeat "
+        "1, ...) instead of arm by arm, so a run cut short by --limit, a stop or a spend "
+        "rail still compares the arms. Changes the order only: the same trials are bought "
+        "and the same resume keys are written",
     )
     run_p.add_argument(
         "--tasks",
@@ -136,8 +147,9 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="ID[,ID...]",
         help="Run only these task ids. The way to buy a SCREEN before the full matrix "
         "(e.g. one band, or the positive control, at higher repeats). --limit cannot do "
-        "it: the plan is scenario-major, so --limit cuts whole arms off the end. Unknown "
-        "ids are an error, never a silent empty run.",
+        "it: it counts trials from the start of the plan's order (arm by arm unless "
+        "--interleave) and selects no task. Unknown ids are an error, never a silent "
+        "empty run.",
     )
     run_p.add_argument(
         "--repeats",
@@ -317,6 +329,27 @@ def _build_parser() -> argparse.ArgumentParser:
 
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
+    report_p.add_argument(
+        "--dataset-version",
+        default=None,
+        dest="dataset_version",
+        metavar="V",
+        help=(
+            "Render this dataset_version instead of the current one. A non-current version "
+            "is written to report/scorecard-<bank>--<version>.md, so the current scorecard "
+            "is never overwritten."
+        ),
+    )
+    report_p.add_argument(
+        "--per-trial",
+        action="store_true",
+        dest="per_trial",
+        help=(
+            "After writing the scorecard, print a table of USD, tokens, turns and wall time "
+            "per (arm, task, repeat), summed over the trial's run rows. The scorecard is "
+            "written as without the flag."
+        ),
+    )
 
     val_p = sub.add_parser(
         "validate",
@@ -500,6 +533,196 @@ def _trial_ceiling_usd(
     return plan.n_prs * (impl + plan.fixes * fix + plan.reviews * review)
 
 
+# A (strategy, model) group needs this many completed trials before the plan quotes its own
+# median; a thinner group would put one lucky trial in front of the operator as a typical one.
+_MIN_MODEL_ROWS = 5
+
+
+@dataclasses.dataclass(frozen=True)
+class _TrialCost:
+    """What one completed trial in the ledger cost: the sum of its run rows' ``cost_usd_est``."""
+
+    strategy: str
+    model: str
+    usd: float
+
+
+def _one_more_repeat_lines(
+    bank: Bank,
+    scenarios: Sequence[ResolvedScenario],
+    tasks: Sequence[Task],
+    done: set[tuple[str, str, str, str, int]],
+    max_budget_usd: float | None,
+) -> list[str]:
+    """What a finished plan can still buy: one more repeat per arm and task (FATH-B82).
+
+    Called only when every requested trial is already completed, so the plan would
+    otherwise end at "nothing to do". Prices one more trial per cell at the cap in
+    force, names the ``--repeats`` value that plans it (the highest completed repeat
+    index among these cells, plus two: the count is the index plus one, and one more is
+    wanted), and counts every completed trial for these arms and tasks at the current
+    dataset version, which is what the scorecard counts. When the cells hold different
+    numbers of repeats, the named value also fills the lagging cells, so the line says
+    "at least".
+    """
+    hashes = {sc.config_hash for sc in scenarios}
+    task_ids = {t.id for t in tasks}
+    top: dict[tuple[str, str], int] = {}
+    completed = 0
+    for _bank, version, task_id, config_hash, repeat in done:
+        if version != bank.dataset_version or config_hash not in hashes or task_id not in task_ids:
+            continue
+        completed += 1
+        cell = (config_hash, task_id)
+        top[cell] = max(top.get(cell, repeat), repeat)
+    if not top:
+        return []
+    cells = [(sc, task) for sc in scenarios for task in tasks]
+    ceiling = sum(_trial_ceiling_usd(sc, task, max_budget_usd) for sc, task in cells)
+    uneven = len(top) < len(cells) or len(set(top.values())) > 1
+    lead = "at least one more repeat" if uneven else "one more repeat"
+    note = (
+        "one per arm and task, more where some cells are behind"
+        if uneven
+        else ("one per arm and task")
+    )
+    one_more = (
+        f"{lead}: ceiling ${ceiling:.2f} for {len(cells)} trials ({note}); "
+        f"plan it with --repeats {max(top.values()) + 2}"
+    )
+    counted = (
+        f"completed in the ledger for these arms: {completed} trials "
+        "(all repeats; the scorecard counts these)"
+    )
+    return [one_more, counted]
+
+
+def _history_trial_costs(
+    bank_name: str,
+    ledger_dir: pathlib.Path,
+    scenarios: Sequence[ResolvedScenario] = (),
+) -> list[_TrialCost]:
+    """Per-trial cost of every completed trial in the bank's ledger, voids applied.
+
+    Read-only. A trial's cost is the sum of ``cost_usd_est`` over its run rows, which are
+    written before the trial row that closes them; a retried key therefore costs what its
+    completed attempt cost, not what an errored attempt before it spent. A trial is left
+    out, never counted as free, when it has no run rows or any run row says
+    ``cost_source == "none"`` (FATH-B79: a missing cost is a gap). Strategy and model come
+    from the trial row's ``config_preimage``, or from the one of ``scenarios`` with the
+    same ``config_hash`` when the row has none; a trial that names neither is left out.
+    """
+    from fathom import ledgerindex
+
+    path = ledger_dir / f"{bank_name}.jsonl"
+    if not path.exists():
+        return []
+    by_hash = {sc.config_hash: sc for sc in scenarios}
+    pending: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    out: list[_TrialCost] = []
+    for row in _ledger.apply_voids(ledgerindex.rows(path)):
+        kind = row.get("kind")
+        if kind not in ("run", "trial"):
+            continue
+        key = (
+            row.get("dataset_version"),
+            row.get("config_hash"),
+            row.get("task_id"),
+            row.get("repeat"),
+        )
+        if kind == "run":
+            pending.setdefault(key, []).append(row)
+            continue
+        runs = pending.pop(key, [])
+        if row.get("status") != "completed" or not runs:
+            continue
+        if any(r.get("cost_source", "reported") == "none" for r in runs):
+            continue
+        strategy = model = None
+        try:
+            preimage = json.loads(row.get("config_preimage") or "{}")
+        except ValueError:
+            preimage = {}
+        if isinstance(preimage, dict):
+            strategy, model = preimage.get("strategy"), preimage.get("model")
+        if not (strategy and model) and row.get("config_hash") in by_hash:
+            sc = by_hash[row["config_hash"]]
+            strategy, model = sc.strategy, sc.model
+        if not (strategy and model):
+            continue
+        try:
+            usd = sum(float(r.get("cost_usd_est") or 0.0) for r in runs)
+        except (TypeError, ValueError):
+            continue
+        out.append(_TrialCost(str(strategy), str(model), usd))
+    return out
+
+
+def _expected_spend_line(
+    planned: Sequence[tuple[ResolvedScenario, Task, int]],
+    history: Sequence[_TrialCost],
+) -> str | None:
+    """The plan's one-line estimate of what ``planned`` will cost, or None to print nothing.
+
+    Beside the ceiling, not instead of it: the ceiling is what the caps allow, this is what
+    trials like these have cost in the same ledger. It is an estimate and gates nothing.
+    A planned trial is priced at the median of its (strategy, model) group when that group
+    holds at least ``_MIN_MODEL_ROWS`` trials, else at its strategy's median; a planned
+    strategy with no history is named and left out of the sum.
+    """
+    if not planned or not history:
+        return None
+    by_strategy: dict[str, list[float]] = {}
+    by_model: dict[tuple[str, str], list[float]] = {}
+    for h in history:
+        by_strategy.setdefault(h.strategy, []).append(h.usd)
+        by_model.setdefault((h.strategy, h.model), []).append(h.usd)
+    median_of_strategy = {k: statistics.median(v) for k, v in by_strategy.items()}
+    median_of_model = {
+        k: statistics.median(v) for k, v in by_model.items() if len(v) >= _MIN_MODEL_ROWS
+    }
+
+    total = 0.0
+    priced = 0
+    unpriced: dict[str, int] = {}
+    used_strategies: set[str] = set()
+    used_models: set[tuple[str, str]] = set()
+    for sc, _task, _repeat in planned:
+        model_key = (sc.strategy, sc.model)
+        if model_key in median_of_model:
+            total += median_of_model[model_key]
+            used_models.add(model_key)
+        elif sc.strategy in median_of_strategy:
+            total += median_of_strategy[sc.strategy]
+        else:
+            unpriced[sc.strategy] = unpriced.get(sc.strategy, 0) + 1
+            continue
+        priced += 1
+        used_strategies.add(sc.strategy)
+
+    parts = [
+        f"{name} ${med:.2f} n={len(by_strategy[name])}"
+        for name, med in sorted(median_of_strategy.items())
+        if name in used_strategies
+    ] + [
+        f"{s}/{m} ${median_of_model[(s, m)]:.2f} n={len(by_model[(s, m)])}"
+        for s, m in sorted(used_models)
+    ]
+    gaps = "; ".join(
+        f"no history for strategy {name} ({count} planned trials)"
+        for name, count in sorted(unpriced.items())
+    )
+    if not priced:
+        return f"expected: not estimated; {gaps}; an estimate, not a cap"
+    line = (
+        f"expected: ~${total:.2f} for {priced} planned trials (median per trial from "
+        f"{len(history)} completed trials in this ledger: {'; '.join(parts)}"
+    )
+    if gaps:
+        line += f"; {gaps}"
+    return line + "); an estimate, not a cap"
+
+
 # Where a treatment arm's agent streams are kept by default. An arm with a [context]
 # inject or a non-default tool allowance keeps its stream, because the stream is the
 # only record of what its agent actually did: there is no ledger-side invocation
@@ -534,6 +757,51 @@ def _default_stream_dir(bank_name: str) -> pathlib.Path:
     return pathlib.Path.cwd() / _STREAM_ROOT / bank_name
 
 
+def _order_by_comparator(
+    scenarios: Sequence[ResolvedScenario],
+) -> tuple[list[ResolvedScenario], str | None]:
+    """The arms with each comparator moved ahead of its dependents, or why they are refused.
+
+    A ``comparator`` must name exactly one loaded arm other than the arm itself, and the
+    declarations must not form a cycle; otherwise the second value is the error and the
+    list is empty. The order is stable: an arm keeps its place unless its comparator has to
+    move ahead of it, so a set that declares no comparator comes back unchanged.
+    """
+    index_of: dict[str, list[int]] = {}
+    for i, sc in enumerate(scenarios):
+        index_of.setdefault(sc.name, []).append(i)
+    for sc in scenarios:
+        if sc.comparator is None:
+            continue
+        if sc.comparator == sc.name:
+            return [], f"scenario '{sc.name}' names itself as its comparator"
+        matches = index_of.get(sc.comparator, [])
+        if len(matches) != 1:
+            found = "no loaded arm" if not matches else f"{len(matches)} loaded arms"
+            return [], (
+                f"scenario '{sc.name}' has comparator '{sc.comparator}', which names "
+                f"{found}; loaded: {', '.join(sorted(index_of))}"
+            )
+
+    ordered: list[ResolvedScenario] = []
+    placed: set[int] = set()
+    for start in range(len(scenarios)):
+        # Walk the comparator chain up to an arm already placed, then place it root first.
+        chain: list[int] = []
+        i: int | None = start
+        while i is not None and i not in placed:
+            if i in chain:
+                cycle = " -> ".join(scenarios[j].name for j in [*chain, i])
+                return [], f"comparator cycle: {cycle}"
+            chain.append(i)
+            comparator = scenarios[i].comparator
+            i = index_of[comparator][0] if comparator is not None else None
+        for j in reversed(chain):
+            ordered.append(scenarios[j])
+            placed.add(j)
+    return ordered, None
+
+
 def run_matrix(
     bank: Bank,
     resolved_scenarios: list[ResolvedScenario],
@@ -555,6 +823,8 @@ def run_matrix(
     skip_bank_validation: bool = False,
     run_lock: Any | None = None,
     out: TextIO | None = None,
+    resume_cmd: str | None = None,
+    interleave: bool = False,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -570,11 +840,40 @@ def run_matrix(
     halts the matrix with ``EXIT_STOPPED`` before the next trial starts, so no caller
     needs a watcher script of its own.  Passing ``None`` (the default, and what every
     test does) changes nothing.
+
+    Once the trial loop has begun, each trial prints one flushed ``trial done:`` line and
+    every return prints one flushed ``run summary:`` line (:func:`_print_run_summary`),
+    ending in ``resume_cmd`` (default ``fathom run <bank> --repeats <n>``; ``_cmd_run``
+    passes the command it was invoked as). A dry run, an empty plan and the gates before
+    the loop print neither.
+
+    An arm that declares ``comparator`` runs after that arm, and a cell of it (task,
+    repeat) is bought only once the comparator has a completed trial for the same cell, in
+    the ledger or from this invocation. Otherwise the cell is blocked: a flushed
+    ``blocked:`` line, no spawn, no ledger row, and a count in the summary (FATH-B58). A
+    comparator that names no loaded arm, or the arm itself, or that forms a cycle returns
+    1 before the plan, dry run included.
+
+    The plan is ordered arm by arm (each arm's tasks, then its repeats), so ``limit`` cuts
+    whole arms off the end. With ``interleave`` it is ordered repeat by repeat (repeat, then
+    arm, then task), so ``limit`` keeps whole repeats and a run cut short has compared the
+    arms. The order is the only difference: the same trials are planned and the same resume
+    keys are written. The plan then prints an ``order:`` line and a ``first:`` line; without
+    it nothing new is printed.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
     _stage_fn = stage_task_fn if stage_task_fn is not None else stage_task
     _verifier = verifier_fn if verifier_fn is not None else run_verifier
+
+    # A dependent arm bought against an incomplete comparator measures a comparison that
+    # does not exist. The comparator goes first, and each dependent cell is gated below.
+    resolved_scenarios, comparator_error = _order_by_comparator(resolved_scenarios)
+    if comparator_error is not None:
+        print(f"ERROR: {comparator_error}", file=sys.stderr)
+        return 1
+    dependents = [sc for sc in resolved_scenarios if sc.comparator is not None]
+    hash_of = {sc.name: sc.config_hash for sc in resolved_scenarios}
 
     # --- Build and filter the planned matrix ---
     # Holdouts are excluded by default (ADR-0005 sealing). --include-holdout is the
@@ -612,12 +911,21 @@ def run_matrix(
 
     done = _ledger.completed_keys(bank.name, ledger_dir=_ledger_dir)
 
-    all_tuples: list[tuple[ResolvedScenario, Task, int]] = [
-        (sc, task, repeat)
-        for sc in resolved_scenarios
-        for task in tasks_to_run
-        for repeat in range(repeats)
-    ]
+    all_tuples: list[tuple[ResolvedScenario, Task, int]]
+    if interleave:
+        all_tuples = [
+            (sc, task, repeat)
+            for repeat in range(repeats)
+            for sc in resolved_scenarios
+            for task in tasks_to_run
+        ]
+    else:
+        all_tuples = [
+            (sc, task, repeat)
+            for sc in resolved_scenarios
+            for task in tasks_to_run
+            for repeat in range(repeats)
+        ]
     total = len(all_tuples)
 
     planned = [
@@ -626,6 +934,7 @@ def run_matrix(
         if (bank.name, bank.dataset_version, task.id, sc.config_hash, repeat) not in done
     ]
     already_done = total - len(planned)
+    nothing_pending = total > 0 and not planned
 
     if limit is not None:
         planned = planned[:limit]
@@ -646,12 +955,39 @@ def run_matrix(
     # arms prints an identical count line, so the counts alone cannot tell a matrix
     # from the wrong experiment — and the arm names are otherwise only visible after
     # the spend, in the ledger.
-    print(f"arms:     {', '.join(sc.name for sc in resolved_scenarios)}", file=_out)
+    print(
+        f"arms:     {', '.join(f'{sc.name} [{sc.config_hash[:12]}]' for sc in resolved_scenarios)}",
+        file=_out,
+    )
+    for sc in dependents:
+        print(
+            f"depends:  {sc.name} on {sc.comparator} (a cell runs only after "
+            f"{sc.comparator} completed the same task and repeat)",
+            file=_out,
+        )
+    if interleave:
+        print(
+            "order:    interleaved (repeat, then arm, then task); "
+            "--limit keeps the first N of this order",
+            file=_out,
+        )
+        if planned:
+            head = ", ".join(f"{sc.name}/{task.id} r{repeat}" for sc, task, repeat in planned[:6])
+            print(f"first:    {head}{', ...' if num_planned > 6 else ''}", file=_out)
     print(
         f"planned:  {num_planned} trials ({already_done} already done)"
         f"  ceiling: ${ceiling_usd:.2f}",
         file=_out,
     )
+    # What trials like these have cost in this ledger, beside the worst-case ceiling above.
+    # Information only: the money rail stays on observed spend, and a printed estimate
+    # changes no exit code. After the `planned:` line, never inside it, which the
+    # acceptance harness matches whole. Nothing is printed without history.
+    expected = _expected_spend_line(
+        planned, _history_trial_costs(bank.name, _ledger_dir, resolved_scenarios)
+    )
+    if expected:
+        print(expected, file=_out)
     # Show the arithmetic for any multi-spawn arm. A ceiling many times the per-trial
     # rail reads as a typo unless the spawn count is named; naming it is what makes
     # the number actionable (chunk it with --limit, lower the rail, or don't run).
@@ -673,6 +1009,12 @@ def run_matrix(
             file=_out,
         )
 
+    if nothing_pending:
+        for line in _one_more_repeat_lines(
+            bank, resolved_scenarios, tasks_to_run, done, max_budget_usd
+        ):
+            print(line, file=_out)
+
     if dry_run:
         print("[dry-run] no spawns", file=_out)
         return EXIT_OK
@@ -691,7 +1033,9 @@ def run_matrix(
         import fathom.validate as _validate
 
         print(f"validate: checking bank '{bank.name}' can discriminate...", file=_out)
-        bank_checks = _validate.validate_bank(bank, stage_fn=_stage_fn, verifier_fn=_verifier)
+        bank_checks = _validate.validate_bank(
+            bank, stage_fn=_stage_fn, verifier_fn=_verifier, scenarios=resolved_scenarios
+        )
         if not _validate.validation_ok(bank_checks):
             print(_validate.render_validation(bank.name, bank_checks), file=_out)
             print(
@@ -784,6 +1128,42 @@ def run_matrix(
     # default and cleared the env var (see the per-trial branch below).
     _explicit_stream_dir = os.environ.get("FATHOM_STREAM_DIR")
 
+    # What this invocation did, for the progress line and the closing summary. Counted
+    # from the rows appended below, never from the ledger file, which also holds every
+    # earlier invocation's rows.
+    started = 0
+    completed = 0
+    errored = 0
+    blocked = 0
+    # Resume keys this invocation completed, so a dependent cell can follow its comparator
+    # within one run; `done` holds the ones earlier invocations completed.
+    completed_now: set[tuple[str, str, str, str, int]] = set()
+    _resume = resume_cmd or f"fathom run {bank.name} --repeats {repeats}"
+
+    def _finish(code: int) -> int:
+        # An infrastructure-stopped trial has no ledger row, so a resume runs it again:
+        # it counts as not started, along with the trials after it.
+        _print_run_summary(
+            _out,
+            ledger_path=_ledger_dir / f"{bank.name}.jsonl",
+            completed=completed,
+            errored=errored,
+            skipped=already_done,
+            not_started=num_planned - completed - errored - blocked,
+            spent_usd=spent_usd,
+            resume_cmd=_resume,
+            blocked=blocked if dependents else None,
+        )
+        return code
+
+    def _progress(sc: ResolvedScenario, task: Task, repeat: int, status: str) -> None:
+        print(
+            f"trial done: {started}/{num_planned} {sc.name}/{task.id} r{repeat} {status} "
+            f"[${spent_usd:.2f}]",
+            file=_out,
+            flush=True,
+        )
+
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
         drifted = fixture_drift(task, fixture_expected[task.id])
@@ -794,7 +1174,7 @@ def run_matrix(
                 "committed one; restore fixtures/ and re-run — stopping matrix",
                 file=_out,
             )
-            return EXIT_INFRASTRUCTURE
+            return _finish(EXIT_INFRASTRUCTURE)
         if max_run_usd is not None and spent_usd >= max_run_usd:
             print(
                 f"run budget reached: ${spent_usd:.2f} of ${max_run_usd:.2f} spent this "
@@ -802,7 +1182,7 @@ def run_matrix(
                 "lost; re-invoke to continue from the ledger.",
                 file=_out,
             )
-            return EXIT_RUN_BUDGET
+            return _finish(EXIT_RUN_BUDGET)
         # The trial boundary is the stop point, for the same reason the budget rail
         # halts here: the ledger is the checkpoint, so halting between trials loses
         # nothing already bought, while killing a tree mid-trial discards a spawn that
@@ -817,7 +1197,21 @@ def run_matrix(
                     "already bought is lost; re-invoke to continue from the ledger.",
                     file=_out,
                 )
-                return EXIT_STOPPED
+                return _finish(EXIT_STOPPED)
+        # A dependent cell is bought only against a completed comparator cell (FATH-B58).
+        # Checked before the executor exists, so a blocked cell spends nothing and writes
+        # no row; a later run buys it once the comparator has completed that cell.
+        if sc.comparator is not None:
+            cell = (bank.name, bank.dataset_version, task.id, hash_of[sc.comparator], repeat)
+            if cell not in done and cell not in completed_now:
+                blocked += 1
+                print(
+                    f"blocked: {sc.name}/{task.id} r{repeat} — comparator {sc.comparator} "
+                    "has no completed trial for this cell; nothing spent",
+                    file=_out,
+                    flush=True,
+                )
+                continue
         # Default FATHOM_STREAM_DIR, per trial, for an arm whose scenario
         # declares a [context] inject or a non-default tool allowance — the
         # kind of arm where the stream is the only record of what the agent
@@ -835,6 +1229,7 @@ def run_matrix(
         os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
         executor = _executor_factory(sc)
         runner = _runner_factory(sc)
+        started += 1
 
         with _stage_fn(task, _DEFAULT_BASE_BRANCH) as workspace:
             trial_result = executor.run_trial(task, workspace, sc, runner)
@@ -850,7 +1245,8 @@ def run_matrix(
                     file=_out,
                 )
                 # Ledger is the resume checkpoint — no writes for this trial.
-                return EXIT_INFRASTRUCTURE
+                _progress(sc, task, repeat, "infrastructure")
+                return _finish(EXIT_INFRASTRUCTURE)
 
             # A trial that reached into the task directory corrupted the baseline for
             # every trial after it; its own result is not scored, and the matrix stops.
@@ -911,6 +1307,7 @@ def run_matrix(
                     tool_git_sha=sc.tool_repo_sha or "",
                     cli_version=run_rec.cli_version,
                     pin_level=trial_result.pin_level,
+                    scenario=sc.name,
                     cost_usd_est=run_rec.cost_usd_est,
                     cost_source=run_rec.cost_source,
                     model_id=run_rec.model_id,
@@ -958,6 +1355,14 @@ def run_matrix(
             trial_dict["holdout"] = task.id in bank.holdout
             trial_dict["fixture_sha"] = fixture_shas[task.id]
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
+            if valid:
+                completed += 1
+                completed_now.add(
+                    (bank.name, bank.dataset_version, task.id, sc.config_hash, repeat)
+                )
+            else:
+                errored += 1
+            _progress(sc, task, repeat, status_value)
 
             if drifted_during:
                 print(
@@ -966,9 +1371,41 @@ def run_matrix(
                     "restore fixtures/ and re-run — stopping matrix",
                     file=_out,
                 )
-                return EXIT_INFRASTRUCTURE
+                return _finish(EXIT_INFRASTRUCTURE)
 
-    return EXIT_OK
+    return _finish(EXIT_OK)
+
+
+def _print_run_summary(
+    out: TextIO,
+    *,
+    ledger_path: pathlib.Path,
+    completed: int,
+    errored: int,
+    skipped: int,
+    not_started: int,
+    spent_usd: float,
+    resume_cmd: str,
+    blocked: int | None = None,
+) -> None:
+    """The one closing line of a run that reached its trial loop, flushed.
+
+    ``completed`` and ``errored`` are the trial rows this invocation appended; ``skipped``
+    is what the ledger already held for the plan; ``not_started`` is the rest of the plan
+    (a trial an infrastructure error stopped has no row, so it counts here and a resume
+    runs it). ``spent_usd`` is this invocation's observed spend, not the ledger's total.
+    ``blocked`` counts the dependent cells whose comparator had no completed trial; it is
+    printed only when an arm declares a comparator (``None`` otherwise), so a run without
+    one prints the line it always did.
+    """
+    blocked_part = "" if blocked is None else f"blocked {blocked} (comparator incomplete); "
+    print(
+        f"run summary: ledger {ledger_path.resolve()}; completed {completed}, errored "
+        f"{errored} this invocation; {blocked_part}skipped {skipped} (already done); not "
+        f"started {not_started}; spent ${spent_usd:.2f} this invocation; resume: {resume_cmd}",
+        file=out,
+        flush=True,
+    )
 
 
 def _default_executor_factory(
@@ -1131,15 +1568,29 @@ def _anchor_paths(args: argparse.Namespace, *, here: pathlib.Path, root: pathlib
     """Make every path in *args* absolute before the working directory changes.
 
     A path the user gave is relative to *here*, where the command was started; a path
-    left out is the data root's own.
+    left out is the data root's own. A relative path that is missing under *here* but
+    present under the data root is recorded in ``args.path_hints``, for the note
+    :func:`_running_in` prints and the "did you mean" the error sites add.
     """
+    hints: dict[str, tuple[str, pathlib.Path]] = {}
+    args.path_hints = hints
     for name, default in _PATH_DEFAULTS.items():
         if not hasattr(args, name):
             continue
         value = getattr(args, name)
         setattr(args, name, root / default if value is None else _absolute(here, value))
+        if value is not None and not pathlib.Path(value).expanduser().is_absolute():
+            alternative = _absolute(root, value)
+            if here != root and not getattr(args, name).exists() and alternative.exists():
+                hints[name] = (str(value), alternative)
     if getattr(args, "lock_root", None):
         args.lock_root = str(_absolute(here, args.lock_root))
+
+
+def _path_hint(args: argparse.Namespace, name: str) -> str:
+    """ " (did you mean <data-root path>?)" for a relative path option that missed, else ``""``."""
+    hint = getattr(args, "path_hints", {}).get(name)
+    return f" (did you mean {hint[1]}?)" if hint else ""
 
 
 def _appends_to(args: argparse.Namespace) -> pathlib.Path | None:
@@ -1168,6 +1619,13 @@ def _running_in(root: _home.DataRoot, args: argparse.Namespace) -> Iterator[None
     warning = root.warning(appends_to=_appends_to(args))
     if warning:
         print(warning, file=sys.stderr)
+    for name, (value, alternative) in args.path_hints.items():
+        print(
+            f"note: --{name.replace('_', '-')} {value} is relative to the working directory "
+            f"({here}), where it does not exist; the data root has {alternative}. "
+            "Pass that path, or run from the data root.",
+            file=sys.stderr,
+        )
     # An explicit stream directory is a path the user gave, so it is relative to `here`.
     saved_stream_dir = os.environ.get("FATHOM_STREAM_DIR")
     if saved_stream_dir:
@@ -1309,6 +1767,48 @@ def _cmd_index(args: argparse.Namespace) -> int:
     return _ledgerindex.run_index(args.home, write_index=args.write, command="fathom index")
 
 
+def _shell_arg(value: object) -> str:
+    """*value* as one command-line word: double-quoted only when it holds whitespace."""
+    text = str(value)
+    return f'"{text}"' if any(ch.isspace() for ch in text) else text
+
+
+def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
+    """The command that continues this ``fathom run`` from its ledger.
+
+    Rebuilt from the parsed *args*: the bank, ``--repeats``, and the flags that shaped
+    what runs or what may be spent (``--scenarios-dir``, ``--tasks-dir``, ``--ledger-dir``,
+    ``--tasks``, ``--include-holdout``, ``--interleave``, ``--max-spawn-usd``,
+    ``--max-run-usd``). A path
+    option that is the data root's own default was not given, since :func:`_anchor_paths`
+    has already filled it in, and is left out. ``--home`` leads the command when it was
+    given, so the command means the same from any directory. ``--limit`` and the
+    ``--skip-*`` flags are left out: a resume runs the rest of the plan, and its gates
+    run again.
+    """
+    root = getattr(args, "data_root", None)
+    head = ["fathom"]
+    if getattr(args, "home", None) is not None and root is not None:
+        head += ["--home", _shell_arg(root)]
+    parts = [*head, "run", _shell_arg(args.bank), "--repeats", str(args.repeats)]
+    for name, default in _PATH_DEFAULTS.items():
+        value = getattr(args, name, None)
+        if value is None or (root is not None and pathlib.Path(value) == root / default):
+            continue
+        parts += [f"--{name.replace('_', '-')}", _shell_arg(value)]
+    if args.tasks is not None:
+        parts += ["--tasks", _shell_arg(args.tasks)]
+    if args.include_holdout:
+        parts.append("--include-holdout")
+    if getattr(args, "interleave", False):
+        parts.append("--interleave")
+    if spawn_cap is not None:
+        parts += ["--max-spawn-usd", f"{spawn_cap:g}"]
+    if args.max_run_usd is not None:
+        parts += ["--max-run-usd", f"{args.max_run_usd:g}"]
+    return " ".join(parts)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     from fathom.scenario import load_scenario, resolve_scenario
 
@@ -1321,7 +1821,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     try:
         bank = load_bank(tasks_dir / args.bank)
     except Exception as exc:
-        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        print(
+            f"error: could not load bank '{args.bank}': {exc}{_path_hint(args, 'tasks_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     resolver = _DefaultResolver()
@@ -1335,7 +1838,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
 
     if not resolved_scenarios:
-        print(f"error: no scenarios found in {scenarios_dir}", file=sys.stderr)
+        print(
+            f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     # Fail fast on an unknown strategy — BEFORE planning or any spawn, so a typo is
@@ -1419,6 +1925,8 @@ def _cmd_run(args: argparse.Namespace) -> int:
             skip_arming_check=args.skip_arming_check,
             skip_bank_validation=args.skip_bank_validation,
             run_lock=run_lock,
+            resume_cmd=_resume_command(args, spawn_cap),
+            interleave=getattr(args, "interleave", False),
         )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
@@ -1511,7 +2019,9 @@ def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenar
     return out
 
 
-def _note_stream_dir(scenarios_dir: pathlib.Path) -> None:
+def _note_stream_dir(
+    scenarios_dir: pathlib.Path, scenarios: list[ResolvedScenario] | None = None
+) -> None:
     """Say where `fathom run` will keep the streams of the arms that need them.
 
     An arm that declares a [context] inject or a non-default tool allowance is one
@@ -1521,11 +2031,13 @@ def _note_stream_dir(scenarios_dir: pathlib.Path) -> None:
     warning, which would ask the operator to act. Nothing is printed when
     FATHOM_STREAM_DIR is already set or no such arm is planned. Unparsable scenario
     files are skipped (as `_load_resolved_scenarios` already does for `run`), never
-    turned into a validate failure.
+    turned into a validate failure. *scenarios*, when given, are the arms already loaded
+    from *scenarios_dir*, so a skipped file is not reported twice.
     """
     if os.environ.get("FATHOM_STREAM_DIR"):
         return
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    if scenarios is None:
+        scenarios = _load_resolved_scenarios(scenarios_dir)
     streamed = [sc.name for sc in scenarios if _wants_stream_dir(sc)]
     if not streamed:
         return
@@ -1545,12 +2057,20 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     try:
         bank = load_bank(tasks_dir / args.bank)
     except Exception as exc:
-        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        print(
+            f"error: could not load bank '{args.bank}': {exc}{_path_hint(args, 'tasks_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
-    checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
+    # The arms' `[gate] extra` commands are path-checked against every task (FATH-B54).
+    scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
+    scenarios = _load_resolved_scenarios(scenarios_dir)
+    checks = _validate.validate_bank(
+        bank, stage_fn=stage_task, verifier_fn=run_verifier, scenarios=scenarios
+    )
     print(_validate.render_validation(bank.name, checks))
-    _note_stream_dir(args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR)
+    _note_stream_dir(scenarios_dir, scenarios)
     return EXIT_OK if _validate.validation_ok(checks, strict=args.strict) else EXIT_BANK_INVALID
 
 
@@ -1561,7 +2081,10 @@ def _cmd_verify_arming(args: argparse.Namespace) -> int:
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
     scenarios = _load_resolved_scenarios(scenarios_dir)
     if not scenarios:
-        print(f"error: no scenarios found in {scenarios_dir}", file=sys.stderr)
+        print(
+            f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     declaring = [sc for sc in scenarios if _arming.needs_verification(sc)]
@@ -1705,6 +2228,14 @@ def _cmd_report(args: argparse.Namespace) -> int:
     in the data root (the working directory while a command runs). Without the ledger it
     would write a scorecard holding only its heading and exit 0, so a missing ledger is an
     error that names the path looked for.
+
+    ``--dataset-version V`` renders one version of the ledger instead of the current one,
+    into ``report/scorecard-<bank>--<V>.md``; a version the ledger does not hold is an
+    error that names the versions it does.
+
+    ``--per-trial`` prints, after the scorecard is written, a table of each trial's USD,
+    tokens, turns and wall time (:func:`fathom.report.render_per_trial`), for the same
+    version. The scorecard is written exactly as without the flag.
     """
     import fathom.report as _report
 
@@ -1725,8 +2256,17 @@ def _cmd_report(args: argparse.Namespace) -> int:
             ledger_dir=ledger_dir,
             report_dir=root / _report.REPORT_DIR,
             tasks_dir=root / _report.TASKS_DIR,
+            dataset_version=getattr(args, "dataset_version", None),
         )
         print(f"report written to {out_path}")
+        if getattr(args, "per_trial", False):
+            rows = _report.per_trial_rows(
+                args.bank,
+                ledger_dir,
+                dataset_version=getattr(args, "dataset_version", None),
+            )
+            print()
+            print(_report.render_per_trial(args.bank, rows), end="")
         _warn_if_unpublished(args.bank, root)
         return EXIT_OK
     except Exception as exc:

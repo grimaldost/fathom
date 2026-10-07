@@ -67,8 +67,9 @@ What each step does:
 - **`fathom validate`** runs each task's verifier twice, locally: on the untouched fixture,
   where at least one criterion must be false (there is work to do), and on the task's
   reference solution, where it must pass (the work can be done). It also runs the task's gate
-  command if it has one. It may print a `note:` saying that a paid run will keep each agent's
-  raw output under `.fathom/streams/<bank>/`; that needs no action.
+  command if it has one, and checks that the scripts named by that command and by each gated
+  arm's `[gate] extra` exist. It may print a `note:` saying that a paid run will keep each
+  agent's raw output under `.fathom/streams/<bank>/`; that needs no action.
 - **`fathom run --dry-run`** prints the data root, the arms it found, the trials still to buy
   and a worst-case cost ceiling, and spawns nothing.
 - **`fathom smoke`** is the first step that spends. It tests the spawn environment on this
@@ -132,15 +133,16 @@ Explicit path options (`--tasks-dir`, `--scenarios-dir`, `--ledger-dir`) resolve
 current directory, as command-line paths usually do, so from outside the data root give them
 as absolute paths. One engine install serves any number of data roots.
 
-Each ledger row records the `engine_version` that wrote it. The version is provenance only: it
-is not part of the resume key, so upgrading the engine does not re-buy completed trials.
+Each ledger row records the `engine_version` that wrote it and a `written_at` time. Both are
+provenance only: neither is part of the resume key, so upgrading the engine does not re-buy
+completed trials.
 
 ## Commands
 
 | Command | What it does | Spends |
 |---|---|---|
 | `fathom init [DIR]` | Create a data root. | nothing |
-| `fathom validate <bank>` | Check each task: the fixture fails the verifier, the reference solution passes it, the gate runs. | nothing |
+| `fathom validate <bank>` | Check each task: the fixture fails the verifier, the reference solution passes it, the gate runs, and the paths the gate commands name exist. | nothing |
 | `fathom run <bank> --dry-run` | Print the arms, the trials still to buy, and a worst-case USD ceiling. | nothing |
 | `fathom smoke` | Prove credential isolation, default-deny, stream parsing, plugin mounting, the run lock and the series-engine boundary on tiny real spawns. `--no-engine-boundary` when the data root has no `scenarios/series.toml`. | a few cents |
 | `fathom verify-arming` | Prove each treatment arm's injection reaches a live spawn. `fathom run` does this itself before spending. | a little |

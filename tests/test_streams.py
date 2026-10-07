@@ -164,6 +164,43 @@ class ToolCallTests(unittest.TestCase):
         self.assertEqual(streams.skill_invocations(streams.parse_events(_lines(ev))), ["x:y"])
 
 
+RESULT_OK = {"type": "result", "subtype": "success", "is_error": False, "num_turns": 2}
+
+
+class StreamFileTests(unittest.TestCase):
+    def setUp(self) -> None:
+        import tempfile
+
+        self._tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self._tmp.name)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_read_stream_file_parses_a_kept_stream(self) -> None:
+        path = self.dir / "kept.ndjson"
+        body = "\n".join(_lines(INIT, ASSISTANT_TOOL_USE, USER_TOOL_RESULT_OK, RESULT_OK))
+        path.write_text(body + "\n", encoding="utf-8")
+        events = streams.read_stream_file(path)
+        self.assertEqual([e["type"] for e in events], ["system", "assistant", "user", "result"])
+        self.assertEqual(
+            streams.successful_mcp_calls(events), ["mcp__plugin_codenav_codenav__find_symbol"]
+        )
+
+    def test_read_stream_file_keeps_the_events_before_a_cut_off_line(self) -> None:
+        # A killed spawn leaves half a line at the end of the file.
+        path = self.dir / "cut.ndjson"
+        path.write_text(json.dumps(INIT) + '\n{"type": "assist', encoding="utf-8")
+        self.assertEqual([e["subtype"] for e in streams.read_stream_file(path)], ["init"])
+
+    def test_stream_completed_needs_a_result_event(self) -> None:
+        self.assertTrue(streams.stream_completed(streams.parse_events(_lines(INIT, RESULT_OK))))
+        self.assertFalse(
+            streams.stream_completed(streams.parse_events(_lines(INIT, ASSISTANT_TOOL_USE)))
+        )
+        self.assertFalse(streams.stream_completed([]))
+
+
 class HookTests(unittest.TestCase):
     def test_hook_names_and_events(self) -> None:
         events = streams.parse_events(_lines(INIT, HOOK_STARTED))

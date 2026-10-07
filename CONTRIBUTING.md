@@ -30,7 +30,8 @@ uv lock --check
 uv run ruff format --check .
 uv run ruff check .
 uv run pytest
-uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
+uv run --with "fastmcp==2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 FATHOM_HOME= uv run fathom reconcile                # the engine checkout: version sites
 uv run fathom --home examples/data-root reconcile   # the example data root
 uv run fathom smoke --no-engine-boundary            # manual: real spawns, a few cents
@@ -44,7 +45,12 @@ first, which removes the variable for the rest of the session.
   before pytest could read the file. CI runs it before `uv sync`.
 - `pytest` collects `tests/` only. The MCP server's tests import `fastmcp`, which the core
   does not depend on, so they run as their own step with `fastmcp` added for that command
-  alone. They check each tool's parameter descriptions and the command each tool runs.
+  alone. They check each tool's parameter descriptions, the command each tool runs, the
+  version the server reports and that starting it prints no banner. They run twice: at the
+  newest `fastmcp` and pinned at the floor, 2.11.3, the oldest release that accepts the
+  `version` constructor argument and the `show_banner` run argument the server passes and
+  that installs against current dependencies. Raising the floor means changing the
+  `fastmcp` string in `.claude-plugin/plugin.json`, in both CI steps and in this list.
 - `fathom reconcile` is free and spawns nothing. Every fact the tree records twice must
   agree; exit 13 means one does not. It runs twice. At the engine root it holds the version
   sites (`pyproject.toml`, `.claude-plugin/plugin.json` and the newest `CHANGELOG.md`
@@ -165,10 +171,16 @@ what enters `config_hash` updates it in the same pull request. The parsers
 
 A release is a metadata-only commit on its own branch, merged through a pull request:
 
-1. Roll `[Unreleased]` into a dated `## [X.Y.Z] - YYYY-MM-DD` heading, and state the bump
+1. For a release that changes `commands/`, `skills/`, `mcp/` or the authoring guide, run
+   the fresh-agent acceptance test on the release branch before merging:
+   `uv run python tools/agent_acceptance.py --preflight-only --data-root DIR`, then
+   `--scenarios S1,S3,S2`. Record its verdict in the release PR. It needs a working
+   Claude login and spends money; link [`docs/agent-acceptance.md`](docs/agent-acceptance.md)
+   and its Cost section for the caps.
+2. Roll `[Unreleased]` into a dated `## [X.Y.Z] - YYYY-MM-DD` heading, and state the bump
    class and the reason for it in the heading's prose.
-2. Bump the version in `pyproject.toml` and `.claude-plugin/plugin.json`.
-3. Run `uv lock`.
+3. Bump the version in `pyproject.toml` and `.claude-plugin/plugin.json`.
+4. Run `uv lock`.
 
 The `version-sites` reconciliation holds the three version sites together, so a half-done
 bump fails the suite. Keep feature work out of the release commit, so that bisect and

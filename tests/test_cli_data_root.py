@@ -10,8 +10,10 @@ the same ledger rows appended to the root's ledger, locks and kept streams under
 ``.fathom/``, the same scorecard, the same resume keys, and nothing written where the
 command was started.
 
-They also pin ``engine_version``, the provenance every new ledger row carries: rows written
-before it existed read, report, reconcile and resume exactly as before.
+They also pin ``engine_version`` and ``written_at``, the provenance every new ledger row
+carries: rows written before either existed read, report, reconcile and resume exactly as
+before. ``written_at`` is the moment of writing, so it is the one field that differs between
+otherwise identical runs; the cross-location comparison sets it aside.
 
 No spawns: the executor and runner are stubbed, and the arming and credential gates, which
 would spawn or read this seat's credential, are skipped with their own flags.
@@ -22,6 +24,7 @@ Stdlib only; runs without uv as ``python tests/test_cli_data_root.py``.
 from __future__ import annotations
 
 import contextlib
+import datetime
 import io
 import json
 import os
@@ -68,6 +71,13 @@ def _ledger_path(root: Path) -> Path:
 
 def _lines(path: Path) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines()
+
+
+def _without_written_at(line: str) -> str:
+    """A ledger line with its write time removed, for comparing rows across runs."""
+    row = json.loads(line)
+    row.pop(_ledger.WRITTEN_AT_KEY)
+    return json.dumps(row, sort_keys=True)
 
 
 def _call(argv: list[str], *, cwd: Path, env: dict[str, str] | None = None):
@@ -190,9 +200,14 @@ class SameResultFromAnywhereTests(unittest.TestCase):
             self.assertEqual(r["after"][: len(r["before"])], r["before"], "append-only")
             new = r["after"][len(r["before"]) :]
             self.assertEqual(len(new), 4, "two trials, each a run row and a trial row")
-            appended[mode] = new
+            for line in new:
+                self.assertIn("written_at", json.loads(line), "every new row is stamped")
+            appended[mode] = [_without_written_at(line) for line in new]
+        # written_at is the one field that differs by design: it is the moment of writing.
         self.assertEqual(
-            len({tuple(rows) for rows in appended.values()}), 1, "identical bytes everywhere"
+            len({tuple(rows) for rows in appended.values()}),
+            1,
+            "identical rows everywhere, apart from when they were written",
         )
 
     def test_config_hashes_match_the_committed_rows(self) -> None:
@@ -248,6 +263,20 @@ class SameResultFromAnywhereTests(unittest.TestCase):
             self.assertTrue(ledgerindex.is_current(r["root"]))
             self.assertIn(f"reconciling the data root at {r['root']}", r["reconcile"][1])
             self.assertIn("RECONCILE: OK", r["reconcile"][1])
+
+    def test_new_rows_record_when_they_were_written(self) -> None:
+        for _mode, r in self._each():
+            for line in r["after"][len(r["before"]) :]:
+                stamp = datetime.datetime.fromisoformat(json.loads(line)["written_at"])
+                self.assertEqual(stamp.utcoffset(), datetime.timedelta(0))
+
+    def test_new_run_rows_name_their_scenario(self) -> None:
+        for _mode, r in self._each():
+            runs = [json.loads(line) for line in r["after"][len(r["before"]) :]]
+            runs = [row for row in runs if row["kind"] == "run"]
+            self.assertEqual(len(runs), 2)
+            for row in runs:
+                self.assertTrue(row["scenario"], "an arm name, not the legacy empty default")
 
     def test_new_rows_record_the_engine_version(self) -> None:
         for _mode, r in self._each():
@@ -387,6 +416,140 @@ class PrecedenceTests(unittest.TestCase):
         self.assertEqual(after, str(self.a), "the variable is restored once the command ends")
 
 
+class RelativePathMissTests(unittest.TestCase):
+    """A relative path option that misses under the working directory names the data root's."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.root = _copy_fixture(base)
+        self.plain = base / "plain"
+        self.plain.mkdir()
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_a_missing_scenarios_dir_names_the_data_roots(self) -> None:
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertIn(str(self.root / "scenarios"), err)
+        self.assertIn("did you mean", err)
+        self.assertIn("is relative to the working directory", err)
+
+    def test_the_same_through_fathom_home(self) -> None:
+        code, out, err = _call(
+            ["run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+            env={"FATHOM_HOME": str(self.root)},
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertIn(str(self.root / "scenarios"), err)
+
+    def test_a_missing_tasks_dir_names_the_data_roots(self) -> None:
+        for command in ("validate", "run"):
+            with self.subTest(command=command):
+                argv = ["--home", str(self.root), command, BANK, "--tasks-dir", "tasks"]
+                if command == "run":
+                    argv.append("--dry-run")
+                code, out, err = _call(argv, cwd=self.plain)
+                self.assertEqual(code, 1, out + err)
+                self.assertIn(str(self.root / "tasks"), err)
+                self.assertIn("could not load bank", err)
+
+    def test_a_relative_path_that_exists_gets_no_note(self) -> None:
+        (self.plain / "scenarios").mkdir()
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+        self.assertNotIn("is relative to the working directory", err)
+
+    def test_a_path_missing_in_both_places_gets_no_note(self) -> None:
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "nowhere"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+        self.assertNotIn("is relative to the working directory", err)
+
+    def test_an_absolute_path_and_an_omitted_option_get_no_note(self) -> None:
+        missing = str(self.plain / "absent")
+        for extra in (["--scenarios-dir", missing], []):
+            with self.subTest(extra=extra):
+                _code, _out, err = _call(
+                    ["--home", str(self.root), "run", BANK, "--dry-run", *extra],
+                    cwd=self.plain,
+                )
+                self.assertNotIn("did you mean", err)
+                self.assertNotIn("is relative to the working directory", err)
+
+    def test_from_inside_the_root_nothing_is_noted(self) -> None:
+        code, out, err = _call(
+            ["run", BANK, "--dry-run", "--scenarios-dir", "nowhere"], cwd=self.root
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+
+
+class ValidateGatePathTests(unittest.TestCase):
+    """`fathom validate` reads the data root's arms and refuses a gate path that dangles.
+
+    End to end on a copy of the example data root: real staging, the example's real
+    verifier, and the arms loaded from its `scenarios/` (FATH-B54).
+    """
+
+    _PROBE_ARM = """\
+name = "probe"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "low"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep"]
+
+[gate]
+extra = ["python ${task_dir}/probe.py"]
+"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = _copy_fixture(Path(self._tmp.name))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _validate(self) -> tuple[int, str]:
+        code, out, err = _call(["--home", str(self.root), "validate", BANK], cwd=self.root)
+        return code, out + err
+
+    def test_the_example_data_root_validates_with_no_gate_path_check(self) -> None:
+        code, out = self._validate()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("gate commands name paths", out)
+
+    def test_an_arm_extra_naming_a_missing_probe_is_refused_with_exit_12(self) -> None:
+        (self.root / "scenarios" / "probe.toml").write_text(self._PROBE_ARM, encoding="utf-8")
+        code, out = self._validate()
+        self.assertEqual(code, 12, out)
+        self.assertIn("${task_dir}/probe.py", out)
+        self.assertIn("arm `probe`", out)
+
+    def test_the_same_arm_validates_once_the_probe_exists(self) -> None:
+        (self.root / "scenarios" / "probe.toml").write_text(self._PROBE_ARM, encoding="utf-8")
+        (self.root / "tasks" / BANK / "add" / "probe.py").write_text("", encoding="utf-8")
+        code, out = self._validate()
+        self.assertEqual(code, 0, out)
+        self.assertIn("[PASS] gate commands name paths that exist", out)
+
+
 class EngineVersionTests(unittest.TestCase):
     """Old rows, which carry no engine_version, behave exactly as rows that do."""
 
@@ -462,6 +625,85 @@ class EngineVersionTests(unittest.TestCase):
             self.assertEqual(rows[1]["engine_version"], "1.2.3", "an explicit value is kept")
             self.assertEqual(len(_ledger.completed_keys(BANK, ledger_dir=d)), 1)
             self.assertNotIn("engine_version", set(trial.__dataclass_fields__))
+
+
+class WrittenAtTests(unittest.TestCase):
+    """Old rows, which carry no written_at or scenario, behave exactly as rows that do."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.old = _copy_fixture(base, "old")
+        self.new = _copy_fixture(base, "new")
+        rows = [json.loads(line) for line in _lines(_ledger_path(self.old))]
+        self.assertFalse(any("written_at" in row for row in rows), "the fixture predates it")
+        _ledger_path(self.new).write_text(
+            "".join(
+                json.dumps({**row, "written_at": "2031-01-02T03:04:05+00:00"}, sort_keys=True)
+                + "\n"
+                for row in rows
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
+        ledgerindex.write(self.new)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_records_and_resume_keys_are_the_same(self) -> None:
+        old = list(_ledger.iter_records(BANK, ledger_dir=self.old / "ledger"))
+        new = list(_ledger.iter_records(BANK, ledger_dir=self.new / "ledger"))
+        self.assertEqual(old, new)
+        self.assertEqual(
+            _ledger.completed_keys(BANK, ledger_dir=self.old / "ledger"),
+            _ledger.completed_keys(BANK, ledger_dir=self.new / "ledger"),
+        )
+        for root in (self.old, self.new):
+            with self.subTest(root=root.name):
+                code, out, err = _call(["run", BANK, "--dry-run"], cwd=root)
+                self.assertEqual(code, 0, err)
+                self.assertIn("planned:  0 trials (4 already done)", out)
+
+    def test_the_scorecard_is_the_same(self) -> None:
+        for root in (self.old, self.new):
+            code, out, err = _call(["report", BANK], cwd=root)
+            self.assertEqual(code, 0, out + err)
+        self.assertEqual(
+            (self.old / "report" / f"scorecard-{BANK}.md").read_bytes(),
+            (self.new / "report" / f"scorecard-{BANK}.md").read_bytes(),
+        )
+
+    def test_reconcile_finds_the_same(self) -> None:
+        old, new = _reconcile.run(self.old), _reconcile.run(self.new)
+        self.assertTrue(old.ok and new.ok)
+        self.assertEqual(old.found, new.found)
+        self.assertEqual(old.excused, new.excused)
+        self.assertEqual(_reconcile.preimage_coverage(self.new), (10, 10))
+
+    def test_it_never_enters_the_hash_or_the_resume_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            d = Path(tmp)
+            trial = _ledger.TrialRecord(
+                bank=BANK,
+                task_id="add",
+                repeat=0,
+                status="completed",
+                dataset_version="1",
+                config_hash="c" * 64,
+                tool_git_sha="",
+                cli_version="",
+                pin_level=PIN_STRONG,
+            )
+            _ledger.append_record(BANK, trial, ledger_dir=d)
+            stamp = "2031-01-02T03:04:05+00:00"
+            _ledger.append_record(BANK, {**trial.__dict__, "written_at": stamp}, ledger_dir=d)
+            rows = [json.loads(line) for line in _lines(d / f"{BANK}.jsonl")]
+            datetime.datetime.fromisoformat(rows[0]["written_at"])
+            self.assertEqual(rows[1]["written_at"], stamp, "an explicit value is kept")
+            self.assertEqual(len(_ledger.completed_keys(BANK, ledger_dir=d)), 1)
+            self.assertEqual(rows[0]["config_hash"], rows[1]["config_hash"])
+            self.assertNotIn("written_at", set(trial.__dataclass_fields__))
 
 
 class InitTests(unittest.TestCase):

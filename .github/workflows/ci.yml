@@ -41,7 +41,10 @@ jobs:
       # run above does not collect them (pytest's testpaths is tests/). They check each
       # tool's parameter schema and that each tool runs the plugin's engine against the data
       # root. fastmcp is added for this step alone; the project environment is left as it is.
-      - run: uv run --with "fastmcp>=2.0" --with pytest python -m pytest mcp/test_server_schema.py
+      - run: uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
+      # The same tests at the floor the plugin manifest declares, so a release that accepts
+      # fewer of the constructor and run arguments the server passes fails here.
+      - run: uv run --with "fastmcp==2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
       # `fathom reconcile` in the engine checkout, with no data root named or found: the
       # checkout carries no ledgers, so here it holds the version sites to each other.
       # Each step that relies on no data root being named, or on finding one from the
