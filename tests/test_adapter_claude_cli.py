@@ -681,6 +681,74 @@ class TestParseStreamUnit(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# models_seen — every model the stream names, not only the init event's
+# ---------------------------------------------------------------------------
+
+OPUS = "claude-opus-4-8-20260115"
+HAIKU = "claude-haiku-4-5-20251001"
+
+
+class TestModelsSeen(AdapterTestBase):
+    """A spawn can be served by more than one model: a subagent runs on its own, and
+    ``model_id`` keeps only the one the init event names. ``models_seen`` lists each
+    distinct ``model`` value the stream carried, in the order first seen."""
+
+    def _record(self, fixture: str) -> RunRecord:
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture(fixture)))
+        return self.make_runner(spawn).execute("p", self.workspace, _scenario())
+
+    def test_a_stream_with_two_models_records_both(self):
+        rec = self._record("stream_two_models.jsonl")
+        self.assertEqual(rec.models_seen, [OPUS, HAIKU])
+        # The strong pin is unchanged: still the model the init event names.
+        self.assertEqual(rec.model_id, OPUS)
+
+    def test_a_single_model_stream_records_it_once(self):
+        self.assertEqual(self._record("stream_complete.jsonl").models_seen, [OPUS])
+
+    def test_a_timed_out_stream_keeps_the_models_seen_before_the_kill(self):
+        def responder(i):
+            raise subprocess.TimeoutExpired(
+                cmd=["claude"], timeout=5, output=_fixture("stream_truncated.jsonl")
+            )
+
+        runner = self.make_runner(RecordingSpawn(responder))
+        with warnings.catch_warnings():
+            # The partial stream reports no cost; that warning has its own tests.
+            warnings.simplefilter("ignore")
+            rec = runner.execute("p", self.workspace, _scenario(trial_timeout_s=5))
+        self.assertIs(rec.status, ExitStatus.TIMEOUT)
+        self.assertEqual(rec.models_seen, [OPUS])
+
+
+class TestModelsSeenUnit(unittest.TestCase):
+    def test_each_model_is_listed_once_in_first_seen_order(self):
+        lines = [
+            json.dumps({"type": "system", "subtype": "init", "model": OPUS}),
+            json.dumps({"type": "assistant", "message": {"model": HAIKU}}),
+            json.dumps({"type": "assistant", "message": {"model": OPUS}}),
+            json.dumps({"type": "assistant", "message": {"model": HAIKU}}),
+            json.dumps({"type": "result", "num_turns": 3}),
+        ]
+        self.assertEqual(parse_stream(lines).models_seen, [OPUS, HAIKU])
+
+    def test_a_stream_naming_no_model_records_none(self):
+        self.assertEqual(parse_stream(['{"type": "result", "num_turns": 1}']).models_seen, [])
+
+    def test_empty_and_non_string_model_values_are_skipped(self):
+        lines = [
+            json.dumps({"type": "system", "subtype": "init", "model": ""}),
+            json.dumps({"type": "assistant", "message": {"model": None}}),
+            json.dumps({"type": "assistant", "message": {"model": 5}}),
+        ]
+        self.assertEqual(parse_stream(lines).models_seen, [])
+
+    def test_the_single_result_object_records_its_model(self):
+        parsed = claude_cli.parse_result_json(json.dumps({"result": "x", "model": OPUS}))
+        self.assertEqual(parsed.models_seen, [OPUS])
+
+
+# ---------------------------------------------------------------------------
 # Cost source — a reported cost, or a labelled gap
 # ---------------------------------------------------------------------------
 

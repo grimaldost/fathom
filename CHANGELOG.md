@@ -6,6 +6,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Every model a spawn's output names, on its run row.** `RunRecord` gains an additive
+  `models_seen` field: each distinct `model` value in the spawn's output, in the order first
+  seen, taken from the init event, each assistant message (a subagent's included) and the
+  result. `model_id` still holds the init event's model, so a run whose subagent ran on
+  another model now records both instead of one. It is provenance only: it does not enter
+  `config_hash`, its preimage or the resume key, and it changes no scorecard. Rows written
+  before it load with an empty list and are never rewritten; series-strategy runs, which
+  are built from the engine's spawn events rather than a CLI stream, carry an empty list.
+
 ### Fixed
 
 - **No crash on a character outside the console's code page.** `fathom` and `fathom smoke`

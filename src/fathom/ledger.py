@@ -115,6 +115,10 @@ class RunRecord:
     # additive default "" so legacy lines load unchanged. Was computed by the adapter
     # but dropped at the cli.py ledger boundary — the pin the design advertises but
     # never persisted until this field existed.
+    models_seen: list[str] = dataclasses.field(default_factory=list)  # additive (ADR-0002).
+    # Each distinct model the spawn's output named, in the order first seen: model_id
+    # keeps one, and a subagent runs on its own model. Provenance only, outside
+    # config_hash. Legacy lines load with [] and are never rewritten.
     config_preimage: str = ""  # the exact string config_hash digests; additive (ADR-0002).
     # Recomputing a hash from scenarios/ is inference about the past, and often fails:
     # config_hash embeds a plugin tree_sha globbed from a live filesystem, and a mounted

@@ -12,6 +12,7 @@ import json
 import os
 import pathlib
 import shutil
+import subprocess
 import sys
 import tempfile
 import types
@@ -1177,6 +1178,54 @@ class TestModelIdPersisted(_Base):
                 "claude-opus-4-8-20260115",
                 "the exact CLI-reported model id (strong pin) must be persisted",
             )
+
+
+class TestModelsSeenPersisted(_Base):
+    """Every model a spawn's stream names reaches the ledger run row as ``models_seen``,
+    not only the one ``model_id`` keeps. End to end: the real adapter parses a stream
+    with two models, the real single-session strategy runs it, and the row is read raw."""
+
+    def test_a_two_model_stream_puts_both_on_the_run_row(self):
+        from fathom.adapters.claude_cli import ClaudeCliRunner
+        from fathom.strategies.single_session import SingleSessionExecutor
+
+        stream = (Path(__file__).parent / "fixtures" / "stream_two_models.jsonl").read_text(
+            encoding="utf-8"
+        )
+
+        def spawn(argv, *, input, timeout, env, cwd):
+            return subprocess.CompletedProcess(args=argv, returncode=0, stdout=stream, stderr="")
+
+        real_config = Path(self._tmp) / "real-config"
+        real_config.mkdir()
+        (real_config / ".credentials.json").write_text("{}", encoding="utf-8")
+        runner = ClaudeCliRunner(
+            spawn=spawn, sleep=lambda _s: None, real_config_dir=str(real_config)
+        )
+        run_matrix(
+            self.bank,
+            [self.sc_a],
+            1,
+            executor_factory=lambda sc: SingleSessionExecutor(),
+            runner_factory=lambda sc: runner,
+            stage_task_fn=_stub_stage,
+            verifier_fn=_stub_verifier,
+            skip_bank_validation=True,
+            ledger_dir=self.ledger_dir,
+            out=io.StringIO(),
+        )
+        rows = [
+            json.loads(ln)
+            for ln in (self.ledger_dir / "test-bank.jsonl").read_text("utf-8").splitlines()
+            if ln.strip()
+        ]
+        runs = [r for r in rows if r.get("kind") == "run"]
+        self.assertEqual(len(runs), 2, "one run row per task")
+        for row in runs:
+            self.assertEqual(
+                row["models_seen"], ["claude-opus-4-8-20260115", "claude-haiku-4-5-20251001"]
+            )
+            self.assertEqual(row["model_id"], "claude-opus-4-8-20260115")
 
 
 class TestVerifierErrorNotScoredAsFail(_Base):

@@ -115,6 +115,12 @@ orders them exactly as they arrived, and reports join them to their trial by `co
 - `model_id` (str): The exact model id the CLI reported (the strong pin; the model actually
   used, not a policy or tier name). Additive; defaults to empty on legacy rows.
   Provenance only; not part of config_hash.
+- `models_seen` (list of str): Each distinct `model` value the spawn's output named, in the
+  order first seen: the init event's, each assistant message's (a subagent's included) and
+  the result's. `model_id` keeps one model; a spawn whose subagent ran on another model
+  lists both here. Additive; `[]` on legacy rows, on series-strategy runs (built from the
+  engine's spawn events, not a CLI stream) and when the output named no model. Provenance only; not part
+  of config_hash.
 - `config_preimage` (str): The exact configuration string hashed to produce `config_hash`.
   Additive; empty on rows written before 0.4.0. Stored for bit-exact validation.
 

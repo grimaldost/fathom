@@ -1311,6 +1311,7 @@ def run_matrix(
                     cost_usd_est=run_rec.cost_usd_est,
                     cost_source=run_rec.cost_source,
                     model_id=run_rec.model_id,
+                    models_seen=list(run_rec.models_seen),
                     config_preimage=sc.config_preimage,
                 )
                 _ledger.append_record(bank.name, ledger_run, ledger_dir=_ledger_dir)

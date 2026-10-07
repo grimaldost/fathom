@@ -70,6 +70,10 @@ class RunRecord:
     # that gap is gone, and a labelled gap beats a plausible number.
     cost_source: str = "reported"
     model_id: str = ""
+    # Each distinct model the spawn's output named, in the order first seen. A spawn can
+    # be served by more than one model (a subagent runs on its own), and ``model_id``
+    # keeps one; this keeps them all. Empty when the output named none.
+    models_seen: list[str] = dataclasses.field(default_factory=list)
     cli_version: str = ""
     result_text: str = ""
     usage: dict[str, Any] = dataclasses.field(default_factory=dict)

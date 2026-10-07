@@ -487,9 +487,15 @@ class _Parsed:
     is_error: bool = False
     usage: dict[str, Any] = dataclasses.field(default_factory=dict)
     model_id: str = ""
+    models_seen: list[str] = dataclasses.field(default_factory=list)
     cli_version: str = ""
     duration_ms: float = 0.0
     saw_result: bool = False
+
+    def see_model(self, value: Any) -> None:
+        """Add a ``model`` value to ``models_seen`` once; an empty or non-string one is skipped."""
+        if isinstance(value, str) and value and value not in self.models_seen:
+            self.models_seen.append(value)
 
 
 def parse_stream(lines: Iterable[str]) -> _Parsed:
@@ -513,6 +519,12 @@ def parse_stream(lines: Iterable[str]) -> _Parsed:
             continue  # a stream cut off mid-line — tolerate it
         if not isinstance(obj, dict):
             continue
+        # Every model the stream names, whichever event names it: the init event, each
+        # assistant message (a subagent's included) and the result.
+        p.see_model(obj.get("model"))
+        msg = obj.get("message")
+        if isinstance(msg, dict):
+            p.see_model(msg.get("model"))
         kind = obj.get("type")
         if kind == "system" and obj.get("subtype") == "init":
             p.model_id = obj.get("model") or p.model_id
@@ -534,7 +546,6 @@ def parse_stream(lines: Iterable[str]) -> _Parsed:
             if isinstance(model, str) and model and not p.model_id:
                 p.model_id = model
         elif kind == "assistant":
-            msg = obj.get("message")
             if isinstance(msg, dict) and isinstance(msg.get("usage"), dict):
                 last_assistant_usage = msg["usage"]
                 assistant_turns += 1
@@ -566,6 +577,7 @@ def parse_result_json(stdout: str) -> _Parsed:
     model = data.get("model")
     if isinstance(model, str):
         p.model_id = model
+    p.see_model(model)
     return p
 
 
@@ -1183,6 +1195,7 @@ class ClaudeCliRunner:
             cost_usd_est=cost_usd_est,
             cost_source=cost_source,
             model_id=parsed.model_id,
+            models_seen=list(parsed.models_seen),
             cli_version=parsed.cli_version or self.cli_version,
             result_text=result_text,
             usage=dict(parsed.usage),
