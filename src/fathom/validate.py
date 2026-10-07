@@ -437,7 +437,7 @@ def _path_words(cmd: str) -> list[tuple[str, bool]]:
             if not (sep and "${" in value):
                 continue
             word = value
-        elif _ASSIGNMENT.match(word):
+        if _ASSIGNMENT.match(word):
             command_next, is_command = is_command, False
             word = word.split("=", 1)[1]
         word = word.split("::", 1)[0]

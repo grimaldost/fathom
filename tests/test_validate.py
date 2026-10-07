@@ -312,6 +312,16 @@ class GatePathTests(unittest.TestCase):
         self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_PASS])
         self.assertTrue(validate.validation_ok(checks))
 
+    def test_an_option_value_that_is_an_assignment_is_read_as_its_value(self) -> None:
+        task_dir = self._task_dir()
+        (task_dir / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=task_dir),
+            arms=(_arm("probe-arm", ("python check.py --define=PROBE=${task_dir}/probe.py",)),),
+        )
+        statuses = [c.status for c in self._paths(checks)]
+        self.assertNotIn(validate.STATUS_FAIL, statuses, self._paths(checks))
+
     def test_a_quoted_placeholder_is_read_as_the_arm_reads_it(self) -> None:
         task_dir = self._task_dir()
         (task_dir / "probe.py").write_text("", encoding="utf-8")
