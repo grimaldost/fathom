@@ -102,6 +102,23 @@ def parts(section_text: str) -> set[str]:
     return names
 
 
+def part_text(section_text: str, name: str) -> str:
+    """The text of the part of a section named `name`, from its heading or bold lead to the
+    next part or the end of the section."""
+    found = list(_PART.finditer(section_text))
+    for index, m in enumerate(found):
+        if (m.group("heading") or m.group("lead")).replace("`", "").strip() == name:
+            end = found[index + 1].start() if index + 1 < len(found) else len(section_text)
+            return section_text[m.start() : end]
+    raise AssertionError(f'no part named "{name}"; the parts are {sorted(parts(section_text))}')
+
+
+def flat(text: str) -> str:
+    """`text` with its line breaks and runs of spaces as single spaces, so a phrase can be
+    found wherever the file wraps it."""
+    return " ".join(text.split())
+
+
 def scanned_files() -> list[str]:
     """The repository's markdown and Python files as POSIX paths relative to it: what git
     tracks or would add, or a walk of the tree without git."""
@@ -247,6 +264,45 @@ class CitationTests(unittest.TestCase):
             ],
         )
         self.assertEqual(citations("docs/other.md", "section 9 of the spec"), [])
+
+
+class RulesTheGuideStatesTests(unittest.TestCase):
+    """Rules that authors had to rediscover before the guide stated them. Each is pinned in the
+    part of the file where a reader looks for it, so a trim to stay within a budget cannot drop
+    it unnoticed."""
+
+    def test_arming_names_the_tools_a_mounted_plugin_serves(self) -> None:
+        part = flat(part_text(sections("arming.md")[10], "MCP servers in a mounted plugin"))
+        for needed in (
+            "`mcp__plugin_<plugin>_<server>__<tool>`",
+            "`plugin:<plugin>:<server>`",
+            "`mcpServers`",
+            "`.claude-plugin/plugin.json`",
+            "`.mcp.json` at its own root",
+            "`.mcp.json` at the root of the task's fixture",
+            "`mcp__<server>__<tool>`",
+        ):
+            with self.subTest(needed=needed):
+                self.assertIn(needed, part)
+
+    def test_the_checklist_asks_for_rechecked_oracles_and_structured_scoring(self) -> None:
+        checklist = sections("bank-design.md")[15]
+        items = [flat(item) for item in re.split(r"^- \[ \] ", checklist, flags=re.M)[1:]]
+        for needed in ("final instruction text", "structured fields"):
+            with self.subTest(needed=needed):
+                self.assertTrue(any(needed in item for item in items), items)
+
+    def test_bank_design_shows_an_answer_key_kept_beside_the_verifier(self) -> None:
+        part = flat(part_text(sections("bank-design.md")[9], "An answer key beside the verifier"))
+        for needed in (
+            "`truth.json`",
+            "`verify.py`",
+            "only `fixtures/` is staged",
+            "Path(__file__)",
+            "(../../../examples/data-root/tasks/example/add/)",
+        ):
+            with self.subTest(needed=needed):
+                self.assertIn(needed, part)
 
 
 if __name__ == "__main__":

@@ -383,8 +383,9 @@ afterwards. Two consequences:
   (for example `uv run` inside the result view) and raise `[verify] timeout_s`.
 - Do not rely on the working directory: it is empty, and a relative path finds nothing.
   Build every path from `argv[1]`, or from `Path(__file__).parent` for support files kept
-  beside the verifier (an original copy of the tests, reference data). The task directory is
-  bank data, not arm identity, so reading it is allowed.
+  beside the verifier (an original copy of the tests, reference data, an answer key as in
+  `bank-design.md`, section 9). The task directory is bank data, not arm identity, so reading
+  it is allowed.
 
 **Run the agent's code in a child process.** The empty working directory removes only the
 accidental route into the data root. The verifier's own file is still in it, and so are

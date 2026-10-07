@@ -10,9 +10,9 @@ section number here is a section of this file, and a section in another file is 
 that file's name.
 
 This file covers the arms that attempt a bank: what an arm file holds, the tools and the
-isolation every spawn gets, the strategies, the treatments and the check that proves them
-armed (section 10); `config_hash` and the resume key (section 11); and series arms
-(section 12).
+isolation every spawn gets, the strategies, the treatments, the MCP servers a mounted plugin
+serves and the check that proves them armed (section 10); `config_hash` and the resume key
+(section 11); and series arms (section 12).
 
 ## 10. Arms (scenario TOML)
 
@@ -100,7 +100,8 @@ refused, and fathom never passes `bypassPermissions` or `--dangerously-skip-perm
 - **An empty `allowed` list means the agent has no tools.** It cannot read or write the
   workspace; the arm is unarmed and measures nothing. `fathom run` warns about it.
 - Entries are Claude Code permission rules: a tool name (`Read`), a tool with a specifier
-  (`Bash(python:*)`, `Bash(git diff:*)`), or an MCP server prefix (`mcp__<server>`).
+  (`Bash(python:*)`, `Bash(git diff:*)`), or an MCP server prefix (`mcp__<server>`; a mounted
+  plugin's servers take a longer one, see "MCP servers in a mounted plugin", below).
 - Give the control and treatment arms the same allowlist unless the tools are the treatment.
 - The order of `allowed` enters `config_hash`; reordering it forks the arm's history.
 
@@ -271,6 +272,25 @@ arming check (below) and `fathom smoke` spawn from copies made the same way.
   template text enters `config_hash`; the content of a script it runs does not, so rename the
   arm when you change such a script. The task's own `[gate] run` takes no placeholders. Other
   strategies ignore `[gate]`.
+
+**MCP servers in a mounted plugin.** A plugin declares its MCP servers under `mcpServers` in
+`.claude-plugin/plugin.json`, in a `.mcp.json` at its own root, or in both. Claude Code 2.1.291
+reads both from a mount, and when both name the same server, the manifest's entry runs. Write
+the paths in a server's command with `${CLAUDE_PLUGIN_ROOT}`, which names the copy the spawn
+mounts. The init event spells each server `plugin:<plugin>:<server>`, with the manifest's
+`name` and the server's key as written, and names its tools
+`mcp__plugin_<plugin>_<server>__<tool>`, with every character other than a letter, a digit,
+`_` or `-` replaced by `_`. The allowlist matches the tool names, so `mcp__<server>`,
+`mcp__<plugin>` and the init event's spelling each permit none of them. Allow
+`mcp__plugin_<plugin>_<server>` for all of a server's tools, or a tool's full name: a server
+keyed `docs.v2` in a plugin named `codenav` shows as `plugin:codenav:docs.v2` and serves
+`mcp__plugin_codenav_docs_v2__find`. An entry that fails Claude Code's schema (one without a
+`command`, say) is dropped with no error in the init event, and the arming check (below) sees
+only the servers the init event lists. So run `claude plugin validate <plugin directory>`
+(Claude Code 2.1.281 and later check `.mcp.json`), and find each declared server in the
+`servers=` line the check prints. A `.mcp.json` at the root of the task's fixture is another
+file: the workspace's own, loaded for the control arm as for any other, with its tools named
+`mcp__<server>__<tool>`. It is part of the task, not a treatment.
 
 **Proving a treatment reached the spawn.** Before it spends, `fathom run` makes one cheap real
 spawn per arm that declares `[context]`, `[settings]`, `[plugins]` or `[env]`, and checks each

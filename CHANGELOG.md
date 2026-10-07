@@ -17,6 +17,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   before it load with an empty list and are never rewritten; series-strategy runs, which
   are built from the engine's spawn events rather than a CLI stream, carry an empty list.
 
+- **The authoring guide covers a mounted plugin's MCP servers and an answer key beside the
+  verifier.** `arming.md`, section 10, says where a plugin declares its MCP servers (under
+  `mcpServers` in `.claude-plugin/plugin.json`, in a `.mcp.json` at the plugin's root, or in
+  both, with the manifest's entry used when both name a server), that the init event spells a
+  server `plugin:<plugin>:<server>` while its tools are named
+  `mcp__plugin_<plugin>_<server>__<tool>`, so an allowlist entry `mcp__<server>` permits none
+  of them, and that a server entry Claude Code drops leaves nothing the arming check can see,
+  so `claude plugin validate` is the check for it. A `.mcp.json` in the task's fixture is the
+  workspace's own and belongs to the task. `bank-design.md`, section 9, shows a `truth.json`
+  kept beside `verify.py` for set-equality and byte-identity criteria, outside the workspace
+  because only `fixtures/` is staged, and its checklist asks that numeric oracle values be
+  computed again against the final instruction text and that criteria score structured
+  fields, not free-text heuristics. `tests/test_answer_key.py` holds the engine to the two
+  facts the answer key relies on: staging copies only `fixtures/`, and the verifier finds the
+  key through its own path.
+
 ### Changed
 
 - **The authoring guide is three files, each with a line budget.** The guide, one file of

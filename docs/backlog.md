@@ -192,19 +192,16 @@ it.
 ## Documentation and surface
 
 **FATH-B10 — Authoring knowledge that is not written down has to be rediscovered by each
-author.** *(M)*
+author.** *(S)*
 The authoring guide is split into `skills/fathom-eval/reference/authoring.md` (the data root,
 the bank and task schemas, the verifier, running and reading the scorecard), `arming.md` (arms,
 their tools and treatments, `config_hash`, series arms) and `bank-design.md` (making a bank
 discriminate, the checklist), each with a line budget in its header, so an addition past the
 budget must displace something. Plugin hooks in headless `-p`, discrimination by scale and turn
-budget, and the order `--limit N` cuts in are written there. Still not written anywhere: MCP
-tools served by a mounted plugin are named `mcp__plugin_<plugin>_<server>__<tool>` while the
-init event names the server `plugin:<plugin>:<server>`, so copying the init-event name into an
-allow-list fails; the arm can be given the interpreter a verifier shells out to through
-`[env] PATH`; a `truth.json` beside `verify.py` is unreachable by the arm, because only
-`fixtures/` is staged. Change: write each into the file it belongs to (`arming.md` for the
-first two, `bank-design.md` for the third), within that file's budget.
+budget, the order `--limit N` cuts in, how a mounted plugin's MCP tools are named, and an answer
+key kept beside the verifier are written there. Still not written anywhere: the arm can be
+given the interpreter a verifier shells out to through `[env] PATH`. Change: write it into
+`arming.md`, within that file's budget.
 
 **FATH-B48 — The skill's trigger description overlaps with skill-evaluation tools that do a
 different job.** *(S)*

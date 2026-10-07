@@ -10,8 +10,8 @@ section number here is a section of this file, and a section in another file is 
 that file's name.
 
 This file covers what lets a bank tell arms apart: criteria, scale, the turn budget, a pilot,
-a holdout, the naive-fix check and calibration banks (section 9); and the checklist before the
-first paid run (section 15).
+a holdout, an answer key beside the verifier, the naive-fix check and calibration banks
+(section 9); and the checklist before the first paid run (section 15).
 
 ## 9. Making a bank discriminate
 
@@ -35,6 +35,27 @@ What helps:
   screen. Check that the control arm fails some criterion before paying for repeats.
 - **A holdout.** Keep one or more tasks in `holdout` to confirm a result on tasks the bank was
   not tuned against.
+
+### An answer key beside the verifier
+
+Some criteria compare the result with an exact answer: set equality (the agent lists every
+call site it had to change, and one missed or one extra fails the criterion) or byte identity
+(an output file must equal the expected bytes, compared directly or by sha256). Keep that
+answer in a `truth.json` beside `verify.py`, never in the fixture: only `fixtures/` is staged,
+so the key is not in the workspace the agent works in (`authoring.md`, section 6). The verifier
+starts in an empty working directory, so it reads the key through its own path:
+
+```python
+TRUTH = json.loads(Path(__file__).with_name("truth.json").read_text(encoding="utf-8"))
+```
+
+In the example data root the key would go in
+[`examples/data-root/tasks/example/add/`](../../../examples/data-root/tasks/example/add/), next
+to its `verify.py`; that verifier computes its answer instead of storing one. Commit the key,
+and let `fathom validate` show that the reference solution meets it (`authoring.md`,
+section 8). Outside the workspace is not out of reach: an arm whose tools read beyond the
+workspace, or agent code that a gate runs, can still find the key, and fathom checks only
+`fixtures/` for changes between trials (`arming.md`, section 10).
 
 ### The naive-fix check
 
@@ -118,6 +139,11 @@ them.
 - [ ] Every verifier reads only `argv[1]`, prints the criteria last, emits every criterion on
       every run, imports only the standard library, and runs the agent's code in a child
       process started in the result view (`authoring.md`, section 7).
+- [ ] Every numeric value an oracle checks was computed again against the final instruction
+      text, after the last edit to the instruction: an edit can change the right answer.
+- [ ] Criteria score structured fields (a key in a JSON file the task asks for, a return
+      value, a file's exact bytes), not free-text heuristics such as a keyword search in
+      the agent's prose.
 - [ ] No hook script a `[settings]` file runs, and no `[env]` value, names a path in the
       data root (`arming.md`, section 10).
 - [ ] Every task ships `solution/`, and `fathom validate <bank> --strict` passes (or its
