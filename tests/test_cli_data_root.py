@@ -497,6 +497,59 @@ class RelativePathMissTests(unittest.TestCase):
         self.assertNotIn("did you mean", err)
 
 
+class ValidateGatePathTests(unittest.TestCase):
+    """`fathom validate` reads the data root's arms and refuses a gate path that dangles.
+
+    End to end on a copy of the example data root: real staging, the example's real
+    verifier, and the arms loaded from its `scenarios/` (FATH-B54).
+    """
+
+    _PROBE_ARM = """\
+name = "probe"
+adapter = "claude-cli"
+model = "claude-haiku-4-5"
+strategy = "gated-session"
+effort = "low"
+
+[tools]
+source = "none"
+allowed = ["Read", "Write", "Edit", "Glob", "Grep"]
+
+[gate]
+extra = ["python ${task_dir}/probe.py"]
+"""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = _copy_fixture(Path(self._tmp.name))
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _validate(self) -> tuple[int, str]:
+        code, out, err = _call(["--home", str(self.root), "validate", BANK], cwd=self.root)
+        return code, out + err
+
+    def test_the_example_data_root_validates_with_no_gate_path_check(self) -> None:
+        code, out = self._validate()
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("gate commands name paths", out)
+
+    def test_an_arm_extra_naming_a_missing_probe_is_refused_with_exit_12(self) -> None:
+        (self.root / "scenarios" / "probe.toml").write_text(self._PROBE_ARM, encoding="utf-8")
+        code, out = self._validate()
+        self.assertEqual(code, 12, out)
+        self.assertIn("${task_dir}/probe.py", out)
+        self.assertIn("arm `probe`", out)
+
+    def test_the_same_arm_validates_once_the_probe_exists(self) -> None:
+        (self.root / "scenarios" / "probe.toml").write_text(self._PROBE_ARM, encoding="utf-8")
+        (self.root / "tasks" / BANK / "add" / "probe.py").write_text("", encoding="utf-8")
+        code, out = self._validate()
+        self.assertEqual(code, 0, out)
+        self.assertIn("[PASS] gate commands name paths that exist", out)
+
+
 class EngineVersionTests(unittest.TestCase):
     """Old rows, which carry no engine_version, behave exactly as rows that do."""
 

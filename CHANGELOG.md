@@ -8,6 +8,32 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **Validation refuses a gate command that names a missing path.** A gate command whose script
+  does not exist still runs, finds nothing and counts for nothing, so a gated arm ran as an
+  ungated one and nothing said so: validation checked only that a task's own gate could start,
+  and an arm's `[gate] extra` not at all. `fathom validate` and the check `fathom run` makes
+  before it spends now have a fourth property, `gate commands name paths that exist`. It
+  splits the task's `[gate] run` and the `[gate] extra` of every `gated-session` or
+  `gated-review` arm into words as the gate's shell reads them, and takes a word as a path when
+  it holds `/` or `\`, ends in a script suffix such as `.py` or `.sh`, or holds a `${...}`;
+  options, the word after `-c` or `-m`, the target of an output redirection and URLs are not
+  paths. An arm's `${task_dir}` and `${workspace}` are filled in for each task as the arm fills
+  them, and a relative path resolves against the staged fixture, read before the verifier or
+  the gate runs on it. A missing path under `${task_dir}`, a missing absolute path, and a
+  `${NAME}` that nothing fills (any placeholder in the task's own gate, or a misspelt
+  `${taskdir}` in an extra) fail, so both commands exit 12 before any spend. A missing path
+  relative to the workspace is a warning, because the task may ask the agent to create it, and
+  blocks only under `--strict`. A word holding a shell variable, a glob or a leading `~` is not
+  checked, so its errors lean toward missing a broken gate rather than failing a working one;
+  the working gates it fails are a command that creates an absolute path before using it and,
+  on POSIX, a `${NAME}` the shell would fill (written `$NAME`, it passes). Each finding
+  names the word, the command and the arm (for example `arm nudge [gate] extra`), and a
+  missing path also the path it resolved to. A bank with no gate command and no gated arm gets
+  no new line. `fathom validate` reads the arms in `scenarios/` or `--scenarios-dir`, and
+  `fathom run` the arms it is about to run; `validate_bank` takes `scenarios=()`. A data root
+  whose arms carry such a path is refused until the path is fixed; `--skip-bank-validation`
+  still spends anyway. Closes T22b (FATH-B54).
+
 - **`fathom run --interleave` orders the plan repeat by repeat.** By default the plan is
   ordered arm by arm (each arm's tasks, then its repeats), so a run cut short holds every
   repeat of the first arm and none of the last, and `--limit` cuts whole arms off the end.

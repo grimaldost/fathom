@@ -446,7 +446,7 @@ A reference solution is an overlay: `<task>/solution/` holds only the files a co
 changes or adds, laid out as in the workspace. fathom copies it over a freshly staged fixture
 and runs the verifier on the result. It is used only for validation; no arm ever sees it.
 
-`fathom validate <bank> [--tasks-dir DIR] [--scenarios-dir DIR] [--strict]` checks three
+`fathom validate <bank> [--tasks-dir DIR] [--scenarios-dir DIR] [--strict]` checks four
 properties for each task. It is free: it stages fixtures and runs the verifier and the gate
 locally, and spawns nothing. The verifier and the gate run as they do in a trial: the verifier
 in its reduced environment and empty working directory (section 7), the gate in the workspace
@@ -459,12 +459,42 @@ would in a run.
 | The verifier fails on the unmodified fixture | at least one criterion is false | the verifier errored, emitted no criteria, or every criterion is already true | — |
 | The verifier passes on the reference solution | outcome `pass` (exit 0) | any other outcome | `unverifiable` when there is no `solution/` |
 | The task gate runs on the fixture | the gate exits 0 | exit 127 or 9009 (the command was not found) | `warn` for any other nonzero exit; `unverifiable` when there is no `[gate] run` |
+| The gate commands name paths that exist | every path a gate command names exists | a missing path under `${task_dir}` or an absolute one; a `${NAME}` that is not filled in | `warn` for a missing path relative to the workspace; no line when neither the task nor a gated arm has a gate command |
 
 The first property reads the criteria, not the exit code: it asks whether an arm has something
 left to do. A red gate on the fixture is reported as `warn` rather than `fail`, because a task
 whose visible tests describe the requested feature starts red on purpose; confirm which case
 yours is. `unverifiable` is not a pass. It is reported on its own and blocks only under
 `--strict`.
+
+The fourth property reads the task's `[gate] run` and the `[gate] extra` of every arm that runs
+it (`gated-session`, `gated-review`): the arms in `scenarios/` or `--scenarios-dir` for `fathom
+validate`, and the arms about to run for `fathom run`. A gate command whose script is missing
+still runs, finds nothing and counts for nothing, so the gated arm runs as an ungated one; this
+check finds that before the spend. Each command is split into words as the shell that runs it
+reads them (`/bin/sh`, or `cmd.exe` on Windows). A word is a path when it holds `/` or `\`,
+ends in a script suffix such as `.py` or `.sh`, or holds a `${...}`; options, the word after
+`-c` or `-m`, the target of an output redirection and URLs are not paths. An arm's
+`${task_dir}` and `${workspace}` are filled in for each task as the arm fills them (section 10,
+"Treatments"), and a relative path resolves against the staged fixture, which is the gate's
+working directory. The check reads the fixture before the verifier or the gate has run on it.
+
+- **fail**: a missing path under `${task_dir}`, or a missing absolute path. The agent cannot
+  create either, so the gate could never have run it. Also a `${NAME}` that nothing fills: an
+  arm's `[gate] extra` takes `${task_dir}` and `${workspace}` only, and the task's own `[gate]
+  run` takes none, so a misspelt `${taskdir}` or a `${task_dir}` in the task's gate fails. To
+  use an environment variable, write it the shell's way (`$NAME` or `%NAME%`).
+- **warn**: a missing path relative to the workspace, or under `${workspace}`. The task may ask
+  the agent to create it, so confirm which, as with a red gate.
+
+The check errs toward missing a broken gate rather than refusing a working one. A word holding a
+shell variable (`$NAME`, `%NAME%`), a glob or a leading `~` is left to the shell and not
+checked, and a command that changes directory (`cd sub && python run.py`) is still resolved
+against the workspace, so such a path can warn but never fails. Two kinds of working gate do
+fail it: a command that creates an absolute path and then uses it (create such a file in the
+workspace, with a relative path), and, on POSIX, a `${NAME}` that `/bin/sh` would fill (write
+it `$NAME`). A gate that passes this check can still be red for other reasons; the third
+property and a pilot cover those.
 
 It may also print a `note:` line naming the arms that declare injected context or a tool list
 (nearly every arm) and saying that `fathom run` will keep their spawn streams under the data
@@ -1137,7 +1167,8 @@ verdict.
 - [ ] No hook script a `[settings]` file runs, and no `[env]` value, names a path in the
       data root (section 10).
 - [ ] Every task ships `solution/`, and `fathom validate <bank> --strict` passes (or its
-      warnings are understood).
+      warnings are understood), with `--scenarios-dir` naming the arms you will run when
+      they are not in `scenarios/`, so their `[gate] extra` paths are checked (section 8).
 - [ ] Every task whose results will inform a decision declares `[naive]` with `refs/naive/`,
       and the naive-fix check passes. A task kept only to demonstrate or test the setup may
       skip this; nothing enforces it (section 9).

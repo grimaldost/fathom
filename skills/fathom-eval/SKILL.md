@@ -116,7 +116,8 @@ An **analysis** is a scenario matrix run against a task **bank**, scored into a
 # 0. Free: which engine version runs.
 fathom --version
 
-# 1. Free: can the bank tell arms apart? (fixture fails, solution passes, gate runs)
+# 1. Free: can the bank tell arms apart? (fixture fails, solution passes, gate runs,
+#    the paths the gate commands name exist)
 fathom validate <bank> [--strict]
 
 # 2. Free: arms, trial count, worst-case USD ceiling, resume state. Spawns nothing.

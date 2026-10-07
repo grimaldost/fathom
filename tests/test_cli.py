@@ -1711,6 +1711,45 @@ class BankValidationGateTests(unittest.TestCase):
         code, _ = self._run("pass", dry_run=True)
         self.assertEqual(code, EXIT_OK, "planning spends nothing")
 
+    def _run_probe_arm(self) -> tuple[int, StubExecutor, str]:
+        from fathom.scenario import GateConfig
+
+        executor = StubExecutor()
+        out = io.StringIO()
+        arm = _make_scenario(
+            name="probe-arm",
+            strategy="gated-session",
+            gate=GateConfig(extra=("python ${task_dir}/probe.py",)),
+        )
+        code = run_matrix(
+            self.bank,
+            [arm],
+            1,
+            executor_factory=lambda sc: executor,
+            runner_factory=lambda sc: StubRunner(),
+            stage_task_fn=_stub_stage,
+            verifier_fn=self._verifier("fail"),
+            ledger_dir=self.ledger_dir,
+            out=out,
+        )
+        return code, executor, out.getvalue()
+
+    def test_an_arm_extra_naming_a_missing_script_blocks_the_matrix(self) -> None:
+        # FATH-B54: a gate that could never have run is a broken arm, found before the spend.
+        from fathom.cli import EXIT_BANK_INVALID
+
+        code, executor, out = self._run_probe_arm()
+        self.assertEqual(code, EXIT_BANK_INVALID, out)
+        self.assertEqual(executor.calls, [], "a dangling gate path must cost nothing to discover")
+        self.assertIn("${task_dir}/probe.py", out)
+        self.assertIn("probe-arm", out)
+
+    def test_the_same_arm_runs_once_the_script_exists(self) -> None:
+        (Path(self._tmp) / "probe.py").write_text("", encoding="utf-8")
+        code, executor, out = self._run_probe_arm()
+        self.assertEqual(code, EXIT_OK, out)
+        self.assertTrue(executor.calls)
+
 
 # ---------------------------------------------------------------------------
 # --tasks: buy a screen before the full matrix

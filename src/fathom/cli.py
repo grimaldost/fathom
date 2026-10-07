@@ -1012,7 +1012,9 @@ def run_matrix(
         import fathom.validate as _validate
 
         print(f"validate: checking bank '{bank.name}' can discriminate...", file=_out)
-        bank_checks = _validate.validate_bank(bank, stage_fn=_stage_fn, verifier_fn=_verifier)
+        bank_checks = _validate.validate_bank(
+            bank, stage_fn=_stage_fn, verifier_fn=_verifier, scenarios=resolved_scenarios
+        )
         if not _validate.validation_ok(bank_checks):
             print(_validate.render_validation(bank.name, bank_checks), file=_out)
             print(
@@ -1996,7 +1998,9 @@ def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenar
     return out
 
 
-def _note_stream_dir(scenarios_dir: pathlib.Path) -> None:
+def _note_stream_dir(
+    scenarios_dir: pathlib.Path, scenarios: list[ResolvedScenario] | None = None
+) -> None:
     """Say where `fathom run` will keep the streams of the arms that need them.
 
     An arm that declares a [context] inject or a non-default tool allowance is one
@@ -2006,11 +2010,13 @@ def _note_stream_dir(scenarios_dir: pathlib.Path) -> None:
     warning, which would ask the operator to act. Nothing is printed when
     FATHOM_STREAM_DIR is already set or no such arm is planned. Unparsable scenario
     files are skipped (as `_load_resolved_scenarios` already does for `run`), never
-    turned into a validate failure.
+    turned into a validate failure. *scenarios*, when given, are the arms already loaded
+    from *scenarios_dir*, so a skipped file is not reported twice.
     """
     if os.environ.get("FATHOM_STREAM_DIR"):
         return
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    if scenarios is None:
+        scenarios = _load_resolved_scenarios(scenarios_dir)
     streamed = [sc.name for sc in scenarios if _wants_stream_dir(sc)]
     if not streamed:
         return
@@ -2036,9 +2042,14 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         )
         return 1
 
-    checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
+    # The arms' `[gate] extra` commands are path-checked against every task (FATH-B54).
+    scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
+    scenarios = _load_resolved_scenarios(scenarios_dir)
+    checks = _validate.validate_bank(
+        bank, stage_fn=stage_task, verifier_fn=run_verifier, scenarios=scenarios
+    )
     print(_validate.render_validation(bank.name, checks))
-    _note_stream_dir(args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR)
+    _note_stream_dir(scenarios_dir, scenarios)
     return EXIT_OK if _validate.validation_ok(checks, strict=args.strict) else EXIT_BANK_INVALID
 
 

@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from fathom import validate
 from fathom.grading.verifier import VerifierResult
+from fathom.scenario import GateConfig, LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.taskbank import Bank, Task
 
 
@@ -227,6 +228,218 @@ class GateTests(unittest.TestCase):
         gate = [c for c in checks if c.prop == validate.PROP_GATE_RUNNABLE]
         self.assertEqual([c.status for c in gate], ["unverifiable"])
         self.assertTrue(validate.validation_ok(checks))
+
+
+def _arm(name: str, extras: tuple[str, ...], strategy: str = "gated-session") -> ResolvedScenario:
+    return ResolvedScenario(
+        name=name,
+        adapter="claude-cli",
+        model="claude-haiku-4-5",
+        strategy=strategy,
+        effort="low",
+        tools=ToolsConfig(source="none"),
+        limits=LimitsOverride(),
+        model_id=None,
+        tool_repo_sha=None,
+        tool_invocation_cmd=None,
+        config_hash="c" * 64,
+        gate=GateConfig(extra=extras),
+    )
+
+
+class GatePathTests(unittest.TestCase):
+    """Gate commands must name paths that exist (FATH-B54, T22b).
+
+    A gate command whose script is missing runs, fails to find the script and contributes
+    nothing, so a gated arm silently runs as the ungated one. A path anchored on
+    `${task_dir}`, or an absolute one, cannot be created by the agent, so a missing one is a
+    FAIL. A path relative to the workspace may be one the task asks the agent to create, so
+    a missing one is a WARN.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        root = Path(self._tmp.name)
+        self.tasks = root / "tasks"
+        self.workspace = root / "ws"
+        self.workspace.mkdir()
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _task_dir(self, task_id: str = "t1") -> Path:
+        task_dir = self.tasks / task_id
+        task_dir.mkdir(parents=True, exist_ok=True)
+        return task_dir
+
+    def _checks(self, *tasks: Task, arms: tuple[ResolvedScenario, ...] = ()):
+        @contextmanager
+        def stage(task, base_branch):
+            yield self.workspace
+
+        return validate.validate_bank(
+            _bank(*tasks),
+            stage_fn=stage,
+            verifier_fn=_verifier("fail"),
+            gate_fn=lambda cmd, ws: (0, ""),
+            overlay_fn=lambda task, ws: False,
+            scenarios=arms,
+        )
+
+    @staticmethod
+    def _paths(checks) -> list[validate.BankCheck]:
+        return [c for c in checks if c.prop == validate.PROP_GATE_PATHS]
+
+    def test_an_extra_naming_a_missing_task_dir_script_FAILS(self) -> None:
+        task = _task("t1", task_dir=self._task_dir())
+        checks = self._checks(task, arms=(_arm("probe-arm", ("python ${task_dir}/probe.py",)),))
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_FAIL], paths)
+        self.assertFalse(validate.validation_ok(checks))
+        detail = paths[0].detail
+        self.assertIn("${task_dir}/probe.py", detail)  # the token
+        self.assertIn("python ${task_dir}/probe.py", detail)  # the command
+        self.assertIn("probe-arm", detail)  # the arm
+
+    def test_the_same_extra_PASSES_once_the_script_exists(self) -> None:
+        task_dir = self._task_dir()
+        (task_dir / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=task_dir),
+            arms=(_arm("probe-arm", ("python ${task_dir}/probe.py ${workspace}",)),),
+        )
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_PASS])
+        self.assertTrue(validate.validation_ok(checks))
+
+    def test_a_quoted_placeholder_is_read_as_the_arm_reads_it(self) -> None:
+        task_dir = self._task_dir()
+        (task_dir / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=task_dir),
+            arms=(_arm("probe-arm", ('python "${task_dir}/probe.py"',)),),
+        )
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_PASS])
+
+    def test_extras_are_expanded_per_task(self) -> None:
+        # The probe exists in t1's directory and not in t2's: only t2 is refused.
+        (self._task_dir("t1") / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir("t1")),
+            _task("t2", task_dir=self._task_dir("t2")),
+            arms=(_arm("probe-arm", ("python ${task_dir}/probe.py",)),),
+        )
+        by_task = {c.task_id: c.status for c in self._paths(checks)}
+        self.assertEqual(by_task, {"t1": validate.STATUS_PASS, "t2": validate.STATUS_FAIL})
+
+    def test_an_unknown_placeholder_FAILS(self) -> None:
+        task_dir = self._task_dir()
+        (task_dir / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=task_dir),
+            arms=(_arm("probe-arm", ("python ${taskdir}/probe.py",)),),
+        )
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_FAIL], paths)
+        self.assertIn("${taskdir}", paths[0].detail)
+        self.assertFalse(validate.validation_ok(checks))
+
+    def test_a_missing_absolute_path_FAILS(self) -> None:
+        missing = (Path(self._tmp.name) / "nowhere" / "probe.py").as_posix()
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir(), gate={"run": f"python {missing}"})
+        )
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_FAIL])
+
+    def test_a_task_gate_naming_a_missing_workspace_script_WARNS(self) -> None:
+        # The agent may be asked to create it, so this cannot be refused outright.
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir(), gate={"run": "python scripts/check.py"})
+        )
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_WARN], paths)
+        self.assertIn("scripts/check.py", paths[0].detail)
+        self.assertTrue(validate.validation_ok(checks))
+        self.assertFalse(validate.validation_ok(checks, strict=True))
+
+    def test_a_workspace_relative_path_resolves_against_the_staged_workspace(self) -> None:
+        (self.workspace / "scripts").mkdir()
+        (self.workspace / "scripts" / "check.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir(), gate={"run": "python scripts/check.py"})
+        )
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_PASS])
+
+    def test_a_placeholder_in_the_task_gate_FAILS(self) -> None:
+        # The task's own gate runs as written: `${task_dir}` reaches the shell unexpanded.
+        task_dir = self._task_dir()
+        (task_dir / "probe.py").write_text("", encoding="utf-8")
+        checks = self._checks(
+            _task("t1", task_dir=task_dir, gate={"run": "python ${task_dir}/probe.py"})
+        )
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_FAIL], paths)
+        self.assertIn("[gate] run", paths[0].detail)
+
+    def test_no_gate_and_no_extra_adds_no_check(self) -> None:
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir()), arms=(_arm("bare", (), "single-session"),)
+        )
+        self.assertEqual(self._paths(checks), [])
+
+    def test_flags_urls_modules_and_redirect_targets_are_not_paths(self) -> None:
+        gate = (
+            "python -m pytest -q --basetemp=tmp/x && "
+            "uv run --with git+https://example.invalid/a/b python -c \"print('a/b')\" "
+            "> logs/out.txt"
+        )
+        checks = self._checks(_task("t1", task_dir=self._task_dir(), gate={"run": gate}))
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_PASS], paths)
+
+    def test_words_the_shell_resolves_are_left_alone(self) -> None:
+        # A shell variable or a glob is the shell's to resolve; guessing at it could refuse
+        # a working gate, so the check reports nothing for it.
+        gate = "python $HOME/tools/probe.py %USERPROFILE%/probe.py tests/*.py"
+        checks = self._checks(_task("t1", task_dir=self._task_dir(), gate={"run": gate}))
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_PASS])
+
+    def test_a_command_shared_by_two_arms_is_one_finding_naming_both(self) -> None:
+        extra = ("python ${task_dir}/probe.py",)
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir()),
+            arms=(_arm("probe-a", extra), _arm("probe-b", extra, "gated-review")),
+        )
+        paths = self._paths(checks)
+        self.assertEqual([c.status for c in paths], [validate.STATUS_FAIL], paths)
+        self.assertIn("probe-a", paths[0].detail)
+        self.assertIn("probe-b", paths[0].detail)
+
+    def test_an_arm_whose_strategy_runs_no_gate_is_not_checked(self) -> None:
+        # Only the gated strategies run `[gate] extra`; other strategies ignore it.
+        checks = self._checks(
+            _task("t1", task_dir=self._task_dir()),
+            arms=(_arm("bare", ("python ${task_dir}/probe.py",), "single-session"),),
+        )
+        self.assertEqual(self._paths(checks), [])
+
+    def test_the_check_reads_the_fixture_before_the_gate_runs(self) -> None:
+        # A gate that writes the file it names must not make the check pass.
+        def writing_gate(cmd, ws):
+            (Path(ws) / "made.py").write_text("", encoding="utf-8")
+            return 0, ""
+
+        @contextmanager
+        def stage(task, base_branch):
+            yield self.workspace
+
+        checks = validate.validate_bank(
+            _bank(_task("t1", task_dir=self._task_dir(), gate={"run": "python made.py"})),
+            stage_fn=stage,
+            verifier_fn=_verifier("fail"),
+            gate_fn=writing_gate,
+            overlay_fn=lambda task, ws: False,
+        )
+        self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_WARN])
 
 
 class GateEnvironmentTests(unittest.TestCase):
