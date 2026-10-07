@@ -19,6 +19,16 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   the value's truthiness. Docstring states the rule and stability promise. The function
   replaces the private `_is_pass()` helper.
 
+- **Scorecard saturation banner.** When a section has at least two arms with completed trials
+  and every one of them passes at least K of the section's N tasks, a line follows the Pass
+  Rates table saying so and pointing at Economy and Efficiency, or at a harder bank. K is
+  ceil(0.9 x N), set by the module constant `_SATURATION_SHARE`, and the line prints K and N.
+  An arm passes a task when at least half of its completed trials on that task have every
+  criterion true; infra and errored trials do not count. With one task (N = 1) the banner
+  prints when every arm passes it, so a one-task holdout section that every arm passes now
+  carries it, and the golden scorecard gains that one line. A single-arm ledger and a section
+  where some arm falls short of K print no banner.
+
 ### Changed
 
 - **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only

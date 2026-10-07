@@ -24,6 +24,10 @@ When reading it:
 - Lead with the **Per-Criterion Pass Rates** table: it shows where arms differ.
   The headline pass rate counts a trial as a pass only when every criterion is
   true.
+- A **Saturated** line under the Pass Rates table means every arm passes at least K of the
+  section's N tasks (K = ceil(0.9 x N); an arm passes a task when at least half of its
+  completed trials on it pass). The pass rate cannot separate the arms there, so read the
+  Economy and Efficiency sections instead, or say the bank needs harder tasks.
 - **Hard-Criteria Fraction** gives each arm partial credit: criteria true over
   criteria present, summed over its completed trials. A task's
   `[verify] hard_criteria` limits the count to those criteria; the last column

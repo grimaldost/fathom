@@ -20,6 +20,9 @@ TASKS_DIR = pathlib.Path("tasks")
 
 _BARE = "bare"
 _SERIES_KEY = "series"
+# An arm is saturated on a section when it passes at least this share of the section's tasks;
+# when every arm is, the pass rate cannot tell the arms apart (see _saturation_banner).
+_SATURATION_SHARE = 0.9
 _ARM_DELTAS = [
     "human decomposition",
     "per-PR gates",
@@ -478,6 +481,39 @@ def render(
                         passes += 1
         return passes, n, infra, len(completed_tasks)
 
+    def _saturation_banner(task_list: list[str]) -> str | None:
+        # An arm passes a task when at least half of its completed trials on that task pass.
+        # When two or more arms have completed trials and every one of them passes at least
+        # K = ceil(_SATURATION_SHARE x N) of the section's N tasks, the pass rate cannot
+        # separate them, so the banner points at the economy axis instead.
+        n_tasks = len(task_list)
+        k_needed = math.ceil(round(_SATURATION_SHARE * n_tasks, 9))
+        arms = 0
+        saturated = True
+        for sc in all_sc:
+            completed = passed = 0
+            for tid in task_list:
+                wins = n = 0
+                for rep in reps_for.get((sc, tid), []):
+                    t = trials.get((sc, tid, rep))
+                    if t is None or t.get("infra_error") or t.get("status") != "completed":
+                        continue
+                    n += 1
+                    wins += is_pass(t.get("verifier_results"))
+                completed += n
+                passed += n > 0 and 2 * wins >= n
+            if completed == 0:
+                continue
+            arms += 1
+            saturated = saturated and passed >= k_needed
+        if arms < 2 or not saturated:
+            return None
+        return (
+            f"> **Saturated:** every arm passes at least {k_needed} of {n_tasks} tasks, so the "
+            "pass rate cannot separate the arms here; compare them on Economy and Efficiency, "
+            "or make the bank harder."
+        )
+
     def _section(title: str, task_list: list[str]) -> None:
         if not task_list:
             return
@@ -500,6 +536,10 @@ def render(
                 rate = ci = "N/A"
             lines.append(f"| {sc} | {passes} | {n} | {rate} | {ci} | {infra} |")
         lines.append("")
+        saturated = _saturation_banner(task_list)
+        if saturated:
+            lines.append(saturated)
+            lines.append("")
         # CI-honesty caveat (ADR-0007 D3 precedent): N pools
         # every task×repeat cell, and repeats within a task and the different tasks
         # are correlated, so the Wilson interval is a heuristic width — an

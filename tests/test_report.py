@@ -1311,6 +1311,117 @@ def test_calibration_metadata_is_read_from_the_tasks_dir_given():
         assert meta == {"t1": {"score": 0.5, "hard_criteria": ["correctness"]}}
 
 
+# ---------------------------------------------------------------------------
+# Saturation banner: every arm at the pass ceiling points at the economy axis
+# ---------------------------------------------------------------------------
+
+
+def _sat_records(passing: dict[str, int], n_tasks: int, *, reps: int = 1) -> list[dict]:
+    """One trial per (arm, task, repeat); arm `a` passes the first passing[a] tasks."""
+    records = []
+    for sc, k in passing.items():
+        for i in range(n_tasks):
+            for rep in range(reps):
+                records.append(_hc_trial(sc, f"t{i:02d}", rep, {"ok": i < k}))
+    return records
+
+
+def _banner(content: str) -> list[str]:
+    return [line for line in content.splitlines() if line.startswith("> **Saturated:**")]
+
+
+def test_the_banner_prints_k_and_n_when_every_arm_is_at_the_ceiling(tmp_path):
+    content = _hc_render(tmp_path, _sat_records({"bare": 3, "nudge": 3}, 3))
+    assert _banner(content) == [
+        (
+            "> **Saturated:** every arm passes at least 3 of 3 tasks, so the pass rate cannot "
+            "separate the arms here; compare them on Economy and Efficiency, or make the bank "
+            "harder."
+        )
+    ]
+
+
+def test_the_banner_follows_the_pass_rates_table(tmp_path):
+    content = _hc_render(tmp_path, _sat_records({"bare": 2, "nudge": 2}, 2))
+    assert (
+        content.index("### Pass Rates")
+        < content.index("> **Saturated:**")
+        < content.index("### Verdicts")
+    )
+
+
+def test_a_single_arm_ledger_prints_no_banner(tmp_path):
+    assert _banner(_hc_render(tmp_path, _sat_records({"bare": 3}, 3))) == []
+
+
+def test_one_task_both_arms_passing_prints_the_banner(tmp_path):
+    content = _hc_render(tmp_path, _sat_records({"bare": 1, "nudge": 1}, 1))
+    (line,) = _banner(content)
+    assert "at least 1 of 1 tasks" in line
+
+
+def test_eight_of_ten_for_one_arm_prints_no_banner(tmp_path):
+    # K = ceil(0.9 x 10) = 9, and bare passes only 8 tasks.
+    assert _banner(_hc_render(tmp_path, _sat_records({"bare": 8, "nudge": 10}, 10))) == []
+
+
+def test_nine_of_ten_for_every_arm_prints_the_banner(tmp_path):
+    content = _hc_render(tmp_path, _sat_records({"bare": 9, "nudge": 10}, 10))
+    (line,) = _banner(content)
+    assert "at least 9 of 10 tasks" in line
+
+
+def test_a_task_is_passed_when_half_its_completed_trials_pass(tmp_path):
+    # bare passes 1 of 2 repeats on the only task (half: a pass); nudge passes 0 of 2.
+    records = [
+        _hc_trial("bare", "t1", 0, {"ok": True}),
+        _hc_trial("bare", "t1", 1, {"ok": False}),
+        _hc_trial("nudge", "t1", 0, {"ok": False}),
+        _hc_trial("nudge", "t1", 1, {"ok": False}),
+    ]
+    assert _banner(_hc_render(tmp_path / "a", records)) == []
+    records[2] = _hc_trial("nudge", "t1", 0, {"ok": True})
+    assert len(_banner(_hc_render(tmp_path / "b", records))) == 1
+
+
+def test_a_task_passed_by_less_than_half_its_trials_does_not_count(tmp_path):
+    records = [
+        _hc_trial("bare", "t1", 0, {"ok": True}),
+        _hc_trial("bare", "t1", 1, {"ok": False}),
+        _hc_trial("bare", "t1", 2, {"ok": False}),
+        _hc_trial("nudge", "t1", 0, {"ok": True}),
+        _hc_trial("nudge", "t1", 1, {"ok": True}),
+        _hc_trial("nudge", "t1", 2, {"ok": True}),
+    ]
+    assert _banner(_hc_render(tmp_path, records)) == []
+
+
+def test_errored_and_infra_trials_do_not_decide_a_task(tmp_path):
+    records = [
+        _hc_trial("bare", "t1", 0, {"ok": True}),
+        _hc_trial("bare", "t1", 1, {"ok": False}, status="errored"),
+        _hc_trial("bare", "t1", 2, {"ok": False}, infra=True),
+        _hc_trial("nudge", "t1", 0, {"ok": True}),
+    ]
+    assert len(_banner(_hc_render(tmp_path, records))) == 1
+
+
+def test_an_arm_with_no_completed_trial_is_not_counted_as_an_arm(tmp_path):
+    # nudge has only an infra error, so one arm remains and there is nothing to separate.
+    records = [
+        _hc_trial("bare", "t1", 0, {"ok": True}),
+        _hc_trial("nudge", "t1", 0, {"ok": False}, infra=True),
+    ]
+    assert _banner(_hc_render(tmp_path, records)) == []
+
+
+def test_the_golden_banner_is_in_the_saturated_holdout_section_only():
+    # Dev Tasks: bare passes 1 of 2 tasks, below K = 2. Holdout: every arm passes its 1 task.
+    dev, holdout = _GOLDEN.read_text(encoding="utf-8").split("## Holdout Tasks")
+    assert "Saturated" not in dev
+    assert "> **Saturated:** every arm passes at least 1 of 1 tasks" in holdout
+
+
 if __name__ == "__main__":
     _tests = [
         test_wilson_n_zero,

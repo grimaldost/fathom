@@ -1142,6 +1142,13 @@ one for holdout tasks. Each contains:
   trials, the pass rate, a Wilson 95% interval, and infrastructure errors. Errored trials are
   excluded, neither pass nor fail. The interval pools repeats and tasks, which are correlated,
   so read it as a rough width.
+- **Saturated banner** — a line after the Pass Rates table, printed only when the section has
+  at least two arms with completed trials and every one of them passes at least K of the
+  section's N tasks, with K = ceil(0.9 x N). An arm passes a task when at least half of its
+  completed trials on that task have every criterion true. The line names K and N. It means
+  the pass rate cannot separate the arms on this bank: compare them on Economy and Efficiency,
+  or make the bank harder (section 9). With one task (N = 1) it prints when every arm passes
+  that task, which is often the case in a holdout section.
 - **Verdicts** — the same numbers in a sentence, with the number of distinct tasks behind them.
 - **Per-Criterion Pass Rates** — each criterion's rate per arm. This is where arms usually
   differ; lead with it.

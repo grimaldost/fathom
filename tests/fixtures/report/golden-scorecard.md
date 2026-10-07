@@ -70,6 +70,8 @@
 | series | 1 | 1 | 100.0% | [20.7%, 100.0%] | 0 |
 | single-session | 1 | 1 | 100.0% | [20.7%, 100.0%] | 0 |
 
+> **Saturated:** every arm passes at least 1 of 1 tasks, so the pass rate cannot separate the arms here; compare them on Economy and Efficiency, or make the bank harder.
+
 > **CI caveat:** N pools every task×repeat cell; repeats within a task and the different (heterogeneous) tasks are correlated repeats, so the Wilson 95% CI is a **heuristic width** (an under-estimate of true uncertainty), not exact 95% coverage — cf. ADR-0007 D3. Each verdict shows K = distinct tasks.
 
 ### Verdicts
