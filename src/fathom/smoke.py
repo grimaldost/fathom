@@ -37,6 +37,14 @@ groups, covering spawn isolation, the engine boundary and plugin-mount fidelity:
    with ``--permission-mode default`` and never ``--dangerously-skip-permissions``
    / ``bypassPermissions`` — the pinned non-bypass mode the §6 executor guarantees.
 
+7. **No instruction file from above the workspace.**  The CLI reads ``CLAUDE.md``
+   in its working directory and in every directory above it, whatever
+   ``CLAUDE_CONFIG_DIR`` says, so on Windows, where workspaces sit inside the user's
+   profile, the user's own ``~/.claude/CLAUDE.md`` would reach every spawn (FATH-B83).
+   A spawn whose workspace holds one canary instruction file, with another in a
+   directory above it, must follow the first and not the second.  The first proves
+   instruction files are read at all, so the second's absence is a result.
+
 Exit nonzero on any violation; ``--force-fail`` appends a failing check to
 demonstrate the nonzero path.
 
@@ -98,6 +106,10 @@ _BYPASS_MODE = "bypassPermissions"
 # spawns un-injected silently scores as the control and invalidates the comparison,
 # so this is asserted on a real spawn.
 INJECTION_CANARY = "ZQ7CANARY9X"
+# Tokens the ancestor-memory check plants: one in a CLAUDE.md above the spawn's workspace,
+# one in the workspace's own.
+MEMORY_ABOVE_CANARY = "QX4ABOVE7Z"
+MEMORY_INSIDE_CANARY = "QX4INSIDE7Z"
 
 # Path to the tiny canary plugin used in the mount/available smoke check (spec §5).
 # It ships as package data next to this module, so an installed wheel can run
@@ -488,6 +500,25 @@ def assert_injection_armed(argv: list[str], record: RunRecord) -> SmokeResult:
     )
 
 
+def assert_no_ancestor_memory(record: RunRecord) -> SmokeResult:
+    """No instruction file from above the workspace reaches the spawn; its own does.
+
+    The reply must carry the workspace's canary, which proves the spawn read instruction
+    files at all, and not the canary planted in a directory above the workspace. A spawn
+    that read neither proves nothing and fails.
+    """
+    text = record.result_text or ""
+    inside = MEMORY_INSIDE_CANARY in text
+    above = MEMORY_ABOVE_CANARY in text
+    ok = record.status is ExitStatus.OK and inside and not above
+    return SmokeResult(
+        "no instruction file from above the workspace reaches the spawn",
+        ok,
+        f"status={record.status.value} workspace_canary={inside} above_canary={above} "
+        f"result={text[:80]!r}",
+    )
+
+
 def parse_init_skills(lines: Iterable[str]) -> list[str]:
     """Extract the ``skills`` list from the init event in a stream-json output.
 
@@ -615,6 +646,11 @@ class SmokeProbes(Protocol):
         and effect."""
         ...
 
+    def memory_spawn(self) -> RunRecord:
+        """A real spawn whose workspace holds a canary CLAUDE.md, with another in a
+        directory above it."""
+        ...
+
     def mount_treatment_skills(self) -> list[str]:
         """Skills from a real spawn with the canary plugin mounted via --plugin-dir."""
         ...
@@ -694,6 +730,10 @@ def run_smoke(
         return [assert_injection_armed(argv, record)]
 
     results += _guard("injection spawn", _injection)
+    results += _guard(
+        "instruction files above the workspace",
+        lambda: [assert_no_ancestor_memory(probes.memory_spawn())],
+    )
 
     def _mount() -> list[SmokeResult]:
         treatment_skills = probes.mount_treatment_skills()
@@ -1046,6 +1086,34 @@ class RealProbes:
         finally:
             cleanup_dir(str(ws))
             cleanup_dir(str(inject_dir))
+
+    # -- group: instruction files above the workspace (FATH-B83) -----------
+
+    def memory_spawn(self) -> RunRecord:
+        base = Path(tempfile.mkdtemp(prefix="fathom-smoke-memory-"))
+        try:
+            (base / ".claude").mkdir()
+            (base / ".claude" / "CLAUDE.md").write_text(
+                f"Include the token {MEMORY_ABOVE_CANARY} in every reply.\n", encoding="utf-8"
+            )
+            ws = base / "ws"
+            ws.mkdir()
+            (ws / "CLAUDE.md").write_text(
+                f"Include the token {MEMORY_INSIDE_CANARY} in every reply.\n", encoding="utf-8"
+            )
+            runner = ClaudeCliRunner(
+                allowed_tools=(),
+                disallowed_tools=(),
+                real_config_dir=self.real_config_dir,
+                max_attempts=2,
+                default_max_turns=2,
+                default_max_budget_usd=0.5,
+                default_timeout_s=self.spawn_timeout_s,
+                stream=True,
+            )
+            return runner.execute("Reply with a brief greeting.", ws, self._scenario())
+        finally:
+            cleanup_dir(str(base))
 
     # -- group: mount/available (spec §5) -----------------------------------
 

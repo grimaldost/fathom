@@ -268,6 +268,20 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Fixed
 
+- **Spawns no longer read the user's own CLAUDE.md from above their workspace (FATH-B83).**
+  Claude Code reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every directory
+  above its working directory, whatever `CLAUDE_CONFIG_DIR` says. fathom stages workspaces in
+  the temporary directory, which on Windows lies inside the user's profile, so the profile's
+  `.claude/CLAUDE.md`, the user's global instructions, reached every trial, arming probe and
+  smoke spawn, in every arm. Each spawn now gets a settings layer (`--settings`, in its own
+  configuration directory) whose `claudeMdExcludes` lists the instruction files above its
+  workspace. The workspace's own files still reach it, and the arm's `settings.json` and
+  `config_hash` are unchanged. The account's claude.ai connectors, which reached some spawns
+  and not others, are turned off (`ENABLE_CLAUDEAI_MCP_SERVERS=false`). `fathom smoke` gains a
+  live check: a spawn must follow a canary `CLAUDE.md` in its workspace and ignore one placed
+  in a directory above it. Runs measured on Windows before this change had the user's
+  instructions in every arm. Within one run every arm had the same file, but no arm was bare.
+  A series arm's engine starts its own spawns, and isolating those is the engine's job.
 - **The MCP server's tool results no longer carry a warning about its own environment.** The
   server runs in the temporary environment `uv run --with fastmcp` makes and passed its
   `VIRTUAL_ENV` to the engine it starts, so every `plan`, `report` and `smoke` result's

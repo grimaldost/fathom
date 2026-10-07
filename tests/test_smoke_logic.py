@@ -36,6 +36,8 @@ from fathom.smoke import (
     CANARY_SKILL,
     CREDENTIAL_MIN_TTL_S,
     INJECTION_CANARY,
+    MEMORY_ABOVE_CANARY,
+    MEMORY_INSIDE_CANARY,
     CredentialStatus,
     SmokeResult,
     assert_activity_detected,
@@ -45,6 +47,7 @@ from fathom.smoke import (
     assert_credential_live,
     assert_injection_armed,
     assert_isolated_config_is_credential_only,
+    assert_no_ancestor_memory,
     assert_no_bypass_in_engine_spawn,
     assert_tool_denied,
     forge_claude_shim,
@@ -117,6 +120,7 @@ class StubProbes:
         authed=None,
         deny=None,
         injection=None,
+        memory=None,
         mount_treatment=None,
         mount_control=None,
         engine_argvs=None,
@@ -133,6 +137,9 @@ class StubProbes:
                 [*_good_argv(), "--append-system-prompt-file", "/skill.md"],
                 _ok_record(result_text=f"hi {INJECTION_CANARY}"),
             )
+        )
+        self._memory = (
+            memory if memory is not None else _ok_record(result_text=f"hi {MEMORY_INSIDE_CANARY}")
         )
         # By default, the treatment has the canary; the control does not.
         self._mount_treatment = (
@@ -173,6 +180,12 @@ class StubProbes:
             raise RuntimeError("injection boom")
         return self._injection
 
+    def memory_spawn(self):
+        self.calls.append("memory")
+        if "memory" in self._raise_on:
+            raise RuntimeError("memory boom")
+        return self._memory
+
     def mount_treatment_skills(self):
         self.calls.append("mount_treatment")
         if "mount_treatment" in self._raise_on:
@@ -208,6 +221,21 @@ class TestConfigAssertion(unittest.TestCase):
 
     def test_empty_config_fails(self):
         self.assertFalse(assert_isolated_config_is_credential_only([]).ok)
+
+
+class TestAncestorMemoryAssertion(unittest.TestCase):
+    def test_the_workspace_file_alone_passes(self):
+        record = _ok_record(result_text=f"Hello. {MEMORY_INSIDE_CANARY}")
+        self.assertTrue(assert_no_ancestor_memory(record).ok)
+
+    def test_a_file_from_above_the_workspace_fails(self):
+        text = f"Hello. {MEMORY_INSIDE_CANARY} {MEMORY_ABOVE_CANARY}"
+        result = assert_no_ancestor_memory(_ok_record(result_text=text))
+        self.assertFalse(result.ok)
+        self.assertIn("above_canary=True", result.detail)
+
+    def test_a_spawn_that_read_no_instruction_file_proves_nothing(self):
+        self.assertFalse(assert_no_ancestor_memory(_ok_record(result_text="Hello.")).ok)
 
 
 class TestAuthedAndActivity(unittest.TestCase):
@@ -697,11 +725,11 @@ class TestRunSmoke(unittest.TestCase):
         self.assertNotIn("[FAIL]", output)
 
     def test_reports_every_check(self):
-        # 10 checks when engine included: credential, concurrency, config, authed,
-        # activity, deny, injection, mount-treatment, mount-control, engine.
+        # 11 checks when engine included: credential, concurrency, config, authed,
+        # activity, deny, injection, memory, mount-treatment, mount-control, engine.
         _code, output = self._run(StubProbes())
-        self.assertEqual(output.count("[PASS]"), 10, output)
-        self.assertIn("(10/10 checks)", output)
+        self.assertEqual(output.count("[PASS]"), 11, output)
+        self.assertIn("(11/11 checks)", output)
 
     # -- The hollow checks, and the headline that hid them ---------------
 
@@ -806,7 +834,7 @@ class TestRunSmoke(unittest.TestCase):
         code, output = self._run(probes, include_engine=False)
         self.assertEqual(code, 0)
         self.assertNotIn("engine", probes.calls, "engine probe must not run when excluded")
-        self.assertEqual(output.count("[PASS]"), 9)
+        self.assertEqual(output.count("[PASS]"), 10)
 
     def test_order_credential_config_authed_deny_injection_mount_engine(self):
         probes = StubProbes()
@@ -819,6 +847,7 @@ class TestRunSmoke(unittest.TestCase):
                 "authed",
                 "deny",
                 "injection",
+                "memory",
                 "mount_treatment",
                 "mount_control",
                 "engine",
