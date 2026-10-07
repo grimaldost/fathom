@@ -431,6 +431,8 @@ is the whole record.
 | FATH-B65 | The silent-failure items in `docs/method/review-checklist.md`. | 0.4.0 |
 | FATH-B66 | `docs/method/measured-terms.md`. | 0.4.0 |
 | FATH-B69 | New ledger rows record `engine_version`, outside `config_hash` and the resume key. | 0.8.0 |
+| FATH-B07 | `docs/ledger-contract.md`, the ledger row format, and the public `report.is_pass()`. | Unreleased |
+| FATH-B08 | The Hard-Criteria Fraction table in every scorecard section, and the saturation banner. | Unreleased |
 | FATH-B54 | `fathom validate` and the pre-flight in `fathom run` refuse a gate command that names a missing path (exit 12). | Unreleased |
 | FATH-B58 | An arm's `comparator` key: a dependent arm's cell runs only after its comparator completed the same task and repeat. | Unreleased |
 | FATH-B80 | The plan's `expected:` line, the median cost per trial from the bank's own completed trials. | Unreleased |

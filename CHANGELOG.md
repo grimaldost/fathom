@@ -258,6 +258,14 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   tasks then count every criterion. A historical view (`--dataset-version`) names hard
   criteria among the task metadata it takes from the current `tasks/` tree.
 
+- **A `task.toml` whose `tags` key is not a table of strings no longer loads.** `tags` was
+  not read before, so a task could carry, say, `tags = ["a"]` and load. It is now the
+  optional `[tags]` table described under Added, and any other shape fails the bank's load
+  with the task named: `fathom run` and `fathom validate` exit 1, and `fathom report` warns
+  and renders without the bank's task metadata (no tag tables, every criterion counted in the
+  Hard-Criteria Fraction, no calibration section for a bank that ships `scores.toml`).
+  Rewrite such a value as a table of strings (`[tags]` then `area = "a"`), or rename the key.
+
 ### Fixed
 
 - **The MCP server's tool results no longer carry a warning about its own environment.** The

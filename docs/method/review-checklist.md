@@ -75,7 +75,9 @@ four make the question part of review.
       to a scored failure conditions the pass rate on the engine succeeding.)*
 - [ ] **Dated claims** — a claim of observed external behaviour, or that an artifact
       exists, carries the date it was checked and the path or command that showed it.
-      *(This PR.)*
+      *(A docstring that says what an external CLI emits, checked once against an
+      older release, reads as current long after the CLI changed; "the report exists"
+      with no path cannot be checked at all.)*
 
 ---
 *Keep this file in version control with the project. Each promoted item should
