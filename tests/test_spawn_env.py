@@ -219,6 +219,11 @@ class TestMakeSpawnEnv(_Base):
         self.assertEqual(env["CLAUDE_CONFIG_DIR"], "cfg-dir")
         self.assertEqual(env["SPAWN_ENV_TEST_BENIGN"], "keep-me")
 
+    def test_the_account_connectors_are_turned_off_in_the_spawn_env(self):
+        """The account's claude.ai connectors reach a session whatever its configuration
+        directory, and arrive in some spawns and not others."""
+        self.assertEqual(make_spawn_env("/cfg")["ENABLE_CLAUDEAI_MCP_SERVERS"], "false")
+
     def test_the_parent_environment_is_left_as_it_was(self):
         make_spawn_env("cfg-dir")
         for name, value in self.parent.items():

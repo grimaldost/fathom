@@ -8,6 +8,11 @@ tools fathom may itself measure), and refactored behind the ``Runner`` protocol
 
 * a temp ``CLAUDE_CONFIG_DIR`` holding only the copied credential — no CLAUDE.md,
   settings.json, or history leaks user context into the supposedly clean arms;
+* no instruction file from above the workspace: the CLI also reads ``CLAUDE.md``,
+  ``CLAUDE.local.md`` and ``.claude/CLAUDE.md`` in every directory above its working
+  directory, whatever ``CLAUDE_CONFIG_DIR`` says, so each spawn gets a settings layer
+  (``--settings``) whose ``claudeMdExcludes`` lists them (:func:`write_isolation_settings`),
+  and the account's claude.ai connectors are turned off (:func:`make_spawn_env`);
 * headless **default-deny**: the command carries no ``--permission-mode`` and no
   ``--dangerously-skip-permissions`` (``bypassPermissions`` auto-approves every
   tool and nullifies the allowlist, so a spawn could write outside its
@@ -102,6 +107,17 @@ _USAGE_LIMIT = re.compile(
 # history.jsonl carries past prompts.
 _CONFIG_COPY_ALLOWLIST = frozenset({".credentials.json"})
 
+# The instruction files the CLI reads in its working directory and in every directory
+# above it, whatever CLAUDE_CONFIG_DIR says. On Windows the temporary directory, where
+# workspaces are staged, lies inside the user's profile, so without an exclusion the
+# profile's .claude/CLAUDE.md (the user's own global instructions) reaches every spawn as
+# the memory of a directory above its workspace.
+_MEMORY_FILES = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
+# The per-spawn settings layer that excludes them, written into the spawn's own
+# configuration directory and passed with --settings. The arm's settings.json is left
+# byte-identical, so the arming check still compares it with the declared file.
+ISOLATION_SETTINGS = "isolation-settings.json"
+
 
 # ---------------------------------------------------------------------------
 # Isolation — credential-only temp CLAUDE_CONFIG_DIR (vendored verbatim in spirit)
@@ -134,6 +150,38 @@ def make_isolated_config(real_config: str | None = None, settings_file: str | No
         with contextlib.suppress(OSError):
             shutil.copy2(settings_file, dest / "settings.json")
     return str(dest)
+
+
+def ancestor_memory_excludes(workspace: str | os.PathLike[str]) -> list[str]:
+    """``claudeMdExcludes`` patterns for every instruction file above *workspace*.
+
+    Absolute, with forward slashes, for each directory above the workspace in each of
+    its spellings (as given and resolved: a Windows temporary directory can be an 8.3
+    short path). The workspace's own files are not listed: a task's fixture may carry a
+    CLAUDE.md, and it is part of the task.
+    """
+    folders: list[Path] = []
+    candidates = [Path(os.path.abspath(workspace))]
+    with contextlib.suppress(OSError):
+        candidates.append(Path(workspace).resolve())
+    for candidate in candidates:
+        folders += [f for f in candidate.parents if f not in folders]
+    return [
+        f"{folder.as_posix().rstrip('/')}/{name}" for folder in folders for name in _MEMORY_FILES
+    ]
+
+
+def write_isolation_settings(config_dir: str, workspace: str | os.PathLike[str]) -> str:
+    """Write the settings layer that keeps instruction files from above *workspace* out of
+    a spawn into *config_dir*, and return its path for ``--settings``.
+
+    Claude Code merges arrays across settings layers, so an arm's own
+    ``claudeMdExcludes`` still applies alongside these.
+    """
+    path = Path(config_dir) / ISOLATION_SETTINGS
+    body = {"claudeMdExcludes": ancestor_memory_excludes(workspace)}
+    path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+    return str(path)
 
 
 def cleanup_dir(path: str, attempts: int = 4) -> None:
@@ -410,10 +458,17 @@ def make_spawn_env(config_dir: str) -> dict[str, str]:
     environment itself is not modified: fathom still reads its variables in its own
     process.
 
+    The account's claude.ai connectors are turned off
+    (``ENABLE_CLAUDEAI_MCP_SERVERS=false``): they reach a session whatever its
+    configuration directory, and whether they arrive in time for the init event varies
+    from spawn to spawn, so an arm would otherwise carry their tool descriptions in
+    some trials and not in others.
+
     A scenario's ``[env]`` is applied on top of this by :func:`_apply_env_template`.
     """
     env = env_for_agent_code()
     env["CLAUDE_CONFIG_DIR"] = config_dir
+    env["ENABLE_CLAUDEAI_MCP_SERVERS"] = "false"
     return env
 
 
@@ -601,6 +656,7 @@ def build_command(
     append_system_prompt_file: str | None = None,
     plugin_dirs: Sequence[str] = (),
     stream: bool = True,
+    isolation_settings: str | None = None,
 ) -> list[str]:
     """Assemble the ``claude -p`` argv.  Pure — no I/O.
 
@@ -631,6 +687,8 @@ def build_command(
         cmd += ["--append-system-prompt-file", append_system_prompt_file]
     for plugin_dir in plugin_dirs:
         cmd += ["--plugin-dir", plugin_dir]
+    if isolation_settings:
+        cmd += ["--settings", isolation_settings]
     # `is not None`, not truthiness: a cap of 0 means "spend nothing on this spawn", and
     # truthiness silently dropped it — so the single most restrictive cap an operator can
     # ask for was the one value that fell back to the adapter's $5 default.
@@ -965,6 +1023,7 @@ class ClaudeCliRunner:
         config_dir = make_isolated_config(self.real_config_dir, settings_file=self.settings_file)
         stage_dir: str | None = None
         try:
+            isolation = write_isolation_settings(config_dir, workspace)
             inject, mounts = self.append_system_prompt_file, self.plugin_dirs
             if self.stage_files and (inject or mounts):
                 stage_dir = tempfile.mkdtemp(prefix="fathom_stage_")
@@ -992,6 +1051,7 @@ class ClaudeCliRunner:
                 env_template=scenario.env.vars,
                 append_system_prompt_file=inject,
                 plugin_dirs=mounts,
+                isolation_settings=isolation,
             )
         finally:
             cleanup_dir(config_dir)
@@ -1012,6 +1072,7 @@ class ClaudeCliRunner:
         env_template: Sequence[tuple[str, str]] = (),
         append_system_prompt_file: str | None = None,
         plugin_dirs: Sequence[str] = (),
+        isolation_settings: str | None = None,
     ) -> RunRecord:
         cmd = build_command(
             model=model,
@@ -1023,6 +1084,7 @@ class ClaudeCliRunner:
             append_system_prompt_file=append_system_prompt_file,
             plugin_dirs=plugin_dirs,
             stream=self.stream,
+            isolation_settings=isolation_settings,
         )
         env = make_spawn_env(config_dir)
         if env_template:

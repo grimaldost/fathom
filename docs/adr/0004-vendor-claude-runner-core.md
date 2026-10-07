@@ -40,3 +40,15 @@ on the harness it was copied from; divergence is expected and managed consciousl
 - New invariant: **spawn isolation properties** (credential-only temp config;
   default-deny tool permissions) must hold for every adapter run; the smoke gate
   is their check.
+
+## Amendment: instruction files above the workspace (FATH-B83)
+
+A credential-only `CLAUDE_CONFIG_DIR` keeps the user's configuration directory out, but
+Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
+directory above its working directory. On Windows the temporary directory, where workspaces
+are staged, lies inside the user's profile, so the profile's `.claude/CLAUDE.md` reached every
+spawn. Each spawn now also gets a `--settings` layer, written into its own configuration
+directory, whose `claudeMdExcludes` lists those files; the arm's `settings.json` is left as
+declared. The account's claude.ai connectors are turned off in the spawn environment. The
+smoke gate checks the effect on a live spawn, not the configuration directory's contents:
+the earlier check passed throughout, because it asserted the cause it had fixed.

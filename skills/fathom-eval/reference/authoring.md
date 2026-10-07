@@ -717,8 +717,12 @@ refused, and fathom never passes `bypassPermissions` or `--dangerously-skip-perm
 - The order of `allowed` enters `config_hash`; reordering it forks the arm's history.
 
 Each spawn also gets a temporary `CLAUDE_CONFIG_DIR` holding only a copy of the credential
-file, so no personal instructions, settings, history or plugins reach any arm. The spawn's
-environment is the host's with these removed:
+file. Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
+directory above its working directory, whatever that directory says, so each spawn gets a
+settings layer (`--settings`) whose `claudeMdExcludes` lists those files, and the account's
+claude.ai connectors are turned off. No personal instructions, settings, history, plugins or
+connectors reach any arm. A `CLAUDE.md` inside the task's fixture still does: it is part of
+the task. The spawn's environment is the host's with these removed:
 
 - the variables that would send it to another account or backend;
 - every `FATHOM_*` variable, and `PWD` and `OLDPWD`, which name the directory fathom was

@@ -97,7 +97,9 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
   additive, and readers tolerate rows written before a field existed. The resume key is
   `(bank, dataset_version, task_id, config_hash, repeat)`, and only `status == "completed"`
   counts as done (`src/fathom/ledger.py`).
-- **Spawn isolation** (ADR-0004). A credential-only temporary `CLAUDE_CONFIG_DIR`, headless
+- **Spawn isolation** (ADR-0004). A credential-only temporary `CLAUDE_CONFIG_DIR`, a
+  `--settings` layer whose `claudeMdExcludes` lists the instruction files above the workspace
+  (the CLI reads them whatever `CLAUDE_CONFIG_DIR` says), the claude.ai connectors off, headless
   default-deny, explicit allow and disallow lists, never `bypassPermissions` or
   `--dangerously-skip-permissions` (`src/fathom/adapters/claude_cli.py`). Every model call goes
   through a `Runner` adapter (ADR-0001); the one sanctioned exception is the series-engine

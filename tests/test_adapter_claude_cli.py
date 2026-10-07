@@ -26,7 +26,9 @@ from fathom.adapters.base import ExitStatus, Runner, RunRecord
 from fathom.adapters.claude_cli import (
     COST_SOURCE_NONE,
     COST_SOURCE_REPORTED,
+    ISOLATION_SETTINGS,
     ClaudeCliRunner,
+    ancestor_memory_excludes,
     build_command,
     cleanup_dir,
     cost_and_source,
@@ -77,6 +79,10 @@ class RecordingSpawn:
     def __call__(self, argv, *, input, timeout, env, cwd):
         cfg = env.get("CLAUDE_CONFIG_DIR")
         contents = sorted(os.listdir(cfg)) if cfg and os.path.isdir(cfg) else None
+        layer = Path(cfg) / ISOLATION_SETTINGS if cfg else None
+        isolation = (
+            json.loads(layer.read_text(encoding="utf-8")) if layer and layer.is_file() else None
+        )
         self.calls.append(
             types.SimpleNamespace(
                 argv=list(argv),
@@ -85,6 +91,7 @@ class RecordingSpawn:
                 env=dict(env),
                 cwd=cwd,
                 config_contents=contents,
+                isolation=isolation,
             )
         )
         return self.responder(len(self.calls) - 1)
@@ -119,6 +126,11 @@ class AdapterTestBase(unittest.TestCase):
 
 
 class TestBuildCommand(unittest.TestCase):
+    def test_the_isolation_layer_is_passed_with_settings_when_given(self):
+        cmd = self._cmd(isolation_settings="/cfg/isolation-settings.json")
+        self.assertEqual(cmd[cmd.index("--settings") + 1], "/cfg/isolation-settings.json")
+        self.assertNotIn("--settings", self._cmd())
+
     def _cmd(self, **overrides):
         kw = {
             "model": "claude-opus-4-8",
@@ -288,10 +300,64 @@ class TestIsolation(AdapterTestBase):
             cleanup_dir(cfg)
 
     def test_execute_spawns_with_credentials_only_config(self):
+        """Nothing from the real configuration but the credential; the engine adds only
+        its own isolation layer."""
         spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
         runner = self.make_runner(spawn)
         runner.execute("do the task", self.workspace, _scenario())
-        self.assertEqual(spawn.calls[0].config_contents, [".credentials.json"])
+        self.assertEqual(spawn.calls[0].config_contents, [".credentials.json", ISOLATION_SETTINGS])
+
+    def test_instruction_files_above_the_workspace_are_excluded(self):
+        """The CLI reads CLAUDE.md in every directory above its working directory,
+        whatever CLAUDE_CONFIG_DIR says (FATH-B83). Each spawn's --settings layer excludes
+        those files, and none of the workspace's own."""
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
+        runner = self.make_runner(spawn)
+        runner.execute("do the task", self.workspace, _scenario())
+        call = spawn.calls[0]
+        layer = Path(call.argv[call.argv.index("--settings") + 1])
+        self.assertEqual(layer.parent, Path(call.env["CLAUDE_CONFIG_DIR"]))
+        self.assertEqual(layer.name, ISOLATION_SETTINGS)
+        excludes = call.isolation["claudeMdExcludes"]
+        own = Path(os.path.abspath(self.workspace))
+        for name in ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md"):
+            self.assertIn(f"{own.parent.as_posix()}/{name}", excludes)
+            self.assertIn(f"{Path(own.anchor).as_posix().rstrip('/')}/{name}", excludes)
+        self.assertFalse([e for e in excludes if e.startswith(own.as_posix() + "/")])
+
+    def test_the_arm_settings_file_reaches_the_spawn_unchanged(self):
+        """The arming check compares the spawn's settings.json with the declared file,
+        so the exclusions travel in their own layer, never merged into the arm's."""
+        declared = Path(tempfile.mkdtemp(prefix="arm_")) / "settings.json"
+        self.addCleanup(cleanup_dir, str(declared.parent))
+        declared.write_bytes(b'{"hooks": {}}\n')
+        seen: list[bytes] = []
+
+        def responder(i):
+            return _cp(0, _fixture("stream_complete.jsonl"))
+
+        spawn = RecordingSpawn(responder)
+        original = spawn.__call__
+
+        def recording(argv, *, input, timeout, env, cwd):
+            seen.append((Path(env["CLAUDE_CONFIG_DIR"]) / "settings.json").read_bytes())
+            return original(argv, input=input, timeout=timeout, env=env, cwd=cwd)
+
+        runner = self.make_runner(recording, settings_file=str(declared))
+        runner.execute("do the task", self.workspace, _scenario())
+        self.assertEqual(seen, [declared.read_bytes()])
+        self.assertIn(ISOLATION_SETTINGS, spawn.calls[0].config_contents)
+
+    def test_ancestor_memory_excludes_lists_every_parent_and_no_workspace_file(self):
+        base = Path(tempfile.mkdtemp(prefix="anc_"))
+        self.addCleanup(cleanup_dir, str(base))
+        workspace = base / "a" / "b"
+        workspace.mkdir(parents=True)
+        excludes = ancestor_memory_excludes(workspace)
+        for folder in (base / "a", base):
+            self.assertIn(f"{Path(os.path.abspath(folder)).as_posix()}/.claude/CLAUDE.md", excludes)
+        self.assertFalse([e for e in excludes if "/a/b/" in e])
+        self.assertEqual(len(excludes), len(set(excludes)))
 
     def test_execute_sets_config_dir_env_and_cwd(self):
         spawn = RecordingSpawn(lambda i: _cp(0, _fixture("stream_complete.jsonl")))
