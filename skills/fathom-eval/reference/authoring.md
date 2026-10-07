@@ -1012,7 +1012,7 @@ fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 fathom smoke [--no-engine-boundary]                     # a few cents: spawn isolation on real spawns
 fathom verify-arming [--scenarios-dir DIR]              # optional, a little: are the treatments armed?
 fathom run <bank> --repeats K [--scenarios-dir DIR]     # paid; resumable
-fathom report <bank> [--dataset-version V]              # free: report/scorecard-<bank>.md
+fathom report <bank> [--dataset-version V] [--per-trial] # free: report/scorecard-<bank>.md
 fathom index --write                                    # free: re-render the ledger index
 fathom reconcile                                        # free: do the derived records agree?
 ```
@@ -1163,6 +1163,16 @@ verdict.
 A scorecard written with `--dataset-version` for a version other than the current one opens
 with a line naming that version and the current one. Quote it only with that line; its numbers
 describe the older task definition, not the bank as it stands.
+
+The Economy section sums an arm over all its trials. For one trial at a time, add
+`--per-trial`: the scorecard is written as before, and a table follows on stdout with a line
+per (arm, task, repeat) giving its status, run rows, estimated USD, input and output tokens,
+turns and wall-clock seconds, each summed over that trial's run rows. A `*` after the USD
+means a run of the trial reported no cost (`cost_source` `none`), so the figure leaves it out.
+The table keys trials by config hash, not by arm name: when one name carries more than one
+hash, each line is labelled `name (hash prefix)` so the two do not pool. The flag combines
+with `--dataset-version`. To keep the table, redirect the output of `fathom report`; the
+scorecard file holds none of it.
 
 ## 15. Checklist before the first paid run
 

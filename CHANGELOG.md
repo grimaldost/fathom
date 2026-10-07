@@ -8,6 +8,16 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **`fathom report <bank> --per-trial` prints each trial's economy.** The Economy section sums
+  tokens, turns and USD over an arm, so one costly trial could not be told from the rest.
+  With the flag, the scorecard is written exactly as before and a markdown table follows on
+  stdout, one line per (arm, task, repeat): status, run rows, estimated USD, input and output
+  tokens, turns and wall-clock seconds, each summed over the trial's run rows. A `*` after the
+  USD marks a trial with a run whose `cost_source` is `none`, whose cost the figure leaves
+  out. Trials are keyed by `config_hash`, not by arm name, so two hashes under one name stay
+  apart, labelled with a hash prefix. Voids and the `--dataset-version` scope are those of the
+  scorecard, and the two flags combine. `report.per_trial_rows` and `report.render_per_trial`
+  are the same view as functions.
 - **`fathom report <bank> --dataset-version V` renders an older `dataset_version`.** The
   scorecard showed only the version of the last trial recorded and warned about the rest, so an
   older task definition's results could not be read back without editing the ledger. With the

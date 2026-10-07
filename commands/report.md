@@ -1,6 +1,6 @@
 ---
 description: Render a fathom scorecard from the committed ledger (idempotent; spends nothing)
-argument-hint: "<bank> [--dataset-version V]"
+argument-hint: "<bank> [--dataset-version V] [--per-trial]"
 allowed-tools: Bash
 ---
 
@@ -37,6 +37,12 @@ When reading it:
   `report/scorecard-<bank>--V.md` so the current scorecard stays; its first line says it is a
   historical view, and its calibration and turn caps come from the current `tasks/` tree. A
   version the ledger does not hold exits 1 and lists the ones it does.
+- `--per-trial` writes the scorecard as without it, then prints a table to stdout with one
+  line per trial: status, run rows, estimated USD, input and output tokens, turns and
+  wall-clock seconds, each summed over the trial's run rows. A `*` after a USD figure means a
+  run of that trial reported no cost, so the figure leaves it out. Trials are keyed by
+  config hash, so two arms that share a name stay apart, each labelled with a hash prefix. It
+  combines with `--dataset-version`.
 - `fathom report` reads `ledger/<bank>.jsonl` and `tasks/<bank>/` in the data
   root; it takes no directory flags. With no ledger for the bank it exits 1 and
   names the path it looked for.

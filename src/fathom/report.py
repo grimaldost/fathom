@@ -9,6 +9,7 @@ import re
 import warnings
 from collections import defaultdict
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 LEDGER_DIR = pathlib.Path("ledger")
@@ -807,3 +808,105 @@ def render(
     out_path = report_dir / f"scorecard-{bank}{suffix}.md"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out_path
+
+
+@dataclass(frozen=True)
+class PerTrialRow:
+    """One trial's economy: its run rows summed, keyed by config_hash, not by arm name."""
+
+    label: str  # the arm name, plus a config_hash prefix when one name carries several hashes
+    config_hash: str
+    task_id: str
+    repeat: int
+    status: str
+    runs: int  # run rows summed into this row
+    usd: float  # the sum of the run rows' cost_usd_est
+    usd_missing: bool  # a run row carries cost_source "none": the sum leaves that run out
+    input_tokens: int
+    output_tokens: int
+    turns: int
+    wall: float  # seconds
+
+
+_HASH_LABEL_CHARS = 8
+
+
+def per_trial_rows(
+    bank: str,
+    ledger_dir: pathlib.Path = LEDGER_DIR,
+    dataset_version: str | None = None,
+) -> list[PerTrialRow]:
+    """Each trial of *bank* with the USD, tokens, turns and wall time of its run rows summed.
+
+    Voids and the dataset_version scope are those of :func:`render`. A run row has no trial
+    id, so the rows of one (config_hash, task, repeat) are all summed, as the Economy section
+    sums them. The key is the config_hash and not the arm name: one name can carry more than
+    one hash (FATH-B49), and pooling them would hide a changed arm. A name that carries more
+    than one hash is labelled with a prefix of each hash.
+    """
+    if not re.fullmatch(r"[a-zA-Z0-9_-]+", bank):
+        raise ValueError(f"Invalid bank name: {bank!r}")
+    raw = _scope_to_current_dataset_version(bank, _read_raw(bank, ledger_dir), dataset_version)
+    trials: dict[tuple[str, str, int], dict] = {}
+    runs: defaultdict[tuple[str, str, int], list[dict]] = defaultdict(list)
+    for rec in raw:
+        key = (rec.get("config_hash", ""), rec.get("task_id", ""), rec.get("repeat", 0))
+        if rec.get("kind") == "trial":
+            trials[key] = rec
+        elif rec.get("kind") == "run":
+            runs[key].append(rec)
+    hashes_of: defaultdict[str, set[str]] = defaultdict(set)
+    for (ch, _, _), rec in trials.items():
+        hashes_of[rec.get("scenario") or ch].add(ch)
+
+    rows = []
+    for key, rec in trials.items():
+        ch, tid, rep = key
+        name = rec.get("scenario") or ch
+        label = f"{name} ({ch[:_HASH_LABEL_CHARS]})" if len(hashes_of[name]) > 1 else name
+        trial_runs = runs.get(key, [])
+        usage = [r.get("usage") or {} for r in trial_runs]
+        rows.append(
+            PerTrialRow(
+                label=label,
+                config_hash=ch,
+                task_id=tid,
+                repeat=rep,
+                status=rec.get("status", ""),
+                runs=len(trial_runs),
+                usd=sum(r.get("cost_usd_est", 0.0) for r in trial_runs),
+                usd_missing=any(r.get("cost_source") == "none" for r in trial_runs),
+                input_tokens=sum(u.get("input_tokens", 0) for u in usage),
+                output_tokens=sum(u.get("output_tokens", 0) for u in usage),
+                turns=sum(r.get("turns", 0) for r in trial_runs),
+                wall=sum(r.get("duration", 0.0) for r in trial_runs),
+            )
+        )
+    return sorted(rows, key=lambda r: (r.label, r.config_hash, r.task_id, r.repeat))
+
+
+def render_per_trial(bank: str, rows: Sequence[PerTrialRow]) -> str:
+    """A markdown table of :func:`per_trial_rows`, one line per trial."""
+    header = (
+        "| Arm | Task | Repeat | Status | Runs | Est. USD | Input tokens | Output tokens"
+        " | Turns | Wall-clock (s) |"
+    )
+    lines = [
+        f"## Per-trial economy: {bank}",
+        "",
+        header,
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        usd = f"{r.usd:.4f}" + ("*" if r.usd_missing else "")
+        lines.append(
+            f"| {r.label} | {r.task_id} | {r.repeat} | {r.status} | {r.runs} | {usd}"
+            f" | {r.input_tokens} | {r.output_tokens} | {r.turns} | {r.wall:.1f} |"
+        )
+    if any(r.usd_missing for r in rows):
+        note = (
+            "`*` marks a trial with a run that reported no cost (cost_source `none`); its USD"
+            " leaves that run out."
+        )
+        lines += ["", note]
+    return "\n".join(lines) + "\n"

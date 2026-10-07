@@ -340,6 +340,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "is never overwritten."
         ),
     )
+    report_p.add_argument(
+        "--per-trial",
+        action="store_true",
+        dest="per_trial",
+        help=(
+            "After writing the scorecard, print a table of USD, tokens, turns and wall time "
+            "per (arm, task, repeat), summed over the trial's run rows. The scorecard is "
+            "written as without the flag."
+        ),
+    )
 
     val_p = sub.add_parser(
         "validate",
@@ -2222,6 +2232,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
     ``--dataset-version V`` renders one version of the ledger instead of the current one,
     into ``report/scorecard-<bank>--<V>.md``; a version the ledger does not hold is an
     error that names the versions it does.
+
+    ``--per-trial`` prints, after the scorecard is written, a table of each trial's USD,
+    tokens, turns and wall time (:func:`fathom.report.render_per_trial`), for the same
+    version. The scorecard is written exactly as without the flag.
     """
     import fathom.report as _report
 
@@ -2245,6 +2259,14 @@ def _cmd_report(args: argparse.Namespace) -> int:
             dataset_version=getattr(args, "dataset_version", None),
         )
         print(f"report written to {out_path}")
+        if getattr(args, "per_trial", False):
+            rows = _report.per_trial_rows(
+                args.bank,
+                ledger_dir,
+                dataset_version=getattr(args, "dataset_version", None),
+            )
+            print()
+            print(_report.render_per_trial(args.bank, rows), end="")
         _warn_if_unpublished(args.bank, root)
         return EXIT_OK
     except Exception as exc:

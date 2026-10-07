@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 
-from fathom.report import render, wilson_interval
+from fathom.report import per_trial_rows, render, render_per_trial, wilson_interval
 
 # ---------------------------------------------------------------------------
 # Golden file
@@ -1487,3 +1487,151 @@ def test_a_version_name_is_sanitized_in_the_file_name(tmp_path):
             "dv-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", dataset_version="a/b c"
         )
     assert out == tmp_path / "report" / "scorecard-dv-bank--a_b_c.md"
+
+
+# ---------------------------------------------------------------------------
+# --per-trial: USD, tokens, turns and wall time per (arm, task, repeat)
+# ---------------------------------------------------------------------------
+
+
+def _pt_trial(sc, ch, tid, rep, *, status="completed", dv="v1"):
+    rec = _dv_trial(dv, sc, ch, tid, rep, True)
+    rec["status"] = status
+    return rec
+
+
+def _pt_run(ch, tid, rep, *, usd, inp, out, turns, wall, source="reported", dv="v1"):
+    rec = _dv_run(dv, "", ch, tid, rep)
+    rec.update(
+        cost_usd_est=usd,
+        cost_source=source,
+        usage={"input_tokens": inp, "output_tokens": out},
+        turns=turns,
+        duration=wall,
+    )
+    return rec
+
+
+def _pt_ledger(tmp_path, records):
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True, exist_ok=True)
+    with open(ldgr / "dv-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    return ldgr
+
+
+def _pt_rows(tmp_path, records, **kwargs):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return per_trial_rows("dv-bank", _pt_ledger(tmp_path, records), **kwargs)
+
+
+def test_per_trial_sums_the_run_rows_of_a_trial(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.10, inp=100, out=40, turns=3, wall=10.0),
+        _pt_run("aaa", "add", 0, usd=0.25, inp=200, out=60, turns=5, wall=20.5),
+        _pt_trial("bare", "aaa", "add", 0),
+    ]
+    (row,) = _pt_rows(tmp_path, records)
+    assert (row.label, row.task_id, row.repeat, row.status, row.runs) == (
+        "bare",
+        "add",
+        0,
+        "completed",
+        2,
+    )
+    assert row.usd == pytest.approx(0.35)
+    assert (row.input_tokens, row.output_tokens, row.turns) == (300, 100, 8)
+    assert row.wall == pytest.approx(30.5)
+    assert row.usd_missing is False
+
+
+def test_per_trial_keys_by_config_hash_not_arm_name(tmp_path):
+    # FATH-B49: one arm name, two config hashes. The rows stay apart and say which is which.
+    records = [
+        _pt_run("aaa111111111", "add", 0, usd=0.10, inp=10, out=1, turns=1, wall=1.0),
+        _pt_trial("bare", "aaa111111111", "add", 0),
+        _pt_run("bbb222222222", "add", 0, usd=0.20, inp=20, out=2, turns=2, wall=2.0),
+        _pt_trial("bare", "bbb222222222", "add", 0),
+    ]
+    rows = _pt_rows(tmp_path, records)
+    assert [r.usd for r in rows] == [pytest.approx(0.10), pytest.approx(0.20)]
+    assert [r.label for r in rows] == ["bare (aaa11111)", "bare (bbb22222)"]
+
+
+def test_per_trial_label_is_the_bare_arm_name_when_one_hash_carries_it(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.1, inp=1, out=1, turns=1, wall=1.0),
+        _pt_trial("bare", "aaa", "add", 0),
+    ]
+    (row,) = _pt_rows(tmp_path, records)
+    assert row.label == "bare"
+
+
+def test_per_trial_shows_the_status_of_an_errored_trial(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.1, inp=1, out=1, turns=1, wall=1.0),
+        _pt_trial("bare", "aaa", "add", 0, status="errored"),
+    ]
+    (row,) = _pt_rows(tmp_path, records)
+    assert row.status == "errored"
+    assert "errored" in render_per_trial("dv-bank", [row])
+
+
+def test_per_trial_marks_a_run_with_no_cost_reported(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.10, inp=1, out=1, turns=1, wall=1.0),
+        _pt_run("aaa", "add", 0, usd=0.0, inp=1, out=1, turns=1, wall=1.0, source="none"),
+        _pt_trial("bare", "aaa", "add", 0),
+        _pt_run("aaa", "sub", 0, usd=0.30, inp=1, out=1, turns=1, wall=1.0),
+        _pt_trial("bare", "aaa", "sub", 0),
+    ]
+    rows = _pt_rows(tmp_path, records)
+    by_task = {r.task_id: r for r in rows}
+    assert by_task["add"].usd_missing is True
+    assert by_task["sub"].usd_missing is False
+    table = render_per_trial("dv-bank", rows)
+    add_line = next(ln for ln in table.splitlines() if "| add |" in ln)
+    sub_line = next(ln for ln in table.splitlines() if "| sub |" in ln)
+    assert "0.1000*" in add_line
+    assert "0.3000*" not in sub_line and "0.3000" in sub_line
+    assert "no cost" in table
+
+
+def test_per_trial_a_trial_without_runs_is_a_row_of_zeros(tmp_path):
+    (row,) = _pt_rows(tmp_path, [_pt_trial("bare", "aaa", "add", 0, status="errored")])
+    assert (row.runs, row.usd, row.turns) == (0, 0.0, 0)
+
+
+def test_per_trial_applies_voids_and_dataset_version_like_render(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.10, inp=1, out=1, turns=1, wall=1.0, dv="v1"),
+        _pt_trial("bare", "aaa", "add", 0, dv="v1"),
+        _pt_run("aaa", "add", 0, usd=0.50, inp=1, out=1, turns=1, wall=1.0, dv="v2"),
+        _pt_trial("bare", "aaa", "add", 0, dv="v2"),
+    ]
+    (current,) = _pt_rows(tmp_path / "a", records)
+    assert current.usd == pytest.approx(0.50)
+    (old,) = _pt_rows(tmp_path / "b", records, dataset_version="v1")
+    assert old.usd == pytest.approx(0.10)
+
+
+def test_per_trial_table_has_a_header_and_one_line_per_trial(tmp_path):
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.10, inp=1, out=1, turns=1, wall=1.0),
+        _pt_trial("bare", "aaa", "add", 0),
+    ]
+    table = render_per_trial("dv-bank", _pt_rows(tmp_path, records))
+    assert "| Arm | Task | Repeat | Status | Runs | Est. USD |" in table
+    assert "| bare | add | 0 | completed | 1 | 0.1000 |" in table
+
+
+def test_the_scorecard_and_golden_do_not_change(tmp_path):
+    # Nothing in the scorecard path calls the per-trial view, and the golden still matches.
+    out_a, _, _ = _render_two_versions(tmp_path / "a")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        per_trial_rows("dv-bank", tmp_path / "a" / "ledger")
+    out_b, _, _ = _render_two_versions(tmp_path / "b")
+    assert out_a.read_bytes() == out_b.read_bytes()

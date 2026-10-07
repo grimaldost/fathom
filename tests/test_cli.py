@@ -2782,7 +2782,7 @@ class ReportWithoutALedgerTests(unittest.TestCase):
 
 
 class ReportDatasetVersionTests(unittest.TestCase):
-    """`fathom report <bank> --dataset-version V` renders one version of a two-version ledger."""
+    """`fathom report <bank>` options on a two-version ledger: --dataset-version, --per-trial."""
 
     BANK = "example-v1"
 
@@ -2838,6 +2838,35 @@ class ReportDatasetVersionTests(unittest.TestCase):
         self.assertIn("v1", err)
         self.assertIn("v2", err)
         self.assertNotIn("report written", out)
+
+    # --per-trial
+    HEADER = "| Arm | Task | Repeat | Status | Runs | Est. USD |"
+
+    def test_per_trial_prints_the_table_header(self):
+        code, out, err = self._report("--per-trial")
+        self.assertEqual(code, EXIT_OK, out + err)
+        self.assertIn(self.HEADER, out)
+        self.assertIn("| bare | add | 0 | completed | 0 |", out)
+
+    def test_without_the_flag_no_table_is_printed(self):
+        code, out, err = self._report()
+        self.assertEqual(code, EXIT_OK, out + err)
+        self.assertNotIn(self.HEADER, out)
+
+    def test_the_scorecard_bytes_are_the_same_with_and_without_the_flag(self):
+        scorecard = self.root / "report" / f"scorecard-{self.BANK}.md"
+        self._report()
+        plain = scorecard.read_bytes()
+        scorecard.unlink()
+        code, out, err = self._report("--per-trial")
+        self.assertEqual(code, EXIT_OK, out + err)
+        self.assertEqual(scorecard.read_bytes(), plain)
+
+    def test_it_combines_with_a_chosen_dataset_version(self):
+        code, out, err = self._report("--per-trial", "--dataset-version", "v1")
+        self.assertEqual(code, EXIT_OK, out + err)
+        self.assertIn(self.HEADER, out)
+        self.assertTrue((self.root / "report" / f"scorecard-{self.BANK}--v1.md").is_file())
 
 
 class ReconcileRefusesANonRootFirstTests(unittest.TestCase):
