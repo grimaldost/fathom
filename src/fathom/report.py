@@ -12,6 +12,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from fathom.calibration import hard_fraction
+
 LEDGER_DIR = pathlib.Path("ledger")
 REPORT_DIR = pathlib.Path("report")
 TASKS_DIR = pathlib.Path("tasks")
@@ -145,6 +147,37 @@ def _load_task_meta(bank: str, tasks_dir: pathlib.Path = TASKS_DIR) -> dict[str,
                 )
             meta[t.id] = entry
     return meta
+
+
+def _load_task_criteria(
+    bank: str, tasks_dir: pathlib.Path = TASKS_DIR
+) -> dict[str, list[str] | None]:
+    """{task_id: its ``[verify] hard_criteria``, or None when it declares none}.
+
+    Read for every bank, with or without scores.toml: the core scorecard's Hard-Criteria
+    Fraction counts a task's declared hard criteria, and every criterion of a task that
+    declares none. Returns {} when the tasks dir or the bank is absent. A bank that cannot
+    be loaded warns and returns {}, so every criterion counts and the table says so.
+    """
+    bank_dir = pathlib.Path(tasks_dir) / bank
+    if not bank_dir.is_dir():
+        return {}
+    from fathom.taskbank import load_bank
+
+    try:
+        loaded = load_bank(bank_dir)
+    except Exception as exc:
+        warnings.warn(
+            f"could not read hard_criteria for bank {bank!r}: {exc}; the Hard-Criteria "
+            "Fraction counts every criterion",
+            stacklevel=2,
+        )
+        return {}
+    criteria: dict[str, list[str] | None] = {}
+    for t in loaded.tasks:
+        hard = t.verify.get("hard_criteria")
+        criteria[t.id] = [str(c) for c in hard] if isinstance(hard, list) and hard else None
+    return criteria
 
 
 # --- Spread and health: qualify the point estimates the ledger already lets us qualify ---
@@ -290,8 +323,8 @@ def _historical_note(raw: list[dict], scoped: list[dict], dataset_version: str |
         return ""
     return (
         f"> Historical view: dataset_version `{dataset_version}`, not the current one "
-        f"(`{dvs[-1]}`). Task metadata (calibration, turn caps) comes from the current "
-        "tasks/ tree, not from this version."
+        f"(`{dvs[-1]}`). Task metadata (calibration, turn caps, hard criteria) comes from "
+        "the current tasks/ tree, not from this version."
     )
 
 
@@ -333,6 +366,7 @@ def render(
     historical_note = _historical_note(raw, scoped, dataset_version)
     raw = scoped
     turn_caps = _load_turn_caps(bank, tasks_dir)
+    task_criteria = _load_task_criteria(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
@@ -539,6 +573,56 @@ def render(
                         f"{_pct(pc[0] / pc[1])} ({pc[0]}/{pc[1]})" if pc and pc[1] else "—"
                     )
                 lines.append(f"| {crit} | " + " | ".join(cells) + " |")
+            lines.append("")
+
+        # Hard-criteria fraction: partial credit per arm, for every bank. The pass rate
+        # counts a trial only when every criterion is true, so two arms can tie there
+        # while one meets more criteria than the other; this pools true over present
+        # criteria across the arm's completed trials. A task that declares
+        # [verify] hard_criteria counts those; any other task counts every criterion
+        # its verifier returned. No interval: criteria within a trial are correlated
+        # (ADR-0009), so pooled criteria are not independent draws.
+        frac_rows: list[str] = []
+        for sc in all_sc:
+            true_n = present_n = 0
+            declared: set[bool] = set()
+            for tid in task_list:
+                hard = task_criteria.get(tid)
+                for rep in reps_for.get((sc, tid), []):
+                    t = trials.get((sc, tid, rep))
+                    if t is None or t.get("infra_error") or t.get("status") != "completed":
+                        continue
+                    vr = t.get("verifier_results")
+                    returned = list(vr) if isinstance(vr, dict) else []
+                    s, p = hard_fraction(vr, returned if hard is None else hard)
+                    true_n += s
+                    present_n += p
+                    declared.add(hard is not None)
+            if not declared:
+                continue
+            if len(declared) > 1:
+                used = "mixed"
+            elif True in declared:
+                used = "hard_criteria"
+            else:
+                used = "all criteria (no hard_criteria declared)"
+            frac = _pct(true_n / present_n) if present_n else "N/A"
+            frac_rows.append(f"| {sc} | {true_n}/{present_n} | {frac} | {used} |")
+        if frac_rows:
+            lines.append("### Hard-Criteria Fraction")
+            lines.append("")
+            lines.append("| Scenario | True / Present | Fraction | Criteria used |")
+            lines.append("|---|---|---|---|")
+            lines.extend(frac_rows)
+            lines.append("")
+            lines.append(
+                "> **Partial credit.** Criteria true over criteria present, summed over the"
+                " arm's completed trials; infra and errored trials are left out. A task that"
+                " declares `[verify] hard_criteria` counts only those, and any other task"
+                " counts every criterion its verifier returned. Two arms with the same pass"
+                " rate can differ here. It is a point estimate with no interval: criteria"
+                " within one trial tend to pass or fail together (ADR-0009)."
+            )
             lines.append("")
 
         if bare_ch:

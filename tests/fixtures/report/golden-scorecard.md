@@ -24,6 +24,16 @@
 |---|---|---|---|
 | criterion_1 | 50.0% (1/2) | 100.0% (2/2) | 100.0% (1/1) |
 
+### Hard-Criteria Fraction
+
+| Scenario | True / Present | Fraction | Criteria used |
+|---|---|---|---|
+| bare | 1/2 | 50.0% | all criteria (no hard_criteria declared) |
+| series | 2/2 | 100.0% | all criteria (no hard_criteria declared) |
+| single-session | 1/1 | 100.0% | all criteria (no hard_criteria declared) |
+
+> **Partial credit.** Criteria true over criteria present, summed over the arm's completed trials; infra and errored trials are left out. A task that declares `[verify] hard_criteria` counts only those, and any other task counts every criterion its verifier returned. Two arms with the same pass rate can differ here. It is a point estimate with no interval: criteria within one trial tend to pass or fail together (ADR-0009).
+
 ### Pairwise vs Bare Anchor
 
 | Scenario | Win | Tie | Loss | N Pairs |
@@ -73,6 +83,16 @@
 | Criterion | bare | series | single-session |
 |---|---|---|---|
 | criterion_1 | 100.0% (1/1) | 100.0% (1/1) | 100.0% (1/1) |
+
+### Hard-Criteria Fraction
+
+| Scenario | True / Present | Fraction | Criteria used |
+|---|---|---|---|
+| bare | 1/1 | 100.0% | all criteria (no hard_criteria declared) |
+| series | 1/1 | 100.0% | all criteria (no hard_criteria declared) |
+| single-session | 1/1 | 100.0% | all criteria (no hard_criteria declared) |
+
+> **Partial credit.** Criteria true over criteria present, summed over the arm's completed trials; infra and errored trials are left out. A task that declares `[verify] hard_criteria` counts only those, and any other task counts every criterion its verifier returned. Two arms with the same pass rate can differ here. It is a point estimate with no interval: criteria within one trial tend to pass or fail together (ADR-0009).
 
 ### Economy
 

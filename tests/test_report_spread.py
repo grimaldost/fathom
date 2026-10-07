@@ -89,6 +89,10 @@ class _Rendered:
             d = self.tasks_dir / "b" / tid
             d.mkdir(parents=True)
             (d / "task.toml").write_text(body, encoding="utf-8")
+        if task_toml:
+            (self.tasks_dir / "b" / "bank.toml").write_text(
+                'name = "b"\ndataset_version = "1"\nholdout = []\n', encoding="utf-8"
+            )
 
     def text(self) -> str:
         path = report.render(

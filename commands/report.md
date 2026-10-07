@@ -24,6 +24,11 @@ When reading it:
 - Lead with the **Per-Criterion Pass Rates** table: it shows where arms differ.
   The headline pass rate counts a trial as a pass only when every criterion is
   true.
+- **Hard-Criteria Fraction** gives each arm partial credit: criteria true over
+  criteria present, summed over its completed trials. A task's
+  `[verify] hard_criteria` limits the count to those criteria; the last column
+  says whether the tasks declared them. Two arms with the same pass rate can
+  differ here. It has no interval, so quote it as a point estimate.
 - **Economy** gives min/median/max per trial; where the ranges overlap, the arms
   are not separated at this number of trials. **Arm Health**, when present, marks
   arms whose trials reached `max_turns`: their pass rates are lower bounds.
@@ -35,8 +40,8 @@ When reading it:
 - By default the scorecard shows the bank's current `dataset_version` and warns which older
   versions it left out. `--dataset-version V` renders an older one instead, into
   `report/scorecard-<bank>--V.md` so the current scorecard stays; its first line says it is a
-  historical view, and its calibration and turn caps come from the current `tasks/` tree. A
-  version the ledger does not hold exits 1 and lists the ones it does.
+  historical view, and its calibration, turn caps and hard criteria come from the current
+  `tasks/` tree. A version the ledger does not hold exits 1 and lists the ones it does.
 - `--per-trial` writes the scorecard as without it, then prints a table to stdout with one
   line per trial: status, run rows, estimated USD, input and output tokens, turns and
   wall-clock seconds, each summed over the trial's run rows. A `*` after a USD figure means a

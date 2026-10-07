@@ -291,6 +291,9 @@ After `fathom report <bank>`, read `report/scorecard-<bank>.md` in the data root
 
 - **Per-Criterion Pass Rates** — where arms usually differ. Lead with it; the headline
   pass rate counts a trial as a pass only when every criterion is true.
+- **Hard-Criteria Fraction** — partial credit per arm: criteria true over criteria
+  present, counting a task's `[verify] hard_criteria` when it declares them and every
+  criterion when it does not. Two arms with the same pass rate can differ here.
 - **Economy** — per arm: tokens, turns, wall-clock, spawns per trial, estimated USD,
   with min/median/max. Overlapping ranges mean the arms are not separated at this
   number of trials.

@@ -256,7 +256,7 @@ max_turns = 10                             # turns per spawn; default 30
 [verify]                                   # required table
 entry = "verify.py"                        # required; path relative to the task directory
 timeout_s = 60                             # optional; bounds the verifier subprocess (default 60)
-# hard_criteria = ["correctness"]          # optional; calibration banks only (section 9)
+# hard_criteria = ["correctness"]          # optional; sections 9 and 14
 
 # [gate]                                   # optional; the task's own deterministic check
 # run = "python -m unittest -q"            # used by the gated strategies and `fathom validate`
@@ -274,7 +274,7 @@ timeout_s = 60                             # optional; bounds the verifier subpr
 | `[limits] trial_timeout_s` | nothing | Accepted and ignored. The spawn timeout is the arm's `[limits] trial_timeout_s` (section 10). |
 | `[verify] entry` | run, validate, naive check | Run as `python <entry> <result view>` (section 7). |
 | `[verify] timeout_s` | run, validate, naive check | Raise it for a verifier that shells out to a heavy harness (a full test-suite collection, say); a timeout scores the trial as errored. |
-| `[verify] hard_criteria` | calibration views | Ignored by other banks. |
+| `[verify] hard_criteria` | scorecard, calibration views | The criteria the scorecard's Hard-Criteria Fraction counts for this task; a task without it counts every criterion (section 14). The calibration views read only the tasks that declare it (section 9). |
 | `[gate] run` | gated-session, gated-review, validate | A shell command run in the workspace; exit 0 is green. The gated strategies stop it, with every process still under it, after 120 seconds, a fixed limit with no setting, and count that as red; `fathom validate` allows it 300 seconds. Keep a gate well inside 120 seconds. In a trial, whatever the command creates in the workspace is removed when it exits, so an arm's `[gate] extra` command cannot use it (section 10, "Tools and default-deny"). It runs without any variable that names the data root, so it cannot find its tools through a virtual environment kept there. |
 | `[naive]` | `tools/check_naive_refs.py` | Section 9. |
 | `[context] size`, `pair` | calibration views | Section 9. |
@@ -1145,6 +1145,14 @@ one for holdout tasks. Each contains:
 - **Verdicts** — the same numbers in a sentence, with the number of distinct tasks behind them.
 - **Per-Criterion Pass Rates** — each criterion's rate per arm. This is where arms usually
   differ; lead with it.
+- **Hard-Criteria Fraction** — per arm, criteria true over criteria present, summed over its
+  completed trials, with infra and errored trials left out. A task that declares
+  `[verify] hard_criteria` counts only those; a task that declares none counts every
+  criterion its verifier returned. The last column says which: `hard_criteria`,
+  `all criteria (no hard_criteria declared)` or `mixed`. Two arms with the same pass rate
+  can differ here, since a trial that misses one criterion still counts the ones it met. It
+  is a point estimate with no interval: criteria within a trial tend to pass or fail
+  together (ADR-0009).
 - **Pairwise vs Bare Anchor** — appears only when the ledger holds pairwise grading rows. The
   pairwise judge is not part of `fathom run`, so it is normally absent.
 - **Economy** — per arm: total tokens, turns, wall-clock, spawns per trial and estimated USD,

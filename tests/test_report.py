@@ -1635,3 +1635,200 @@ def test_the_scorecard_and_golden_do_not_change(tmp_path):
         per_trial_rows("dv-bank", tmp_path / "a" / "ledger")
     out_b, _, _ = _render_two_versions(tmp_path / "b")
     assert out_a.read_bytes() == out_b.read_bytes()
+
+
+# ---------------------------------------------------------------------------
+# Hard-criteria fraction: partial credit in the core scorecard, for every bank
+# ---------------------------------------------------------------------------
+
+_ALL_CRITERIA = "all criteria (no hard_criteria declared)"
+
+
+def _hc_trial(sc, tid, rep, vr, *, status="completed", infra=False):
+    return {
+        "kind": "trial",
+        "bank": "hc-bank",
+        "task_id": tid,
+        "repeat": rep,
+        "status": status,
+        "dataset_version": "v1",
+        "config_hash": f"ch-{sc}",
+        "verifier_results": vr,
+        "scenario": sc,
+        "holdout": False,
+        "infra_error": infra,
+    }
+
+
+def _hc_tasks(tasks_dir: pathlib.Path, tasks: dict[str, list[str] | None]) -> None:
+    """tasks/hc-bank/ with one task.toml per id; a list declares [verify] hard_criteria."""
+    bank = tasks_dir / "hc-bank"
+    bank.mkdir(parents=True)
+    (bank / "bank.toml").write_text(
+        'name = "hc-bank"\ndataset_version = "v1"\nholdout = []\n', encoding="utf-8"
+    )
+    for tid, hard in tasks.items():
+        (bank / tid).mkdir()
+        verify = 'entry = "verify.py"\n'
+        if hard is not None:
+            verify += f"hard_criteria = {json.dumps(hard)}\n"
+        (bank / tid / "task.toml").write_text(
+            f'id = "{tid}"\ninstruction = "x"\n[limits]\n[verify]\n{verify}', encoding="utf-8"
+        )
+
+
+def _hc_render(tmp_path, records, tasks: dict[str, list[str] | None] | None = None) -> str:
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True)
+    with open(ldgr / "hc-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    tasks_dir = tmp_path / "tasks"
+    if tasks is not None:
+        _hc_tasks(tasks_dir, tasks)
+    out = render("hc-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", tasks_dir=tasks_dir)
+    return out.read_text(encoding="utf-8")
+
+
+def _hc_rows(content: str) -> dict[str, str]:
+    """The Hard-Criteria Fraction rows of the first section, keyed by scenario."""
+    lines = content.splitlines()
+    start = lines.index("### Hard-Criteria Fraction")
+    rows: dict[str, str] = {}
+    for line in lines[start + 1 :]:
+        if line.startswith("#"):
+            break
+        if line.startswith("| ") and not line.startswith("| Scenario"):
+            rows[line.split("|")[1].strip()] = line
+    return rows
+
+
+def test_the_fraction_pools_criteria_over_an_arms_trials(tmp_path):
+    # bare: 2 + 1 of 4 criteria true = 3/4; nudge: 4/4. No tasks/ tree, so every criterion counts.
+    records = [
+        _hc_trial("bare", "t1", 0, {"a": True, "b": True}),
+        _hc_trial("bare", "t1", 1, {"a": True, "b": False}),
+        _hc_trial("nudge", "t1", 0, {"a": True, "b": True}),
+        _hc_trial("nudge", "t1", 1, {"a": True, "b": True}),
+    ]
+    content = _hc_render(tmp_path, records)
+    rows = _hc_rows(content)
+    assert rows["bare"] == f"| bare | 3/4 | 75.0% | {_ALL_CRITERIA} |"
+    assert rows["nudge"] == f"| nudge | 4/4 | 100.0% | {_ALL_CRITERIA} |"
+    assert "| Scenario | True / Present | Fraction | Criteria used |" in content
+
+
+def test_the_fraction_table_follows_the_per_criterion_table(tmp_path):
+    records = [_hc_trial("bare", "t1", 0, {"a": True, "b": False})]
+    content = _hc_render(tmp_path, records)
+    assert (
+        content.index("### Per-Criterion Pass Rates")
+        < content.index("### Hard-Criteria Fraction")
+        < content.index("### Efficiency")
+    )
+
+
+def test_a_task_that_declares_hard_criteria_counts_only_those(tmp_path):
+    # Only "a" is hard: r0 has a=True, r1 a=False, so 1/2 whatever "b" says.
+    records = [
+        _hc_trial("bare", "t1", 0, {"a": True, "b": False}),
+        _hc_trial("bare", "t1", 1, {"a": False, "b": True}),
+    ]
+    content = _hc_render(tmp_path, records, tasks={"t1": ["a"]})
+    assert _hc_rows(content)["bare"] == "| bare | 1/2 | 50.0% | hard_criteria |"
+
+
+def test_an_arm_over_both_kinds_of_task_is_marked_mixed(tmp_path):
+    # t1 declares ["a"] (1/1); t2 declares none, so both its criteria count (1/2): 2/3.
+    records = [
+        _hc_trial("bare", "t1", 0, {"a": True, "b": False}),
+        _hc_trial("bare", "t2", 0, {"a": True, "b": False}),
+    ]
+    content = _hc_render(tmp_path, records, tasks={"t1": ["a"], "t2": None})
+    assert _hc_rows(content)["bare"] == "| bare | 2/3 | 66.7% | mixed |"
+
+
+def test_infra_and_errored_trials_are_left_out_of_the_fraction(tmp_path):
+    records = [
+        _hc_trial("bare", "t1", 0, {"a": True, "b": True}),
+        _hc_trial("bare", "t1", 1, {"a": False, "b": False}, status="errored"),
+        _hc_trial("bare", "t1", 2, {"a": False, "b": False}, infra=True),
+    ]
+    content = _hc_render(tmp_path, records)
+    assert _hc_rows(content)["bare"] == f"| bare | 2/2 | 100.0% | {_ALL_CRITERIA} |"
+
+
+def test_an_arm_whose_verifier_returned_no_criteria_reads_not_available(tmp_path):
+    records = [_hc_trial("bare", "t1", 0, None), _hc_trial("nudge", "t1", 0, {"a": True})]
+    content = _hc_render(tmp_path, records)
+    assert _hc_rows(content)["bare"] == f"| bare | 0/0 | N/A | {_ALL_CRITERIA} |"
+
+
+def test_a_historical_view_says_its_hard_criteria_are_the_current_ones(tmp_path):
+    # The fraction of an older dataset_version still reads today's tasks/ tree.
+    out, _, _ = _render_two_versions(tmp_path, dataset_version="v1")
+    first = out.read_text(encoding="utf-8").splitlines()[0]
+    assert "hard criteria" in first and "current tasks/ tree" in first
+
+
+def test_hard_criteria_are_read_without_a_scores_file(tmp_path):
+    from fathom.report import _load_task_criteria
+
+    _hc_tasks(tmp_path / "tasks", {"t1": ["a", "b"], "t2": None})
+    assert _load_task_criteria("hc-bank", tmp_path / "tasks") == {"t1": ["a", "b"], "t2": None}
+    assert _load_task_criteria("other-bank", tmp_path / "tasks") == {}
+    assert _load_task_criteria("hc-bank", tmp_path / "missing") == {}
+
+
+def test_an_unreadable_bank_warns_and_counts_every_criterion(tmp_path):
+    from fathom.report import _load_task_criteria
+
+    (tmp_path / "tasks" / "hc-bank").mkdir(parents=True)  # no bank.toml
+    with pytest.warns(UserWarning, match="hard_criteria"):
+        assert _load_task_criteria("hc-bank", tmp_path / "tasks") == {}
+
+
+_CALIBRATION_SECTION = _FIXTURES_DIR / "calibration-section.md"
+
+
+def _calibration_bank_scorecard(tmp_path: pathlib.Path) -> str:
+    """The scorecard of a calibration bank: scores.toml, hard_criteria, three tiered arms."""
+    bank = tmp_path / "tasks" / "cal"
+    for tid, hard in (("t1", ["correctness"]), ("t2", ["correctness", "style"])):
+        (bank / tid).mkdir(parents=True)
+        (bank / tid / "task.toml").write_text(
+            f'id = "{tid}"\ninstruction = "x"\n[limits]\n'
+            f'[verify]\nentry = "verify.py"\nhard_criteria = {json.dumps(hard)}\n',
+            encoding="utf-8",
+        )
+    (bank / "bank.toml").write_text(
+        'name = "cal"\ndataset_version = "1"\nholdout = []\n', encoding="utf-8"
+    )
+    (bank / "scores.toml").write_text("[scores]\nt1 = 10\nt2 = 80\n", encoding="utf-8")
+    passes = {"haiku": (True, False), "sonnet": (True, False), "opus": (True, True)}
+    records: list[dict] = []
+    for arm, (t1_pass, t2_pass) in passes.items():
+        for tid, ok in (("t1", t1_pass), ("t2", t2_pass)):
+            for rep in range(2):
+                run = _dv_run("1", arm, f"ch-{arm}", tid, rep)
+                run["bank"] = "cal"
+                trial = _dv_trial("1", arm, f"ch-{arm}", tid, rep, ok)
+                trial["bank"] = "cal"
+                trial["verifier_results"] = {"correctness": ok, "style": ok, "extra": not ok}
+                records += [run, trial]
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir()
+    with open(ldgr / "cal.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    out = render(
+        "cal", ledger_dir=ldgr, report_dir=tmp_path / "report", tasks_dir=tmp_path / "tasks"
+    )
+    return out.read_text(encoding="utf-8")
+
+
+def test_the_calibration_section_is_unchanged_by_the_fraction(tmp_path):
+    # The snapshot was taken before the core scorecard gained the fraction table.
+    content = _calibration_bank_scorecard(tmp_path)
+    section = content[content.index("## Model-Tier Calibration") :]
+    assert section == _CALIBRATION_SECTION.read_text(encoding="utf-8")

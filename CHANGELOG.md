@@ -21,6 +21,19 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Changed
 
+- **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only
+  when every criterion is true, so two arms could tie on it while one met more criteria than
+  the other, and `[verify] hard_criteria` was read only for banks that ship `scores.toml`.
+  Each section of the scorecard now has a `### Hard-Criteria Fraction` table after
+  Per-Criterion Pass Rates: per arm, criteria true over criteria present, summed over its
+  completed trials, with infra and errored trials left out. A task that declares
+  `[verify] hard_criteria` counts only those; a task that declares none counts every
+  criterion its verifier returned. The last column says which applied: `hard_criteria`,
+  `all criteria (no hard_criteria declared)` or `mixed`. The figure is a point estimate with
+  no interval, because criteria within one trial tend to pass or fail together (ADR-0009).
+  The calibration sections are unchanged. A bank directory that cannot be loaded warns, and
+  its tasks then count every criterion. A historical view (`--dataset-version`) names hard
+  criteria among the task metadata it takes from the current `tasks/` tree.
 - **`report.is_pass()` renamed from `_is_pass()` for public use.** Call sites in `report.py`
   updated. The pass rule is stable and will not change; a public function grants callers
   the same guarantee.
