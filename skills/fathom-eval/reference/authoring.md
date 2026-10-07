@@ -1178,6 +1178,21 @@ one for holdout tasks. Each contains:
   number of trials.
 - **Arm Health** — appears when trials reached `max_turns`. Such an arm's pass rate is a lower
   bound; raise the budget before comparing it.
+- **Arm Health: MCP calls** — appears only when an arm mounts a plugin (`[plugins] mount`,
+  recorded in its trial rows' `config_preimage`). One row per such arm: how many of its
+  completed trials have a kept stream (section 10, "Streams"), and per such trial the
+  `mcp__*` calls to a server the spawn reported that returned without an error, as
+  min/median/max. Streams are read from `FATHOM_STREAM_DIR` when it is set, else from the
+  data root's `.fathom/streams/<bank>/`. `no streams kept` means none was found for any of the
+  arm's trials: an arm with neither a tool grant nor a `[context]` inject keeps none unless
+  `FATHOM_STREAM_DIR` is set. `(k partial)` counts trials with a stream that has no closing
+  `result` event (the spawn was cut off); their counts are lower bounds. The flag
+  `all calls denied or absent` means every trial with a stream made no such call: the
+  plugin's tools were denied or never used, so the arm's numbers describe the arm without its
+  treatment. Check the allowlist (section 10) before reading anything else about that arm.
+  Trial rows written before fathom recorded `config_preimage` are left out, and a line names
+  their arms. A cell run more than once (a resumed error, a voided trial) keeps every run's
+  streams under one name, so its count sums them all.
 - **Efficiency** — per-trial means, quality per 100k tokens, and a Pareto mark: `★` when no
   other arm is at least as good on both quality and tokens and better on one, `★?` when that
   holds on the means but the per-trial token ranges overlap.

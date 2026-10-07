@@ -36,6 +36,11 @@ When reading it:
 - **Economy** gives min/median/max per trial; where the ranges overlap, the arms
   are not separated at this number of trials. **Arm Health**, when present, marks
   arms whose trials reached `max_turns`: their pass rates are lower bounds.
+- **Arm Health: MCP calls** appears when an arm mounts a plugin: per arm, the trials
+  with a kept stream and the `mcp__*` calls per trial that returned without an error.
+  The flag `all calls denied or absent` means the plugin's tools went unused, so that
+  arm measured no treatment: say so before comparing it. `no streams kept` means the
+  count is missing, and `partial` that it is a lower bound.
 - **Pairwise vs Bare Anchor** appears only when the ledger holds pairwise grading
   rows; `fathom run` does not write them, so it is normally absent.
 - Calibration sections render only for banks that ship `scores.toml` and

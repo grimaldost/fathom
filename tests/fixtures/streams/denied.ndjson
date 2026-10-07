@@ -1,0 +1,4 @@
+{"type": "system", "subtype": "init", "model": "claude-haiku-4-5", "tools": ["Read", "mcp__srv__x"], "mcp_servers": [{"name": "srv", "status": "connected"}], "plugins": [{"name": "example", "path": "/plugins/example", "version": "1.0.0"}]}
+{"type": "assistant", "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "tu_1", "name": "mcp__srv__x", "input": {"q": "add"}}]}}
+{"type": "user", "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "tu_1", "is_error": true, "content": "Claude requested permissions to use mcp__srv__x, but you have not granted it."}]}}
+{"type": "result", "subtype": "success", "is_error": false, "num_turns": 2, "result": "Done without the tool."}

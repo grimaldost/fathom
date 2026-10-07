@@ -2058,3 +2058,218 @@ def test_task_tags_are_read_without_a_scores_file(tmp_path):
     assert _load_task_tags("hc-bank", tmp_path / "tasks") == {"t1": {"size": "small"}, "t2": {}}
     assert _load_task_tags("other-bank", tmp_path / "tasks") == {}
     assert _load_task_tags("hc-bank", tmp_path / "missing") == {}
+
+
+# ---------------------------------------------------------------------------
+# Arm Health: MCP calls, counted from the kept streams of arms that mount a plugin
+# ---------------------------------------------------------------------------
+
+_STREAM_FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "streams"
+_MOUNT = json.dumps(
+    {"name": "x", "plugins": [{"name": "example", "tree_sha": "t", "version": "1.0.0"}]},
+    sort_keys=True,
+)
+_NO_MOUNT = json.dumps({"name": "x"}, sort_keys=True)
+_MCP_HEADING = "### Arm Health: MCP calls"
+
+
+def _mcp_trial(sc, tid, rep, *, preimage=_MOUNT, status="completed"):
+    rec = _hc_trial(sc, tid, rep, {"a": True}, status=status)
+    rec["bank"] = "mcp-bank"
+    if preimage is not None:
+        rec["config_preimage"] = preimage
+    return rec
+
+
+def _keep(streams_dir, sc, tid, rep, *fixtures):
+    """Copy fixture streams to the names the adapter tees for that trial, one per spawn."""
+    streams_dir.mkdir(parents=True, exist_ok=True)
+    for n, name in enumerate(fixtures, 1):
+        body = (_STREAM_FIXTURES / name).read_text(encoding="utf-8")
+        target = streams_dir / f"mcp-bank--{sc}--{tid}--r{rep}--a1--{1000 + n}.ndjson"
+        target.write_text(body, encoding="utf-8")
+
+
+def _mcp_ledger(tmp_path, records) -> pathlib.Path:
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True, exist_ok=True)
+    with open(ldgr / "mcp-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    return ldgr
+
+
+def _mcp_render(tmp_path, records, streams_dir=None) -> str:
+    out = render(
+        "mcp-bank",
+        ledger_dir=_mcp_ledger(tmp_path, records),
+        report_dir=tmp_path / "report",
+        tasks_dir=tmp_path / "tasks",
+        streams_dir=tmp_path / "streams" if streams_dir is None else streams_dir,
+    )
+    return out.read_text(encoding="utf-8")
+
+
+def _mcp_table(content: str) -> list[str]:
+    lines = content.splitlines()
+    start = lines.index(_MCP_HEADING)
+    table: list[str] = []
+    for line in lines[start + 2 :]:
+        if not line.startswith("|"):
+            break
+        table.append(line)
+    return table
+
+
+def test_mcp_calls_render_served_denied_partial_and_missing(tmp_path):
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "served", "t1", 0, "served.ndjson")
+    _keep(streams_dir, "denied", "t1", 0, "denied.ndjson")
+    _keep(streams_dir, "cut", "t1", 0, "truncated.ndjson")
+    _keep(streams_dir, "bare", "t1", 0, "served.ndjson")
+    records = [
+        _mcp_trial("served", "t1", 0),
+        _mcp_trial("denied", "t1", 0),
+        _mcp_trial("cut", "t1", 0),
+        _mcp_trial("unkept", "t1", 0),
+        _mcp_trial("bare", "t1", 0, preimage=_NO_MOUNT),
+    ]
+    assert _mcp_table(_mcp_render(tmp_path, records)) == [
+        "| Scenario | Trials with streams | MCP calls per trial (min/med/max) | Flag |",
+        "|---|---|---|---|",
+        "| cut | 1/1 | 1/1/1 (1 partial) |  |",
+        "| denied | 1/1 | 0/0/0 | all calls denied or absent |",
+        "| served | 1/1 | 1/1/1 |  |",
+        "| unkept | 0/1 | no streams kept |  |",
+    ]
+
+
+def test_a_trials_count_sums_its_stream_files(tmp_path):
+    # r1 spawned twice (two files), each with one served call; r2's call was denied.
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "nudge", "t1", 0, "served.ndjson")
+    _keep(streams_dir, "nudge", "t1", 1, "served.ndjson", "served.ndjson")
+    _keep(streams_dir, "nudge", "t1", 2, "denied.ndjson")
+    records = [_mcp_trial("nudge", "t1", rep) for rep in range(3)]
+    assert _mcp_table(_mcp_render(tmp_path, records))[2:] == ["| nudge | 3/3 | 0/1/2 |  |"]
+
+
+def test_the_flag_needs_every_trial_with_streams_at_zero(tmp_path):
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "quiet", "t1", 0, "denied.ndjson")
+    _keep(streams_dir, "mixed", "t1", 0, "denied.ndjson")
+    _keep(streams_dir, "mixed", "t1", 1, "served.ndjson")
+    records = [
+        _mcp_trial("quiet", "t1", 0),
+        _mcp_trial("quiet", "t1", 1),  # no stream kept: not counted as a zero
+        _mcp_trial("mixed", "t1", 0),
+        _mcp_trial("mixed", "t1", 1),
+    ]
+    assert _mcp_table(_mcp_render(tmp_path, records))[2:] == [
+        "| mixed | 2/2 | 0/0/1 |  |",
+        "| quiet | 1/2 | 0/0/0 | all calls denied or absent |",
+    ]
+
+
+def test_a_call_to_a_server_the_spawn_did_not_report_is_not_counted(tmp_path):
+    # A successful mcp__ call whose server is not in the init event's mcp_servers.
+    body = (_STREAM_FIXTURES / "served.ndjson").read_text(encoding="utf-8")
+    streams_dir = tmp_path / "streams"
+    streams_dir.mkdir()
+    name = "mcp-bank--served--t1--r0--a1--1001.ndjson"
+    (streams_dir / name).write_text(body.replace("mcp__srv__x", "mcp__other__x"), encoding="utf-8")
+    table = _mcp_table(_mcp_render(tmp_path, [_mcp_trial("served", "t1", 0)]))
+    assert table[2:] == ["| served | 1/1 | 0/0/0 | all calls denied or absent |"]
+
+
+def test_errored_and_infra_trials_are_not_counted(tmp_path):
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "served", "t1", 0, "served.ndjson")
+    _keep(streams_dir, "served", "t1", 1, "served.ndjson")
+    infra = _mcp_trial("served", "t1", 2)
+    infra["infra_error"] = True
+    records = [
+        _mcp_trial("served", "t1", 0),
+        _mcp_trial("served", "t1", 1, status="errored"),
+        infra,
+    ]
+    assert _mcp_table(_mcp_render(tmp_path, records))[2:] == ["| served | 1/1 | 1/1/1 |  |"]
+
+
+def test_a_ledger_without_a_mount_arm_renders_no_mcp_table(tmp_path):
+    # Streams are kept for both arms, but neither mounts a plugin (one row is legacy).
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "bare", "t1", 0, "served.ndjson")
+    _keep(streams_dir, "old", "t1", 0, "served.ndjson")
+    records = [
+        _mcp_trial("bare", "t1", 0, preimage=_NO_MOUNT),
+        _mcp_trial("old", "t1", 0, preimage=None),
+    ]
+    with_streams = _mcp_render(tmp_path / "a", records, streams_dir=streams_dir)
+    without = _mcp_render(tmp_path / "b", records, streams_dir=tmp_path / "missing")
+    assert "MCP calls" not in with_streams
+    assert with_streams == without
+
+
+def test_legacy_rows_without_a_preimage_are_left_out_and_the_note_names_them(tmp_path):
+    streams_dir = tmp_path / "streams"
+    _keep(streams_dir, "served", "t1", 0, "served.ndjson")
+    _keep(streams_dir, "old", "t1", 0, "served.ndjson")
+    records = [_mcp_trial("served", "t1", 0), _mcp_trial("old", "t1", 0, preimage=None)]
+    content = _mcp_render(tmp_path, records)
+    assert _mcp_table(content)[2:] == ["| served | 1/1 | 1/1/1 |  |"]
+    after = content[content.index(_MCP_HEADING) :]
+    assert "Left out: the trials of old" in after
+    assert "config_preimage" in after
+
+
+def test_the_mcp_note_states_that_reruns_of_a_cell_share_a_stream_name(tmp_path):
+    _keep(tmp_path / "streams", "served", "t1", 0, "served.ndjson")
+    content = _mcp_render(tmp_path, [_mcp_trial("served", "t1", 0)])
+    after = content[content.index(_MCP_HEADING) :]
+    assert "share a stream name" in after
+    assert "Left out" not in after
+
+
+def test_the_mcp_table_follows_economy_and_precedes_efficiency(tmp_path):
+    _keep(tmp_path / "streams", "served", "t1", 0, "served.ndjson")
+    run = _dv_run("v1", "served", "ch-served", "t1", 0)
+    content = _mcp_render(tmp_path, [run, _mcp_trial("served", "t1", 0)])
+    assert content.index("### Economy") < content.index(_MCP_HEADING)
+    assert content.index(_MCP_HEADING) < content.index("### Efficiency")
+
+
+def test_the_default_streams_dir_is_fathom_stream_dir_then_the_data_root(tmp_path, monkeypatch):
+    from fathom.cli import _default_stream_dir
+
+    ldgr = _mcp_ledger(tmp_path, [_mcp_trial("served", "t1", 0)])
+
+    def _rendered() -> list[str]:
+        out = render("mcp-bank", ledger_dir=ldgr, report_dir=tmp_path / "report")
+        return _mcp_table(out.read_text(encoding="utf-8"))[2:]
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path / "elsewhere"))
+    _keep(tmp_path / "elsewhere", "served", "t1", 0, "served.ndjson")
+    assert _rendered() == ["| served | 1/1 | 1/1/1 |  |"]
+
+    monkeypatch.delenv("FATHOM_STREAM_DIR")
+    assert _rendered() == ["| served | 0/1 | no streams kept |  |"]
+    assert _default_stream_dir("mcp-bank") == tmp_path / ".fathom" / "streams" / "mcp-bank"
+    _keep(_default_stream_dir("mcp-bank"), "served", "t1", 0, "denied.ndjson")
+    assert _rendered() == ["| served | 1/1 | 0/0/0 | all calls denied or absent |"]
+
+
+def test_a_stream_the_adapter_tees_is_found_by_its_trial(tmp_path, monkeypatch):
+    # The adapter names the file after the tag the run loop sets, replacing characters it
+    # does not keep; the report must find it under the arm name the ledger records.
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    streams_dir = tmp_path / "streams"
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(streams_dir))
+    monkeypatch.setenv("FATHOM_STREAM_TAG", "mcp-bank--with mcp+--t1--r0")
+    body = (_STREAM_FIXTURES / "served.ndjson").read_text(encoding="utf-8")
+    ClaudeCliRunner._tee_stream(body, 1)
+    assert len(list(streams_dir.glob("*.ndjson"))) == 1
+    table = _mcp_table(_mcp_render(tmp_path, [_mcp_trial("with mcp+", "t1", 0)]))
+    assert table[2:] == ["| with mcp+ | 1/1 | 1/1/1 |  |"]

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import pathlib
 import re
 import warnings
@@ -30,6 +31,23 @@ _ARM_DELTAS = [
     "review/fix subagents",
     "engine settings",
 ]
+# Where `fathom run` keeps an arm's agent streams when FATHOM_STREAM_DIR is unset, relative
+# to the data root (cli._STREAM_ROOT and cli._default_stream_dir). The adapter names each file
+# `<tag>--a<attempt>--<ms>.ndjson`, the tag being `<bank>--<arm>--<task>--r<repeat>` cleaned
+# by _safe_file_part's rule (claude_cli._tee_stream).
+_STREAM_ROOT = pathlib.Path(".fathom") / "streams"
+_STREAM_FILE = re.compile(r"(?P<tag>.+)--a\d+--\d+\.ndjson")
+_ALL_DENIED = "all calls denied or absent"
+_MCP_CALLS_NOTE = (
+    "> Counted from the agent streams `fathom run` kept, for each completed trial of an arm"
+    " that mounts a plugin: the `mcp__*` calls to a server the spawn reported that returned"
+    " without an error. *no streams kept* means no stream was found for any of the arm's"
+    " trials. A count marked *partial* includes a stream with no closing `result` event (the"
+    " spawn was cut off), so it is a lower bound. The flag means every trial with a stream"
+    " made no such call: the mounted tools were denied or never called, so the arm's results"
+    " describe the arm without its treatment. Re-runs of one cell share a stream name, so a"
+    " cell run more than once sums the streams of every run."
+)
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -325,9 +343,58 @@ def _scope_to_current_dataset_version(
     return [r for r in raw if r.get("dataset_version", current_dv) == current_dv]
 
 
-def _safe_version(version: str) -> str:
-    """*version* as a file-name part: the stream tag's rule (letters, digits, ``-_.``)."""
-    return "".join(c if c.isalnum() or c in "-_." else "_" for c in version)
+def _safe_file_part(text: str) -> str:
+    """*text* as a file-name part, by the rule the adapter applies to a stream tag: letters,
+    digits and ``-_.`` are kept, anything else becomes ``_``."""
+    return "".join(c if c.isalnum() or c in "-_." else "_" for c in text)
+
+
+def default_streams_dir(bank: str) -> pathlib.Path:
+    """Where `fathom run` kept *bank*'s agent streams: ``FATHOM_STREAM_DIR`` when set, else
+    ``.fathom/streams/<bank>`` under the working directory, which is the data root while a
+    command runs."""
+    explicit = os.environ.get("FATHOM_STREAM_DIR")
+    return pathlib.Path(explicit) if explicit else pathlib.Path.cwd() / _STREAM_ROOT / bank
+
+
+def _mounts_a_plugin(trial: dict) -> bool | None:
+    """Whether a trial row's arm mounts a plugin: its ``config_preimage`` has a ``plugins``
+    key. None for a row with no readable preimage (rows written before it was recorded)."""
+    try:
+        preimage = json.loads(trial.get("config_preimage") or "")
+    except ValueError:
+        return None
+    return isinstance(preimage, dict) and "plugins" in preimage
+
+
+def _kept_streams(streams_dir: pathlib.Path) -> dict[str, list[pathlib.Path]]:
+    """The stream files in *streams_dir*, grouped by the trial tag they are named after."""
+    by_tag: defaultdict[str, list[pathlib.Path]] = defaultdict(list)
+    if streams_dir.is_dir():
+        for path in sorted(streams_dir.glob("*.ndjson")):
+            match = _STREAM_FILE.fullmatch(path.name)
+            if match:
+                by_tag[match["tag"]].append(path)
+    return by_tag
+
+
+def _served_mcp_calls(paths: Sequence[pathlib.Path]) -> tuple[int, bool]:
+    """(the successful ``mcp__*`` calls to a server the spawn reported, summed over *paths*;
+    whether any of them lacks its closing ``result`` event, so the sum is partial)."""
+    from fathom import streams
+    from fathom.arming import tools_served_by
+
+    calls = 0
+    partial = False
+    for path in paths:
+        try:
+            events = streams.read_stream_file(path)
+        except OSError:
+            events = []
+        partial = partial or not streams.stream_completed(events)
+        served = streams.init_mcp_servers(events)
+        calls += len(tools_served_by(served, streams.successful_mcp_calls(events)))
+    return calls, partial
 
 
 def _historical_note(raw: list[dict], scoped: list[dict], dataset_version: str | None) -> str:
@@ -375,12 +442,16 @@ def render(
     report_dir: pathlib.Path = REPORT_DIR,
     tasks_dir: pathlib.Path = TASKS_DIR,
     dataset_version: str | None = None,
+    streams_dir: pathlib.Path | None = None,
 ) -> pathlib.Path:
     """Read ledger/<bank>.jsonl and write report/scorecard-<bank>.md.
 
     With *dataset_version* naming a version other than the current one, the scorecard
     is that version's view and goes to ``scorecard-<bank>--<version>.md``, so it never
     overwrites the current scorecard. Its first line says so.
+
+    *streams_dir* is where the run kept the agent streams (:func:`default_streams_dir` when
+    None). It is read only when an arm mounts a plugin, for the MCP-call table.
     """
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", bank):
         raise ValueError(f"Invalid bank name: {bank!r}")
@@ -479,6 +550,65 @@ def render(
     lines: list[str] = [f"# Scorecard — {bank}", ""]
     if historical_note:
         lines = [historical_note, "", *lines]
+
+    # The kept stream files, listed on first use: only an arm that mounts a plugin reads them.
+    kept: dict[str, list[pathlib.Path]] | None = None
+
+    def _mcp_calls_table(task_list: list[str]) -> list[str]:
+        # One row per arm that mounts a plugin: how many of its completed trials have a kept
+        # stream, and the served MCP calls per such trial. Empty when no arm mounts one.
+        nonlocal kept
+        rows: list[str] = []
+        legacy: list[str] = []
+        for sc in all_sc:
+            trials_n = partial = 0
+            counts: list[float] = []
+            for tid in task_list:
+                for rep in reps_for.get((sc, tid), []):
+                    t = trials.get((sc, tid, rep))
+                    if t is None or t.get("infra_error") or t.get("status") != "completed":
+                        continue
+                    mounts = _mounts_a_plugin(t)
+                    if mounts is None and sc not in legacy:
+                        legacy.append(sc)
+                    if not mounts:
+                        continue
+                    trials_n += 1
+                    if kept is None:
+                        kept = _kept_streams(streams_dir or default_streams_dir(bank))
+                    paths = kept.get(_safe_file_part(f"{bank}--{sc}--{tid}--r{rep}"), [])
+                    if paths:
+                        calls, cut = _served_mcp_calls(paths)
+                        counts.append(calls)
+                        partial += cut
+            if not trials_n:
+                continue
+            if counts:
+                cell = _fmt_spread(counts) + (f" ({partial} partial)" if partial else "")
+            else:
+                cell = "no streams kept"
+            flag = _ALL_DENIED if counts and not any(counts) else ""
+            rows.append(f"| {sc} | {len(counts)}/{trials_n} | {cell} | {flag} |")
+        if not rows:
+            return []
+        out = [
+            "### Arm Health: MCP calls",
+            "",
+            "| Scenario | Trials with streams | MCP calls per trial (min/med/max) | Flag |",
+            "|---|---|---|---|",
+            *rows,
+            "",
+            _MCP_CALLS_NOTE,
+            "",
+        ]
+        if legacy:
+            left_out = (
+                f"> Left out: the trials of {', '.join(legacy)}: their rows carry no"
+                " `config_preimage` (written before fathom recorded it), so the ledger does"
+                " not say whether the arm mounts a plugin."
+            )
+            out += [left_out, ""]
+        return out
 
     def _stats(sc: str, task_list: list[str]) -> tuple[int, int, int, int]:
         # Returns (passes, n, infra, k) where k = distinct tasks contributing a
@@ -838,6 +968,8 @@ def render(
                 )
                 lines.append("")
 
+        lines.extend(_mcp_calls_table(task_list))
+
         # --- Efficiency view (§9): per-trial means + quality-per-100k + Pareto flag ---
         eff_data: dict[str, dict] = {}
         for sc in all_sc:
@@ -990,7 +1122,7 @@ def render(
         lines.pop()
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    suffix = f"--{_safe_version(dataset_version)}" if historical_note else ""
+    suffix = f"--{_safe_file_part(dataset_version)}" if historical_note else ""
     out_path = report_dir / f"scorecard-{bank}{suffix}.md"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out_path

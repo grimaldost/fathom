@@ -2869,6 +2869,83 @@ class ReportDatasetVersionTests(unittest.TestCase):
         self.assertTrue((self.root / "report" / f"scorecard-{self.BANK}--v1.md").is_file())
 
 
+class ReportMcpCallsTests(unittest.TestCase):
+    """`fathom report` counts a mounted plugin's MCP calls from the streams `fathom run` kept.
+
+    The command runs from the data root, so the default stream directory is the data root's
+    `.fathom/streams/<bank>/` whatever directory it starts in, and a relative
+    FATHOM_STREAM_DIR is taken from the directory it starts in, as `fathom run` takes it.
+    """
+
+    BANK = "example-v1"
+    STREAM = (
+        '{"type": "system", "subtype": "init", "mcp_servers": [{"name": "srv"}]}\n'
+        '{"type": "assistant", "message": {"content": [{"type": "tool_use", "id": "u1",'
+        ' "name": "mcp__srv__x", "input": {}}]}}\n'
+        '{"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": "u1",'
+        ' "content": "ok"}]}}\n'
+        '{"type": "result", "subtype": "success"}\n'
+    )
+    ROW = "| nudge | 1/1 | 1/1/1 |  |"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        saved = os.environ.pop("FATHOM_STREAM_DIR", None)
+        self.addCleanup(
+            lambda: (
+                os.environ.__setitem__("FATHOM_STREAM_DIR", saved)
+                if saved is not None
+                else os.environ.pop("FATHOM_STREAM_DIR", None)
+            )
+        )
+        self.root = Path(self._tmp.name)
+        (self.root / "fathom.toml").write_text("[data_root]\nschema = 1\n", encoding="utf-8")
+        (self.root / "ledger").mkdir()
+        (self.root / "sub").mkdir()
+        row = {
+            "kind": "trial",
+            "bank": self.BANK,
+            "task_id": "add",
+            "repeat": 0,
+            "status": "completed",
+            "dataset_version": "v1",
+            "config_hash": "aaa",
+            "config_preimage": json.dumps({"plugins": [{"name": "example"}]}),
+            "verifier_results": {"c": True},
+            "scenario": "nudge",
+            "holdout": False,
+            "infra_error": False,
+        }
+        ledger = self.root / "ledger" / f"{self.BANK}.jsonl"
+        ledger.write_text(json.dumps(row, sort_keys=True) + "\n", encoding="utf-8")
+
+    def _keep(self, directory: Path) -> None:
+        directory.mkdir(parents=True)
+        name = f"{self.BANK}--nudge--add--r0--a1--1700000000000.ndjson"
+        (directory / name).write_text(self.STREAM, encoding="utf-8")
+
+    def _scorecard(self) -> str:
+        import contextlib
+
+        with contextlib.chdir(self.root / "sub"):
+            code, out, err = _call_main(["report", self.BANK])
+        self.assertEqual(code, EXIT_OK, out + err)
+        return (self.root / "report" / f"scorecard-{self.BANK}.md").read_text(encoding="utf-8")
+
+    def test_the_data_roots_kept_streams_are_read_from_a_subdirectory(self):
+        self._keep(self.root / ".fathom" / "streams" / self.BANK)
+        self.assertIn(self.ROW, self._scorecard())
+
+    def test_a_relative_fathom_stream_dir_is_taken_from_the_starting_directory(self):
+        self._keep(self.root / "sub" / "kept")
+        os.environ["FATHOM_STREAM_DIR"] = "kept"
+        self.assertIn(self.ROW, self._scorecard())
+
+    def test_without_kept_streams_the_arm_says_so(self):
+        self.assertIn("| nudge | 0/1 | no streams kept |  |", self._scorecard())
+
+
 class ReconcileRefusesANonRootFirstTests(unittest.TestCase):
     """`fathom reconcile` refuses a directory that is no root before any check reads it.
 

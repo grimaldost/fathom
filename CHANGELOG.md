@@ -39,6 +39,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   never change a `config_hash`; they do not change `dataset_version` either. The authoring
   guide documents the table in sections 5 and 14.
 
+- **MCP calls per trial for arms that mount a plugin.** An arm can mount an MCP server whose
+  every call is denied or never made, and its pass rate then describes the arm without its
+  treatment. When an arm's trial rows carry a `config_preimage` with a `plugins` key, each
+  scorecard section gains a `### Arm Health: MCP calls` table after Arm Health: per arm, the
+  completed trials with a kept stream, and per such trial the `mcp__*` calls to a server the
+  spawn reported that returned without an error, as min/median/max. Streams are read from
+  `FATHOM_STREAM_DIR` when it is set, else from the data root's `.fathom/streams/<bank>/`, and
+  matched to a trial by the name the run gave its stream file. An arm with no stream found
+  reads `no streams kept`; a count that includes a stream with no closing `result` event is
+  marked partial; an arm whose trials with streams made no such call is flagged
+  `all calls denied or absent`. Rows with no `config_preimage` are left out, and a note names
+  their arms. A cell run more than once sums the streams of every run, since they share a
+  name. A ledger with no such arm renders the same scorecard as before. `report.render` takes
+  `streams_dir`, and `fathom.streams` gains `read_stream_file` and `stream_completed`. Closes
+  T10c (FATH-B78).
+
 ### Changed
 
 - **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only
