@@ -118,12 +118,10 @@ N` that stops cleanly on a stated boundary and prints the resume command; and ei
 config once per run or write the refreshed credential back, so spawns stop racing each other's
 refresh.
 
-**FATH-B12 — Two smoke-gate gaps.** *(S)*
-Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
-code page can crash a print on a Windows console; `smoke.py` and `cli.py` should reconfigure
-stdout with `errors="replace"` at the entry point, with a regression test at each text boundary
-rather than one call site. And `smoke` does not accept `--model` / `--effort`, which blocks a
-cheap acceptance probe before a paid run at a non-default model or effort.
+**FATH-B12 — `smoke` takes no model or effort.** *(S)*
+`smoke` does not accept `--model` / `--effort`, which blocks a cheap acceptance probe before a
+paid run at a non-default model or effort. The row's other gap, output not forced to UTF-8, is
+closed: `fathom` and `fathom smoke` write stdout and stderr as UTF-8 at their entry points.
 
 **FATH-B64 — `smoke` checks isolation and blindness but most of the operational surface not at
 all.** *(M)*
