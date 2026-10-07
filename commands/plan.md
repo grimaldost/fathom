@@ -20,7 +20,8 @@ Plan a fathom eval matrix without spawning or spending anything.
    Keep both uv flags: `--no-dev` stops the first call from installing the
    development tools into the plugin's environment, and `--frozen` uses the
    plugin's lock file as shipped instead of rewriting it.
-3. Report the arm names the plan printed, the trial count (and how many are
+3. Report the arm names the plan printed (each arm shows its name and config_hash
+   prefix to distinguish forks from pools), the trial count (and how many are
    already done), and the USD ceiling: planned trials × the per-spawn cap in force
    (`--max-spawn-usd` if given, else $5), with series trials priced by their spawn
    count.

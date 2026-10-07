@@ -38,6 +38,14 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
   It is run by hand; the test suite covers it offline and never spawns `claude`.
 
+### Changed
+
+- **The `fathom run --dry-run` plan now shows each arm's config_hash prefix.** The arms line
+  prints each arm name with its config_hash's first 12 characters in brackets (e.g., `bare
+  [aaaaaaaaaa]`), so the plan can distinguish arms that fork from those that pool: a fork shows
+  a different prefix, a pool shows the same one. This prefix matches what the `report` command
+  uses in its warnings.
+
 ### Fixed
 
 - **A relative path option that misses now names the data root's path.** `--tasks-dir`,

@@ -267,6 +267,9 @@ class TestDryRun(_Base):
         self.assertIn("arms:", output)
         self.assertIn("bare", output)
         self.assertIn("single-long", output)
+        # Verify config_hash prefix is shown for each arm
+        self.assertIn(f"bare [{self.sc_a.config_hash[:12]}]", output)
+        self.assertIn(f"single-long [{self.sc_b.config_hash[:12]}]", output)
 
     def test_prints_ceiling(self):
         _, output = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)

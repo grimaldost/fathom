@@ -646,7 +646,10 @@ def run_matrix(
     # arms prints an identical count line, so the counts alone cannot tell a matrix
     # from the wrong experiment — and the arm names are otherwise only visible after
     # the spend, in the ledger.
-    print(f"arms:     {', '.join(sc.name for sc in resolved_scenarios)}", file=_out)
+    print(
+        f"arms:     {', '.join(f'{sc.name} [{sc.config_hash[:12]}]' for sc in resolved_scenarios)}",
+        file=_out,
+    )
     print(
         f"planned:  {num_planned} trials ({already_done} already done)"
         f"  ceiling: ${ceiling_usd:.2f}",

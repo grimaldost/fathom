@@ -951,14 +951,15 @@ and `reconcile` never start a model. `fathom smoke` is the first step that spend
 cents. It tests the spawn environment on this machine (the login, isolation, the lock), not
 the bank, so it belongs just before paid runs rather than in the authoring loop.
 
-- **Plan first, and read the arm names.** `--dry-run` prints the data root, the arm names, the
-  number of trials still to buy (and how many are already done), and a ceiling of
-  `trials × the per-spawn cap` (series trials priced as in section 12). It spawns nothing and
-  takes no lock. The ceiling is a worst case, not an estimate. A bank whose arms sit in a
-  subdirectory needs `--scenarios-dir` on every `fathom run` and `fathom verify-arming`.
-  Without it, the command takes every `*.toml` directly under `scenarios/` with no warning and
-  runs those arms instead; only when there are none there does it stop, with
-  `no scenarios found`.
+- **Plan first, and read the arm names.** `--dry-run` prints the data root, the arm names
+  (each with a config_hash prefix to distinguish forks: arms that differ show different
+  prefixes; arms that pool show the same one), the number of trials still to buy (and how
+  many are already done), and a ceiling of `trials × the per-spawn cap` (series trials
+  priced as in section 12). It spawns nothing and takes no lock. The ceiling is a worst
+  case, not an estimate. A bank whose arms sit in a subdirectory needs `--scenarios-dir` on
+  every `fathom run` and `fathom verify-arming`. Without it, the command takes every `*.toml`
+  directly under `scenarios/` with no warning and runs those arms instead; only when there
+  are none there does it stop, with `no scenarios found`.
 - **Smoke before any paid run**, and again when resuming later. It proves on tiny real spawns
   that the credential works, that the temporary config holds only the credential, that a
   disallowed tool is refused, that stream parsing works, that a plugin mount reaches the CLI,
