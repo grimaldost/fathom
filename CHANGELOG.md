@@ -8,6 +8,18 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **`fathom report <bank> --dataset-version V` renders an older `dataset_version`.** The
+  scorecard showed only the version of the last trial recorded and warned about the rest, so an
+  older task definition's results could not be read back without editing the ledger. With the
+  flag, the report keeps that version's rows and names the versions it left out. A version
+  other than the current one is written to `report/scorecard-<bank>--<V>.md`, with `V` cleaned
+  as a raw-stream tag is (anything but a letter, digit, `-`, `_` or `.` becomes `_`), so it
+  never overwrites the current scorecard. That file opens with a line saying it is a historical
+  view, which version it shows and which is current, and that its calibration and turn caps
+  come from the current `tasks/` tree. A version the ledger holds no trial for raises an error
+  naming the versions it does hold, and the command exits 1 and writes nothing. Without the
+  flag, or with the current version, the output is byte-identical. `report.render` takes the
+  same `dataset_version` argument.
 - **Validation refuses a gate command that names a missing path.** A gate command whose script
   does not exist still runs, finds nothing and counts for nothing, so a gated arm ran as an
   ungated one and nothing said so: validation checked only that a task's own gate could start,

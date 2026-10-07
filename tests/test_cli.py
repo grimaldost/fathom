@@ -2781,6 +2781,65 @@ class ReportWithoutALedgerTests(unittest.TestCase):
         self.assertTrue((self.root / "report" / f"scorecard-{self.BANK}.md").is_file())
 
 
+class ReportDatasetVersionTests(unittest.TestCase):
+    """`fathom report <bank> --dataset-version V` renders one version of a two-version ledger."""
+
+    BANK = "example-v1"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        (self.root / "fathom.toml").write_text("[data_root]\nschema = 1\n", encoding="utf-8")
+        (self.root / "ledger").mkdir()
+        rows = [
+            {
+                "kind": "trial",
+                "bank": self.BANK,
+                "task_id": "add",
+                "repeat": 0,
+                "status": "completed",
+                "dataset_version": dv,
+                "config_hash": "aaa",
+                "verifier_results": {"c": True},
+                "scenario": "bare",
+                "holdout": False,
+                "infra_error": False,
+            }
+            for dv in ("v1", "v2")
+        ]
+        text = "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows)
+        (self.root / "ledger" / f"{self.BANK}.jsonl").write_text(text, encoding="utf-8")
+
+    def _report(self, *extra: str) -> tuple[int, str, str]:
+        import contextlib
+
+        with contextlib.chdir(self.root):
+            return _call_main(["report", self.BANK, *extra])
+
+    def test_a_chosen_version_is_written_to_its_own_file_and_named(self):
+        code, out, err = self._report("--dataset-version", "v1")
+        self.assertEqual(code, EXIT_OK, out + err)
+        name = f"scorecard-{self.BANK}--v1.md"
+        self.assertIn(name, out)
+        self.assertTrue((self.root / "report" / name).is_file())
+        self.assertFalse((self.root / "report" / f"scorecard-{self.BANK}.md").exists())
+
+    def test_the_default_writes_the_current_scorecard_only(self):
+        code, out, err = self._report()
+        self.assertEqual(code, EXIT_OK, out + err)
+        self.assertTrue((self.root / "report" / f"scorecard-{self.BANK}.md").is_file())
+        self.assertEqual(len(list((self.root / "report").glob("*.md"))), 1)
+
+    def test_an_unknown_version_exits_1_and_names_the_versions_held(self):
+        code, out, err = self._report("--dataset-version", "v9")
+        self.assertEqual(code, 1, out + err)
+        self.assertIn("v9", err)
+        self.assertIn("v1", err)
+        self.assertIn("v2", err)
+        self.assertNotIn("report written", out)
+
+
 class ReconcileRefusesANonRootFirstTests(unittest.TestCase):
     """`fathom reconcile` refuses a directory that is no root before any check reads it.
 

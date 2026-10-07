@@ -1012,7 +1012,7 @@ fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 fathom smoke [--no-engine-boundary]                     # a few cents: spawn isolation on real spawns
 fathom verify-arming [--scenarios-dir DIR]              # optional, a little: are the treatments armed?
 fathom run <bank> --repeats K [--scenarios-dir DIR]     # paid; resumable
-fathom report <bank>                                    # free: report/scorecard-<bank>.md
+fathom report <bank> [--dataset-version V]              # free: report/scorecard-<bank>.md
 fathom index --write                                    # free: re-render the ledger index
 fathom reconcile                                        # free: do the derived records agree?
 ```
@@ -1102,7 +1102,14 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
 
 After a run:
 
-- Render the scorecard with `fathom report <bank>`.
+- Render the scorecard with `fathom report <bank>`. It shows the bank's current
+  `dataset_version`, the last one a trial was recorded under, and warns which older versions it
+  left out. To read an older version, add `--dataset-version V`: the scorecard goes to
+  `report/scorecard-<bank>--<V>.md` (any character other than a letter, digit, `-`, `_` or `.`
+  becomes `_`), so it never overwrites the current one. The version must be one the ledger
+  holds, or the command exits 1 and lists the versions it does. Task metadata (calibration,
+  turn caps) is read from the current `tasks/` tree, so an older version's calibration section
+  describes today's tasks; the file opens with a note saying so.
 - Re-render the ledger index with `fathom index --write` and commit it with the ledgers.
   `docs/reports/LEDGER-INDEX.md` stamps each ledger's sha256 and its completed trials per arm,
   so any document quoting a count can be checked against it. Without `--write`,
@@ -1152,6 +1159,10 @@ one for holdout tasks. Each contains:
 
 With few trials, treat every difference as directional. The scorecard says so beside each
 verdict.
+
+A scorecard written with `--dataset-version` for a version other than the current one opens
+with a line naming that version and the current one. Quote it only with that line; its numbers
+describe the older task definition, not the bank as it stands.
 
 ## 15. Checklist before the first paid run
 

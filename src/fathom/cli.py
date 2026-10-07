@@ -329,6 +329,17 @@ def _build_parser() -> argparse.ArgumentParser:
 
     report_p = sub.add_parser("report", help="Render a scorecard from the ledger")
     report_p.add_argument("bank", help="Bank name")
+    report_p.add_argument(
+        "--dataset-version",
+        default=None,
+        dest="dataset_version",
+        metavar="V",
+        help=(
+            "Render this dataset_version instead of the current one. A non-current version "
+            "is written to report/scorecard-<bank>--<version>.md, so the current scorecard "
+            "is never overwritten."
+        ),
+    )
 
     val_p = sub.add_parser(
         "validate",
@@ -2207,6 +2218,10 @@ def _cmd_report(args: argparse.Namespace) -> int:
     in the data root (the working directory while a command runs). Without the ledger it
     would write a scorecard holding only its heading and exit 0, so a missing ledger is an
     error that names the path looked for.
+
+    ``--dataset-version V`` renders one version of the ledger instead of the current one,
+    into ``report/scorecard-<bank>--<V>.md``; a version the ledger does not hold is an
+    error that names the versions it does.
     """
     import fathom.report as _report
 
@@ -2227,6 +2242,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
             ledger_dir=ledger_dir,
             report_dir=root / _report.REPORT_DIR,
             tasks_dir=root / _report.TASKS_DIR,
+            dataset_version=getattr(args, "dataset_version", None),
         )
         print(f"report written to {out_path}")
         _warn_if_unpublished(args.bank, root)

@@ -11,6 +11,8 @@ import sys
 import tempfile
 import warnings
 
+import pytest
+
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent / "src"))
 
 from fathom.report import render, wilson_interval
@@ -1376,3 +1378,112 @@ def test_substrate_note_names_the_file_relative_to_the_data_root(tmp_path):
     assert substrate_display_path(inside, root=tmp_path) == "report/routing-substrate-b.json"
     outside = tmp_path.parent / "elsewhere" / "routing-substrate-b.json"
     assert substrate_display_path(outside, root=tmp_path) == outside.as_posix()
+
+
+# ---------------------------------------------------------------------------
+# A chosen historical dataset_version
+# ---------------------------------------------------------------------------
+
+
+def _two_version_records() -> list[dict]:
+    """bare/task-x: v1 (reps 0-3, all pass), then v2 (reps 0-1, all fail)."""
+    records = []
+    for rep in range(4):
+        records += [
+            _dv_trial("v1", "bare", "aaa", "task-x", rep, True),
+            _dv_run("v1", "bare", "aaa", "task-x", rep),
+        ]
+    for rep in range(2):
+        records += [
+            _dv_trial("v2", "bare", "aaa", "task-x", rep, False),
+            _dv_run("v2", "bare", "aaa", "task-x", rep),
+        ]
+    return records
+
+
+def _render_two_versions(tmp_path, **kwargs):
+    ldgr = tmp_path / "ledger"
+    rpt = tmp_path / "report"
+    ldgr.mkdir(parents=True)
+    with open(ldgr / "dv-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in _two_version_records():
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        out = render("dv-bank", ledger_dir=ldgr, report_dir=rpt, **kwargs)
+    return out, rpt, caught
+
+
+def _bare_rate_cols(content: str) -> list[str]:
+    rows = [ln for ln in content.splitlines() if ln.startswith("| bare |") and "%" in ln]
+    assert rows, content
+    return [c.strip() for c in rows[0].split("|")]
+
+
+def test_dataset_version_none_is_the_default_render(tmp_path):
+    out_default, _, _ = _render_two_versions(tmp_path / "a")
+    out_none, _, _ = _render_two_versions(tmp_path / "b", dataset_version=None)
+    assert out_default.name == "scorecard-dv-bank.md"
+    assert out_default.read_bytes() == out_none.read_bytes()
+
+
+def test_requesting_the_current_version_is_the_default_render(tmp_path):
+    out_default, _, _ = _render_two_versions(tmp_path / "a")
+    out_v2, rpt, _ = _render_two_versions(tmp_path / "b", dataset_version="v2")
+    assert out_v2.name == "scorecard-dv-bank.md"
+    assert out_default.read_bytes() == out_v2.read_bytes()
+    assert not list(rpt.glob("*--*"))
+
+
+def test_a_historical_version_is_written_to_its_own_file(tmp_path):
+    out, rpt, caught = _render_two_versions(tmp_path, dataset_version="v1")
+    assert out == rpt / "scorecard-dv-bank--v1.md"
+    assert not (rpt / "scorecard-dv-bank.md").exists()
+    content = out.read_text(encoding="utf-8")
+    cols = _bare_rate_cols(content)
+    assert cols[2:5] == ["4", "4", "100.0%"], cols
+    first = content.splitlines()[0]
+    assert "v1" in first
+    assert "not the current" in first
+    assert "v2" in first
+    assert "tasks/" in first
+    assert any("v2" in str(w.message) and "excluded" in str(w.message) for w in caught)
+
+
+def test_a_historical_render_leaves_the_current_scorecard_alone(tmp_path):
+    out_cur, rpt, _ = _render_two_versions(tmp_path)
+    before = out_cur.read_bytes()
+    ldgr = tmp_path / "ledger"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        render("dv-bank", ledger_dir=ldgr, report_dir=rpt, dataset_version="v1")
+    assert out_cur.read_bytes() == before
+
+
+def test_an_unknown_dataset_version_names_the_versions_in_the_ledger(tmp_path):
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True)
+    with open(ldgr / "dv-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in _two_version_records():
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    with pytest.raises(ValueError) as exc:
+        render("dv-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", dataset_version="v9")
+    msg = str(exc.value)
+    assert "v9" in msg and "v1" in msg and "v2" in msg
+    assert not (tmp_path / "report").exists()
+
+
+def test_a_version_name_is_sanitized_in_the_file_name(tmp_path):
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True)
+    records = [_dv_trial("a/b c", "bare", "aaa", "task-x", 0, True)]
+    records += [_dv_trial("z", "bare", "aaa", "task-x", 0, True)]
+    with open(ldgr / "dv-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out = render(
+            "dv-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", dataset_version="a/b c"
+        )
+    assert out == tmp_path / "report" / "scorecard-dv-bank--a_b_c.md"

@@ -1,6 +1,6 @@
 ---
 description: Render a fathom scorecard from the committed ledger (idempotent; spends nothing)
-argument-hint: "<bank>"
+argument-hint: "<bank> [--dataset-version V]"
 allowed-tools: Bash
 ---
 
@@ -32,6 +32,11 @@ When reading it:
 - Calibration sections render only for banks that ship `scores.toml` and
   `[verify] hard_criteria`.
 - With few trials, every difference is directional; the verdict lines say so.
+- By default the scorecard shows the bank's current `dataset_version` and warns which older
+  versions it left out. `--dataset-version V` renders an older one instead, into
+  `report/scorecard-<bank>--V.md` so the current scorecard stays; its first line says it is a
+  historical view, and its calibration and turn caps come from the current `tasks/` tree. A
+  version the ledger does not hold exits 1 and lists the ones it does.
 - `fathom report` reads `ledger/<bank>.jsonl` and `tasks/<bank>/` in the data
   root; it takes no directory flags. With no ledger for the bank it exits 1 and
   names the path it looked for.

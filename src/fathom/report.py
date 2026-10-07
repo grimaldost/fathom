@@ -188,7 +188,9 @@ def _ranges_overlap(a: Sequence[float], b: Sequence[float]) -> bool:
     return min(a) <= max(b) and min(b) <= max(a)
 
 
-def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
+def _scope_to_current_dataset_version(
+    bank: str, raw: list[dict], dataset_version: str | None = None
+) -> list[dict]:
     """Keep only records at the CURRENT dataset_version — the last-appended trial's.
 
     The ledger is append-only, so the most-recently-run trials are last in the file;
@@ -205,6 +207,11 @@ def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
     remain in the committed ledger untouched (append-only); they are excluded from
     this render and the exclusion is surfaced, never silent. A single-version bank is
     unaffected — nothing is excluded and the output is byte-identical.
+
+    *dataset_version* names another version to keep instead of the current one, for a
+    historical view: its rows are kept, and the warning names the versions left out. A
+    version no trial carries raises ``ValueError`` naming the versions the ledger holds.
+    ``None`` keeps the current version, as before.
     """
     # Voided trials (and their runs) are excluded as of the void row: the re-run counts.
     from fathom.ledger import apply_voids as _apply_voids
@@ -216,6 +223,21 @@ def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
         return raw
     current_dv = trial_dvs[-1]
     distinct = sorted(set(trial_dvs))
+    if dataset_version is not None and dataset_version != current_dv:
+        if dataset_version not in distinct:
+            raise ValueError(
+                f"ledger for {bank!r} holds no trials at dataset_version "
+                f"{dataset_version!r}; it holds {distinct}"
+            )
+        excluded_dvs = [dv for dv in distinct if dv != dataset_version]
+        warnings.warn(
+            f"ledger for {bank!r} holds {len(distinct)} dataset_versions {distinct}; the "
+            f"scorecard reflects dataset_version {dataset_version!r} only, not the "
+            f"current {current_dv!r} ({excluded_dvs} excluded — they stay in the "
+            "committed ledger).",
+            stacklevel=2,
+        )
+        return [r for r in raw if r.get("dataset_version", dataset_version) == dataset_version]
     if len(distinct) == 1:
         return raw
     excluded = sum(1 for dv in trial_dvs if dv != current_dv)
@@ -228,6 +250,32 @@ def _scope_to_current_dataset_version(bank: str, raw: list[dict]) -> list[dict]:
     )
     # Records without a dataset_version (none in practice) are kept, not dropped.
     return [r for r in raw if r.get("dataset_version", current_dv) == current_dv]
+
+
+def _safe_version(version: str) -> str:
+    """*version* as a file-name part: the stream tag's rule (letters, digits, ``-_.``)."""
+    return "".join(c if c.isalnum() or c in "-_." else "_" for c in version)
+
+
+def _historical_note(raw: list[dict], scoped: list[dict], dataset_version: str | None) -> str:
+    """The note that opens a historical view, or "" when the view is the current one.
+
+    *raw* is the ledger as read; the current version is the last-appended trial's of
+    the unscoped, void-applied rows, which is what the default render would show.
+    """
+    if dataset_version is None:
+        return ""
+    from fathom.ledger import apply_voids as _apply_voids
+
+    dvs = [r.get("dataset_version") for r in _apply_voids(raw) if r.get("kind") == "trial"]
+    dvs = [dv for dv in dvs if dv is not None]
+    if not dvs or dvs[-1] == dataset_version:
+        return ""
+    return (
+        f"> Historical view: dataset_version `{dataset_version}`, not the current one "
+        f"(`{dvs[-1]}`). Task metadata (calibration, turn caps) comes from the current "
+        "tasks/ tree, not from this version."
+    )
 
 
 def calibration_heading(*, is_context: bool) -> str:
@@ -253,12 +301,20 @@ def render(
     ledger_dir: pathlib.Path = LEDGER_DIR,
     report_dir: pathlib.Path = REPORT_DIR,
     tasks_dir: pathlib.Path = TASKS_DIR,
+    dataset_version: str | None = None,
 ) -> pathlib.Path:
-    """Read ledger/<bank>.jsonl and write report/scorecard-<bank>.md."""
+    """Read ledger/<bank>.jsonl and write report/scorecard-<bank>.md.
+
+    With *dataset_version* naming a version other than the current one, the scorecard
+    is that version's view and goes to ``scorecard-<bank>--<version>.md``, so it never
+    overwrites the current scorecard. Its first line says so.
+    """
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", bank):
         raise ValueError(f"Invalid bank name: {bank!r}")
     raw = _read_raw(bank, ledger_dir)
-    raw = _scope_to_current_dataset_version(bank, raw)
+    scoped = _scope_to_current_dataset_version(bank, raw, dataset_version)
+    historical_note = _historical_note(raw, scoped, dataset_version)
+    raw = scoped
     turn_caps = _load_turn_caps(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
@@ -346,6 +402,8 @@ def render(
         reps_for[k].sort()
 
     lines: list[str] = [f"# Scorecard — {bank}", ""]
+    if historical_note:
+        lines = [historical_note, "", *lines]
 
     def _stats(sc: str, task_list: list[str]) -> tuple[int, int, int, int]:
         # Returns (passes, n, infra, k) where k = distinct tasks contributing a
@@ -745,6 +803,7 @@ def render(
         lines.pop()
 
     report_dir.mkdir(parents=True, exist_ok=True)
-    out_path = report_dir / f"scorecard-{bank}.md"
+    suffix = f"--{_safe_version(dataset_version)}" if historical_note else ""
+    out_path = report_dir / f"scorecard-{bank}{suffix}.md"
     out_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return out_path
