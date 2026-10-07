@@ -995,8 +995,20 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   for a run on another credential). `fathom stop <bank>` asks the holder to stop after the
   trial in flight, and the run then exits 16; `--now` also ends its process tree and discards
   that trial.
+- **Progress and the closing summary.** A paid run prints one flushed line per trial,
+  `trial done: i/N arm/task r<k> <status> [$spent]`, where `i` counts the planned trials
+  started, `status` is `completed`, `errored` or `infrastructure`, and the amount is what
+  this invocation has spent so far. When the run ends, at any exit once the trial loop
+  has begun, it prints one `run summary:` line: the absolute ledger path,
+  the trials completed and errored by this invocation, the trials skipped as already done,
+  the trials not started, the amount spent this invocation, and the command that resumes
+  it. The counts come from the rows this invocation appended, not from the whole ledger. A
+  trial stopped by an infrastructure error has no row, so it counts as not started and a
+  resume runs it. A dry run, and a plan with nothing to buy, print neither line.
 - **Resuming.** Every nonzero exit leaves the ledger as the checkpoint. Run the same command
-  again to continue. An authentication or usage-limit failure stops the matrix with exit 10
+  again to continue; the `resume:` command in the summary is that command, with the bank,
+  `--repeats`, and the path, `--tasks`, `--include-holdout` and cost-rail flags the run was
+  given. An authentication or usage-limit failure stops the matrix with exit 10
   and records nothing for that trial.
 - **Exit codes of `fathom run`:** 0 done; 1 usage error (bank not loadable, no scenarios,
   unknown strategy, unknown `--tasks` id); 10 infrastructure (auth, usage limit, fixture drift,

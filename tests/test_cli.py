@@ -2870,5 +2870,385 @@ class DataRootWithheldFromChildrenTests(unittest.TestCase):
         self.assertIn("VIRTUAL_ENV", env_after)
 
 
+# ---------------------------------------------------------------------------
+# Per-trial progress line and closing run summary (T4a, T4b)
+# ---------------------------------------------------------------------------
+
+
+class _FlushCountingStream(io.StringIO):
+    """A stream that records where in its text each flush() happened."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.flush_offsets: list[int] = []
+
+    def flush(self) -> None:
+        self.flush_offsets.append(len(self.getvalue()))
+        super().flush()
+
+    def flushed_lines(self, prefix: str) -> list[tuple[str, bool]]:
+        """Each line starting with *prefix*, and whether a flush came right after it."""
+        found: list[tuple[str, bool]] = []
+        offset = 0
+        for line in self.getvalue().splitlines(keepends=True):
+            offset += len(line)
+            if line.startswith(prefix):
+                found.append((line.rstrip("\n"), offset in self.flush_offsets))
+        return found
+
+
+def _ledger_trials(ledger_dir: pathlib.Path, bank: str) -> list[dict]:
+    path = ledger_dir / f"{bank}.jsonl"
+    rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [r for r in rows if r.get("kind") == "trial"]
+
+
+def _summary_fields(text: str) -> dict:
+    """Parse the one `run summary:` line of *text* into its counts."""
+    import re
+
+    lines = [ln for ln in text.splitlines() if ln.startswith("run summary:")]
+    assert len(lines) == 1, f"expected exactly one run summary line, got {lines}"
+    line = lines[0]
+    m = re.fullmatch(
+        r"run summary: ledger (?P<ledger>.+?); completed (?P<c>\d+), errored (?P<e>\d+) "
+        r"this invocation; skipped (?P<s>\d+) \(already done\); not started (?P<u>\d+); "
+        r"spent \$(?P<usd>\d+\.\d\d) this invocation; resume: (?P<resume>.+)",
+        line,
+    )
+    assert m is not None, f"unexpected summary shape: {line}"
+    return {
+        "ledger": m["ledger"],
+        "completed": int(m["c"]),
+        "errored": int(m["e"]),
+        "skipped": int(m["s"]),
+        "not_started": int(m["u"]),
+        "usd": float(m["usd"]),
+        "resume": m["resume"],
+    }
+
+
+class TestProgressAndSummary(_Base):
+    """One flushed line per trial, and a closing summary on every exit after the loop began."""
+
+    def _counts(self) -> tuple[int, int]:
+        """(completed, errored) trial rows in the ledger file, counted by reading it."""
+        trials = _ledger_trials(self.ledger_dir, "test-bank")
+        return (
+            sum(1 for t in trials if t["status"] == "completed"),
+            sum(1 for t in trials if t["status"] == "errored"),
+        )
+
+    def test_one_flushed_progress_line_per_planned_trial(self):
+        out = _FlushCountingStream()
+        code, _ = _run_matrix(
+            self.bank, self.scenarios, repeats=2, ledger_dir=self.ledger_dir, out=out
+        )
+        self.assertEqual(code, EXIT_OK)
+        lines = out.flushed_lines("trial done:")
+        self.assertEqual(len(lines), 2 * 2 * 2, "arms x tasks x repeats")
+        for text, flushed in lines:
+            self.assertTrue(flushed, f"not flushed right after it was written: {text}")
+        self.assertEqual(lines[0][0], "trial done: 1/8 bare/task-1 r0 completed [$0.05]")
+        self.assertEqual(lines[-1][0], "trial done: 8/8 single-long/task-2 r1 completed [$0.40]")
+
+    def test_the_summary_counts_equal_the_rows_appended(self):
+        def verifier(entry, ws, timeout_s=60):
+            # the second trial's verifier crashes: an errored row, not a completed one
+            verifier.n += 1
+            if verifier.n == 2:
+                return VerifierResult(
+                    outcome="error", criteria=None, stdout="", stderr="boom", exit_code=1
+                )
+            return _stub_verifier(entry, ws, timeout_s)
+
+        verifier.n = 0
+        out = _FlushCountingStream()
+        code, _ = _run_matrix(
+            self.bank,
+            self.scenarios,
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            verifier_fn=verifier,
+        )
+        self.assertEqual(code, EXIT_OK)
+        fields = _summary_fields(out.getvalue())
+        completed, errored = self._counts()
+        self.assertEqual((fields["completed"], fields["errored"]), (completed, errored))
+        self.assertEqual((completed, errored), (3, 1))
+        self.assertEqual(fields["skipped"], 0)
+        self.assertEqual(fields["not_started"], 0)
+        self.assertAlmostEqual(fields["usd"], 0.20)
+        self.assertEqual(fields["ledger"], str((self.ledger_dir / "test-bank.jsonl").resolve()))
+        self.assertTrue(pathlib.Path(fields["ledger"]).is_absolute())
+        self.assertEqual(fields["resume"], "fathom run test-bank --repeats 1")
+        flushed = out.flushed_lines("run summary:")
+        self.assertEqual(len(flushed), 1)
+        self.assertTrue(flushed[0][1], "the summary is flushed")
+
+    def test_skipped_counts_what_an_earlier_invocation_finished(self):
+        _run_matrix(self.bank, [self.sc_a], repeats=1, ledger_dir=self.ledger_dir)
+        out = io.StringIO()
+        _run_matrix(self.bank, [self.sc_a], repeats=2, ledger_dir=self.ledger_dir, out=out)
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(fields["skipped"], 2)
+        self.assertEqual(fields["completed"], 2)
+        self.assertEqual(len(_ledger_trials(self.ledger_dir, "test-bank")), 4)
+
+    def test_a_resume_command_passed_in_is_printed_as_given(self):
+        out = io.StringIO()
+        _run_matrix(
+            self.bank,
+            [self.sc_a],
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            resume_cmd="fathom run test-bank --repeats 1 --tasks task-1",
+        )
+        self.assertEqual(
+            _summary_fields(out.getvalue())["resume"],
+            "fathom run test-bank --repeats 1 --tasks task-1",
+        )
+
+    def test_an_infrastructure_stop_prints_the_summary(self):
+        calls = {"n": 0}
+
+        def result(task, ws, sc):
+            calls["n"] += 1
+            return _infra_result() if calls["n"] == 3 else _ok_result()
+
+        out = _FlushCountingStream()
+        code, _ = _run_matrix(
+            self.bank,
+            self.scenarios,
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            executor_factory=lambda sc: StubExecutor(result_fn=result),
+        )
+        self.assertEqual(code, EXIT_INFRASTRUCTURE)
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(self._counts(), (2, 0))
+        self.assertEqual((fields["completed"], fields["errored"]), (2, 0))
+        # The stopped trial has no ledger row, so a resume runs it: it is not "done".
+        self.assertEqual(fields["not_started"], 2)
+        self.assertAlmostEqual(fields["usd"], 0.10)
+        lines = out.flushed_lines("trial done:")
+        self.assertEqual(len(lines), 3)
+        self.assertIn("3/4 single-long/task-1 r0 infrastructure", lines[2][0])
+        self.assertTrue(all(flushed for _, flushed in lines))
+
+    def test_a_fixture_drift_stop_prints_the_summary(self):
+        root = Path(self._tmp) / "fx"
+        (root / "fixtures" / "pkg").mkdir(parents=True)
+        (root / "fixtures" / "pkg" / "a.py").write_text("print(1)\n", encoding="utf-8")
+        task = Task(
+            id="fx", instruction="x", limits={}, verify={"entry": "verify.py"}, task_dir=root
+        )
+        bank = _make_bank("test-bank", [task])
+        out = io.StringIO()
+        code, _ = _run_matrix(
+            bank,
+            [self.sc_a],
+            repeats=2,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            stage_task_fn=_mutating_stage_factory(task, when="during"),
+        )
+        self.assertEqual(code, EXIT_INFRASTRUCTURE)
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(self._counts(), (0, 1))
+        self.assertEqual((fields["completed"], fields["errored"]), (0, 1))
+        self.assertEqual(fields["not_started"], 1)
+        self.assertEqual(out.getvalue().count("trial done:"), 1)
+
+    def test_the_run_budget_halt_prints_the_summary(self):
+        from fathom.cli import EXIT_RUN_BUDGET
+
+        out = _FlushCountingStream()
+        code, _ = _run_matrix(
+            self.bank,
+            self.scenarios,
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            max_run_usd=0.10,
+        )
+        self.assertEqual(code, EXIT_RUN_BUDGET)
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(self._counts(), (2, 0))
+        self.assertEqual((fields["completed"], fields["errored"]), (2, 0))
+        self.assertEqual(fields["not_started"], 2)
+        self.assertEqual(len(out.flushed_lines("trial done:")), 2, "a halt starts no trial")
+
+    def test_a_stop_request_prints_the_summary(self):
+        from fathom.cli import EXIT_STOPPED
+
+        class _Lock:
+            def __init__(self) -> None:
+                self.polls = 0
+
+            def stop_requested(self):
+                self.polls += 1
+                return None if self.polls <= 1 else types.SimpleNamespace(reason="")
+
+            def clear_stop_request(self):
+                pass
+
+        out = io.StringIO()
+        code, _ = _run_matrix(
+            self.bank,
+            self.scenarios,
+            repeats=1,
+            ledger_dir=self.ledger_dir,
+            out=out,
+            run_lock=_Lock(),
+        )
+        self.assertEqual(code, EXIT_STOPPED)
+        fields = _summary_fields(out.getvalue())
+        self.assertEqual(self._counts(), (1, 0))
+        self.assertEqual((fields["completed"], fields["errored"]), (1, 0))
+        self.assertEqual(fields["not_started"], 3)
+
+    def test_a_dry_run_and_an_empty_plan_print_neither_line(self):
+        code, dry = _run_matrix(self.bank, self.scenarios, ledger_dir=self.ledger_dir, dry_run=True)
+        self.assertEqual(code, EXIT_OK)
+        self.assertNotIn("trial done", dry)
+        self.assertNotIn("run summary", dry)
+        _run_matrix(self.bank, self.scenarios, repeats=1, ledger_dir=self.ledger_dir)
+        code, again = _run_matrix(self.bank, self.scenarios, repeats=1, ledger_dir=self.ledger_dir)
+        self.assertEqual(code, EXIT_OK)
+        self.assertIn("nothing to do", again)
+        self.assertNotIn("trial done", again)
+        self.assertNotIn("run summary", again)
+
+
+class TestResumeCommand(unittest.TestCase):
+    """_resume_command rebuilds the invocation from parsed args, flags given only."""
+
+    def _args(self, **kw):
+        args = types.SimpleNamespace(
+            bank="b",
+            repeats=3,
+            tasks_dir=None,
+            scenarios_dir=None,
+            ledger_dir=None,
+            tasks=None,
+            include_holdout=False,
+            max_spawn_usd=None,
+            max_run_usd=None,
+            data_root=None,
+            home=None,
+        )
+        for k, v in kw.items():
+            setattr(args, k, v)
+        return args
+
+    def test_the_default_is_bank_and_repeats(self):
+        from fathom.cli import _resume_command
+
+        self.assertEqual(_resume_command(self._args(), spawn_cap=None), "fathom run b --repeats 3")
+
+    def test_every_flag_given_is_carried_and_nothing_else(self):
+        from fathom.cli import _resume_command
+
+        args = self._args(
+            scenarios_dir=Path("/x/arms"),
+            tasks_dir=Path("/x/banks"),
+            ledger_dir=Path("/x/led"),
+            tasks="t1,t2",
+            include_holdout=True,
+            max_run_usd=12.5,
+        )
+        cmd = _resume_command(args, spawn_cap=2.0)
+        self.assertEqual(
+            cmd,
+            "fathom run b --repeats 3 --tasks-dir "
+            f"{Path('/x/banks')} --scenarios-dir {Path('/x/arms')} --ledger-dir {Path('/x/led')} "
+            "--tasks t1,t2 --include-holdout --max-spawn-usd 2 --max-run-usd 12.5",
+        )
+
+    def test_a_path_that_is_the_data_roots_own_default_is_not_a_given_flag(self):
+        from fathom.cli import _resume_command
+
+        root = Path("/data")
+        args = self._args(
+            data_root=root,
+            tasks_dir=root / "tasks",
+            scenarios_dir=root / "scenarios",
+            ledger_dir=root / "ledger",
+        )
+        self.assertEqual(_resume_command(args, spawn_cap=None), "fathom run b --repeats 3")
+
+    def test_a_home_flag_that_was_given_leads_the_command(self):
+        from fathom.cli import _resume_command
+
+        args = self._args(home="rel/root", data_root=Path("/data"))
+        self.assertEqual(
+            _resume_command(args, spawn_cap=None),
+            f"fathom --home {Path('/data')} run b --repeats 3",
+        )
+
+    def test_a_path_with_spaces_is_double_quoted(self):
+        from fathom.cli import _resume_command
+
+        args = self._args(ledger_dir=Path("/my data/led"))
+        self.assertIn(
+            f'--ledger-dir "{Path("/my data/led")}"', _resume_command(args, spawn_cap=None)
+        )
+
+    def test_cmd_run_hands_the_resume_command_to_run_matrix(self):
+        from unittest import mock
+
+        from fathom.cli import _cmd_run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_p = Path(tmp)
+            bank_dir = tmp_p / "tasks" / "b"
+            (bank_dir / "t1").mkdir(parents=True)
+            (bank_dir / "bank.toml").write_text(
+                'name = "b"\ndataset_version = "1"\nholdout = []\n', encoding="utf-8"
+            )
+            (bank_dir / "t1" / "task.toml").write_text(
+                'id = "t1"\ninstruction = "x"\n[limits]\ntrial_timeout_s = 1\n'
+                '[verify]\nentry = "verify.py"\n',
+                encoding="utf-8",
+            )
+            (bank_dir / "t1" / "verify.py").write_text("print('{}')", encoding="utf-8")
+            (tmp_p / "scenarios").mkdir()
+            (tmp_p / "scenarios" / "arm.toml").write_text(
+                'name = "arm"\nadapter = "claude-cli"\nmodel = "m"\n'
+                'strategy = "single-session"\neffort = "high"\n'
+                '[tools]\nsource = "none"\nallowed = ["Read"]\n',
+                encoding="utf-8",
+            )
+            args = types.SimpleNamespace(
+                command="run",
+                bank="b",
+                dry_run=True,
+                limit=None,
+                tasks=None,
+                repeats=1,
+                tasks_dir=tmp_p / "tasks",
+                scenarios_dir=tmp_p / "scenarios",
+                ledger_dir=tmp_p / "ledger",
+                include_holdout=False,
+                max_spawn_usd=None,
+                legacy_max_budget_usd=None,
+                max_run_usd=None,
+                skip_bank_validation=True,
+                skip_arming_check=True,
+                skip_credential_check=True,
+                no_lock=True,
+                lock_wait_s=None,
+            )
+            with mock.patch("fathom.cli.run_matrix", return_value=EXIT_OK) as rm:
+                self.assertEqual(_cmd_run(args), EXIT_OK)
+        resume = rm.call_args.kwargs["resume_cmd"]
+        self.assertTrue(resume.startswith("fathom run b --repeats 1 --tasks-dir "), resume)
+        self.assertIn("--ledger-dir", resume)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

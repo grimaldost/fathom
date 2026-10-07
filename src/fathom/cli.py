@@ -746,6 +746,7 @@ def run_matrix(
     skip_bank_validation: bool = False,
     run_lock: Any | None = None,
     out: TextIO | None = None,
+    resume_cmd: str | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -761,6 +762,12 @@ def run_matrix(
     halts the matrix with ``EXIT_STOPPED`` before the next trial starts, so no caller
     needs a watcher script of its own.  Passing ``None`` (the default, and what every
     test does) changes nothing.
+
+    Once the trial loop has begun, each trial prints one flushed ``trial done:`` line and
+    every return prints one flushed ``run summary:`` line (:func:`_print_run_summary`),
+    ending in ``resume_cmd`` (default ``fathom run <bank> --repeats <n>``; ``_cmd_run``
+    passes the command it was invoked as). A dry run, an empty plan and the gates before
+    the loop print neither.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
@@ -994,6 +1001,37 @@ def run_matrix(
     # default and cleared the env var (see the per-trial branch below).
     _explicit_stream_dir = os.environ.get("FATHOM_STREAM_DIR")
 
+    # What this invocation did, for the progress line and the closing summary. Counted
+    # from the rows appended below, never from the ledger file, which also holds every
+    # earlier invocation's rows.
+    started = 0
+    completed = 0
+    errored = 0
+    _resume = resume_cmd or f"fathom run {bank.name} --repeats {repeats}"
+
+    def _finish(code: int) -> int:
+        # An infrastructure-stopped trial has no ledger row, so a resume runs it again:
+        # it counts as not started, along with the trials after it.
+        _print_run_summary(
+            _out,
+            ledger_path=_ledger_dir / f"{bank.name}.jsonl",
+            completed=completed,
+            errored=errored,
+            skipped=already_done,
+            not_started=num_planned - completed - errored,
+            spent_usd=spent_usd,
+            resume_cmd=_resume,
+        )
+        return code
+
+    def _progress(sc: ResolvedScenario, task: Task, repeat: int, status: str) -> None:
+        print(
+            f"trial done: {started}/{num_planned} {sc.name}/{task.id} r{repeat} {status} "
+            f"[${spent_usd:.2f}]",
+            file=_out,
+            flush=True,
+        )
+
     # --- Execute trials (all spawns happen below this line) ---
     for sc, task, repeat in planned:
         drifted = fixture_drift(task, fixture_expected[task.id])
@@ -1004,7 +1042,7 @@ def run_matrix(
                 "committed one; restore fixtures/ and re-run — stopping matrix",
                 file=_out,
             )
-            return EXIT_INFRASTRUCTURE
+            return _finish(EXIT_INFRASTRUCTURE)
         if max_run_usd is not None and spent_usd >= max_run_usd:
             print(
                 f"run budget reached: ${spent_usd:.2f} of ${max_run_usd:.2f} spent this "
@@ -1012,7 +1050,7 @@ def run_matrix(
                 "lost; re-invoke to continue from the ledger.",
                 file=_out,
             )
-            return EXIT_RUN_BUDGET
+            return _finish(EXIT_RUN_BUDGET)
         # The trial boundary is the stop point, for the same reason the budget rail
         # halts here: the ledger is the checkpoint, so halting between trials loses
         # nothing already bought, while killing a tree mid-trial discards a spawn that
@@ -1027,7 +1065,7 @@ def run_matrix(
                     "already bought is lost; re-invoke to continue from the ledger.",
                     file=_out,
                 )
-                return EXIT_STOPPED
+                return _finish(EXIT_STOPPED)
         # Default FATHOM_STREAM_DIR, per trial, for an arm whose scenario
         # declares a [context] inject or a non-default tool allowance — the
         # kind of arm where the stream is the only record of what the agent
@@ -1045,6 +1083,7 @@ def run_matrix(
         os.environ["FATHOM_STREAM_TAG"] = f"{bank.name}--{sc.name}--{task.id}--r{repeat}"
         executor = _executor_factory(sc)
         runner = _runner_factory(sc)
+        started += 1
 
         with _stage_fn(task, _DEFAULT_BASE_BRANCH) as workspace:
             trial_result = executor.run_trial(task, workspace, sc, runner)
@@ -1060,7 +1099,8 @@ def run_matrix(
                     file=_out,
                 )
                 # Ledger is the resume checkpoint — no writes for this trial.
-                return EXIT_INFRASTRUCTURE
+                _progress(sc, task, repeat, "infrastructure")
+                return _finish(EXIT_INFRASTRUCTURE)
 
             # A trial that reached into the task directory corrupted the baseline for
             # every trial after it; its own result is not scored, and the matrix stops.
@@ -1169,6 +1209,11 @@ def run_matrix(
             trial_dict["holdout"] = task.id in bank.holdout
             trial_dict["fixture_sha"] = fixture_shas[task.id]
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
+            if valid:
+                completed += 1
+            else:
+                errored += 1
+            _progress(sc, task, repeat, status_value)
 
             if drifted_during:
                 print(
@@ -1177,9 +1222,36 @@ def run_matrix(
                     "restore fixtures/ and re-run — stopping matrix",
                     file=_out,
                 )
-                return EXIT_INFRASTRUCTURE
+                return _finish(EXIT_INFRASTRUCTURE)
 
-    return EXIT_OK
+    return _finish(EXIT_OK)
+
+
+def _print_run_summary(
+    out: TextIO,
+    *,
+    ledger_path: pathlib.Path,
+    completed: int,
+    errored: int,
+    skipped: int,
+    not_started: int,
+    spent_usd: float,
+    resume_cmd: str,
+) -> None:
+    """The one closing line of a run that reached its trial loop, flushed.
+
+    ``completed`` and ``errored`` are the trial rows this invocation appended; ``skipped``
+    is what the ledger already held for the plan; ``not_started`` is the rest of the plan
+    (a trial an infrastructure error stopped has no row, so it counts here and a resume
+    runs it). ``spent_usd`` is this invocation's observed spend, not the ledger's total.
+    """
+    print(
+        f"run summary: ledger {ledger_path.resolve()}; completed {completed}, errored "
+        f"{errored} this invocation; skipped {skipped} (already done); not started "
+        f"{not_started}; spent ${spent_usd:.2f} this invocation; resume: {resume_cmd}",
+        file=out,
+        flush=True,
+    )
 
 
 def _default_executor_factory(
@@ -1541,6 +1613,45 @@ def _cmd_index(args: argparse.Namespace) -> int:
     return _ledgerindex.run_index(args.home, write_index=args.write, command="fathom index")
 
 
+def _shell_arg(value: object) -> str:
+    """*value* as one command-line word: double-quoted only when it holds whitespace."""
+    text = str(value)
+    return f'"{text}"' if any(ch.isspace() for ch in text) else text
+
+
+def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
+    """The command that continues this ``fathom run`` from its ledger.
+
+    Rebuilt from the parsed *args*: the bank, ``--repeats``, and the flags that shaped
+    what runs or what may be spent (``--scenarios-dir``, ``--tasks-dir``, ``--ledger-dir``,
+    ``--tasks``, ``--include-holdout``, ``--max-spawn-usd``, ``--max-run-usd``). A path
+    option that is the data root's own default was not given, since :func:`_anchor_paths`
+    has already filled it in, and is left out. ``--home`` leads the command when it was
+    given, so the command means the same from any directory. ``--limit`` and the
+    ``--skip-*`` flags are left out: a resume runs the rest of the plan, and its gates
+    run again.
+    """
+    root = getattr(args, "data_root", None)
+    head = ["fathom"]
+    if getattr(args, "home", None) is not None and root is not None:
+        head += ["--home", _shell_arg(root)]
+    parts = [*head, "run", _shell_arg(args.bank), "--repeats", str(args.repeats)]
+    for name, default in _PATH_DEFAULTS.items():
+        value = getattr(args, name, None)
+        if value is None or (root is not None and pathlib.Path(value) == root / default):
+            continue
+        parts += [f"--{name.replace('_', '-')}", _shell_arg(value)]
+    if args.tasks is not None:
+        parts += ["--tasks", _shell_arg(args.tasks)]
+    if args.include_holdout:
+        parts.append("--include-holdout")
+    if spawn_cap is not None:
+        parts += ["--max-spawn-usd", f"{spawn_cap:g}"]
+    if args.max_run_usd is not None:
+        parts += ["--max-run-usd", f"{args.max_run_usd:g}"]
+    return " ".join(parts)
+
+
 def _cmd_run(args: argparse.Namespace) -> int:
     from fathom.scenario import load_scenario, resolve_scenario
 
@@ -1657,6 +1768,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             skip_arming_check=args.skip_arming_check,
             skip_bank_validation=args.skip_bank_validation,
             run_lock=run_lock,
+            resume_cmd=_resume_command(args, spawn_cap),
         )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------

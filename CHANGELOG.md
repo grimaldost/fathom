@@ -8,6 +8,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **A progress line per trial and a closing summary on `fathom run`.** After each trial,
+  `fathom run` prints `trial done: i/N arm/task r<k> <status> [$spent]`, flushed so it reaches
+  a pipe or a log as it happens; `i` counts the planned trials started, `status` is
+  `completed`, `errored` or `infrastructure`, and the amount is this invocation's spend so
+  far. Every exit after the trial loop has begun (done, an infrastructure error or fixture
+  drift, the run budget, a stop request) then prints one `run summary:` line: the absolute
+  ledger path, the trials completed and errored by this invocation, the trials skipped as
+  already done, the trials not started, the amount spent this invocation, and a `resume:`
+  command. `run_matrix` takes an optional `resume_cmd`; `fathom run` builds it from the bank,
+  `--repeats` and the `--tasks-dir`, `--scenarios-dir`, `--ledger-dir`, `--tasks`,
+  `--include-holdout`, `--max-spawn-usd` and `--max-run-usd` flags it was given, with
+  `--home` first when that was given. A trial stopped by an infrastructure error has no
+  ledger row, so it counts as not started. A dry run, a plan with nothing to buy and the gates
+  before the first trial print neither line, so their output is unchanged. Closes T4a and T4b,
+  the first two parts of FATH-B13; the per-trial report view is not built.
+
 - **A finished plan prices one more repeat.** When every requested trial is already
   completed, `fathom run` (with or without `--dry-run`) prints two lines after `planned:`
   and before `nothing to do` or `[dry-run] no spawns`. `one more repeat:` gives the ceiling
