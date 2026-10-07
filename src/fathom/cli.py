@@ -18,6 +18,7 @@ import dataclasses
 import json
 import os
 import pathlib
+import statistics
 import sys
 import tomllib
 from collections.abc import Callable, Iterator, Sequence
@@ -500,6 +501,146 @@ def _trial_ceiling_usd(
     return plan.n_prs * (impl + plan.fixes * fix + plan.reviews * review)
 
 
+# A (strategy, model) group needs this many completed trials before the plan quotes its own
+# median; a thinner group would put one lucky trial in front of the operator as a typical one.
+_MIN_MODEL_ROWS = 5
+
+
+@dataclasses.dataclass(frozen=True)
+class _TrialCost:
+    """What one completed trial in the ledger cost: the sum of its run rows' ``cost_usd_est``."""
+
+    strategy: str
+    model: str
+    usd: float
+
+
+def _history_trial_costs(
+    bank_name: str,
+    ledger_dir: pathlib.Path,
+    scenarios: Sequence[ResolvedScenario] = (),
+) -> list[_TrialCost]:
+    """Per-trial cost of every completed trial in the bank's ledger, voids applied.
+
+    Read-only. A trial's cost is the sum of ``cost_usd_est`` over its run rows, which are
+    written before the trial row that closes them; a retried key therefore costs what its
+    completed attempt cost, not what an errored attempt before it spent. A trial is left
+    out, never counted as free, when it has no run rows or any run row says
+    ``cost_source == "none"`` (FATH-B79: a missing cost is a gap). Strategy and model come
+    from the trial row's ``config_preimage``, or from the one of ``scenarios`` with the
+    same ``config_hash`` when the row has none; a trial that names neither is left out.
+    """
+    from fathom import ledgerindex
+
+    path = ledger_dir / f"{bank_name}.jsonl"
+    if not path.exists():
+        return []
+    by_hash = {sc.config_hash: sc for sc in scenarios}
+    pending: dict[tuple[Any, ...], list[dict[str, Any]]] = {}
+    out: list[_TrialCost] = []
+    for row in _ledger.apply_voids(ledgerindex.rows(path)):
+        kind = row.get("kind")
+        if kind not in ("run", "trial"):
+            continue
+        key = (
+            row.get("dataset_version"),
+            row.get("config_hash"),
+            row.get("task_id"),
+            row.get("repeat"),
+        )
+        if kind == "run":
+            pending.setdefault(key, []).append(row)
+            continue
+        runs = pending.pop(key, [])
+        if row.get("status") != "completed" or not runs:
+            continue
+        if any(r.get("cost_source", "reported") == "none" for r in runs):
+            continue
+        strategy = model = None
+        try:
+            preimage = json.loads(row.get("config_preimage") or "{}")
+        except ValueError:
+            preimage = {}
+        if isinstance(preimage, dict):
+            strategy, model = preimage.get("strategy"), preimage.get("model")
+        if not (strategy and model) and row.get("config_hash") in by_hash:
+            sc = by_hash[row["config_hash"]]
+            strategy, model = sc.strategy, sc.model
+        if not (strategy and model):
+            continue
+        try:
+            usd = sum(float(r.get("cost_usd_est") or 0.0) for r in runs)
+        except (TypeError, ValueError):
+            continue
+        out.append(_TrialCost(str(strategy), str(model), usd))
+    return out
+
+
+def _expected_spend_line(
+    planned: Sequence[tuple[ResolvedScenario, Task, int]],
+    history: Sequence[_TrialCost],
+) -> str | None:
+    """The plan's one-line estimate of what ``planned`` will cost, or None to print nothing.
+
+    Beside the ceiling, not instead of it: the ceiling is what the caps allow, this is what
+    trials like these have cost in the same ledger. It is an estimate and gates nothing.
+    A planned trial is priced at the median of its (strategy, model) group when that group
+    holds at least ``_MIN_MODEL_ROWS`` trials, else at its strategy's median; a planned
+    strategy with no history is named and left out of the sum.
+    """
+    if not planned or not history:
+        return None
+    by_strategy: dict[str, list[float]] = {}
+    by_model: dict[tuple[str, str], list[float]] = {}
+    for h in history:
+        by_strategy.setdefault(h.strategy, []).append(h.usd)
+        by_model.setdefault((h.strategy, h.model), []).append(h.usd)
+    median_of_strategy = {k: statistics.median(v) for k, v in by_strategy.items()}
+    median_of_model = {
+        k: statistics.median(v) for k, v in by_model.items() if len(v) >= _MIN_MODEL_ROWS
+    }
+
+    total = 0.0
+    priced = 0
+    unpriced: dict[str, int] = {}
+    used_strategies: set[str] = set()
+    used_models: set[tuple[str, str]] = set()
+    for sc, _task, _repeat in planned:
+        model_key = (sc.strategy, sc.model)
+        if model_key in median_of_model:
+            total += median_of_model[model_key]
+            used_models.add(model_key)
+        elif sc.strategy in median_of_strategy:
+            total += median_of_strategy[sc.strategy]
+        else:
+            unpriced[sc.strategy] = unpriced.get(sc.strategy, 0) + 1
+            continue
+        priced += 1
+        used_strategies.add(sc.strategy)
+
+    parts = [
+        f"{name} ${med:.2f} n={len(by_strategy[name])}"
+        for name, med in sorted(median_of_strategy.items())
+        if name in used_strategies
+    ] + [
+        f"{s}/{m} ${median_of_model[(s, m)]:.2f} n={len(by_model[(s, m)])}"
+        for s, m in sorted(used_models)
+    ]
+    gaps = "; ".join(
+        f"no history for strategy {name} ({count} planned trials)"
+        for name, count in sorted(unpriced.items())
+    )
+    if not priced:
+        return f"expected: not estimated; {gaps}; an estimate, not a cap"
+    line = (
+        f"expected: ~${total:.2f} for {priced} planned trials (median per trial from "
+        f"{len(history)} completed trials in this ledger: {'; '.join(parts)}"
+    )
+    if gaps:
+        line += f"; {gaps}"
+    return line + "); an estimate, not a cap"
+
+
 # Where a treatment arm's agent streams are kept by default. An arm with a [context]
 # inject or a non-default tool allowance keeps its stream, because the stream is the
 # only record of what its agent actually did: there is no ledger-side invocation
@@ -655,6 +796,15 @@ def run_matrix(
         f"  ceiling: ${ceiling_usd:.2f}",
         file=_out,
     )
+    # What trials like these have cost in this ledger, beside the worst-case ceiling above.
+    # Information only: the money rail stays on observed spend, and a printed estimate
+    # changes no exit code. After the `planned:` line, never inside it, which the
+    # acceptance harness matches whole. Nothing is printed without history.
+    expected = _expected_spend_line(
+        planned, _history_trial_costs(bank.name, _ledger_dir, resolved_scenarios)
+    )
+    if expected:
+        print(expected, file=_out)
     # Show the arithmetic for any multi-spawn arm. A ceiling many times the per-trial
     # rail reads as a typo unless the spawn count is named; naming it is what makes
     # the number actionable (chunk it with --limit, lower the rail, or don't run).

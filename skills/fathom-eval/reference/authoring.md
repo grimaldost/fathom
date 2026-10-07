@@ -956,7 +956,13 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   prefixes; arms that pool show the same one), the number of trials still to buy (and how
   many are already done), and a ceiling of `trials × the per-spawn cap` (series trials
   priced as in section 12). It spawns nothing and takes no lock. The ceiling is a worst
-  case, not an estimate. A bank whose arms sit in a subdirectory needs `--scenarios-dir` on
+  case, not an estimate. When the bank's ledger already holds completed trials, an
+  `expected:` line follows the `planned:` line with the estimate: the median cost per
+  trial for each planned strategy (per strategy and model once a model has 5 trials), its
+  trial count, and the planned trials priced at that median. Trials with no run rows, with
+  a run whose cost was not reported, errored or voided are left out, a strategy with no
+  history is named as unpriced, and an empty ledger prints nothing. It never gates a run:
+  the rails stay on observed spend. A bank whose arms sit in a subdirectory needs `--scenarios-dir` on
   every `fathom run` and `fathom verify-arming`. Without it, the command takes every `*.toml`
   directly under `scenarios/` with no warning and runs those arms instead; only when there
   are none there does it stop, with `no scenarios found`.

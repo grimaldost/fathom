@@ -165,6 +165,16 @@ After a run, keep the data root's derived records current:
   count: per PR, one implementation, the template's fix attempts, and under a
   blocking review one review more than the fix attempts, each at its cap ($20, $3 and
   $5 unless `--max-spawn-usd` is given). It is a worst case, not an estimate.
+- **The `expected:` line** under the plan's `planned:` line is the estimate: what a trial
+  of the same strategy has cost in this bank's own ledger. It is the median over completed
+  trials (a trial's cost is the sum of its run rows), per strategy and, where a model has
+  at least 5 trials, per model, with the trial count `n`; planned trials times that median
+  is the expected spend. A trial with no run rows, a run whose cost the provider did not
+  report, an errored trial and a voided one are left out, and a strategy with no history
+  is named as unpriced. Nothing is printed on an empty ledger. It is information only:
+  no exit code or rail depends on it, and the ceiling and `--max-run-usd` still bound the
+  spend. Read the two together: a ceiling far above the expected spend says how loose the
+  cap is, not that the run will cost the ceiling.
 - **`--max-spawn-usd`** (older spelling `--max-budget-usd`) is the cap for each
   **spawn**, not a run total. Raising it loosens the runaway guard, which is why the
   printed ceiling tracks it. A series trial spawns several agents, each under the

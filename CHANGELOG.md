@@ -38,6 +38,18 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
   It is run by hand; the test suite covers it offline and never spawns `claude`.
 
+- **The plan prints the expected spend beside the ceiling.** When the bank's ledger holds
+  completed trials, `fathom run --dry-run` (and the live run's plan) prints one more line
+  after `planned:`, for example `expected: ~$0.80 for 4 planned trials (median per trial from
+  3 completed trials in this ledger: single-session $0.20 n=3); an estimate, not a cap`. A
+  trial's cost is the sum of `cost_usd_est` over its run rows; the median is taken per
+  strategy, and per strategy and model once that model has at least 5 trials. Trials with no
+  run rows, with a run whose `cost_source` is `none` (a missing cost is not free), errored
+  trials and voided trials are left out, and a planned strategy with no history is named
+  rather than priced. The line is information only: there is no gate, the `planned:` line is
+  unchanged, no exit code differs, and an empty ledger prints nothing. The spend rails still
+  act on observed spend.
+
 ### Changed
 
 - **The `fathom run --dry-run` plan now shows each arm's config_hash prefix.** The arms line

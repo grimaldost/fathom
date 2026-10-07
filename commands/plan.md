@@ -25,6 +25,12 @@ Plan a fathom eval matrix without spawning or spending anything.
    already done), and the USD ceiling: planned trials × the per-spawn cap in force
    (`--max-spawn-usd` if given, else $5), with series trials priced by their spawn
    count.
+   When the bank's ledger already holds completed trials, the plan also prints one
+   `expected:` line after the `planned:` line: the median cost per trial for the
+   planned strategies (and per model where a group holds at least 5 trials), with
+   its trial count, and that median times the planned trials. Report it beside the
+   ceiling, as an estimate from this ledger's own history. It is not a cap, and no
+   run is refused or stopped by it. With no history, no line is printed.
 
 Guardrails to surface:
 - If the bank's arms live in a subdirectory of `scenarios/` (for example
@@ -32,6 +38,7 @@ Guardrails to surface:
   planned: the run reads `<dir>/*.toml` non-recursively. Check the arm names in
   the plan against what the user intends, and `ls scenarios/` in the data root if
   unsure.
-- The ceiling is a worst case, not a spend cap. The real per-spawn cap is
+- The ceiling is a worst case, not a spend cap, and the `expected:` line is a past
+  median, not a promise. The real per-spawn cap is
   `--max-spawn-usd`, and `--max-run-usd` caps what one invocation may spend; both
   apply to the actual run.
