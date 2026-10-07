@@ -634,7 +634,11 @@ class TestParseComplete(AdapterTestBase):
 
 
 class TestParseTruncated(AdapterTestBase):
-    def _record(self) -> RunRecord:
+    """A killed spawn never reaches its result event, so the stream carries tokens but
+    no reported cost. That gap is deliberate here: the run is recorded as cost_source=none
+    and announced with a warning, which these tests capture instead of leaking."""
+
+    def _run(self) -> tuple[RunRecord, list[warnings.WarningMessage]]:
         def responder(i):
             raise subprocess.TimeoutExpired(
                 cmd=["claude"], timeout=123, output=_fixture("stream_truncated.jsonl")
@@ -642,7 +646,19 @@ class TestParseTruncated(AdapterTestBase):
 
         spawn = RecordingSpawn(responder)
         runner = self.make_runner(spawn)
-        return runner.execute("p", self.workspace, _scenario(trial_timeout_s=123))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            rec = runner.execute("p", self.workspace, _scenario(trial_timeout_s=123))
+        return rec, caught
+
+    def _record(self) -> RunRecord:
+        return self._run()[0]
+
+    def test_the_missing_cost_of_a_killed_spawn_is_announced(self):
+        rec, caught = self._run()
+        self.assertEqual(rec.cost_source, COST_SOURCE_NONE)
+        gaps = [w for w in caught if "no cost reported" in str(w.message)]
+        self.assertEqual(len(gaps), 1, "the gap in a truncated stream must be announced once")
 
     def test_status_timeout(self):
         self.assertEqual(self._record().status, ExitStatus.TIMEOUT)
@@ -938,6 +954,7 @@ class TestInfrastructureClassification(AdapterTestBase):
                         "is_error": False,
                         "num_turns": 5,
                         "duration_ms": 1000,
+                        "total_cost_usd": 0.01,
                         "result": "dataset_a needs authentication (auth provider not "
                         "configured); unauthorized for dataset_b. result.json written.",
                         "usage": {"input_tokens": 100, "output_tokens": 50},
@@ -979,6 +996,7 @@ class TestInfrastructureClassification(AdapterTestBase):
                         "is_error": False,
                         "num_turns": 3,
                         "duration_ms": 900,
+                        "total_cost_usd": 0.01,
                         "result": "Added handler raising QuotaError('quota exceeded'); "
                         "CLI prints 'Upgrade to Pro' when the limit reached. Done.",
                         "usage": {"input_tokens": 100, "output_tokens": 40},
