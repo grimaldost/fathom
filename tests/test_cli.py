@@ -612,7 +612,7 @@ class TestResume(_Base):
 
 
 class TestFinishedBankPlan(_Base):
-    """A finished bank's plan prices one more repeat (T32c / FATH-B82)."""
+    """A finished bank's plan prices one more repeat (FATH-B82)."""
 
     def _complete(self, sc, task, repeat):
         rec = _ledger.TrialRecord(
@@ -3075,7 +3075,7 @@ class DataRootWithheldFromChildrenTests(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Per-trial progress line and closing run summary (T4a, T4b)
+# Per-trial progress line and closing run summary
 # ---------------------------------------------------------------------------
 
 
@@ -3126,7 +3126,7 @@ def _summary_fields(text: str) -> dict:
         "ledger": m["ledger"],
         "completed": int(m["c"]),
         "errored": int(m["e"]),
-        # Present only when the run's arms declare a comparator (T20a).
+        # Present only when the run's arms declare a comparator.
         "blocked": int(m["b"]) if m["b"] is not None else None,
         "skipped": int(m["s"]),
         "not_started": int(m["u"]),
@@ -3469,7 +3469,7 @@ class TestResumeCommand(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Comparator dependency (T20a, FATH-B58)
+# Comparator dependency (FATH-B58)
 # ---------------------------------------------------------------------------
 
 
@@ -3703,7 +3703,7 @@ class TestComparatorDependency(_Base):
 
 
 class TestInterleave(unittest.TestCase):
-    """``--interleave``: repeat-major trial order, opt-in (T28a).
+    """``--interleave``: repeat-major trial order, opt-in.
 
     The default plan is arm by arm, so a trial list cut short (``--limit``, a stop, a
     spend rail) holds every repeat of the first arm and none of the last. With the flag the

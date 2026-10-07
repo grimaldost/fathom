@@ -859,7 +859,7 @@ def run_matrix(
     arm, then task), so ``limit`` keeps whole repeats and a run cut short has compared the
     arms. The order is the only difference: the same trials are planned and the same resume
     keys are written. The plan then prints an ``order:`` line and a ``first:`` line; without
-    it nothing new is printed (T28a).
+    it nothing new is printed.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout

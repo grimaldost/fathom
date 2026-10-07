@@ -698,7 +698,7 @@ class TestSettingsInjection(unittest.TestCase):
 
 class TestComparator(unittest.TestCase):
     """The top-level `comparator` key names the arm a dependent arm is bought against
-    (T20a, FATH-B58). It orders the run and gates its trials, and changes nothing the
+    (FATH-B58). It orders the run and gates its trials, and changes nothing the
     arm measures, so it enters neither config_hash nor the preimage: adding it to a
     committed arm must not fork that arm's history (ADR-0002)."""
 

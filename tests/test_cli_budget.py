@@ -113,7 +113,7 @@ class TestSpendRailFlags(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Expected spend beside the ceiling (T32a, FATH-B80)
+# Expected spend beside the ceiling (FATH-B80)
 # ---------------------------------------------------------------------------
 
 
