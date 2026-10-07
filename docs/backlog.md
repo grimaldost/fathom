@@ -7,7 +7,8 @@ Each item has a stable id (`FATH-Bnn`), a one-line claim, the cause and the prop
 an effort estimate: **S** is one focused change, **M** a small series with tests, **L** a design
 decision plus a multi-PR series. Items are grouped by area and ordered by leverage within each
 group. Ids are never reused, so the numbering has gaps. A closed id that code or another document
-still cites is listed under "Closed ids" at the end, so the reference resolves.
+still cites is listed under "Closed ids" at the end, so the reference resolves. A row that needs
+confirmation names where to look first to validate it.
 
 ## Measurement correctness
 
