@@ -42,7 +42,9 @@ The harness judges each session three ways.
   `fathom run` is not a run. A call through a shell variable or function that holds the
   plugin's long invocation (`F="uv run ... python -m fathom"; $F run b`, or
   `F() { uv run ... python -m fathom "$@"; }; F run b`), as agents often write it, is read as
-  the command it stands for. Results are paired with their calls, and errors on a fathom
+  the command it stands for, also when the definition sits in a file the session wrote earlier
+  (with `cat` and a here-document, or the Write tool) and sources (`. /tmp/f.sh && F run b`).
+  Results are paired with their calls, and errors on a fathom
   surface are kept, 300 characters each.
 - **Ground truth**, read by the harness after the subject exits: files in the workspace, the
   calls that reached the `claude` stub, the real data root's state, and for S2 a

@@ -484,6 +484,51 @@ class ClassificationTests(unittest.TestCase):
             with self.subTest(command):
                 self.assertEqual(self.ops(command), expected)
 
+    def test_a_file_the_session_wrote_and_sources_later_is_read(self) -> None:
+        """An agent wrote a function into a file in one call and called it from another
+        (`. scratch/fx.sh && fx run b`); the run was missed until the file was followed."""
+        helper = f'fx() {{ {PLUGIN_CMD} "$@"; }}\n'
+        writes = "cat > scratch/fx.sh <<'EOF'\n" + helper + "EOF\necho written"
+        cases = [
+            (
+                _use("w", "Bash", {"command": writes}),
+                ". scratch/fx.sh && fx run b --max-run-usd 1",
+                ["run"],
+            ),
+            (
+                _use("w", "Write", {"file_path": "scratch/fx.sh", "content": helper}),
+                "source scratch/fx.sh; fx index",
+                ["index"],
+            ),
+        ]
+        for write, use, expected in cases:
+            with self.subTest(use):
+                analysis = _analysis(write, _use("u", "Bash", {"command": use}))
+                written, used = analysis.calls
+                self.assertIsNone(written.surface)  # writing the helper runs nothing
+                self.assertEqual(used.surface, "cli")
+                self.assertEqual([inv.op for inv in used.invocations], expected)
+
+    def test_writing_and_sourcing_in_one_command_and_unknown_files(self) -> None:
+        helper = f'F="{PLUGIN_CMD}"\n$F --version\n'
+        same = "cat <<'EOF' > ./f.sh\n" + helper + "EOF\n. ./f.sh && $F run b --dry-run"
+        analysis = _analysis(_use("a", "Bash", {"command": same}))
+        self.assertEqual(
+            [inv.op for inv in analysis.calls[0].invocations], ["--version", "run --dry-run"]
+        )
+        unknown = _analysis(_use("b", "Bash", {"command": ". scratch/other.sh && fx run b"}))
+        self.assertIsNone(unknown.calls[0].surface)
+
+    def test_heredoc_writes(self) -> None:
+        command = (
+            "cat > \"scratch/a b.sh\" <<'EOF'\nline one\nEOF\n"
+            "cat <<-END >> out.txt\n\tkept\n\tEND\n"
+            "cat notes.md\n"
+        )
+        self.assertEqual(
+            acc.heredoc_writes(command), {"scratch/a b.sh": "line one\n", "out.txt": "\tkept\n"}
+        )
+
     def test_calls_through_a_variable_or_a_function_are_read_as_the_command(self) -> None:
         """Agents keep the long plugin invocation in a variable or a function."""
         cases = {
