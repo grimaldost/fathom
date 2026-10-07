@@ -40,6 +40,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Fixed
 
+- **A relative path option that misses now names the data root's path.** `--tasks-dir`,
+  `--scenarios-dir` and `--ledger-dir` are relative to where the command was started. Given
+  `--scenarios-dir scenarios` from outside the data root, the command said only that no
+  scenarios were found in a directory that did not exist. When the path is missing under the
+  working directory but present under the data root, the command now prints a note on stderr
+  naming the data-root path, and the `no scenarios found` and `could not load bank` errors add
+  `(did you mean <path>?)`. Absolute paths, paths that exist, paths missing in both places and
+  omitted options behave as before.
+
 - **The MCP server's tool results no longer carry a warning about its own environment.** The
   server runs in the temporary environment `uv run --with fastmcp` makes and passed its
   `VIRTUAL_ENV` to the engine it starts, so every `plan`, `report` and `smoke` result's

@@ -1132,15 +1132,29 @@ def _anchor_paths(args: argparse.Namespace, *, here: pathlib.Path, root: pathlib
     """Make every path in *args* absolute before the working directory changes.
 
     A path the user gave is relative to *here*, where the command was started; a path
-    left out is the data root's own.
+    left out is the data root's own. A relative path that is missing under *here* but
+    present under the data root is recorded in ``args.path_hints``, for the note
+    :func:`_running_in` prints and the "did you mean" the error sites add.
     """
+    hints: dict[str, tuple[str, pathlib.Path]] = {}
+    args.path_hints = hints
     for name, default in _PATH_DEFAULTS.items():
         if not hasattr(args, name):
             continue
         value = getattr(args, name)
         setattr(args, name, root / default if value is None else _absolute(here, value))
+        if value is not None and not pathlib.Path(value).expanduser().is_absolute():
+            alternative = _absolute(root, value)
+            if here != root and not getattr(args, name).exists() and alternative.exists():
+                hints[name] = (str(value), alternative)
     if getattr(args, "lock_root", None):
         args.lock_root = str(_absolute(here, args.lock_root))
+
+
+def _path_hint(args: argparse.Namespace, name: str) -> str:
+    """ " (did you mean <data-root path>?)" for a relative path option that missed, else ``""``."""
+    hint = getattr(args, "path_hints", {}).get(name)
+    return f" (did you mean {hint[1]}?)" if hint else ""
 
 
 def _appends_to(args: argparse.Namespace) -> pathlib.Path | None:
@@ -1169,6 +1183,13 @@ def _running_in(root: _home.DataRoot, args: argparse.Namespace) -> Iterator[None
     warning = root.warning(appends_to=_appends_to(args))
     if warning:
         print(warning, file=sys.stderr)
+    for name, (value, alternative) in args.path_hints.items():
+        print(
+            f"note: --{name.replace('_', '-')} {value} is relative to the working directory "
+            f"({here}), where it does not exist; the data root has {alternative}. "
+            "Pass that path, or run from the data root.",
+            file=sys.stderr,
+        )
     # An explicit stream directory is a path the user gave, so it is relative to `here`.
     saved_stream_dir = os.environ.get("FATHOM_STREAM_DIR")
     if saved_stream_dir:
@@ -1322,7 +1343,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
     try:
         bank = load_bank(tasks_dir / args.bank)
     except Exception as exc:
-        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        print(
+            f"error: could not load bank '{args.bank}': {exc}{_path_hint(args, 'tasks_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     resolver = _DefaultResolver()
@@ -1336,7 +1360,10 @@ def _cmd_run(args: argparse.Namespace) -> int:
             print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
 
     if not resolved_scenarios:
-        print(f"error: no scenarios found in {scenarios_dir}", file=sys.stderr)
+        print(
+            f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     # Fail fast on an unknown strategy — BEFORE planning or any spawn, so a typo is
@@ -1546,7 +1573,10 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     try:
         bank = load_bank(tasks_dir / args.bank)
     except Exception as exc:
-        print(f"error: could not load bank '{args.bank}': {exc}", file=sys.stderr)
+        print(
+            f"error: could not load bank '{args.bank}': {exc}{_path_hint(args, 'tasks_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     checks = _validate.validate_bank(bank, stage_fn=stage_task, verifier_fn=run_verifier)
@@ -1562,7 +1592,10 @@ def _cmd_verify_arming(args: argparse.Namespace) -> int:
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
     scenarios = _load_resolved_scenarios(scenarios_dir)
     if not scenarios:
-        print(f"error: no scenarios found in {scenarios_dir}", file=sys.stderr)
+        print(
+            f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",
+            file=sys.stderr,
+        )
         return 1
 
     declaring = [sc for sc in scenarios if _arming.needs_verification(sc)]

@@ -416,6 +416,87 @@ class PrecedenceTests(unittest.TestCase):
         self.assertEqual(after, str(self.a), "the variable is restored once the command ends")
 
 
+class RelativePathMissTests(unittest.TestCase):
+    """A relative path option that misses under the working directory names the data root's."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        base = Path(self._tmp.name)
+        self.root = _copy_fixture(base)
+        self.plain = base / "plain"
+        self.plain.mkdir()
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def test_a_missing_scenarios_dir_names_the_data_roots(self) -> None:
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertIn(str(self.root / "scenarios"), err)
+        self.assertIn("did you mean", err)
+        self.assertIn("is relative to the working directory", err)
+
+    def test_the_same_through_fathom_home(self) -> None:
+        code, out, err = _call(
+            ["run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+            env={"FATHOM_HOME": str(self.root)},
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertIn(str(self.root / "scenarios"), err)
+
+    def test_a_missing_tasks_dir_names_the_data_roots(self) -> None:
+        for command in ("validate", "run"):
+            with self.subTest(command=command):
+                argv = ["--home", str(self.root), command, BANK, "--tasks-dir", "tasks"]
+                if command == "run":
+                    argv.append("--dry-run")
+                code, out, err = _call(argv, cwd=self.plain)
+                self.assertEqual(code, 1, out + err)
+                self.assertIn(str(self.root / "tasks"), err)
+                self.assertIn("could not load bank", err)
+
+    def test_a_relative_path_that_exists_gets_no_note(self) -> None:
+        (self.plain / "scenarios").mkdir()
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "scenarios"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+        self.assertNotIn("is relative to the working directory", err)
+
+    def test_a_path_missing_in_both_places_gets_no_note(self) -> None:
+        code, out, err = _call(
+            ["--home", str(self.root), "run", BANK, "--dry-run", "--scenarios-dir", "nowhere"],
+            cwd=self.plain,
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+        self.assertNotIn("is relative to the working directory", err)
+
+    def test_an_absolute_path_and_an_omitted_option_get_no_note(self) -> None:
+        missing = str(self.plain / "absent")
+        for extra in (["--scenarios-dir", missing], []):
+            with self.subTest(extra=extra):
+                _code, _out, err = _call(
+                    ["--home", str(self.root), "run", BANK, "--dry-run", *extra],
+                    cwd=self.plain,
+                )
+                self.assertNotIn("did you mean", err)
+                self.assertNotIn("is relative to the working directory", err)
+
+    def test_from_inside_the_root_nothing_is_noted(self) -> None:
+        code, out, err = _call(
+            ["run", BANK, "--dry-run", "--scenarios-dir", "nowhere"], cwd=self.root
+        )
+        self.assertEqual(code, 1, out + err)
+        self.assertNotIn("did you mean", err)
+
+
 class EngineVersionTests(unittest.TestCase):
     """Old rows, which carry no engine_version, behave exactly as rows that do."""
 
