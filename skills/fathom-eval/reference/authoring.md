@@ -966,6 +966,15 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   every `fathom run` and `fathom verify-arming`. Without it, the command takes every `*.toml`
   directly under `scenarios/` with no warning and runs those arms instead; only when there
   are none there does it stop, with `no scenarios found`.
+- **A finished plan prices one more repeat.** When every requested trial is already done,
+  the plan prints two lines after `planned:` and before `nothing to do` (or `[dry-run] no
+  spawns`), with no new flag. `one more repeat:` gives the ceiling of one more trial per
+  arm and task, the number of those trials, and the `--repeats` value that plans them (the
+  highest completed repeat index among these cells, plus two). When the cells hold different
+  numbers of repeats it says `at least one more repeat`, because that value also fills the
+  lagging cells. `completed in the ledger for these arms:` counts every completed trial for
+  these arms and tasks at the current dataset version, across all repeats, which is the
+  count the scorecard uses. Nothing is printed while any trial is still planned.
 - **Smoke before any paid run**, and again when resuming later. It proves on tiny real spawns
   that the credential works, that the temporary config holds only the credential, that a
   disallowed tool is refused, that stream parsing works, that a plugin mount reaches the CLI,

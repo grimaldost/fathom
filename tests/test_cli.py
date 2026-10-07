@@ -611,6 +611,101 @@ class TestResume(_Base):
         self.assertEqual(len(calls), 6, "8 total − 2 done = 6 spawns expected")
 
 
+class TestFinishedBankPlan(_Base):
+    """A finished bank's plan prices one more repeat (T32c / FATH-B82)."""
+
+    def _complete(self, sc, task, repeat):
+        rec = _ledger.TrialRecord(
+            bank=self.bank.name,
+            task_id=task.id,
+            repeat=repeat,
+            status="completed",
+            dataset_version=self.bank.dataset_version,
+            config_hash=sc.config_hash,
+            tool_git_sha="",
+            cli_version="",
+            pin_level="strong",
+        )
+        _ledger.append_record(self.bank.name, rec, ledger_dir=self.ledger_dir)
+
+    def _finished(self, repeats_done=3):
+        """Two arms x one task, repeats 0..repeats_done-1 completed."""
+        self.bank = _make_bank("test-bank", [self.task1])
+        for sc in self.scenarios:
+            for repeat in range(repeats_done):
+                self._complete(sc, self.task1, repeat)
+
+    def _plan(self, **kw):
+        kw.setdefault("max_budget_usd", 0.5)
+        return _run_matrix(self.bank, self.scenarios, repeats=2, ledger_dir=self.ledger_dir, **kw)
+
+    def test_finished_bank_prices_one_more_repeat(self):
+        self._finished()
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                code, output = self._plan(dry_run=dry_run)
+                self.assertEqual(code, 0)
+                self.assertIn(
+                    "one more repeat: ceiling $1.00 for 2 trials (one per arm and task); "
+                    "plan it with --repeats 4",
+                    output,
+                )
+                self.assertIn(
+                    "completed in the ledger for these arms: 6 trials "
+                    "(all repeats; the scorecard counts these)",
+                    output,
+                )
+                tail = "[dry-run] no spawns" if dry_run else "nothing to do"
+                self.assertLess(output.index("one more repeat"), output.index(tail))
+                self.assertLess(output.index("planned:"), output.index("one more repeat"))
+
+    def test_uneven_cells_say_at_least(self):
+        self._finished()
+        self._complete(self.sc_a, self.task1, 3)
+        _, output = self._plan(dry_run=True)
+        self.assertIn("at least one more repeat", output)
+        self.assertIn("plan it with --repeats 5", output)
+        self.assertIn("completed in the ledger for these arms: 7 trials", output)
+
+    def test_counts_only_current_dataset_version_and_these_arms(self):
+        self._finished()
+        stale = _ledger.TrialRecord(
+            bank=self.bank.name,
+            task_id=self.task1.id,
+            repeat=9,
+            status="completed",
+            dataset_version="older",
+            config_hash=self.sc_a.config_hash,
+            tool_git_sha="",
+            cli_version="",
+            pin_level="strong",
+        )
+        other_arm = _ledger.TrialRecord(
+            bank=self.bank.name,
+            task_id=self.task1.id,
+            repeat=0,
+            status="completed",
+            dataset_version=self.bank.dataset_version,
+            config_hash="c" * 64,
+            tool_git_sha="",
+            cli_version="",
+            pin_level="strong",
+        )
+        for rec in (stale, other_arm):
+            _ledger.append_record(self.bank.name, rec, ledger_dir=self.ledger_dir)
+        _, output = self._plan(dry_run=True)
+        self.assertIn("plan it with --repeats 4", output)
+        self.assertIn("for these arms: 6 trials", output)
+
+    def test_partially_done_ledger_prints_neither_line(self):
+        self._finished(repeats_done=1)
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                _, output = self._plan(dry_run=dry_run)
+                self.assertNotIn("one more repeat", output)
+                self.assertNotIn("completed in the ledger", output)
+
+
 # ---------------------------------------------------------------------------
 # §10 DoD 3: infrastructure error — clean stop, trial unscored, named status
 # ---------------------------------------------------------------------------

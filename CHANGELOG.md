@@ -8,6 +8,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **A finished plan prices one more repeat.** When every requested trial is already
+  completed, `fathom run` (with or without `--dry-run`) prints two lines after `planned:`
+  and before `nothing to do` or `[dry-run] no spawns`. `one more repeat:` gives the ceiling
+  of one more trial per arm and task, the number of trials, and the `--repeats` value that
+  plans them (the highest completed repeat index among those cells, plus two); it reads
+  `at least one more repeat` when the cells hold different numbers of repeats.
+  `completed in the ledger for these arms:` counts every completed trial for the planned
+  arms and tasks at the current dataset version, across all repeats, the count a scorecard
+  uses. There is no new flag, and a plan that still has trials to buy prints neither line.
+  Closes T32c (FATH-B82).
+
 - **Write time on every ledger row, and the arm name on run rows.** `append_record` now adds
   `written_at`, the UTC time the row was written (ISO 8601, to the second, the format a void
   row's `voided_at` already uses), beside `engine_version`, unless the record names one.

@@ -515,6 +515,56 @@ class _TrialCost:
     usd: float
 
 
+def _one_more_repeat_lines(
+    bank: Bank,
+    scenarios: Sequence[ResolvedScenario],
+    tasks: Sequence[Task],
+    done: set[tuple[str, str, str, str, int]],
+    max_budget_usd: float | None,
+) -> list[str]:
+    """What a finished plan can still buy: one more repeat per arm and task (FATH-B82).
+
+    Called only when every requested trial is already completed, so the plan would
+    otherwise end at "nothing to do". Prices one more trial per cell at the cap in
+    force, names the ``--repeats`` value that plans it (the highest completed repeat
+    index among these cells, plus two: the count is the index plus one, and one more is
+    wanted), and counts every completed trial for these arms and tasks at the current
+    dataset version, which is what the scorecard counts. When the cells hold different
+    numbers of repeats, the named value also fills the lagging cells, so the line says
+    "at least".
+    """
+    hashes = {sc.config_hash for sc in scenarios}
+    task_ids = {t.id for t in tasks}
+    top: dict[tuple[str, str], int] = {}
+    completed = 0
+    for _bank, version, task_id, config_hash, repeat in done:
+        if version != bank.dataset_version or config_hash not in hashes or task_id not in task_ids:
+            continue
+        completed += 1
+        cell = (config_hash, task_id)
+        top[cell] = max(top.get(cell, repeat), repeat)
+    if not top:
+        return []
+    cells = [(sc, task) for sc in scenarios for task in tasks]
+    ceiling = sum(_trial_ceiling_usd(sc, task, max_budget_usd) for sc, task in cells)
+    uneven = len(top) < len(cells) or len(set(top.values())) > 1
+    lead = "at least one more repeat" if uneven else "one more repeat"
+    note = (
+        "one per arm and task, more where some cells are behind"
+        if uneven
+        else ("one per arm and task")
+    )
+    one_more = (
+        f"{lead}: ceiling ${ceiling:.2f} for {len(cells)} trials ({note}); "
+        f"plan it with --repeats {max(top.values()) + 2}"
+    )
+    counted = (
+        f"completed in the ledger for these arms: {completed} trials "
+        "(all repeats; the scorecard counts these)"
+    )
+    return [one_more, counted]
+
+
 def _history_trial_costs(
     bank_name: str,
     ledger_dir: pathlib.Path,
@@ -767,6 +817,7 @@ def run_matrix(
         if (bank.name, bank.dataset_version, task.id, sc.config_hash, repeat) not in done
     ]
     already_done = total - len(planned)
+    nothing_pending = total > 0 and not planned
 
     if limit is not None:
         planned = planned[:limit]
@@ -825,6 +876,12 @@ def run_matrix(
             f"  ({shape}; the per-spawn rail applies to each)",
             file=_out,
         )
+
+    if nothing_pending:
+        for line in _one_more_repeat_lines(
+            bank, resolved_scenarios, tasks_to_run, done, max_budget_usd
+        ):
+            print(line, file=_out)
 
     if dry_run:
         print("[dry-run] no spawns", file=_out)

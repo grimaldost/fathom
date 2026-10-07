@@ -31,6 +31,13 @@ Plan a fathom eval matrix without spawning or spending anything.
    its trial count, and that median times the planned trials. Report it beside the
    ceiling, as an estimate from this ledger's own history. It is not a cap, and no
    run is refused or stopped by it. With no history, no line is printed.
+   When nothing is planned (the bank is finished for the requested repeats), two more
+   lines follow the `planned:` line: `one more repeat:` gives the ceiling of one more
+   trial per arm and task and the `--repeats` value that plans it ("at least one more"
+   when the cells hold different numbers of repeats), and `completed in the ledger for
+   these arms:` gives the count of completed trials across all repeats, which is the
+   count the scorecard uses. Report both, so the user can decide on one more repeat
+   without a second planning run.
 
 Guardrails to surface:
 - If the bank's arms live in a subdirectory of `scenarios/` (for example
