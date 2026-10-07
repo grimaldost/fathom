@@ -31,6 +31,11 @@ reference solutions, arms, `config_hash` — follow
 [`reference/authoring.md`](reference/authoring.md). It is the complete guide. This
 file covers running what is built.
 
+For a worked example of one common design, a guardrail injected into the system prompt and
+compared across two model tiers, with every command runnable against the example data root
+without spending, see
+[`reference/recipe-guardrail-tiers.md`](reference/recipe-guardrail-tiers.md).
+
 A few bright lines, because breaking them spends money wrongly or corrupts the
 record:
 

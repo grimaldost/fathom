@@ -8,6 +8,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **Worked recipe: A/B a guardrail across model tiers.**
+  `skills/fathom-eval/reference/recipe-guardrail-tiers.md`, linked from the skill, walks a copy
+  of the example data root through a 2 x 2 design: one scenario file per (arm, model) cell
+  under `scenarios/tiers/` (bare and guardrail, on a smaller and a larger tier), the guardrail
+  injected from a real file, the comparison declared as `bank.toml` contrasts, a dry run read
+  by hash prefix and expected spend, the paid command, blind verification, manipulation checks
+  and the order to read the scorecard. A test, `tests/test_recipe_guardrail_tiers.py`, writes
+  the recipe's files into a temporary copy and runs each `fathom` line of it (the paid run
+  with `--dry-run`), so the recipe cannot drift from the command line.
 - **Ledger row contract reference: `docs/ledger-contract.md`.** Complete reference for the
   append-only JSONL row format: every record kind (`trial`, `run`, `grading`, `void`), every
   named field with its semantics and stability promise, the resume key, the trial-to-run join,
