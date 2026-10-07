@@ -8,25 +8,141 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
-- **Worked recipe: A/B a guardrail across model tiers.**
-  `skills/fathom-eval/reference/recipe-guardrail-tiers.md`, linked from the skill, walks a copy
-  of the example data root through a 2 x 2 design: one scenario file per (arm, model) cell
-  under `scenarios/tiers/` (bare and guardrail, on a smaller and a larger tier), the guardrail
-  injected from a real file, the comparison declared as `bank.toml` contrasts, a dry run read
-  by hash prefix and expected spend, the paid command, blind verification, manipulation checks
-  and the order to read the scorecard. A test, `tests/test_recipe_guardrail_tiers.py`, writes
-  the recipe's files into a temporary copy and runs each `fathom` line of it (the paid run
-  with `--dry-run`), so the recipe cannot drift from the command line.
-- **Ledger row contract reference: `docs/ledger-contract.md`.** Complete reference for the
-  append-only JSONL row format: every record kind (`trial`, `run`, `grading`, `void`), every
-  named field with its semantics and stability promise, the resume key, the trial-to-run join,
-  per-experiment cost summation, pass-rate denominators, the pass rule (via `is_pass`), and
-  void ordering semantics. Fields are stable: once named, they remain forever, so readers
-  accept rows written before a field existed (append-only invariant).
-- **Public `is_pass()` function in `fathom.report`.** The pass rule for trial outcomes:
-  `None` gives `False`; a dict passes when non-empty and all values are truthy; otherwise
-  the value's truthiness. Docstring states the rule and stability promise. The function
-  replaces the private `_is_pass()` helper.
+- **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
+  headless Claude Code sessions whose prompt is a user's goal in plain words, with no fathom
+  command, flag, skill or tool name and no appended system prompt, and checks whether each
+  session can use fathom from what the installed plugin shows it: reading an existing data
+  root (on a clone of it), building and running a measurement from an empty directory, and
+  finding the tool without being told its name. Each session is judged on what it could see
+  (the init event), what it did (its tool calls, by fathom surface, counted only by the lines
+  fathom printed) and what is true afterwards (the workspace, the calls that reached a
+  `claude` stub, the real data root's state with its ignored files, a reconcile the harness
+  runs). By default a subject runs under a configuration directory that holds only the
+  credential, with the installed plugin loaded from where it is installed and the
+  account's claude.ai connectors off, in a workspace whose path says nothing about the test
+  and with no instruction file in any directory above it, with this checkout's virtual
+  environment, the data root's agent instruction files and the parent session's variables
+  withheld; a no-spend scenario's ledgers and a measuring one's spend are watched while it
+  runs. The scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
+  `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
+  It is run by hand; the test suite covers it offline and never spawns `claude`.
+
+- **Write time on every ledger row, and the arm name on run rows.** `append_record` now adds
+  `written_at`, the UTC time the row was written (ISO 8601, to the second, the format a void
+  row's `voided_at` already uses), beside `engine_version`, unless the record names one.
+  `RunRecord` gains an additive `scenario` field, which the run loop fills with the arm's
+  name, so a run row says which arm produced it without a join through `config_hash`. Both
+  are provenance only: neither enters `config_hash`, its preimage or the resume key, and
+  neither changes a scorecard. Rows written before them load as they did, with `scenario`
+  empty, and are never rewritten. `written_at` is the one field that differs between two
+  otherwise identical runs, so a byte comparison of appended rows across runs must set it
+  aside.
+
+- **The plan prints the expected spend beside the ceiling.** When the bank's ledger holds
+  completed trials, `fathom run --dry-run` (and the live run's plan) prints one more line
+  after `planned:`, for example `expected: ~$0.80 for 4 planned trials (median per trial from
+  3 completed trials in this ledger: single-session $0.20 n=3); an estimate, not a cap`. A
+  trial's cost is the sum of `cost_usd_est` over its run rows; the median is taken per
+  strategy, and per strategy and model once that model has at least 5 trials. Trials with no
+  run rows, with a run whose `cost_source` is `none` (a missing cost is not free), errored
+  trials and voided trials are left out, and a planned strategy with no history is named
+  rather than priced. The line is information only: there is no gate, the `planned:` line is
+  unchanged, no exit code differs, and an empty ledger prints nothing. The spend rails still
+  act on observed spend.
+
+- **A finished plan prices one more repeat.** When every requested trial is already
+  completed, `fathom run` (with or without `--dry-run`) prints two lines after `planned:`
+  and before `nothing to do` or `[dry-run] no spawns`. `one more repeat:` gives the ceiling
+  of one more trial per arm and task, the number of trials, and the `--repeats` value that
+  plans them (the highest completed repeat index among those cells, plus two); it reads
+  `at least one more repeat` when the cells hold different numbers of repeats.
+  `completed in the ledger for these arms:` counts every completed trial for the planned
+  arms and tasks at the current dataset version, across all repeats, the count a scorecard
+  uses. There is no new flag, and a plan that still has trials to buy prints neither line.
+
+- **A progress line per trial and a closing summary on `fathom run`.** After each trial,
+  `fathom run` prints `trial done: i/N arm/task r<k> <status> [$spent]`, flushed so it reaches
+  a pipe or a log as it happens; `i` counts the planned trials started, `status` is
+  `completed`, `errored` or `infrastructure`, and the amount is this invocation's spend so
+  far. Every exit after the trial loop has begun (done, an infrastructure error or fixture
+  drift, the run budget, a stop request) then prints one `run summary:` line: the absolute
+  ledger path, the trials completed and errored by this invocation, the trials skipped as
+  already done, the trials not started, the amount spent this invocation, and a `resume:`
+  command. `run_matrix` takes an optional `resume_cmd`; `fathom run` builds it from the bank,
+  `--repeats` and the `--tasks-dir`, `--scenarios-dir`, `--ledger-dir`, `--tasks`,
+  `--include-holdout`, `--max-spawn-usd` and `--max-run-usd` flags it was given, with
+  `--home` first when that was given. A trial stopped by an infrastructure error has no
+  ledger row, so it counts as not started. A dry run, a plan with nothing to buy and the gates
+  before the first trial print neither line, so their output is unchanged.
+
+- **A dependent arm is never bought against an incomplete comparator.** An arm file may set
+  a top-level `comparator = "bare"`. `fathom run` then checks, before the plan and on
+  `--dry-run` too, that the comparator names exactly one loaded arm, not the arm itself, with
+  no cycle, and exits 1 otherwise. It orders each comparator ahead of the arms that depend on
+  it (a set of arms without the key keeps its order and its plan output byte for byte), and
+  prints one `depends:  nudge on bare (a cell runs only after bare completed the same task
+  and repeat)` line per dependent arm after `arms:`. Before each trial of a dependent arm it
+  checks that the comparator has a completed trial for the same task and repeat, in the
+  ledger or from this invocation; when it has none, the run prints a flushed `blocked:
+  nudge/add r0 — comparator bare has no completed trial for this cell; nothing spent` line,
+  starts no spawn, writes no ledger row and goes on. Blocked cells leave the exit code at 0,
+  and the run summary counts them as `blocked N (comparator incomplete)`, a field present
+  only when an arm declares the key. `comparator` is run-ordering metadata: it enters neither
+  `config_hash` nor the preimage, so adding it to an arm that already has trials keeps the
+  arm's history.
+
+- **`fathom run --interleave` orders the plan repeat by repeat.** By default the plan is
+  ordered arm by arm (each arm's tasks, then its repeats), so a run cut short holds every
+  repeat of the first arm and none of the last, and `--limit` cuts whole arms off the end.
+  With `--interleave` the plan runs repeat 0 of every arm and task, then repeat 1, and so on,
+  with the arms in the order they already run in (each comparator ahead of its dependents).
+  `--limit` then counts from the start of that order, so `--limit` of arms x tasks buys
+  repeat 0 of every arm, and a run stopped by `--limit`, `fathom stop` or a spend rail has
+  still compared the arms. The flag changes the order only: the same trials are bought, and
+  the same resume keys are written with and without it. The plan prints `order:    interleaved
+  (repeat, then arm, then task); --limit keeps the first N of this order` and a `first:` line
+  with the first planned cells; without the flag no new line is printed and the order and
+  output are unchanged byte for byte. The resume command at the end of the run summary keeps
+  the flag when it was given. `run_matrix` takes `interleave=False`. The `--limit` and
+  `--tasks` help and the skill, command and authoring-guide text now say what `--limit` cuts
+  with and without the flag. Making repeat-major the default is a separate decision and is not
+  made here.
+
+- **`fathom report <bank> --dataset-version V` renders an older `dataset_version`.** The
+  scorecard showed only the version of the last trial recorded and warned about the rest, so an
+  older task definition's results could not be read back without editing the ledger. With the
+  flag, the report keeps that version's rows and names the versions it left out. A version
+  other than the current one is written to `report/scorecard-<bank>--<V>.md`, with `V` cleaned
+  as a raw-stream tag is (anything but a letter, digit, `-`, `_` or `.` becomes `_`), so it
+  never overwrites the current scorecard. That file opens with a line saying it is a historical
+  view, which version it shows and which is current, and that its calibration and turn caps
+  come from the current `tasks/` tree. A version the ledger holds no trial for raises an error
+  naming the versions it does hold, and the command exits 1 and writes nothing. Without the
+  flag, or with the current version, the output is byte-identical. `report.render` takes the
+  same `dataset_version` argument.
+
+- **`fathom report <bank> --per-trial` prints each trial's economy.** The Economy section sums
+  tokens, turns and USD over an arm, so one costly trial could not be told from the rest.
+  With the flag, the scorecard is written exactly as before and a markdown table follows on
+  stdout, one line per (arm, task, repeat): status, run rows, estimated USD, input and output
+  tokens, turns and wall-clock seconds, each summed over the trial's run rows. A `*` after the
+  USD marks a trial with a run whose `cost_source` is `none`, whose cost the figure leaves
+  out. Trials are keyed by `config_hash`, not by arm name, so two hashes under one name stay
+  apart, labelled with a hash prefix. Voids and the `--dataset-version` scope are those of the
+  scorecard, and the two flags combine. `report.per_trial_rows` and `report.render_per_trial`
+  are the same view as functions.
+
+- **A reference page for the ledger row format: `docs/ledger-contract.md`.** It covers the
+  append-only JSONL rows: every record kind (`trial`, `run`, `grading`, `void`), every named
+  field with its meaning and stability promise, the resume key, the trial-to-run join, how an
+  experiment's cost is summed, which trials enter a pass-rate denominator, the pass rule (via
+  `is_pass`), and how voids apply. A field once named is kept, so a reader accepts rows
+  written before the field existed.
+
+- **`fathom.report.is_pass()`, the pass rule as a public function.** `None` gives `False`;
+  a dict passes when it is non-empty and every value is truthy; any other value passes on
+  its truthiness. The docstring states the rule and that it will not change. It replaces
+  the private `_is_pass()`, which is gone: code that imported it imports `is_pass` instead.
 
 - **Scorecard saturation banner.** When a section has at least two arms with completed trials
   and every one of them passes at least K of the section's N tasks, a line follows the Pass
@@ -61,8 +177,7 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `all calls denied or absent`. Rows with no `config_preimage` are left out, and a note names
   their arms. A cell run more than once sums the streams of every run, since they share a
   name. A ledger with no such arm renders the same scorecard as before. `report.render` takes
-  `streams_dir`, and `fathom.streams` gains `read_stream_file` and `stream_completed`. Closes
-  T10c (FATH-B78).
+  `streams_dir`, and `fathom.streams` gains `read_stream_file` and `stream_completed`.
 
 - **Bank-declared contrasts in the scorecard.** A bank's `bank.toml` may carry an optional
   `[contrasts]` table: `alpha` (default 0.05) and one `[[contrasts.pair]]` per comparison, with
@@ -77,51 +192,26 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   makes a contrast directional. An `alpha` outside (0, 1) or a malformed pair warns instead of
   failing the report. `load_bank` ignores the table and nothing hashes `bank.toml`, so
   declaring contrasts changes no trial or resume key, and a bank without them renders the same
-  scorecard as before. Closes T30a.
+  scorecard as before.
+
+- **Worked recipe: A/B a guardrail across model tiers.**
+  `skills/fathom-eval/reference/recipe-guardrail-tiers.md`, linked from the skill, walks a copy
+  of the example data root through a 2 x 2 design: one scenario file per (arm, model) cell
+  under `scenarios/tiers/` (bare and guardrail, on a smaller and a larger tier), the guardrail
+  injected from a real file, the comparison declared as `bank.toml` contrasts, a dry run read
+  by hash prefix and expected spend, the paid command, blind verification, manipulation checks
+  and the order to read the scorecard. A test, `tests/test_recipe_guardrail_tiers.py`, writes
+  the recipe's files into a temporary copy and runs each `fathom` line of it (the paid run
+  with `--dry-run`), so the recipe cannot drift from the command line.
 
 ### Changed
 
-- **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only
-  when every criterion is true, so two arms could tie on it while one met more criteria than
-  the other, and `[verify] hard_criteria` was read only for banks that ship `scores.toml`.
-  Each section of the scorecard now has a `### Hard-Criteria Fraction` table after
-  Per-Criterion Pass Rates: per arm, criteria true over criteria present, summed over its
-  completed trials, with infra and errored trials left out. A task that declares
-  `[verify] hard_criteria` counts only those; a task that declares none counts every
-  criterion its verifier returned. The last column says which applied: `hard_criteria`,
-  `all criteria (no hard_criteria declared)` or `mixed`. The figure is a point estimate with
-  no interval, because criteria within one trial tend to pass or fail together (ADR-0009).
-  The calibration sections are unchanged. A bank directory that cannot be loaded warns, and
-  its tasks then count every criterion. A historical view (`--dataset-version`) names hard
-  criteria among the task metadata it takes from the current `tasks/` tree.
-- **`report.is_pass()` renamed from `_is_pass()` for public use.** Call sites in `report.py`
-  updated. The pass rule is stable and will not change; a public function grants callers
-  the same guarantee.
+- **The plan's `arms:` line shows each arm's `config_hash` prefix.** `fathom run` (with or
+  without `--dry-run`) prints each arm name followed by the first 12 characters of its
+  `config_hash` in brackets, for example `bare [0123456789ab]`, so the plan shows which arms
+  fork (different prefixes) and which pool (the same prefix). The prefix has the length the
+  report's warnings use. Anything that reads the `arms:` line needs the new form.
 
-### Added (continued)
-
-- **`fathom report <bank> --per-trial` prints each trial's economy.** The Economy section sums
-  tokens, turns and USD over an arm, so one costly trial could not be told from the rest.
-  With the flag, the scorecard is written exactly as before and a markdown table follows on
-  stdout, one line per (arm, task, repeat): status, run rows, estimated USD, input and output
-  tokens, turns and wall-clock seconds, each summed over the trial's run rows. A `*` after the
-  USD marks a trial with a run whose `cost_source` is `none`, whose cost the figure leaves
-  out. Trials are keyed by `config_hash`, not by arm name, so two hashes under one name stay
-  apart, labelled with a hash prefix. Voids and the `--dataset-version` scope are those of the
-  scorecard, and the two flags combine. `report.per_trial_rows` and `report.render_per_trial`
-  are the same view as functions.
-- **`fathom report <bank> --dataset-version V` renders an older `dataset_version`.** The
-  scorecard showed only the version of the last trial recorded and warned about the rest, so an
-  older task definition's results could not be read back without editing the ledger. With the
-  flag, the report keeps that version's rows and names the versions it left out. A version
-  other than the current one is written to `report/scorecard-<bank>--<V>.md`, with `V` cleaned
-  as a raw-stream tag is (anything but a letter, digit, `-`, `_` or `.` becomes `_`), so it
-  never overwrites the current scorecard. That file opens with a line saying it is a historical
-  view, which version it shows and which is current, and that its calibration and turn caps
-  come from the current `tasks/` tree. A version the ledger holds no trial for raises an error
-  naming the versions it does hold, and the command exits 1 and writes nothing. Without the
-  flag, or with the current version, the output is byte-identical. `report.render` takes the
-  same `dataset_version` argument.
 - **Validation refuses a gate command that names a missing path.** A gate command whose script
   does not exist still runs, finds nothing and counts for nothing, so a gated arm ran as an
   ungated one and nothing said so: validation checked only that a task's own gate could start,
@@ -146,119 +236,35 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   no new line. `fathom validate` reads the arms in `scenarios/` or `--scenarios-dir`, and
   `fathom run` the arms it is about to run; `validate_bank` takes `scenarios=()`. A data root
   whose arms carry such a path is refused until the path is fixed; `--skip-bank-validation`
-  still spends anyway. Closes T22b (FATH-B54).
+  still spends anyway.
 
-- **`fathom run --interleave` orders the plan repeat by repeat.** By default the plan is
-  ordered arm by arm (each arm's tasks, then its repeats), so a run cut short holds every
-  repeat of the first arm and none of the last, and `--limit` cuts whole arms off the end.
-  With `--interleave` the plan runs repeat 0 of every arm and task, then repeat 1, and so on,
-  with the arms in the order they already run in (each comparator ahead of its dependents).
-  `--limit` then counts from the start of that order, so `--limit` of arms x tasks buys
-  repeat 0 of every arm, and a run stopped by `--limit`, `fathom stop` or a spend rail has
-  still compared the arms. The flag changes the order only: the same trials are bought, and
-  the same resume keys are written with and without it. The plan prints `order:    interleaved
-  (repeat, then arm, then task); --limit keeps the first N of this order` and a `first:` line
-  with the first planned cells; without the flag no new line is printed and the order and
-  output are unchanged byte for byte. The resume command at the end of the run summary keeps
-  the flag when it was given. `run_matrix` takes `interleave=False`. The `--limit` and
-  `--tasks` help and the skill, command and authoring-guide text now say what `--limit` cuts
-  with and without the flag. Making repeat-major the default is a separate decision and is not
-  made here. Closes T28a.
-
-- **A dependent arm is never bought against an incomplete comparator.** An arm file may set
-  a top-level `comparator = "bare"`. `fathom run` then checks, before the plan and on
-  `--dry-run` too, that the comparator names exactly one loaded arm, not the arm itself, with
-  no cycle, and exits 1 otherwise. It orders each comparator ahead of the arms that depend on
-  it (a set of arms without the key keeps its order and its plan output byte for byte), and
-  prints one `depends:  nudge on bare (a cell runs only after bare completed the same task
-  and repeat)` line per dependent arm after `arms:`. Before each trial of a dependent arm it
-  checks that the comparator has a completed trial for the same task and repeat, in the
-  ledger or from this invocation; when it has none, the run prints a flushed `blocked:
-  nudge/add r0 — comparator bare has no completed trial for this cell; nothing spent` line,
-  starts no spawn, writes no ledger row and goes on. Blocked cells leave the exit code at 0,
-  and the run summary counts them as `blocked N (comparator incomplete)`, a field present
-  only when an arm declares the key. `comparator` is run-ordering metadata: it enters neither
-  `config_hash` nor the preimage, so adding it to an arm that already has trials keeps the
-  arm's history. Closes T20a (FATH-B58).
-
-- **A progress line per trial and a closing summary on `fathom run`.** After each trial,
-  `fathom run` prints `trial done: i/N arm/task r<k> <status> [$spent]`, flushed so it reaches
-  a pipe or a log as it happens; `i` counts the planned trials started, `status` is
-  `completed`, `errored` or `infrastructure`, and the amount is this invocation's spend so
-  far. Every exit after the trial loop has begun (done, an infrastructure error or fixture
-  drift, the run budget, a stop request) then prints one `run summary:` line: the absolute
-  ledger path, the trials completed and errored by this invocation, the trials skipped as
-  already done, the trials not started, the amount spent this invocation, and a `resume:`
-  command. `run_matrix` takes an optional `resume_cmd`; `fathom run` builds it from the bank,
-  `--repeats` and the `--tasks-dir`, `--scenarios-dir`, `--ledger-dir`, `--tasks`,
-  `--include-holdout`, `--max-spawn-usd` and `--max-run-usd` flags it was given, with
-  `--home` first when that was given. A trial stopped by an infrastructure error has no
-  ledger row, so it counts as not started. A dry run, a plan with nothing to buy and the gates
-  before the first trial print neither line, so their output is unchanged. Closes T4a and T4b,
-  the first two parts of FATH-B13; the per-trial report view is not built.
-
-- **A finished plan prices one more repeat.** When every requested trial is already
-  completed, `fathom run` (with or without `--dry-run`) prints two lines after `planned:`
-  and before `nothing to do` or `[dry-run] no spawns`. `one more repeat:` gives the ceiling
-  of one more trial per arm and task, the number of trials, and the `--repeats` value that
-  plans them (the highest completed repeat index among those cells, plus two); it reads
-  `at least one more repeat` when the cells hold different numbers of repeats.
-  `completed in the ledger for these arms:` counts every completed trial for the planned
-  arms and tasks at the current dataset version, across all repeats, the count a scorecard
-  uses. There is no new flag, and a plan that still has trials to buy prints neither line.
-  Closes T32c (FATH-B82).
-
-- **Write time on every ledger row, and the arm name on run rows.** `append_record` now adds
-  `written_at`, the UTC time the row was written (ISO 8601, to the second, the format a void
-  row's `voided_at` already uses), beside `engine_version`, unless the record names one.
-  `RunRecord` gains an additive `scenario` field, which the run loop fills with the arm's
-  name, so a run row says which arm produced it without a join through `config_hash`. Both
-  are provenance only: neither enters `config_hash`, its preimage or the resume key, and
-  neither changes a scorecard. Rows written before them load as they did, with `scenario`
-  empty, and are never rewritten. `written_at` is the one field that differs between two
-  otherwise identical runs, so a byte comparison of appended rows across runs must set it
-  aside.
-
-- **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
-  headless Claude Code sessions whose prompt is a user's goal in plain words, with no fathom
-  command, flag, skill or tool name and no appended system prompt, and checks whether each
-  session can use fathom from what the installed plugin shows it: reading an existing data
-  root (on a clone of it), building and running a measurement from an empty directory, and
-  finding the tool without being told its name. Each session is judged on what it could see
-  (the init event), what it did (its tool calls, by fathom surface, counted only by the lines
-  fathom printed) and what is true afterwards (the workspace, the calls that reached a
-  `claude` stub, the real data root's state with its ignored files, a reconcile the harness
-  runs). By default a subject runs under a configuration directory that holds only the
-  credential, with the installed plugin loaded from where it is installed and the
-  account's claude.ai connectors off, in a workspace whose path says nothing about the test
-  and with no instruction file in any directory above it, with this checkout's virtual
-  environment, the data root's agent instruction files and the parent session's variables
-  withheld; a no-spend scenario's ledgers and a measuring one's spend are watched while it
-  runs. The scenarios are data in `tools/agent_acceptance_scenarios.toml`, and
-  `docs/agent-acceptance.md` covers the cost, the safety rails and how to read the verdict.
-  It is run by hand; the test suite covers it offline and never spawns `claude`.
-
-- **The plan prints the expected spend beside the ceiling.** When the bank's ledger holds
-  completed trials, `fathom run --dry-run` (and the live run's plan) prints one more line
-  after `planned:`, for example `expected: ~$0.80 for 4 planned trials (median per trial from
-  3 completed trials in this ledger: single-session $0.20 n=3); an estimate, not a cap`. A
-  trial's cost is the sum of `cost_usd_est` over its run rows; the median is taken per
-  strategy, and per strategy and model once that model has at least 5 trials. Trials with no
-  run rows, with a run whose `cost_source` is `none` (a missing cost is not free), errored
-  trials and voided trials are left out, and a planned strategy with no history is named
-  rather than priced. The line is information only: there is no gate, the `planned:` line is
-  unchanged, no exit code differs, and an empty ledger prints nothing. The spend rails still
-  act on observed spend.
-
-### Changed
-
-- **The `fathom run --dry-run` plan now shows each arm's config_hash prefix.** The arms line
-  prints each arm name with its config_hash's first 12 characters in brackets (e.g., `bare
-  [aaaaaaaaaa]`), so the plan can distinguish arms that fork from those that pool: a fork shows
-  a different prefix, a pool shows the same one. This prefix matches what the `report` command
-  uses in its warnings.
+- **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only
+  when every criterion is true, so two arms could tie on it while one met more criteria than
+  the other, and `[verify] hard_criteria` was read only for banks that ship `scores.toml`.
+  Each section of the scorecard now has a `### Hard-Criteria Fraction` table after
+  Per-Criterion Pass Rates: per arm, criteria true over criteria present, summed over its
+  completed trials, with infra and errored trials left out. A task that declares
+  `[verify] hard_criteria` counts only those; a task that declares none counts every
+  criterion its verifier returned. The last column says which applied: `hard_criteria`,
+  `all criteria (no hard_criteria declared)` or `mixed`. The figure is a point estimate with
+  no interval, because criteria within one trial tend to pass or fail together (ADR-0009).
+  The calibration sections are unchanged; anything that compares scorecards line by line
+  sees the new table in every section. A bank directory that cannot be loaded warns, and its
+  tasks then count every criterion. A historical view (`--dataset-version`) names hard
+  criteria among the task metadata it takes from the current `tasks/` tree.
 
 ### Fixed
+
+- **The MCP server's tool results no longer carry a warning about its own environment.** The
+  server runs in the temporary environment `uv run --with fastmcp` makes and passed its
+  `VIRTUAL_ENV` to the engine it starts, so every `plan`, `report` and `smoke` result's
+  `stderr` said that `VIRTUAL_ENV` did not match the plugin's project environment and would be
+  ignored. The engine now starts without it.
+
+- **The authoring guide says where the naive-fix check is.** It called
+  `tools/check_naive_refs.py` part of the engine repository and asked for an engine clone, so
+  an agent working from the installed plugin concluded it could not run the check. The
+  plugin's directory is a copy of the repository and ships the tool; the guide now says so.
 
 - **A relative path option that misses now names the data root's path.** `--tasks-dir`,
   `--scenarios-dir` and `--ledger-dir` are relative to where the command was started. Given
@@ -269,15 +275,6 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `(did you mean <path>?)`. Absolute paths, paths that exist, paths missing in both places and
   omitted options behave as before.
 
-- **The MCP server's tool results no longer carry a warning about its own environment.** The
-  server runs in the temporary environment `uv run --with fastmcp` makes and passed its
-  `VIRTUAL_ENV` to the engine it starts, so every `plan`, `report` and `smoke` result's
-  `stderr` said that `VIRTUAL_ENV` did not match the plugin's project environment and would be
-  ignored. The engine now starts without it.
-- **The authoring guide says where the naive-fix check is.** It called
-  `tools/check_naive_refs.py` part of the engine repository and asked for an engine clone, so
-  an agent working from the installed plugin concluded it could not run the check. The
-  plugin's directory is a copy of the repository and ships the tool; the guide now says so.
 - **The MCP server reports fathom's version, and starts without a banner.** Its handshake
   carried the version of the framework serving it, so a client read the framework's release
   as fathom's, and the framework printed its start-up banner to stderr on every launch. The
