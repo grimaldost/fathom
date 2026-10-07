@@ -180,7 +180,9 @@ flags through `report`, or warn on the asymmetry.
 ## Ledger and schema
 
 **FATH-B18 — The schema has no notion of a factor.** *(S)*
-Task tags shipped in 0.8.0. Remaining: a tag that carries a per-task inject override.
+Task tags (`[tags]` in `task.toml`) and per-tag grouping in the scorecard are built
+(CHANGELOG, Unreleased). Remaining: a tag that carries a per-task inject override, so a per-task
+hint no longer needs one bank per value.
 
 **FATH-B47 — Every trial gets exactly one user prompt.** *(M)*
 The adapter runs one headless session per trial and removes its config directory afterwards, so a
@@ -429,6 +431,7 @@ is the whole record.
 | FATH-B65 | The silent-failure items in `docs/method/review-checklist.md`. | 0.4.0 |
 | FATH-B66 | `docs/method/measured-terms.md`. | 0.4.0 |
 | FATH-B69 | New ledger rows record `engine_version`, outside `config_hash` and the resume key. | 0.8.0 |
-| FATH-B07 | Ledger row contract page and _is_pass decision. | Unreleased |
-| FATH-B08 | Hard-criteria fraction in the core report for every bank; saturation banner. | Unreleased |
-| FATH-B54 | Gate-command path validation at validate time. | Unreleased |
+| FATH-B54 | `fathom validate` and the pre-flight in `fathom run` refuse a gate command that names a missing path (exit 12). | Unreleased |
+| FATH-B58 | An arm's `comparator` key: a dependent arm's cell runs only after its comparator completed the same task and repeat. | Unreleased |
+| FATH-B80 | The plan's `expected:` line, the median cost per trial from the bank's own completed trials. | Unreleased |
+| FATH-B82 | A finished plan prices one more repeat and counts the completed trials for its arms. | Unreleased |
