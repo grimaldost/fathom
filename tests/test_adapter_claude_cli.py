@@ -634,7 +634,11 @@ class TestParseComplete(AdapterTestBase):
 
 
 class TestParseTruncated(AdapterTestBase):
-    def _record(self) -> RunRecord:
+    """A killed spawn never reaches its result event, so the stream carries tokens but
+    no reported cost. That gap is deliberate here: the run is recorded as cost_source=none
+    and announced with a warning, which these tests capture instead of leaking."""
+
+    def _run(self) -> tuple[RunRecord, list[warnings.WarningMessage]]:
         def responder(i):
             raise subprocess.TimeoutExpired(
                 cmd=["claude"], timeout=123, output=_fixture("stream_truncated.jsonl")
@@ -642,7 +646,19 @@ class TestParseTruncated(AdapterTestBase):
 
         spawn = RecordingSpawn(responder)
         runner = self.make_runner(spawn)
-        return runner.execute("p", self.workspace, _scenario(trial_timeout_s=123))
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            rec = runner.execute("p", self.workspace, _scenario(trial_timeout_s=123))
+        return rec, caught
+
+    def _record(self) -> RunRecord:
+        return self._run()[0]
+
+    def test_the_missing_cost_of_a_killed_spawn_is_announced(self):
+        rec, caught = self._run()
+        self.assertEqual(rec.cost_source, COST_SOURCE_NONE)
+        gaps = [w for w in caught if "no cost reported" in str(w.message)]
+        self.assertEqual(len(gaps), 1, "the gap in a truncated stream must be announced once")
 
     def test_status_timeout(self):
         self.assertEqual(self._record().status, ExitStatus.TIMEOUT)
@@ -678,6 +694,74 @@ class TestParseStreamUnit(unittest.TestCase):
         parsed = parse_stream([])
         self.assertEqual(parsed.num_turns, 0)
         self.assertFalse(parsed.saw_result)
+
+
+# ---------------------------------------------------------------------------
+# models_seen — every model the stream names, not only the init event's
+# ---------------------------------------------------------------------------
+
+OPUS = "claude-opus-4-8-20260115"
+HAIKU = "claude-haiku-4-5-20251001"
+
+
+class TestModelsSeen(AdapterTestBase):
+    """A spawn can be served by more than one model: a subagent runs on its own, and
+    ``model_id`` keeps only the one the init event names. ``models_seen`` lists each
+    distinct ``model`` value the stream carried, in the order first seen."""
+
+    def _record(self, fixture: str) -> RunRecord:
+        spawn = RecordingSpawn(lambda i: _cp(0, _fixture(fixture)))
+        return self.make_runner(spawn).execute("p", self.workspace, _scenario())
+
+    def test_a_stream_with_two_models_records_both(self):
+        rec = self._record("stream_two_models.jsonl")
+        self.assertEqual(rec.models_seen, [OPUS, HAIKU])
+        # The strong pin is unchanged: still the model the init event names.
+        self.assertEqual(rec.model_id, OPUS)
+
+    def test_a_single_model_stream_records_it_once(self):
+        self.assertEqual(self._record("stream_complete.jsonl").models_seen, [OPUS])
+
+    def test_a_timed_out_stream_keeps_the_models_seen_before_the_kill(self):
+        def responder(i):
+            raise subprocess.TimeoutExpired(
+                cmd=["claude"], timeout=5, output=_fixture("stream_truncated.jsonl")
+            )
+
+        runner = self.make_runner(RecordingSpawn(responder))
+        with warnings.catch_warnings():
+            # The partial stream reports no cost; that warning has its own tests.
+            warnings.simplefilter("ignore")
+            rec = runner.execute("p", self.workspace, _scenario(trial_timeout_s=5))
+        self.assertIs(rec.status, ExitStatus.TIMEOUT)
+        self.assertEqual(rec.models_seen, [OPUS])
+
+
+class TestModelsSeenUnit(unittest.TestCase):
+    def test_each_model_is_listed_once_in_first_seen_order(self):
+        lines = [
+            json.dumps({"type": "system", "subtype": "init", "model": OPUS}),
+            json.dumps({"type": "assistant", "message": {"model": HAIKU}}),
+            json.dumps({"type": "assistant", "message": {"model": OPUS}}),
+            json.dumps({"type": "assistant", "message": {"model": HAIKU}}),
+            json.dumps({"type": "result", "num_turns": 3}),
+        ]
+        self.assertEqual(parse_stream(lines).models_seen, [OPUS, HAIKU])
+
+    def test_a_stream_naming_no_model_records_none(self):
+        self.assertEqual(parse_stream(['{"type": "result", "num_turns": 1}']).models_seen, [])
+
+    def test_empty_and_non_string_model_values_are_skipped(self):
+        lines = [
+            json.dumps({"type": "system", "subtype": "init", "model": ""}),
+            json.dumps({"type": "assistant", "message": {"model": None}}),
+            json.dumps({"type": "assistant", "message": {"model": 5}}),
+        ]
+        self.assertEqual(parse_stream(lines).models_seen, [])
+
+    def test_the_single_result_object_records_its_model(self):
+        parsed = claude_cli.parse_result_json(json.dumps({"result": "x", "model": OPUS}))
+        self.assertEqual(parsed.models_seen, [OPUS])
 
 
 # ---------------------------------------------------------------------------
@@ -870,6 +954,7 @@ class TestInfrastructureClassification(AdapterTestBase):
                         "is_error": False,
                         "num_turns": 5,
                         "duration_ms": 1000,
+                        "total_cost_usd": 0.01,
                         "result": "dataset_a needs authentication (auth provider not "
                         "configured); unauthorized for dataset_b. result.json written.",
                         "usage": {"input_tokens": 100, "output_tokens": 50},
@@ -911,6 +996,7 @@ class TestInfrastructureClassification(AdapterTestBase):
                         "is_error": False,
                         "num_turns": 3,
                         "duration_ms": 900,
+                        "total_cost_usd": 0.01,
                         "result": "Added handler raising QuotaError('quota exceeded'); "
                         "CLI prints 'Upgrade to Pro' when the limit reached. Done.",
                         "usage": {"input_tokens": 100, "output_tokens": 40},
@@ -1133,7 +1219,7 @@ def test_tee_stream_inert_without_env(tmp_path, monkeypatch):
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     monkeypatch.delenv("FATHOM_STREAM_DIR", raising=False)
-    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}', 1, 1.0)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -1142,12 +1228,48 @@ def test_tee_stream_writes_tagged_file(tmp_path, monkeypatch):
 
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
     monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm/tier--task--r0")
-    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2)
+    ClaudeCliRunner._tee_stream('{"type": "assistant"}\n{"type": "result"}', 2, 1.0)
     files = list(tmp_path.iterdir())
     assert len(files) == 1
     name = files[0].name
     assert name.startswith("bank--arm_tier--task--r0--a2--"), name  # '/' sanitized
     assert files[0].read_text(encoding="utf-8").count('"type"') == 2
+
+
+def test_tee_stream_names_the_file_by_the_start_time(tmp_path, monkeypatch):
+    from fathom.adapters.claude_cli import ClaudeCliRunner
+
+    monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
+    monkeypatch.setenv("FATHOM_STREAM_TAG", "bank--arm--task--r0")
+    monkeypatch.setattr("fathom.adapters.claude_cli.time.time", lambda: 9999.0)  # write time
+    ClaudeCliRunner._tee_stream("data", 1, 1700000000.25)
+    assert [f.name for f in tmp_path.iterdir()] == ["bank--arm--task--r0--a1--1700000000250.ndjson"]
+
+
+class TestStreamFileNames(AdapterTestBase):
+    def test_each_attempt_is_named_by_when_its_spawn_started(self):
+        # The wall clock runs on while a spawn does; the name must carry the reading taken
+        # before the spawn, so a retry's file is not stamped with its predecessor's end.
+        now = [1000.0]
+
+        def responder(i):
+            now[0] += 5.0  # the spawn takes five seconds
+            if i == 0:
+                return _cp(1, '{"type": "system"}', "transient 503 error")
+            return _cp(0, _fixture("stream_complete.jsonl"))
+
+        spawn = RecordingSpawn(responder)
+        runner = self.make_runner(spawn, max_attempts=3, wall_clock=lambda: now[0])
+        streams = self.workspace / "streams"
+        with mock.patch.dict(
+            os.environ,
+            {"FATHOM_STREAM_DIR": str(streams), "FATHOM_STREAM_TAG": "b--a--t--r0"},
+        ):
+            runner.execute("p", self.workspace, _scenario())
+        self.assertEqual(
+            sorted(f.name for f in streams.iterdir()),
+            ["b--a--t--r0--a1--1000000.ndjson", "b--a--t--r0--a2--1005000.ndjson"],
+        )
 
 
 def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
@@ -1156,12 +1278,12 @@ def test_tee_stream_failure_is_swallowed(tmp_path, monkeypatch):
     blocker = tmp_path / "afile"
     blocker.write_text("x", encoding="utf-8")
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(blocker / "sub"))  # dir under a file
-    ClaudeCliRunner._tee_stream("data", 1)  # must not raise
+    ClaudeCliRunner._tee_stream("data", 1, 1.0)  # must not raise
 
 
 def test_tee_stream_skips_empty_stdout(tmp_path, monkeypatch):
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     monkeypatch.setenv("FATHOM_STREAM_DIR", str(tmp_path))
-    ClaudeCliRunner._tee_stream("", 1)
+    ClaudeCliRunner._tee_stream("", 1, 1.0)
     assert list(tmp_path.iterdir()) == []

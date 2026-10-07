@@ -55,4 +55,5 @@ agreement, else tie. Trajectory, telemetry, and economy data join the comparison
 > and the gate's output with the task directory and the data root masked, and whatever a
 > gate command creates in the workspace is removed when it exits. The routes that stay open,
 > and what a bank author does about them, are in the authoring guide
-> (`skills/fathom-eval/reference/authoring.md`, sections 7 and 10).
+> (`skills/fathom-eval/reference/authoring.md`, section 7, and
+> `skills/fathom-eval/reference/arming.md`, section 10).

@@ -44,8 +44,9 @@ recurs across rounds, add a line here so it is caught next time. That is how
       against the engine checkout or the package's install location; an explicit
       path option keeps its usual meaning (relative to the working directory).
 - [ ] **Docs** — a new CLI flag, scenario/bank/task TOML field, env var, or MCP
-      argument is documented in `skills/fathom-eval/reference/authoring.md`
-      (schemas) or the SKILL / `commands/*.md` (flags) in the SAME change.
+      argument is documented in the authoring guide under `skills/fathom-eval/reference/`
+      (`authoring.md` for bank and task fields, `arming.md` for arm fields) or the
+      SKILL / `commands/*.md` (flags) in the SAME change.
 - [ ] **No particulars** — engine code, comments, docs and examples carry no
       campaign's bank or arm names, results, trial counts, spend or dates, and no
       personal paths or private repository names; examples use neutral names.

@@ -6,6 +6,72 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Every model a spawn's output names, on its run row.** `RunRecord` gains an additive
+  `models_seen` field: each distinct `model` value in the spawn's output, in the order first
+  seen, taken from the init event, each assistant message (a subagent's included) and the
+  result. `model_id` still holds the init event's model, so a run whose subagent ran on
+  another model now records both instead of one. It is provenance only: it does not enter
+  `config_hash`, its preimage or the resume key, and it changes no scorecard. Rows written
+  before it load with an empty list and are never rewritten; series-strategy runs, which
+  are built from the engine's spawn events rather than a CLI stream, carry an empty list.
+  Run rows written from now on carry the key, so a reader that checks a row against a fixed
+  set of keys sees one more.
+
+- **The authoring guide covers a mounted plugin's MCP servers and an answer key beside the
+  verifier.** `arming.md`, section 10, says where a plugin declares its MCP servers (under
+  `mcpServers` in `.claude-plugin/plugin.json`, in a `.mcp.json` at the plugin's root, or in
+  both, with the manifest's entry used when both name a server), that the init event spells a
+  server `plugin:<plugin>:<server>` while its tools are named
+  `mcp__plugin_<plugin>_<server>__<tool>`, so an allowlist entry `mcp__<server>` permits none
+  of them, and that a server entry Claude Code drops leaves nothing the arming check can see,
+  so `claude plugin validate` is the check for it. A `.mcp.json` in the task's fixture is the
+  workspace's own and belongs to the task. `bank-design.md`, section 9, shows a `truth.json`
+  kept beside `verify.py` for set-equality and byte-identity criteria, outside the workspace
+  because only `fixtures/` is staged, and its checklist asks that numeric oracle values be
+  computed again against the final instruction text and that criteria score structured
+  fields, not free-text heuristics. `tests/test_answer_key.py` holds the engine to the two
+  facts the answer key relies on: staging copies only `fixtures/`, and the verifier finds the
+  key through its own path.
+
+### Changed
+
+- **The authoring guide is three files, each with a line budget.** The guide, one file of
+  1280 lines, now starts at `skills/fathom-eval/reference/authoring.md` (the data root, the
+  bank and its tasks, fixtures, the verifier, `fathom validate`, running an analysis and
+  reading the scorecard) and continues in `arming.md` (arms, their tools and treatments,
+  `config_hash` and the resume key, series arms) and `bank-design.md` (making a bank
+  discriminate, the checklist before the first paid run). Sections were moved whole and keep
+  their numbers, so a section number names the same text it did before; a citation of a
+  section outside `authoring.md` now names its file (`arming.md`, section 10), in the guide,
+  the skill, the READMEs, `CLAUDE.md`, ADR-0003, the backlog and the `validate.py`
+  docstrings. Each file states a line budget in its header (800, 450 and 175 lines), so an
+  addition past it has to displace something, and a test holds each file to its budget and
+  checks that every cited section is in the file the citation names. The skill links all
+  three files. A citation kept outside this repository, in a data root's notes for example,
+  that names `authoring.md` and a section that moved must now name the section's new file;
+  the number is unchanged.
+
+### Fixed
+
+- **No crash on a character outside the locale's code page.** On Windows, Python encodes
+  output sent to a pipe or a file in the locale's code page (cp1252, for example), so a path,
+  task name or reply holding a character outside it ended `fathom` or `fathom smoke` with a
+  UnicodeEncodeError. Both now write stdout and stderr as UTF-8 on every platform, replacing
+  what cannot be encoded. A program that reads their output through a pipe on Windows and
+  decodes it in the locale's code page now misreads each non-ASCII character and must decode
+  it as UTF-8. The plugin's MCP server did that; it now reads the engine's output as UTF-8,
+  and a test compares what it reads with what the engine wrote.
+
+- **A kept stream is named by when its spawn started.** The file `fathom run` keeps
+  for a trial's agent stream (`<tag>--a<attempt>--<ms>.ndjson`) carried the time the stream
+  was written, which is the end of the spawn, so the files of a trial's retries and of
+  trials that overlapped sorted by their ends. The `<ms>` part is now the wall-clock time
+  just before the spawn began. The name keeps its shape, so `fathom report` finds the
+  files as before; the adapter takes an optional `wall_clock` for tests. A tool of your own
+  that reads `<ms>` as the time a stream ended now reads the time its spawn started.
+
 ## [0.9.0] - 2026-10-07
 
 A minor release, pre-1.0: it adds ledger fields, scorecard sections, a fresh-agent acceptance

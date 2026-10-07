@@ -7,7 +7,8 @@ Each item has a stable id (`FATH-Bnn`), a one-line claim, the cause and the prop
 an effort estimate: **S** is one focused change, **M** a small series with tests, **L** a design
 decision plus a multi-PR series. Items are grouped by area and ordered by leverage within each
 group. Ids are never reused, so the numbering has gaps. A closed id that code or another document
-still cites is listed under "Closed ids" at the end, so the reference resolves.
+still cites is listed under "Closed ids" at the end, so the reference resolves. A row that needs
+confirmation names where to look first to validate it.
 
 ## Measurement correctness
 
@@ -117,12 +118,10 @@ N` that stops cleanly on a stated boundary and prints the resume command; and ei
 config once per run or write the refreshed credential back, so spawns stop racing each other's
 refresh.
 
-**FATH-B12 — Two smoke-gate gaps.** *(S)*
-Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
-code page can crash a print on a Windows console; `smoke.py` and `cli.py` should reconfigure
-stdout with `errors="replace"` at the entry point, with a regression test at each text boundary
-rather than one call site. And `smoke` does not accept `--model` / `--effort`, which blocks a
-cheap acceptance probe before a paid run at a non-default model or effort.
+**FATH-B12 — `smoke` takes no model or effort.** *(S)*
+`smoke` does not accept `--model` / `--effort`, which blocks a cheap acceptance probe before a
+paid run at a non-default model or effort. The row's other gap, output not forced to UTF-8, is
+closed: `fathom` and `fathom smoke` write stdout and stderr as UTF-8 at their entry points.
 
 **FATH-B64 — `smoke` checks isolation and blindness but most of the operational surface not at
 all.** *(M)*
@@ -192,20 +191,16 @@ it.
 ## Documentation and surface
 
 **FATH-B10 — Authoring knowledge that is not written down has to be rediscovered by each
-author.** *(M)*
-`skills/fathom-eval/reference/authoring.md` holds the schemas and a "What no check covers"
-section, but several rules an author needs are not written anywhere. Among them: MCP tools served
-by a mounted plugin are named `mcp__plugin_<plugin>_<server>__<tool>` while the init event names
-the server `plugin:<plugin>:<server>`, so copying the init-event name into an allow-list fails;
-plugin hooks do not fire in headless `-p` sessions, while user-scope settings hooks
-(`[settings] inject`) do; a verifier for a task with third-party dependencies can shell out to an
-interpreter that has them, and the arm can be given the same interpreter through `[env] PATH`; a
-`truth.json` beside `verify.py` is unreachable by the arm, because only `fixtures/` is staged;
-discrimination comes more from the scale of the task material and the turn budget than from task
-cleverness; `--limit N` is scenario-major, so a small pilot spends everything on the first arm.
-Change: split the reference into `authoring.md` (schemas), `arming.md` (which arming axis fires
-where and how each is verified) and `bank-design.md` (the checklist and the fixture patterns),
-each with a line budget in its header, so an addition past the budget must displace something.
+author.** *(S)*
+The authoring guide is split into `skills/fathom-eval/reference/authoring.md` (the data root,
+the bank and task schemas, the verifier, running and reading the scorecard), `arming.md` (arms,
+their tools and treatments, `config_hash`, series arms) and `bank-design.md` (making a bank
+discriminate, the checklist), each with a line budget in its header, so an addition past the
+budget must displace something. Plugin hooks in headless `-p`, discrimination by scale and turn
+budget, the order `--limit N` cuts in, how a mounted plugin's MCP tools are named, and an answer
+key kept beside the verifier are written there. Still not written anywhere: the arm can be
+given the interpreter a verifier shells out to through `[env] PATH`. Change: write it into
+`arming.md`, within that file's budget.
 
 **FATH-B48 — The skill's trigger description overlaps with skill-evaluation tools that do a
 different job.** *(S)*
@@ -232,7 +227,7 @@ that its Proposed status is the build gate; ADR-0009 refers to a slicer gated be
 proposal left open indefinitely reads as a live plan. Change: decide it. Either accept it with
 the slicer it gates (a factor slicer in the calibration views), or withdraw it, with the reason
 recorded. Then update the references in ADR-0009 and in the authoring guide's calibration
-section.
+section (`bank-design.md`, section 9).
 
 ## Retire or fold
 
@@ -284,8 +279,8 @@ notes in `series-toml-skeleton.md` on what fathom pins and strips.
 ## Later
 
 Deferred work with a known shape. Each narrows a route that the authoring guide describes
-and leaves to the bank author until it lands (sections 7, 10 and 12), so none of them blocks a
-correct run.
+and leaves to the bank author until it lands (`authoring.md` section 7, `arming.md` sections 10
+and 12), so none of them blocks a correct run.
 
 **FATH-B70 — A gate that times out is stopped only as far as its process tree reaches.** *(M)*
 `run_shell_bounded` stops the tree it can find: on Windows, `taskkill /T` from the shell, which
@@ -326,14 +321,14 @@ after them, so a test runner's cache or compiled bytecode can reach the result v
 a series trial apart from the others. Change: have the engine run its checks against a
 snapshot of the workspace (a copy, or a worktree of the commit under test) that it discards
 afterwards, as a clause of the series-engine contract
-(`docs/specs/2026-07-03-series-engine-contract.md`). Until then the authoring guide's
-section 12 asks for checks that write nothing into the workspace.
+(`docs/specs/2026-07-03-series-engine-contract.md`). Until then the authoring guide
+(`arming.md`, section 12) asks for checks that write nothing into the workspace.
 
 **FATH-B74 — A series arm whose engine checkout lies inside the data root names the data root.** *(S)*
 The engine command carries `[tools].repo` as an absolute path, and running the engine from a
 virtual environment in that checkout puts the data root on `VIRTUAL_ENV` and `PATH`. Change:
 refuse, or warn, when a series arm's repo resolves inside the data root, and say in the
-authoring guide that the engine checkout lives outside it.
+authoring guide (`arming.md`, section 12) that the engine checkout lives outside it.
 
 **FATH-B75 — fathom's own process holds the arm name during a trial.** *(S)*
 `FATHOM_STREAM_TAG` and `FATHOM_STREAM_DIR` are set in fathom's environment for the whole

@@ -81,7 +81,7 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
     a gate ran in.
   - *New child processes.* Any new child process that runs code fathom does not control
     starts from `env_for_agent_code`, or at least `without_harness_vars`; the authoring
-    guide's section 10 says what is left to the bank author.
+    guide (`arming.md`, section 10) says what is left to the bank author.
   - *Routes that stay open* are documented in the guide, not closed: fathom's own process
     (its working directory is the data root while a command runs, and `--home` puts the path
     on its command line); agent code a gate runs, which sees the expanded `${task_dir}` and
@@ -142,13 +142,21 @@ Design detail: `docs/specs/2026-06-10-fathom-v1-design.md` (architecture) and
 
 ## The authoring guide
 
-[`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) is the
-one guide for building banks and arms, written so an agent with only a fresh copy of this
-repository can build a working bank. It ships with the plugin, and `README.md` links to it. It
-describes as-built behaviour of `taskbank.py`, `scenario.py`, `grading/verifier.py`,
-`validate.py`, `cli.py` and `tools/check_naive_refs.py`. A change to any of those that alters a
-field, a default, a flag, an exit code or what enters `config_hash` updates the guide in the
-same change. `examples/data-root/` is its worked example; keep the two consistent.
+[`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) is
+where the one guide for building banks and arms starts, written so an agent with only a fresh
+copy of this repository can build a working bank. It continues in `arming.md` (arms,
+`config_hash`, series arms) and `bank-design.md` (making a bank discriminate, the checklist)
+beside it. It ships with the plugin, and `README.md` links to it. It describes as-built
+behaviour of `taskbank.py`, `scenario.py`, `grading/verifier.py`, `validate.py`, `cli.py` and
+`tools/check_naive_refs.py`. A change to any of those that alters a field, a default, a flag,
+an exit code or what enters `config_hash` updates the guide in the same change.
+`examples/data-root/` is its worked example; keep the two consistent.
+
+Each of the three files states a line budget in its header: an addition that would pass it
+displaces something first. Sections are numbered across the three files, and a citation of a
+section outside `authoring.md` names its file (`arming.md`, section 10).
+`tests/test_authoring_guide.py` holds each file to its budget and checks every such citation
+in the repository.
 
 ## The data-root contract
 

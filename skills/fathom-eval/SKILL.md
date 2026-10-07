@@ -27,9 +27,19 @@ result **blind to which arm produced it**, and joins quality with cost (tokens,
 turns, wall-clock, USD) into scorecards that accumulate over time.
 
 To build a bank — data root, `bank.toml`, `task.toml`, fixtures, the verifier,
-reference solutions, arms, `config_hash` — follow
-[`reference/authoring.md`](reference/authoring.md). It is the complete guide. This
-file covers running what is built.
+reference solutions, arms, `config_hash` — follow the authoring guide. It is the
+complete guide, in three files:
+
+- [`reference/authoring.md`](reference/authoring.md), where it starts: the data root,
+  the bank and its tasks, fixtures, the verifier, `fathom validate`, running an
+  analysis and reading the scorecard;
+- [`reference/arming.md`](reference/arming.md): arms, their tools and treatments,
+  `config_hash` and the resume key, series arms;
+- [`reference/bank-design.md`](reference/bank-design.md): making a bank discriminate,
+  and the checklist before the first paid run.
+
+Its sections are numbered across the three files. This file covers running what is
+built.
 
 For a worked example of one common design, a guardrail injected into the system prompt and
 compared across two model tiers, with every command runnable against the example data root
@@ -237,9 +247,10 @@ so a mounted plugin must work without a `.venv` or `.git` of its own; the arming
 spawns from copies too, so it shows a plugin that does not before a run. A fix spawn is
 shown the gate commands as written, placeholders not filled in, and their output with
 the task directory's and the data root's paths masked. Whatever a gate command
-creates in the workspace is removed when it exits. The authoring guide (section 10,
-"Tools and default-deny") says what is left to the bank author, and section 7 asks
-verifiers to run the agent's code in a child process.
+creates in the workspace is removed when it exits. The authoring guide
+([`reference/arming.md`](reference/arming.md), section 10, "Tools and default-deny") says
+what is left to the bank author, and `reference/authoring.md`, section 7, asks verifiers
+to run the agent's code in a child process.
 
 `fathom run` exits `0` on success, `10` on an infrastructure error (auth or usage
 limit, fixture drift, lock timeout — the matrix stops cleanly and the ledger stays the
@@ -260,7 +271,7 @@ refusal before any check ran.
 ## Strategy catalog
 
 A scenario's `strategy` is required; an unknown name is rejected before anything
-spawns. Details in the authoring guide, section 10.
+spawns. Details in the authoring guide, `reference/arming.md` section 10.
 
 | strategy | what it does | spawns per trial |
 |---|---|---|

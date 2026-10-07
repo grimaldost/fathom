@@ -699,6 +699,29 @@ def test_a_run_record_built_without_scenario_defaults_to_empty():
     assert make_run().scenario == ""
 
 
+def test_a_run_rows_models_seen_round_trips():
+    models = ["claude-opus-4-8-20260115", "claude-haiku-4-5-20251001"]
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        append_record("test-bank", make_run(models_seen=models), ledger_dir=d)
+        assert _read_rows(d)[0]["models_seen"] == models
+        (record,) = iter_records("test-bank", ledger_dir=d)
+        assert isinstance(record, RunRecord) and record.models_seen == models
+
+
+def test_a_legacy_run_line_without_models_seen_loads_with_an_empty_list():
+    """Additive (ADR-0002): a run row from before the field loads unchanged, as []."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = pathlib.Path(tmp)
+        legacy = dataclasses.asdict(make_run(model_id="claude-opus-4-8-20260115"))
+        legacy.pop("models_seen", None)
+        (d / "test-bank.jsonl").write_text(json.dumps(legacy) + "\n", encoding="utf-8")
+        (record,) = iter_records("test-bank", ledger_dir=d)
+        assert isinstance(record, RunRecord)
+        assert record.models_seen == []
+        assert record.model_id == "claude-opus-4-8-20260115"
+
+
 def test_a_run_rows_scenario_round_trips():
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)

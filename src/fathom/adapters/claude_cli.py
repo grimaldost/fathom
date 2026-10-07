@@ -487,9 +487,15 @@ class _Parsed:
     is_error: bool = False
     usage: dict[str, Any] = dataclasses.field(default_factory=dict)
     model_id: str = ""
+    models_seen: list[str] = dataclasses.field(default_factory=list)
     cli_version: str = ""
     duration_ms: float = 0.0
     saw_result: bool = False
+
+    def see_model(self, value: Any) -> None:
+        """Add a ``model`` value to ``models_seen`` once; an empty or non-string one is skipped."""
+        if isinstance(value, str) and value and value not in self.models_seen:
+            self.models_seen.append(value)
 
 
 def parse_stream(lines: Iterable[str]) -> _Parsed:
@@ -513,6 +519,12 @@ def parse_stream(lines: Iterable[str]) -> _Parsed:
             continue  # a stream cut off mid-line — tolerate it
         if not isinstance(obj, dict):
             continue
+        # Every model the stream names, whichever event names it: the init event, each
+        # assistant message (a subagent's included) and the result.
+        p.see_model(obj.get("model"))
+        msg = obj.get("message")
+        if isinstance(msg, dict):
+            p.see_model(msg.get("model"))
         kind = obj.get("type")
         if kind == "system" and obj.get("subtype") == "init":
             p.model_id = obj.get("model") or p.model_id
@@ -534,7 +546,6 @@ def parse_stream(lines: Iterable[str]) -> _Parsed:
             if isinstance(model, str) and model and not p.model_id:
                 p.model_id = model
         elif kind == "assistant":
-            msg = obj.get("message")
             if isinstance(msg, dict) and isinstance(msg.get("usage"), dict):
                 last_assistant_usage = msg["usage"]
                 assistant_turns += 1
@@ -566,6 +577,7 @@ def parse_result_json(stdout: str) -> _Parsed:
     model = data.get("model")
     if isinstance(model, str):
         p.model_id = model
+    p.see_model(model)
     return p
 
 
@@ -981,6 +993,7 @@ class ClaudeCliRunner:
         spawn: Spawn = _subprocess_spawn,
         sleep: Callable[[float], None] = time.sleep,
         clock: Callable[[], float] = time.monotonic,
+        wall_clock: Callable[[], float] = time.time,
     ) -> None:
         self.allowed_tools = tuple(allowed_tools)
         self.disallowed_tools = tuple(disallowed_tools)
@@ -998,6 +1011,7 @@ class ClaudeCliRunner:
         self._spawn = spawn
         self._sleep = sleep
         self._clock = clock
+        self._wall_clock = wall_clock
 
     # -- Runner protocol ----------------------------------------------------
 
@@ -1092,6 +1106,7 @@ class ClaudeCliRunner:
         start = self._clock()
         last: tuple[subprocess.CompletedProcess, _Parsed] | None = None
         for attempt in range(1, self.max_attempts + 1):
+            spawn_started_at = self._wall_clock()
             try:
                 proc = self._spawn(cmd, input=prompt, timeout=timeout, env=env, cwd=cwd)
             except subprocess.TimeoutExpired as exc:
@@ -1102,7 +1117,7 @@ class ClaudeCliRunner:
                     result_text="claude CLI not found on PATH",
                     cli_version=self.cli_version,
                 )
-            self._tee_stream(proc.stdout or "", attempt)
+            self._tee_stream(proc.stdout or "", attempt, spawn_started_at)
             parsed = self._parse(proc.stdout or "")
             success = proc.returncode == 0 and not parsed.is_error
             # Infrastructure (never scored, never retried). A usage-limit/quota signature is
@@ -1132,14 +1147,17 @@ class ClaudeCliRunner:
         return parse_stream(stdout.splitlines()) if self.stream else parse_result_json(stdout)
 
     @staticmethod
-    def _tee_stream(stdout: str, attempt: int) -> None:
+    def _tee_stream(stdout: str, attempt: int, started_at: float) -> None:
         """Persist the raw spawn stdout when FATHOM_STREAM_DIR is set (opt-in).
 
         The parsed RunRecord keeps only economy/result fields; post-hoc analyses
         (tool-invocation counts, skill-activation measurement) need the raw
         stream events, which are otherwise discarded. FATHOM_STREAM_TAG (set by
-        the run loop per trial) names the file. Both are read here, in fathom's own
-        process; the spawn's env never carries them (:func:`make_spawn_env`).
+        the run loop per trial) names the file, with the attempt and the wall-clock time
+        (seconds since the epoch, *started_at*) at which the spawn began, so files sort by
+        when each spawn started, not by when its stream was written. Both variables are
+        read here, in fathom's own process; the spawn's env never carries them
+        (:func:`make_spawn_env`).
         Best-effort: a persistence failure must never affect the trial.
         """
         stream_dir = os.environ.get("FATHOM_STREAM_DIR")
@@ -1150,7 +1168,7 @@ class ClaudeCliRunner:
             safe = "".join(c if c.isalnum() or c in "-_." else "_" for c in tag)
             out = Path(stream_dir)
             out.mkdir(parents=True, exist_ok=True)
-            name = f"{safe}--a{attempt}--{int(time.time() * 1000)}.ndjson"
+            name = f"{safe}--a{attempt}--{round(started_at * 1000)}.ndjson"
             (out / name).write_text(stdout, encoding="utf-8")
         except OSError:
             pass
@@ -1183,6 +1201,7 @@ class ClaudeCliRunner:
             cost_usd_est=cost_usd_est,
             cost_source=cost_source,
             model_id=parsed.model_id,
+            models_seen=list(parsed.models_seen),
             cli_version=parsed.cli_version or self.cli_version,
             result_text=result_text,
             usage=dict(parsed.usage),

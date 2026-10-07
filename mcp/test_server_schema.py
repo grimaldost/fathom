@@ -15,8 +15,9 @@ Three guards:
 - every tool runs the engine the plugin ships against the data root,
   ``uv run --no-dev --frozen --project <plugin root> python -m fathom --home <data root>
   ...``, with the
-  data root as the working directory, and refuses to run anything when no data root
-  resolves. ``subprocess.run`` is replaced, so nothing is spawned.
+  data root as the working directory, reads its output as UTF-8, and refuses to run
+  anything when no data root resolves. ``subprocess.run`` is replaced, so nothing is
+  spawned, except in the one test that reads the engine's real output.
 """
 
 from __future__ import annotations
@@ -134,8 +135,10 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> list[dict]:
 
     seen: list[dict] = []
 
-    def fake_run(cmd, *, cwd, env, capture_output, text, timeout):
-        seen.append({"cmd": list(cmd), "cwd": pathlib.Path(cwd), "env": dict(env)})
+    def fake_run(cmd, *, cwd, env, capture_output, text, encoding, errors, timeout):
+        seen.append(
+            {"cmd": list(cmd), "cwd": pathlib.Path(cwd), "env": dict(env), "encoding": encoding}
+        )
         return subprocess.CompletedProcess(cmd, 0, stdout="stdout text", stderr="")
 
     monkeypatch.setattr(fathom_server.subprocess, "run", fake_run)
@@ -178,6 +181,7 @@ def test_plan_runs_a_dry_run_in_the_data_root(data_root, calls) -> None:
     assert out["plan"] == "stdout text"
     [call] = calls
     assert call["cwd"] == data_root
+    assert call["encoding"] == "utf-8"
     assert call["cmd"] == [
         *_prefix(data_root),
         "run",
@@ -205,6 +209,31 @@ def test_report_runs_in_the_data_root_and_finds_the_scorecard(data_root, calls) 
     assert call["cwd"] == data_root
     assert call["cmd"] == [*_prefix(data_root), "report", "example-v1"]
     assert out["scorecard_path"] == str(data_root / "report" / "scorecard-example-v1.md")
+
+
+def test_the_engine_output_reaches_the_tool_as_written(data_root) -> None:
+    """The engine writes UTF-8 on every platform, and the server reads it as UTF-8.
+
+    Read in the locale's code page instead (cp1252 on a Windows runner), each em dash in
+    the engine's help came back as three characters. This test spawns the engine.
+    """
+    import _resolve
+    import fathom_server
+
+    args = ["--help"]
+    raw = subprocess.run(
+        _resolve.fathom_command(data_root, args),
+        cwd=data_root,
+        env=fathom_server._engine_env(),
+        capture_output=True,
+        timeout=300,
+    )
+    assert raw.returncode == 0, raw.stderr
+    written = raw.stdout.decode("utf-8").replace("\r\n", "\n")
+    assert any(ord(ch) > 127 for ch in written), "the help has no non-ASCII character to test"
+    out = fathom_server._run_fathom(args, data_root, timeout=300)
+    assert out["exit_code"] == 0, out["stderr"]
+    assert out["stdout"] == written
 
 
 def test_the_engine_does_not_inherit_the_server_virtual_environment(
