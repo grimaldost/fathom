@@ -38,12 +38,15 @@ The triad, and what each property protects against:
    run`` and the ``[gate] extra`` of every arm whose strategy runs it are split into
    words as the gate's shell reads them, and each path-shaped word is resolved the
    way the arm will resolve it (:func:`_gate_path_checks`). A missing path anchored
-   on ``${task_dir}``, a missing absolute path and a ``${NAME}`` that nothing fills
-   are FAILs, because the agent cannot create them; a missing path relative to the
-   workspace is a WARN, because the task may ask the agent to create it. Words the
-   check cannot resolve (shell variables, globs) are left alone, so its errors lean
-   toward a broken gate it did not catch rather than a working one it refused. Only
-   checked when the bank or an arm declares a gate.
+   on ``${task_dir}``, a missing absolute path the gate runs (a command word, or a
+   word with a script suffix such as ``.py``) and a ``${NAME}`` that nothing fills
+   are FAILs, because the agent cannot create them. Any other missing absolute word
+   is a WARN, because it may be a pattern rather than a path (``grep -q "/health"``),
+   and so is a missing path relative to the workspace, because the task may ask the
+   agent to create it. Words the check cannot resolve (shell variables, globs) and
+   words holding pattern syntax (a sed address, an awk program) are left alone, so
+   its errors lean toward a broken gate it did not catch rather than a working one
+   it refused. Only checked when the bank or an arm declares a gate.
 
 Properties 2 and 3 are ``unverifiable`` when the bank ships no reference solution
 or declares no gate.  ``unverifiable`` is deliberately NOT a pass: it is reported
@@ -99,6 +102,13 @@ _WINDOWS_SWITCH = re.compile(r"^/[A-Za-z?][^/\\.]*$")
 # Options whose next word is code or a module name, not a path.
 _NON_PATH_OPTIONS = frozenset({"-c", "-m"})
 _SHELL_OPERATOR_CHARS = frozenset("();<>|&")
+# A word holding one of these is the shell's to resolve: a variable or a glob.
+_SHELL_RESOLVED_CHARS = frozenset("$%*?[")
+# A word holding one of these is a regular expression, a sed or awk address, or a brace
+# expansion (`/^def /`, `/start/,/end/p`, `src/{a,b}.py`), not a file name.
+_PATTERN_CHARS = frozenset("^{},|")
+# The shell a gate runs under: `/bin/sh` on POSIX, `cmd.exe` on Windows.
+_POSIX_SHELL = os.name != "nt"
 
 # Where a bank ships the reference implementation, as an overlay copied over the
 # staged fixture tree.
@@ -376,7 +386,7 @@ def _shell_words(cmd: str) -> list[str]:
     mode with the double quotes then dropped. A command that does not split (an unclosed
     quote) gives no words, and so no finding.
     """
-    posix = os.name != "nt"
+    posix = _POSIX_SHELL
     lexer = shlex.shlex(cmd, posix=posix, punctuation_chars=True)
     lexer.whitespace_split = True
     if not posix:
@@ -388,7 +398,7 @@ def _shell_words(cmd: str) -> list[str]:
     return words if posix else [w.replace('"', "") for w in words]
 
 
-def _path_words(cmd: str) -> list[str]:
+def _path_words(cmd: str) -> list[tuple[str, bool]]:
     """The words of *cmd* that name a path, as written, placeholders not filled in.
 
     A word names a path when it holds a separator or a ``${...}``, or ends in a script
@@ -397,33 +407,46 @@ def _path_words(cmd: str) -> list[str]:
     output redirection (written, not read), URLs, and on Windows a ``cmd.exe`` switch or
     a single-quoted word. A ``NAME=value`` assignment is read as its value, and a pytest
     node id as the file before ``::``.
+
+    Each word comes with whether it is a command word, the program the shell runs: the
+    first word of the command, or the first after ``;``, ``&&``, ``||``, ``|``, ``&``,
+    ``(`` or ``!``, past any ``NAME=value`` and redirection.
     """
-    words: list[str] = []
+    words: list[tuple[str, bool]] = []
     skip_next = False
+    command_next = True
     for word in _shell_words(cmd):
+        is_command, command_next = command_next, False
         if skip_next:
-            skip_next = False
+            skip_next, command_next = False, is_command
             continue
         if word in _NON_PATH_OPTIONS:
             skip_next = True
             continue
         if word and set(word) <= _SHELL_OPERATOR_CHARS:
             skip_next = ">" in word
+            # A redirection leaves the command word where it was; any other operator
+            # starts a new command.
+            command_next = is_command if ("<" in word or ">" in word) else True
+            continue
+        if word == "!":
+            command_next = is_command
             continue
         if word.startswith("-"):
             _, sep, value = word.partition("=")
             if not (sep and "${" in value):
                 continue
             word = value
-        if _ASSIGNMENT.match(word):
+        elif _ASSIGNMENT.match(word):
+            command_next, is_command = is_command, False
             word = word.split("=", 1)[1]
         word = word.split("::", 1)[0]
         if _URL.match(word):
             continue
-        if os.name == "nt" and ("'" in word or _WINDOWS_SWITCH.match(word)):
+        if not _POSIX_SHELL and ("'" in word or _WINDOWS_SWITCH.match(word)):
             continue
         if "${" in word or "/" in word or "\\" in word or word.lower().endswith(_SCRIPT_SUFFIXES):
-            words.append(word)
+            words.append((word, is_command))
     return words
 
 
@@ -445,11 +468,14 @@ def _gate_path_checks(
     relative path resolves against the staged workspace, the gate's working directory.
 
     FAIL, which ``fathom run`` refuses: a ``${...}`` the command's runner does not fill (any
-    placeholder in the task's own gate), and a missing path anchored on ``${task_dir}`` or
-    absolute; the agent cannot create either. WARN, which blocks only under ``--strict``: a
-    missing path relative to the workspace or under ``${workspace}``, which the task may
-    ask the agent to create. A word holding a shell variable (``$NAME``, ``%NAME%``), a
-    glob or a leading ``~`` is not resolved and not reported. No gate command, no check.
+    placeholder in the task's own gate), a missing path anchored on ``${task_dir}``, and a
+    missing absolute path the gate runs: a command word, or a word with a script suffix.
+    The agent cannot create any of them. WARN, which blocks only under ``--strict``: any
+    other missing absolute word, which may be a pattern rather than a path (``grep -q
+    "/health"``), and a missing path relative to the workspace or under ``${workspace}``,
+    which the task may ask the agent to create. A word holding a shell variable (``$NAME``,
+    ``%NAME%``), a glob, a leading ``~`` or pattern syntax (:data:`_PATTERN_CHARS`) is not
+    resolved and not reported. No gate command, no check.
     """
     sources: list[tuple[str, str, frozenset[str]]] = []  # (where, command, placeholders)
     gate_cmd = task.gate.get("run")
@@ -476,12 +502,14 @@ def _gate_path_checks(
         for name in dict.fromkeys(_PLACEHOLDER.findall(cmd)):
             if name not in filled:
                 findings.setdefault((STATUS_FAIL, cmd, _unfilled(name, filled)), []).append(where)
-        for word in _path_words(cmd):
+        for word, is_command in _path_words(cmd):
             if any(name not in filled for name in _PLACEHOLDER.findall(word)):
                 continue  # reported above
             unfilled = _PLACEHOLDER.sub("", word)
-            if any(ch in unfilled for ch in "$%*?[") or unfilled.startswith("~"):
+            if not _SHELL_RESOLVED_CHARS.isdisjoint(unfilled) or unfilled.startswith("~"):
                 continue  # a shell variable or a glob: the shell resolves it, not this check
+            if not _PATTERN_CHARS.isdisjoint(unfilled):
+                continue  # a pattern, an address or a brace expansion, not a file name
             expanded = word
             for name, value in values.items():
                 expanded = expanded.replace(name, value)
@@ -490,15 +518,22 @@ def _gate_path_checks(
             target = path if path.anchor else workspace / path
             if _exists(target):
                 continue
-            if PLACEHOLDER_TASK_DIR in word or (
-                bool(path.anchor) and PLACEHOLDER_WORKSPACE not in word
-            ):
+            absolute = bool(path.anchor) and PLACEHOLDER_WORKSPACE not in word
+            runs = is_command or word.lower().endswith(_SCRIPT_SUFFIXES)
+            if PLACEHOLDER_TASK_DIR in word or (absolute and runs):
                 message = (
                     f"`{word}` is {target.as_posix()}, which does not exist. The gate cannot "
                     "run what it names, so a gated trial's gate contributes nothing and the "
                     "arm runs as an ungated one."
                 )
                 status = STATUS_FAIL
+            elif absolute:
+                message = (
+                    f"`{word}` would be {target.as_posix()}, which does not exist. Fine if the "
+                    "word is a pattern rather than a path, or the command creates it first; "
+                    "otherwise the gate can never read it."
+                )
+                status = STATUS_WARN
             else:
                 message = (
                     f"`{word}` is not in the staged fixture (a relative path resolves against "

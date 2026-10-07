@@ -223,14 +223,19 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   options, the word after `-c` or `-m`, the target of an output redirection and URLs are not
   paths. An arm's `${task_dir}` and `${workspace}` are filled in for each task as the arm fills
   them, and a relative path resolves against the staged fixture, read before the verifier or
-  the gate runs on it. A missing path under `${task_dir}`, a missing absolute path, and a
+  the gate runs on it. A missing path under `${task_dir}`, a missing absolute path the gate
+  runs (a command word, or a word with a script suffix such as `/opt/gates/probe.py`), and a
   `${NAME}` that nothing fills (any placeholder in the task's own gate, or a misspelt
-  `${taskdir}` in an extra) fail, so both commands exit 12 before any spend. A missing path
-  relative to the workspace is a warning, because the task may ask the agent to create it, and
-  blocks only under `--strict`. A word holding a shell variable, a glob or a leading `~` is not
-  checked, so its errors lean toward missing a broken gate rather than failing a working one;
-  the working gates it fails are a command that creates an absolute path before using it and,
-  on POSIX, a `${NAME}` the shell would fill (written `$NAME`, it passes). Each finding
+  `${taskdir}` in an extra) fail, so both commands exit 12 before any spend. Any other missing
+  absolute word is a warning, because it may be a pattern rather than a path (`grep -q
+  "/health" app.py`), and so is a missing path relative to the workspace, because the task may
+  ask the agent to create it; warnings block only under `--strict`. A word holding a shell
+  variable, a glob, a leading `~` or pattern syntax (`^`, `{`, `}`, `,` or `|`, as in the sed
+  address `/start/,/end/p` or an awk program) is not checked, so its errors lean toward missing
+  a broken gate rather than failing a working one. The working gates it still fails are a
+  command that creates an absolute path and then runs it, a pattern that reads as an absolute
+  script path (`grep -q "/app/main.py" log.txt`) and, on POSIX, a `${NAME}` the shell would
+  fill (written `$NAME`, it passes). Each finding
   names the word, the command and the arm (for example `arm nudge [gate] extra`), and a
   missing path also the path it resolved to. A bank with no gate command and no gated arm gets
   no new line. `fathom validate` reads the arms in `scenarios/` or `--scenarios-dir`, and

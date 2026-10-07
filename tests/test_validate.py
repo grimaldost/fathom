@@ -248,13 +248,14 @@ def _arm(name: str, extras: tuple[str, ...], strategy: str = "gated-session") ->
 
 
 class GatePathTests(unittest.TestCase):
-    """Gate commands must name paths that exist (FATH-B54, T22b).
+    """Gate commands must name paths that exist (FATH-B54).
 
     A gate command whose script is missing runs, fails to find the script and contributes
     nothing, so a gated arm silently runs as the ungated one. A path anchored on
-    `${task_dir}`, or an absolute one, cannot be created by the agent, so a missing one is a
-    FAIL. A path relative to the workspace may be one the task asks the agent to create, so
-    a missing one is a WARN.
+    `${task_dir}`, or an absolute path the gate runs (a command word, or a script), cannot
+    be created by the agent, so a missing one is a FAIL. Any other absolute word may be a
+    pattern, and a path relative to the workspace may be one the task asks the agent to
+    create, so a missing one of either is a WARN.
     """
 
     def setUp(self) -> None:
@@ -349,6 +350,75 @@ class GatePathTests(unittest.TestCase):
             _task("t1", task_dir=self._task_dir(), gate={"run": f"python {missing}"})
         )
         self.assertEqual([c.status for c in self._paths(checks)], [validate.STATUS_FAIL])
+
+    def test_a_missing_absolute_command_FAILS(self) -> None:
+        # The shell runs the first word of each command, so it is a path to a program.
+        missing = (Path(self._tmp.name) / "nowhere" / "gate-tool").as_posix()
+        for gate in (f"{missing} --check", f"echo start && {missing} --check"):
+            for posix in (True, False):
+                with (
+                    self.subTest(gate=gate, posix=posix),
+                    mock.patch.object(validate, "_POSIX_SHELL", posix),
+                ):
+                    checks = self._checks(
+                        _task("t1", task_dir=self._task_dir(), gate={"run": gate})
+                    )
+                    paths = self._paths(checks)
+                    self.assertEqual([c.status for c in paths], [validate.STATUS_FAIL], paths)
+
+    # Arguments that start with `/` without naming a file: a sed address, a grep pattern, an
+    # awk program. Each is a working gate on a fixture that holds app.py and src/.
+    _PATTERN_GATES = (
+        'sed -n "/start/,/end/p" app.py',
+        'grep -q "/health" app.py',
+        "awk '/^def /{n++} END{exit n<1}' app.py",
+        '! grep -rn "/usr/local/secret" src',
+    )
+
+    def test_pattern_and_address_arguments_never_FAIL(self) -> None:
+        (self.workspace / "app.py").write_text("", encoding="utf-8")
+        (self.workspace / "src").mkdir()
+        for gate in self._PATTERN_GATES:
+            for posix in (True, False):
+                with (
+                    self.subTest(gate=gate, posix=posix),
+                    mock.patch.object(validate, "_POSIX_SHELL", posix),
+                ):
+                    checks = self._checks(
+                        _task("t1", task_dir=self._task_dir(), gate={"run": gate})
+                    )
+                    statuses = {c.status for c in self._paths(checks)}
+                    self.assertLessEqual(
+                        statuses, {validate.STATUS_PASS, validate.STATUS_WARN}, checks
+                    )
+                    self.assertTrue(validate.validation_ok(checks))
+
+    def test_regex_and_address_syntax_is_not_read_as_a_path(self) -> None:
+        # `^ { } , |` belong to a pattern, an address range or a brace expansion, not a file.
+        (self.workspace / "app.py").write_text("", encoding="utf-8")
+        for gate in (self._PATTERN_GATES[0], self._PATTERN_GATES[2]):
+            for posix in (True, False):
+                with (
+                    self.subTest(gate=gate, posix=posix),
+                    mock.patch.object(validate, "_POSIX_SHELL", posix),
+                ):
+                    checks = self._checks(
+                        _task("t1", task_dir=self._task_dir(), gate={"run": gate})
+                    )
+                    paths = self._paths(checks)
+                    self.assertEqual([c.status for c in paths], [validate.STATUS_PASS], paths)
+
+    def test_a_missing_absolute_argument_with_no_script_suffix_WARNS(self) -> None:
+        # `/usr/local/secret` may be a path or a pattern; the check cannot tell, so it warns.
+        (self.workspace / "src").mkdir()
+        for posix in (True, False):
+            with self.subTest(posix=posix), mock.patch.object(validate, "_POSIX_SHELL", posix):
+                checks = self._checks(
+                    _task("t1", task_dir=self._task_dir(), gate={"run": self._PATTERN_GATES[3]})
+                )
+                paths = self._paths(checks)
+                self.assertEqual([c.status for c in paths], [validate.STATUS_WARN], paths)
+                self.assertIn("/usr/local/secret", paths[0].detail)
 
     def test_a_task_gate_naming_a_missing_workspace_script_WARNS(self) -> None:
         # The agent may be asked to create it, so this cannot be refused outright.

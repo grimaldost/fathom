@@ -479,7 +479,7 @@ would in a run.
 | The verifier fails on the unmodified fixture | at least one criterion is false | the verifier errored, emitted no criteria, or every criterion is already true | — |
 | The verifier passes on the reference solution | outcome `pass` (exit 0) | any other outcome | `unverifiable` when there is no `solution/` |
 | The task gate runs on the fixture | the gate exits 0 | exit 127 or 9009 (the command was not found) | `warn` for any other nonzero exit; `unverifiable` when there is no `[gate] run` |
-| The gate commands name paths that exist | every path a gate command names exists | a missing path under `${task_dir}` or an absolute one; a `${NAME}` that is not filled in | `warn` for a missing path relative to the workspace; no line when neither the task nor a gated arm has a gate command |
+| The gate commands name paths that exist | every path a gate command names exists | a missing path under `${task_dir}`; a missing absolute path the gate runs (a command word, or a word with a script suffix); a `${NAME}` that is not filled in | `warn` for any other missing absolute word and for a missing path relative to the workspace; no line when neither the task nor a gated arm has a gate command |
 
 The first property reads the criteria, not the exit code: it asks whether an arm has something
 left to do. A red gate on the fixture is reported as `warn` rather than `fail`, because a task
@@ -499,22 +499,29 @@ ends in a script suffix such as `.py` or `.sh`, or holds a `${...}`; options, th
 "Treatments"), and a relative path resolves against the staged fixture, which is the gate's
 working directory. The check reads the fixture before the verifier or the gate has run on it.
 
-- **fail**: a missing path under `${task_dir}`, or a missing absolute path. The agent cannot
-  create either, so the gate could never have run it. Also a `${NAME}` that nothing fills: an
+- **fail**: a missing path under `${task_dir}`, or a missing absolute path that the gate runs:
+  the command word (the first word, or the first after `&&`, `||`, `;`, `|` or `!`), or a word
+  with a script suffix such as `.py` or `.sh`. The agent cannot create either, so the gate
+  could never have run it. Also a `${NAME}` that nothing fills: an
   arm's `[gate] extra` takes `${task_dir}` and `${workspace}` only, and the task's own `[gate]
   run` takes none, so a misspelt `${taskdir}` or a `${task_dir}` in the task's gate fails. To
   use an environment variable, write it the shell's way (`$NAME` or `%NAME%`).
-- **warn**: a missing path relative to the workspace, or under `${workspace}`. The task may ask
-  the agent to create it, so confirm which, as with a red gate.
+- **warn**: any other missing absolute word, which may be a pattern rather than a path
+  (`grep -q "/health" app.py`, `grep -rn "/usr/local/secret" src`); and a missing path
+  relative to the workspace, or under `${workspace}`, which the task may ask the agent to
+  create. Confirm which, as with a red gate.
 
 The check errs toward missing a broken gate rather than refusing a working one. A word holding a
 shell variable (`$NAME`, `%NAME%`), a glob or a leading `~` is left to the shell and not
-checked, and a command that changes directory (`cd sub && python run.py`) is still resolved
-against the workspace, so such a path can warn but never fails. Two kinds of working gate do
-fail it: a command that creates an absolute path and then uses it (create such a file in the
-workspace, with a relative path), and, on POSIX, a `${NAME}` that `/bin/sh` would fill (write
-it `$NAME`). A gate that passes this check can still be red for other reasons; the third
-property and a pilot cover those.
+checked, and so is a word holding pattern syntax (`^`, `{`, `}`, `,` or `|`), such as the sed
+address `/start/,/end/p` or the awk program `'/^def /{n++}'`. A command that changes directory
+(`cd sub && python run.py`) is still resolved against the workspace, so such a path can warn
+but never fails. Three kinds of working gate do fail it: a command that creates an absolute
+path and then runs it (create such a file in the workspace, with a relative path); a pattern
+that reads as an absolute script path, such as `grep -q "/app/main.py" log.txt` (drop the
+leading `/` or match on less of it); and, on POSIX, a `${NAME}` that `/bin/sh` would fill
+(write it `$NAME`). A gate that passes this check can still be red for other reasons; the
+third property and a pilot cover those.
 
 It may also print a `note:` line naming the arms that declare injected context or a tool list
 (nearly every arm) and saying that `fathom run` will keep their spawn streams under the data
