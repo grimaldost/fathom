@@ -73,15 +73,6 @@ the init sample as the fast path; better, corroborate with an observed `mcp__*` 
 was not denied (`arming.tools_served_by` already maps tools to servers). The refusal should name
 the server and its last-seen status, and offer a scoped wait before the blanket flag.
 
-**FATH-B54 — Gate commands run without a check that the paths they name exist.** *(S)*
-A gate command naming a script that does not exist (an unfilled placeholder, for example) runs,
-fails to find the script, and contributes nothing, so a gated arm silently runs as the ungated
-one. `fathom validate` checks a task's gate only for whether the command can start, and a
-scenario's `[gate] extra` not at all. Change: at validate time, take the path-shaped tokens of
-every task `[gate] run` and scenario `[gate] extra`, expand `${task_dir}` and `${workspace}` as
-the arm will, and refuse in the `EXIT_BANK_INVALID` class when one does not resolve. A gate that
-ran and went red is a result; a gate that could never have run is a broken arm.
-
 **FATH-B56 — A relative `[tools] repo` resolves against the process working directory.** *(S)*
 `resolve_repo_invocation_cmd` (`scenario.py`) resolves the path with `Path(repo).resolve()`,
 against fathom's working directory rather than the scenario file that wrote it. It works only
@@ -135,14 +126,6 @@ outside the data root or is untracked.
 
 ## Operations
 
-**FATH-B58 — A failed comparator block does not stop its dependent arms.** *(S)*
-The run loop is a flat iteration over a scenario-major plan with no notion of an arm group or a
-dependency; the only early exit is an infrastructure classification. If the comparator arm fails
-part-way (a staging error, say) and the caller continues, the treatment arm is bought against an
-incomplete comparator. Change: make the dependency explicit in the plan, or halt the remaining
-arms of a group when a comparator arm exits non-zero. The run lock, `EXIT_STOPPED` (16) and
-`EXIT_CREDENTIAL` (15) give a calling script exit codes to branch on.
-
 **FATH-B55 — A matrix longer than the credential's life only survives if it is chunked.** *(M)*
 Each spawn copies the shared OAuth credential into a throwaway `CLAUDE_CONFIG_DIR` (ADR-0004),
 the CLI refreshes it inside that spawn, and the refreshed credential is discarded with the
@@ -153,33 +136,6 @@ section operators read (resume is free, so re-invoking per block costs nothing);
 N` that stops cleanly on a stated boundary and prints the resume command; and either copy the
 config once per run or write the refreshed credential back, so spawns stop racing each other's
 refresh.
-
-**FATH-B13 — A run prints its plan and then nothing until it exits.** *(M)*
-A multi-hour matrix gives no progress signal, and a headless caller must read the ledger to learn
-what a run cost; per-trial economy is the most-asked question of the ledger and is a hand-join
-today. Change: one flushed progress line per trial; a closing summary naming the ledger path, the
-completed and skipped counts, total USD and the resume command; and a `fathom report --per-trial`
-view (or a cost field on new trial rows). All additive.
-
-**FATH-B80 — The plan prints a worst-case ceiling and no expected spend.** *(S)*
-The dry-run ceiling is each planned trial's worst case summed: the per-spawn cap in force times the
-spawns the trial may make (one for a single-spawn strategy, more for `series`). It is the right
-bound, but it is usually far above what trials cost, so it does not help size a run. Change: beside
-the ceiling, print an expected figure from the data root's own completed run rows: the median cost
-per trial, per strategy (and per model, where enough rows exist), with the number of rows it rests
-on. Print nothing when there is no history. The figure is information labelled with its provenance,
-never a gate, so the ceiling keeps its meaning.
-
-**FATH-B82 — A plan with nothing left to run says nothing about running more.** *(S)*
-When every requested trial is in the ledger, the dry run prints `planned:  0 trials (N already
-done)  ceiling: $0.00` and stops. The question that follows, what one more repeat would cost, is
-left to the reader, and the "already done" count covers only the requested repeats while the
-scorecard counts every completed trial of those arms, so the two disagree for a bank that was run
-at more repeats than asked. Fresh agents asked what re-running a finished bank would cost priced
-it from the ledger rows by hand, and one reported the count mismatch as a possible inconsistency.
-Change: when nothing is planned, print the ceiling of one more trial per arm and task with the
-`--repeats` value that would plan it, and the number of completed trials the ledger holds for
-these arms. Additive output lines; no new flag.
 
 **FATH-B12 — Two smoke-gate gaps.** *(S)*
 Harness stdout is not forced to UTF-8, so a spawn emitting a character outside the console's
@@ -203,12 +159,6 @@ as part of FATH-B64's group.
 
 ## Reporting
 
-**FATH-B08 — The anti-ceiling metric renders only for calibration banks.** *(M)*
-`report.py` shows the hard-criteria quality fraction only when a bank ships `scores.toml`, so the
-banks most at risk of saturation get the least informative headline. Change: move the
-hard-criteria fraction into the core report for every bank, and print a saturation banner when
-every arm passes at least K of N tasks, pointing the reader at the economy axis.
-
 **FATH-B09 — Truncated trials drop out of the per-criterion table.** *(S)*
 A trial cut off by `max_turns` or its timeout is `errored`, so its criteria never reach the
 per-criterion table, and partial compliance is visible only in the ledger. Separately,
@@ -221,46 +171,16 @@ Errors" column and the golden file.
 A cheaper arm with a lower pass rate can cost more per passing trial, and the scorecard leaves the
 division to the reader. Add a cost-per-passing-trial column to the Economy table.
 
-**FATH-B28 — There is no way to render a chosen historical `dataset_version`.** *(S)*
-The report scopes to the latest `dataset_version` and warns about the trials it excluded, which is
-right as a default, but an older view cannot be asked for. Add a flag that selects the version.
-
 **FATH-B19 — `fathom report` takes none of the directory flags `fathom run` accepts.** *(S)*
 `report` reads `tasks/<bank>/` and `ledger/<bank>.jsonl` under the data root, while `run` also
 accepts `--tasks-dir`, `--scenarios-dir` and `--ledger-dir`. A bank run from an alternate tasks
 directory renders a scorecard with its calibration section silently missing. Thread the same
 flags through `report`, or warn on the asymmetry.
 
-**FATH-B78 — The scorecard does not show whether an MCP-serving arm's tools were actually
-used.** *(S)*
-Arm Health reports trials at or over the turn cap, but nothing about tool use. An arm that mounts an
-MCP server can have the server registered while every call to it is denied, or never made, and its
-pass rate and economy then describe the control, not the treatment. The kept streams hold the
-evidence (each `tool_use` event and its result), but the report does not read them. Change: for each
-arm that declares a mount, count per trial the `mcp__*` calls that returned without a permission
-denial, read from the kept streams (`.fathom/streams/<bank>/` or `FATHOM_STREAM_DIR`). Render the
-count in Arm Health, and flag an arm whose calls were all denied or absent. Where a trial's stream
-is missing, say "no streams kept" for that trial rather than printing zero; where it is truncated,
-mark the count as partial. `streams.py` and `arming.tools_served_by` already parse and attribute
-these events.
-
 ## Ledger and schema
 
-**FATH-B07 — The ledger is a public contract with no written contract.** *(S)*
-`report.py`, `calibration.py` and outside readers all consume the ledger, and readers written
-from memory have guessed field names that do not exist. Change: one reference page carrying the
-`kind` discriminator, the trial and run field lists, the trial-to-run join key `(bank, task_id,
-repeat, config_hash)` with "a trial may have several run rows", per-experiment cost as the sum of
-run-row `cost_usd_est`, the rule that only `completed` trials enter a pass-rate denominator, and
-which fields are provenance only (`engine_version`, `cli_version`, `tool_git_sha`); a
-docstring-of-record on the writer; and a decision on `_is_pass`: export it as a public function
-or state that it is private.
-
-**FATH-B18 — The schema has no notion of a factor.** *(M)*
-A factorial experiment has to carry its factor in task-id suffixes, and the scorecard pools them,
-so the arm-by-factor table is built by hand; `[context] inject` is per scenario, so a per-task
-hint needs one bank per value. Change: task tags (`[tags]` in `task.toml`, or a bank-level factor
-map) with per-tag grouping in the scorecard. A tag can later carry a per-task inject override.
+**FATH-B18 — The schema has no notion of a factor.** *(S)*
+Task tags shipped in 0.8.0. Remaining: a tag that carries a per-task inject override.
 
 **FATH-B47 — Every trial gets exactly one user prompt.** *(M)*
 The adapter runs one headless session per trial and removes its config directory afterwards, so a
@@ -304,13 +224,6 @@ cleverness; `--limit N` is scenario-major, so a small pilot spends everything on
 Change: split the reference into `authoring.md` (schemas), `arming.md` (which arming axis fires
 where and how each is verified) and `bank-design.md` (the checklist and the fixture patterns),
 each with a line budget in its header, so an addition past the budget must displace something.
-
-**FATH-B68 — There is no worked recipe for the most common experiment.** *(S)*
-An author who cannot tell quickly whether fathom supports injecting exact bytes as an arm, a
-model-tier sweep, and blind grading will build a one-off harness instead. The first two are
-supported (the second as one scenario file per cell); the third is FATH-B34. Change: a worked
-recipe in `skills/fathom-eval/` for A/B-testing a guardrail across model tiers, built on the
-example data root's layout, from scenario files to reading the scorecard.
 
 **FATH-B48 — The skill's trigger description overlaps with skill-evaluation tools that do a
 different job.** *(S)*
@@ -516,3 +429,6 @@ is the whole record.
 | FATH-B65 | The silent-failure items in `docs/method/review-checklist.md`. | 0.4.0 |
 | FATH-B66 | `docs/method/measured-terms.md`. | 0.4.0 |
 | FATH-B69 | New ledger rows record `engine_version`, outside `config_hash` and the resume key. | 0.8.0 |
+| FATH-B07 | Ledger row contract page and _is_pass decision. | Unreleased |
+| FATH-B08 | Hard-criteria fraction in the core report for every bank; saturation banner. | Unreleased |
+| FATH-B54 | Gate-command path validation at validate time. | Unreleased |
