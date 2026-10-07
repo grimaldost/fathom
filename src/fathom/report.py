@@ -37,7 +37,23 @@ def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, flo
     return (max(0.0, centre - half), min(1.0, centre + half))
 
 
-def _is_pass(verifier_results: Any) -> bool:
+def is_pass(verifier_results: Any) -> bool:
+    """Determine if verifier results represent a pass.
+
+    The pass rule: `None` gives `False`; a dict passes when non-empty and all values
+    are truthy; otherwise the value's truthiness is returned. A trial passes when all
+    its verifier results (compliance criteria, correctness checks) are truthy.
+
+    Args:
+        verifier_results: The `verifier_results` field from a trial record, which may be
+            None (no verification run), a dict (one or more criteria: name -> bool), or
+            another value type (for forward compatibility).
+
+    Returns:
+        bool: `False` if `None`, `False` if dict and empty or any value is falsy,
+            `True` if dict and non-empty and all values truthy, otherwise the
+            truthiness of the argument.
+    """
     if verifier_results is None:
         return False
     if isinstance(verifier_results, dict):
@@ -424,7 +440,7 @@ def render(
                 elif t.get("status") == "completed":
                     n += 1
                     completed_tasks.add(tid)
-                    if _is_pass(t.get("verifier_results")):
+                    if is_pass(t.get("verifier_results")):
                         passes += 1
         return passes, n, infra, len(completed_tasks)
 
@@ -666,7 +682,7 @@ def render(
                     if t is None or t.get("infra_error") or t.get("status") != "completed":
                         continue
                     n_trials += 1
-                    if _is_pass(t.get("verifier_results")):
+                    if is_pass(t.get("verifier_results")):
                         passes_count += 1
                     for run in runs.get((sc, tid, rep), []):
                         u = run.get("usage") or {}

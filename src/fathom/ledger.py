@@ -55,6 +55,16 @@ def engine_version() -> str:
 
 @dataclasses.dataclass
 class TrialRecord:
+    """One trial of a task under a configuration, recorded in the append-only ledger.
+
+    A trial carries every field needed to resume a run from this point, and the
+    verifier's results — the outcome that answers whether the task passed. Fields are
+    stable: once named, they stay, and readers accept rows written before a field
+    existed (append-only invariant, ADR-0002). See :doc:`../docs/ledger-contract.md`
+    for the field semantics and which fields are written by the trial/run loop, which
+    are provenance-only, and which are part of the resume key.
+    """
+
     bank: str
     task_id: str
     repeat: int
@@ -206,6 +216,12 @@ def append_record(bank: str, record: Any, *, ledger_dir: pathlib.Path = LEDGER_D
 
     The row gains ``engine_version`` (:func:`engine_version`) and ``written_at``
     (:func:`_utc_now`) unless the record already names them.
+
+    Records are appended exactly as the trial/run loop writes them; the JSONL row is
+    a superset of the dataclass fields (add engine_version and written_at, keep any
+    unknown fields), so forward-compatible readers and append-only field additions work
+    as designed. See :doc:`../docs/ledger-contract.md` for the field schema and every
+    named field that may appear on a row.
     """
     ledger_dir.mkdir(parents=True, exist_ok=True)
     path = ledger_dir / f"{bank}.jsonl"

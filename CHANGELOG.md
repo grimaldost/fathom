@@ -8,6 +8,25 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Added
 
+- **Ledger row contract reference: `docs/ledger-contract.md`.** Complete reference for the
+  append-only JSONL row format: every record kind (`trial`, `run`, `grading`, `void`), every
+  named field with its semantics and stability promise, the resume key, the trial-to-run join,
+  per-experiment cost summation, pass-rate denominators, the pass rule (via `is_pass`), and
+  void ordering semantics. Fields are stable: once named, they remain forever, so readers
+  accept rows written before a field existed (append-only invariant).
+- **Public `is_pass()` function in `fathom.report`.** The pass rule for trial outcomes:
+  `None` gives `False`; a dict passes when non-empty and all values are truthy; otherwise
+  the value's truthiness. Docstring states the rule and stability promise. The function
+  replaces the private `_is_pass()` helper.
+
+### Changed
+
+- **`report.is_pass()` renamed from `_is_pass()` for public use.** Call sites in `report.py`
+  updated. The pass rule is stable and will not change; a public function grants callers
+  the same guarantee.
+
+### Added (continued)
+
 - **`fathom report <bank> --per-trial` prints each trial's economy.** The Economy section sums
   tokens, turns and USD over an arm, so one costly trial could not be told from the rest.
   With the flag, the scorecard is written exactly as before and a markdown table follows on

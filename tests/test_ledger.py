@@ -706,3 +706,130 @@ def test_a_run_rows_scenario_round_trips():
         assert _read_rows(d)[0]["scenario"] == "bare"
         (record,) = iter_records("test-bank", ledger_dir=d)
         assert isinstance(record, RunRecord) and record.scenario == "bare"
+
+
+# ---------------------------------------------------------------------------
+# Ledger contract validation: docs/ledger-contract.md field coverage
+# ---------------------------------------------------------------------------
+
+
+def test_every_trial_record_field_appears_in_ledger_contract():
+    """Every dataclass field in TrialRecord must be documented in docs/ledger-contract.md."""
+    import pathlib as _pathlib
+
+    contract_path = _pathlib.Path(__file__).parent.parent / "docs" / "ledger-contract.md"
+    if not contract_path.exists():
+        raise FileNotFoundError(f"docs/ledger-contract.md not found at {contract_path}")
+    contract_text = contract_path.read_text(encoding="utf-8")
+
+    # Collect all field names from TrialRecord dataclass
+    trial_fields = {f.name for f in dataclasses.fields(TrialRecord)}
+    # Add 'kind' even though it's init=False (still a documented field)
+    trial_fields.add("kind")
+
+    missing_fields = []
+    for field_name in sorted(trial_fields):
+        # Each field should appear in backticks in the contract
+        if f"`{field_name}`" not in contract_text:
+            missing_fields.append(field_name)
+
+    assert not missing_fields, f"Trial fields missing from ledger-contract.md: {missing_fields}"
+
+
+def test_every_run_record_field_appears_in_ledger_contract():
+    """Every dataclass field in RunRecord must be documented in docs/ledger-contract.md."""
+    import pathlib as _pathlib
+
+    contract_path = _pathlib.Path(__file__).parent.parent / "docs" / "ledger-contract.md"
+    if not contract_path.exists():
+        raise FileNotFoundError(f"docs/ledger-contract.md not found at {contract_path}")
+    contract_text = contract_path.read_text(encoding="utf-8")
+
+    # Collect all field names from RunRecord dataclass
+    run_fields = {f.name for f in dataclasses.fields(RunRecord)}
+    # Add 'kind' even though it's init=False
+    run_fields.add("kind")
+
+    missing_fields = []
+    for field_name in sorted(run_fields):
+        # Each field should appear in backticks in the contract
+        if f"`{field_name}`" not in contract_text:
+            missing_fields.append(field_name)
+
+    assert not missing_fields, f"Run fields missing from ledger-contract.md: {missing_fields}"
+
+
+def test_extra_keys_written_by_trial_loop_appear_in_contract():
+    """Extra keys added to trial_dict by cli.py must be documented."""
+    import pathlib as _pathlib
+
+    contract_path = _pathlib.Path(__file__).parent.parent / "docs" / "ledger-contract.md"
+    contract_text = contract_path.read_text(encoding="utf-8")
+
+    # Keys cli.py adds to trial_dict beyond the dataclass fields
+    extra_trial_keys = [
+        "valid",
+        "verifier_stdout",
+        "verifier_stderr",
+        "scenario",
+        "holdout",
+        "fixture_sha",
+    ]
+
+    missing_keys = []
+    for key_name in extra_trial_keys:
+        if f"`{key_name}`" not in contract_text:
+            missing_keys.append(key_name)
+
+    assert not missing_keys, f"Extra trial keys missing from ledger-contract.md: {missing_keys}"
+
+
+# ---------------------------------------------------------------------------
+# is_pass rule: the pass-rate decision function
+# ---------------------------------------------------------------------------
+
+
+def test_is_pass_with_none():
+    """The pass rule: None gives False."""
+    from fathom.report import is_pass
+
+    assert is_pass(None) is False
+
+
+def test_is_pass_with_empty_dict():
+    """The pass rule: empty dict gives False."""
+    from fathom.report import is_pass
+
+    assert is_pass({}) is False
+
+
+def test_is_pass_with_all_truthy_dict():
+    """The pass rule: dict with all truthy values gives True."""
+    from fathom.report import is_pass
+
+    assert is_pass({"criterion_a": True}) is True
+    assert is_pass({"criterion_a": True, "criterion_b": True}) is True
+    assert is_pass({"criterion_a": 1, "criterion_b": "yes"}) is True
+
+
+def test_is_pass_with_any_falsy_dict():
+    """The pass rule: dict with any falsy value gives False."""
+    from fathom.report import is_pass
+
+    assert is_pass({"criterion_a": False}) is False
+    assert is_pass({"criterion_a": True, "criterion_b": False}) is False
+    assert is_pass({"criterion_a": 1, "criterion_b": 0}) is False
+    assert is_pass({"criterion_a": True, "criterion_b": None}) is False
+    assert is_pass({"criterion_a": True, "criterion_b": ""}) is False
+
+
+def test_is_pass_with_other_types():
+    """The pass rule: other types use truthiness."""
+    from fathom.report import is_pass
+
+    assert is_pass(True) is True
+    assert is_pass(False) is False
+    assert is_pass(1) is True
+    assert is_pass(0) is False
+    assert is_pass("yes") is True
+    assert is_pass("") is False

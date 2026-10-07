@@ -35,6 +35,10 @@ installed plugin: what it measures, its cost and safety rails, and how to read i
 [`backlog.md`](backlog.md) lists open improvements to the engine by area, with the items
 declined and the ids already closed.
 
+[`ledger-contract.md`](ledger-contract.md) is the reference for the append-only JSONL ledger
+row format: every record kind (trial, run, grading, void), every field, the resume key, the
+pass rule, and void semantics.
+
 ## adr/ — decisions
 
 One decision per file. An accepted ADR is never edited, only superseded.
