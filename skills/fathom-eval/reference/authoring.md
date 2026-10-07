@@ -633,10 +633,11 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   incomplete)` after the errored count; without a `comparator` the summary has no such
   field. When the run appended rows to the data root's own ledger and the data root keeps
   a ledger index that those rows left stale, the summary adds `ledger index is now stale:
-  refresh it with fathom index --write` before `resume:`, so `resume:` stays the last
-  field; it says nothing when the index is current, when the root keeps no index, or when
-  `--ledger-dir` sent the rows to a side ledger. A dry run, and a plan with nothing to buy,
-  print neither line.
+  refresh it with fathom index --write` (`fathom --home ROOT index --write` when the run
+  was given `--home`) before `resume:`, so `resume:` stays the last field. It adds nothing
+  when the run appended no rows, when the index is current, when the root keeps no index,
+  or when `--ledger-dir` sent the rows to a side ledger. A dry run, and a plan with nothing
+  to buy, print neither line.
 - **Resuming.** Every nonzero exit leaves the ledger as the checkpoint. Run the same command
   again to continue; the `resume:` command in the summary is that command, with the bank,
   `--repeats`, and the path, `--tasks`, `--include-holdout` and cost-rail flags the run was
