@@ -105,7 +105,7 @@ trial_timeout_s = 300
 # scenarios/tiers/bare-sonnet.toml
 name = "bare-sonnet"
 adapter = "claude-cli"
-model = "claude-sonnet-4-5"
+model = "claude-sonnet-5"
 strategy = "single-session"
 effort = "low"
 
@@ -121,7 +121,7 @@ trial_timeout_s = 300
 # scenarios/tiers/guardrail-sonnet.toml
 name = "guardrail-sonnet"
 adapter = "claude-cli"
-model = "claude-sonnet-4-5"
+model = "claude-sonnet-5"
 strategy = "single-session"
 effort = "low"
 

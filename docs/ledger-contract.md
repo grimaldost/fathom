@@ -147,7 +147,7 @@ when multiple arms compete.
 - `tool_git_sha` (str): The tool repository SHA.
 - `cli_version` (str): The CLI version.
 - `judge_config_hash` (str): The SHA256 hash of the judge's configuration. Provenance only.
-- `judge_model` (str): The model the judge used (e.g., `"claude-sonnet-4-6"`). Provenance only.
+- `judge_model` (str): The model the judge used (e.g., `"claude-sonnet-5"`). Provenance only.
 - `pin_level` (str): The pin strength (`"strong"` or `"series"`).
 
 **Provenance-only fields** (added by the ledger module):

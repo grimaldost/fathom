@@ -1390,10 +1390,11 @@ class DryRunTests(unittest.TestCase):
         self.config = tmp / "config"
         self.config.mkdir()
 
-    def _main(self, *extra: str) -> tuple[int, str, str]:
+    def _main(self, *extra: str, keep: bool = True) -> tuple[int, str, str]:
         stdout, stderr = io.StringIO(), io.StringIO()
         argv = [
             "--dry-run",
+            *(["--keep-workspaces"] if keep else []),
             "--data-root",
             str(self.root),
             "--out",
@@ -1425,6 +1426,14 @@ class DryRunTests(unittest.TestCase):
         clones = list(self.workspaces.glob("ws-*/project/data"))
         self.assertEqual(len(clones), 2)  # S1 and S3
         return clones[0]
+
+    def test_a_dry_run_removes_what_it_prepared_unless_asked_to_keep_it(self) -> None:
+        """A clone workspace holds a copy of the data root, under a root other local
+        accounts may read; a dry run left them behind."""
+        code, text, err = self._main(keep=False)
+        self.assertEqual(code, acc.EXIT_PASSED, text + err)
+        self.assertIn("Workspaces removed", text)
+        self.assertEqual(sorted(p.name for p in self.workspaces.iterdir()), [])
 
     def test_instruction_files_above_the_workspace_root_are_refused(self) -> None:
         """In isolated mode they would reach every subject as an ancestor's memory."""

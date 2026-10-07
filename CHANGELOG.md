@@ -6,6 +6,26 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **The pinned install lines are version sites.** `README.md`, `README-plugin.md` and the
+  authoring guide told readers to install `@v0.8.0` through two releases. `fathom reconcile` at
+  the engine root now holds every `git+https://.../fathom@vX.Y.Z` line in those documents
+  against `pyproject.toml`'s version, as it does the plugin manifest and the newest changelog
+  heading. The three lines now say `@v0.10.0`, and the release steps name them.
+- **`tools/agent_acceptance.py --dry-run` removes the workspaces it prepared.** A clone
+  workspace holds a copy of the data root, and on Windows the default workspace root
+  (`%PUBLIC%`) is readable by every local account. `--keep-workspaces` keeps them for
+  inspection.
+
+### Fixed
+
+- **Backlog rows closed by 0.9.0 said "Unreleased".** Seven Closed-ids rows and FATH-B18 now
+  name 0.9.0. `tests/test_backlog_versions.py` fails when the changelog's `[Unreleased]` is
+  empty and a backlog line still says "Unreleased", so the next cut cannot leave them behind.
+- **Model ids in examples.** The guardrail recipe's mid-tier arms and the ledger contract's
+  `judge_model` example named superseded Sonnet ids; they now name `claude-sonnet-5`.
+
 ## [0.10.0] - 2026-10-07
 
 A minor release, pre-1.0: it adds a ledger field, splits the authoring guide into three

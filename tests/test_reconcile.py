@@ -518,6 +518,23 @@ class VersionSitesTests(unittest.TestCase):
             )
             self.assertEqual(reconcile.check_version_sites(root), [])
 
+    def test_an_install_pin_that_lags_the_package_is_a_discrepancy(self) -> None:
+        """The install lines stayed at @v0.8.0 through two releases before a review saw it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _version_files(Path(tmp), package="0.4.0", manifest="0.4.0", heading="0.4.0")
+            line = "uv tool install git+https://github.com/owner/fathom@v{}\n"
+            (root / "README.md").write_text(line.format("0.4.0") + line.format("0.3.0"))
+            (root / "README-plugin.md").write_text(line.format("0.4.0"))
+            (root / "skills/fathom-eval/reference").mkdir(parents=True)
+            (root / "skills/fathom-eval/reference/authoring.md").write_text("No pin here.\n")
+            found = reconcile.check_version_sites(root)
+            self.assertEqual(
+                [(d.subject, d.key) for d in found], [("README.md (install pin)", "0.3.0")]
+            )
+            sites = reconcile.version_sites(root)
+            self.assertEqual(sites["README-plugin.md (install pin)"], "0.4.0")
+            self.assertNotIn("skills/fathom-eval/reference/authoring.md (install pin)", sites)
+
     def test_version_sites_is_skipped_where_there_is_no_manifest(self) -> None:
         """A data root carries no plugin manifest; that is not an unreadable site."""
         with tempfile.TemporaryDirectory() as tmp:

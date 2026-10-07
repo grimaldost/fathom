@@ -53,8 +53,9 @@ first, which removes the variable for the rest of the session.
   `fastmcp` string in `.claude-plugin/plugin.json`, in both CI steps and in this list.
 - `fathom reconcile` is free and spawns nothing. Every fact the tree records twice must
   agree; exit 13 means one does not. It runs twice. At the engine root it holds the version
-  sites (`pyproject.toml`, `.claude-plugin/plugin.json` and the newest `CHANGELOG.md`
-  heading) to each other. Against `examples/data-root/` it checks that the example data root
+  sites (`pyproject.toml`, `.claude-plugin/plugin.json`, the newest `CHANGELOG.md`
+  heading, and the pinned install lines in `README.md`, `README-plugin.md` and the authoring
+  guide) to each other. Against `examples/data-root/` it checks that the example data root
   still reconciles: its ledger index, its rows' config hashes and its arm names. Exit 13 also
   covers a refusal before any check ran: a malformed `fathom.toml`, an unknown `--check`
   name, or a directory that is neither a data root nor an engine checkout.
@@ -182,11 +183,15 @@ A release is a metadata-only commit on its own branch, merged through a pull req
    Claude login and spends money; link [`docs/agent-acceptance.md`](docs/agent-acceptance.md)
    and its Cost section for the caps.
 2. Roll `[Unreleased]` into a dated `## [X.Y.Z] - YYYY-MM-DD` heading, and state the bump
-   class and the reason for it in the heading's prose.
-3. Bump the version in `pyproject.toml` and `.claude-plugin/plugin.json`.
+   class and the reason for it in the heading's prose. Set the version on every
+   `docs/backlog.md` line that says the release closed something as "Unreleased";
+   `tests/test_backlog_versions.py` fails once `[Unreleased]` is empty and one still does.
+3. Bump the version in `pyproject.toml`, `.claude-plugin/plugin.json` and the pinned install
+   lines (`git+https://.../fathom@vX.Y.Z`) in `README.md`, `README-plugin.md` and the
+   authoring guide.
 4. Run `uv lock`.
 
-The `version-sites` reconciliation holds the three version sites together, so a half-done
+The `version-sites` reconciliation holds these version sites together, so a half-done
 bump fails the suite. Keep feature work out of the release commit, so that bisect and
 per-commit review stay meaningful across the boundary.
 

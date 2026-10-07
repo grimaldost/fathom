@@ -25,7 +25,7 @@ CLI on PATH with a working login. Each spawn authenticates from a copy of the CL
 credential file and nothing else.
 
 ```sh
-uv tool install git+https://github.com/grimaldost/fathom@v0.8.0
+uv tool install git+https://github.com/grimaldost/fathom@v0.10.0
 fathom --version
 ```
 
