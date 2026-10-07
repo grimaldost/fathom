@@ -6,6 +6,38 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-07
+
+A minor release, pre-1.0: it adds ledger fields, scorecard sections, a fresh-agent acceptance
+test and several run and report options, and it tightens three checks, so a data root or
+caller that relied on what they used to accept needs a change. The release serves
+measurement you can trust and read back: every ledger row says when it was written and every
+run row which arm produced it; the scorecard shows how many criteria each arm met and says
+when a bank no longer separates the arms; spawns no longer carry the user's own instruction
+files from above their workspace (FATH-B83), so an arm is bare when it is meant to be.
+
+What changes behaviour for an existing data root or caller:
+
+- A `task.toml` whose `tags` key is not a table of strings no longer loads: `fathom run` and
+  `fathom validate` exit 1, and `fathom report` warns and renders without the bank's task
+  metadata.
+- `fathom validate` and the check before `fathom run` spends have a fourth property, gate
+  commands that name paths that exist; a missing path under `${task_dir}`, a missing absolute
+  script and an unfilled `${NAME}` exit 12 before any spend, so a data root whose gates carry
+  such a path is refused until it is fixed.
+- Spawns get a settings layer that excludes the instruction files above their workspace and
+  turn the account's claude.ai connectors off; runs measured on Windows before this change had
+  the user's instructions in every arm, so they are not comparable with new runs of the same
+  arms. `fathom smoke` gains a live check of it.
+- Every scorecard section gains a Hard-Criteria Fraction table and, when every arm passes
+  nearly every task, a saturation banner; anything that compares scorecards line by line sees
+  them.
+- Every ledger row gains `written_at` and run rows gain `scenario`; a byte comparison of
+  appended rows across runs must set `written_at` aside. Old rows load unchanged.
+- The plan's `arms:` line shows each arm's `config_hash` prefix, and `_is_pass()` is replaced
+  by the public `fathom.report.is_pass()`.
+- The plugin's `fastmcp` floor moves from 2.0 to 2.11.3.
+
 ### Added
 
 - **A fresh-agent acceptance test for the plugin.** `tools/agent_acceptance.py` starts
