@@ -224,6 +224,14 @@ The bank itself needs only `bank.toml`. Each task needs:
 name = "example"          # required; must equal the bank's directory name
 dataset_version = "1"     # required; a string, part of the resume key
 holdout = []              # required; an array of task ids, may be empty
+
+# [contrasts]             # optional; arm comparisons the scorecard tests (section 14)
+# alpha = 0.05            # optional; the level Holm's step-down shares among the pairs
+#
+# [[contrasts.pair]]      # one table per comparison
+# treatment = "nudge"     # arm names, as the ledger records them
+# control = "bare"
+# criterion = "correctness"  # optional; without it the pair compares the all-criteria pass
 ```
 
 - **`name`** names the ledger file (`ledger/<name>.jsonl`) and the run lock. `fathom report
@@ -238,6 +246,13 @@ holdout = []              # required; an array of task ids, may be empty
   `--include-holdout`, which marks those trials `holdout` in the ledger; the scorecard reports
   them in a separate section. `--tasks` cannot name a holdout without `--include-holdout`. Once
   spent, a holdout is ordinary development data. Every holdout id must name a task in the bank.
+- **`[contrasts]`** (optional) lists the arm comparisons the scorecard tests (section 14). Each
+  `[[contrasts.pair]]` names a `treatment` arm and a `control` arm, and optionally a
+  `criterion`; without one, the pair compares the all-criteria pass. `alpha` (default 0.05) is
+  the level Holm's step-down shares among a section's pairs. Only `fathom report` reads the
+  table and nothing hashes `bank.toml`, so adding or changing it changes no trial and needs no
+  `dataset_version` bump. An `alpha` that is not a number between 0 and 1 warns and renders no
+  contrasts; a pair without a string `treatment` and `control` warns and is skipped.
 
 Loading fails on a missing field, a scalar `holdout`, a holdout id that names no task, or two
 task directories that declare the same `id`.
@@ -1171,6 +1186,17 @@ one for holdout tasks. Each contains:
   can differ here, since a trial that misses one criterion still counts the ones it met. It
   is a point estimate with no interval: criteria within a trial tend to pass or fail
   together (ADR-0009).
+- **Contrasts** — appears only when `bank.toml` declares `[contrasts]` (section 4). One row
+  per pair: each arm's passes over completed trials on the pair's criterion (the all-criteria
+  pass when it names none; on a criterion, the trials whose verifier returned it), with the
+  rate and a Wilson 95% interval; a one-sided Fisher exact p for the treatment passing more
+  often than the control; and Holm's step-down over the section's pairs. In ascending p order
+  the thresholds are alpha/m, alpha/(m-1), and so on up to alpha, and `Below threshold` reads
+  `yes` while a pair's p and every smaller p are at or under their thresholds. Rows are in p
+  order. A pair with an arm that has no completed trial in the section shows `N/A` and is left
+  out of the family; a pair naming an arm the ledger does not hold gets a `Not compared` line
+  instead of a row. Trials pool tasks and repeats, which are correlated, and N per cell is
+  small, so read a contrast as directional.
 - **Pairwise vs Bare Anchor** — appears only when the ledger holds pairwise grading rows. The
   pairwise judge is not part of `fathom run`, so it is normally absent.
 - **Economy** — per arm: total tokens, turns, wall-clock, spawns per trial and estimated USD,

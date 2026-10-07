@@ -55,6 +55,21 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `streams_dir`, and `fathom.streams` gains `read_stream_file` and `stream_completed`. Closes
   T10c (FATH-B78).
 
+- **Bank-declared contrasts in the scorecard.** A bank's `bank.toml` may carry an optional
+  `[contrasts]` table: `alpha` (default 0.05) and one `[[contrasts.pair]]` per comparison, with
+  `treatment`, `control` and an optional `criterion` (default: the all-criteria pass). When it
+  does, each scorecard section gains a `### Contrasts` table after Hard-Criteria Fraction, one
+  row per pair in p order: each arm's passes over completed trials on the criterion with the
+  rate and a Wilson 95% interval, a one-sided Fisher exact p for the treatment passing more
+  often than the control (`calibration.fisher_one_sided`), the pair's Holm step-down threshold
+  over the section's pairs, and whether it is below. A pair with an arm that has no completed
+  trial in the section reads `N/A` and is left out of the family; a pair naming an arm the
+  ledger does not hold gets a `Not compared` line. A note under the table says that small N
+  makes a contrast directional. An `alpha` outside (0, 1) or a malformed pair warns instead of
+  failing the report. `load_bank` ignores the table and nothing hashes `bank.toml`, so
+  declaring contrasts changes no trial or resume key, and a bank without them renders the same
+  scorecard as before. Closes T30a.
+
 ### Changed
 
 - **Every scorecard has a Hard-Criteria Fraction table.** The pass rate counts a trial only

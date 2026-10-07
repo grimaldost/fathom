@@ -2273,3 +2273,241 @@ def test_a_stream_the_adapter_tees_is_found_by_its_trial(tmp_path, monkeypatch):
     assert len(list(streams_dir.glob("*.ndjson"))) == 1
     table = _mcp_table(_mcp_render(tmp_path, [_mcp_trial("with mcp+", "t1", 0)]))
     assert table[2:] == ["| with mcp+ | 1/1 | 1/1/1 |  |"]
+
+
+# ---------------------------------------------------------------------------
+# Contrasts: bank-declared treatment/control pairs, one-sided Fisher, Wilson and Holm
+# ---------------------------------------------------------------------------
+
+_CONTRASTS_HEADING = "### Contrasts"
+
+
+def _hypergeometric_left_tail(control_pass, n_control, treatment_pass, n_treatment) -> float:
+    """P(control passes <= control_pass) given both margins: the exact one-sided Fisher p for
+    "the treatment passes more often", summed term by term."""
+    from math import comb
+
+    total, passes = n_control + n_treatment, control_pass + treatment_pass
+    return sum(
+        comb(passes, k) * comb(total - passes, n_control - k)
+        for k in range(max(0, passes - n_treatment), control_pass + 1)
+    ) / comb(total, n_control)
+
+
+def _ct_trials(sc: str, n: int, passes: int, *, vr_pass=None, vr_fail=None) -> list[dict]:
+    """*n* completed trials of arm *sc* on task t1, the first *passes* of them passing."""
+    ok = {"a": True} if vr_pass is None else vr_pass
+    bad = {"a": False} if vr_fail is None else vr_fail
+    return [_hc_trial(sc, "t1", rep, ok if rep < passes else bad) for rep in range(n)]
+
+
+def _ct_render(tmp_path, records, contrasts_toml: str | None) -> str:
+    """Render hc-bank with a bank.toml that carries *contrasts_toml* after its three keys."""
+    bank = tmp_path / "tasks" / "hc-bank"
+    bank.mkdir(parents=True)
+    manifest = 'name = "hc-bank"\ndataset_version = "v1"\nholdout = []\n'
+    (bank / "bank.toml").write_text(manifest + (contrasts_toml or ""), encoding="utf-8")
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True)
+    with open(ldgr / "hc-bank.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    out = render(
+        "hc-bank", ledger_dir=ldgr, report_dir=tmp_path / "report", tasks_dir=tmp_path / "tasks"
+    )
+    return out.read_text(encoding="utf-8")
+
+
+def _ct_block(content: str) -> list[str]:
+    """The first section's Contrasts block, heading excluded, up to the next heading."""
+    lines = content.splitlines()
+    start = lines.index(_CONTRASTS_HEADING)
+    block: list[str] = []
+    for line in lines[start + 1 :]:
+        if line.startswith("#"):
+            break
+        block.append(line)
+    return block
+
+
+def _ct_rows(content: str) -> list[list[str]]:
+    """The Contrasts table's data rows, split into stripped cells."""
+    rows = [line for line in _ct_block(content) if line.startswith("| ")]
+    return [[cell.strip() for cell in row.split("|")[1:-1]] for row in rows[1:]]
+
+
+def _arm_cell(passes: int, n: int) -> str:
+    lo, hi = wilson_interval(passes, n)
+    return f"{passes}/{n} ({100 * passes / n:.1f}%) [{100 * lo:.1f}%, {100 * hi:.1f}%]"
+
+
+_PAIR = '[[contrasts.pair]]\ntreatment = "{t}"\ncontrol = "{c}"\n'
+
+
+def test_a_contrast_reproduces_the_exact_one_sided_fisher_p(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    content = _ct_render(tmp_path, records, _PAIR.format(t="nudge", c="bare"))
+    p = _hypergeometric_left_tail(2, 10, 8, 10)
+    assert abs(p - 0.0115) < 0.0001
+    assert _ct_rows(content) == [
+        [
+            "nudge vs bare",
+            "all criteria",
+            _arm_cell(8, 10),
+            _arm_cell(2, 10),
+            f"{p:.4f}",
+            "0.0500",
+            "yes",
+        ]
+    ]
+    header = next(line for line in _ct_block(content) if line.startswith("| "))
+    assert header == (
+        "| Treatment vs control | Criterion | Treatment | Control | Fisher p (one-sided)"
+        " | Holm threshold | Below threshold |"
+    )
+
+
+def test_holm_thresholds_step_down_in_p_order(tmp_path):
+    # Declared out of p order. strong 9/10 vs bare 2/10 has the smallest p, mid 7/10 vs bare
+    # the next, late 8/12 vs early 3/12 the largest. The thresholds in p order are 0.05/3,
+    # 0.05/2 and 0.05. mid misses its threshold, so late is not below its own even though
+    # its p is under 0.05: the step-down stops at the first miss.
+    records = (
+        _ct_trials("bare", 10, 2)
+        + _ct_trials("strong", 10, 9)
+        + _ct_trials("mid", 10, 7)
+        + _ct_trials("late", 12, 8)
+        + _ct_trials("early", 12, 3)
+    )
+    declared = "".join(
+        _PAIR.format(t=t, c=c) for t, c in [("late", "early"), ("mid", "bare"), ("strong", "bare")]
+    )
+    content = _ct_render(tmp_path, records, declared)
+    p_strong = _hypergeometric_left_tail(2, 10, 9, 10)
+    p_mid = _hypergeometric_left_tail(2, 10, 7, 10)
+    p_late = _hypergeometric_left_tail(3, 12, 8, 12)
+    assert p_strong < 0.05 / 3 < p_mid and 0.05 / 2 < p_mid < p_late < 0.05
+    rows = _ct_rows(content)
+    assert [r[0] for r in rows] == ["strong vs bare", "mid vs bare", "late vs early"]
+    assert [r[4] for r in rows] == [f"{p:.4f}" for p in (p_strong, p_mid, p_late)]
+    assert [r[5] for r in rows] == [f"{0.05 / 3:.4f}", f"{0.05 / 2:.4f}", f"{0.05:.4f}"]
+    assert [r[6] for r in rows] == ["yes", "no", "no"]
+
+
+def test_a_declared_alpha_sets_the_holm_thresholds(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2) + _ct_trials("add", 10, 3)
+    declared = "[contrasts]\nalpha = 0.1\n" + "".join(
+        _PAIR.format(t=t, c="bare") for t in ("nudge", "add")
+    )
+    content = _ct_render(tmp_path, records, declared)
+    rows = _ct_rows(content)
+    assert [(r[0], r[5]) for r in rows] == [("nudge vs bare", "0.0500"), ("add vs bare", "0.1000")]
+    assert "α = 0.1" in "\n".join(_ct_block(content))
+
+
+def test_a_criterion_pair_counts_that_criterion(tmp_path):
+    # Every trial fails criterion a, so the all-criteria pass is 0/10 for both arms; on
+    # criterion b, nudge passes 8 of 10 and bare 2 of 10.
+    hit, miss = {"a": False, "b": True}, {"a": False, "b": False}
+    records = _ct_trials("nudge", 10, 8, vr_pass=hit, vr_fail=miss) + _ct_trials(
+        "bare", 10, 2, vr_pass=hit, vr_fail=miss
+    )
+    declared = (
+        _PAIR.format(t="nudge", c="bare") + 'criterion = "b"\n' + _PAIR.format(t="nudge", c="bare")
+    )
+    rows = _ct_rows(_ct_render(tmp_path, records, declared))
+    by_criterion = {r[1]: r for r in rows}
+    assert by_criterion["b"][2:5] == [
+        _arm_cell(8, 10),
+        _arm_cell(2, 10),
+        f"{_hypergeometric_left_tail(2, 10, 8, 10):.4f}",
+    ]
+    assert by_criterion["all criteria"][2:5] == [
+        _arm_cell(0, 10),
+        _arm_cell(0, 10),
+        f"{_hypergeometric_left_tail(0, 10, 0, 10):.4f}",
+    ]
+
+
+def test_a_bank_toml_without_contrasts_renders_the_golden_scorecard(tmp_path):
+    bank = tmp_path / "tasks" / "test-bank"
+    bank.mkdir(parents=True)
+    (bank / "bank.toml").write_text(
+        'name = "test-bank"\ndataset_version = "v1"\nholdout = []\n', encoding="utf-8"
+    )
+    _write_fixture(tmp_path / "ledger", "test-bank")
+    with_manifest = render(
+        "test-bank",
+        ledger_dir=tmp_path / "ledger",
+        report_dir=tmp_path / "with-manifest",
+        tasks_dir=tmp_path / "tasks",
+    )
+    without_tasks = render(
+        "test-bank",
+        ledger_dir=tmp_path / "ledger",
+        report_dir=tmp_path / "without-tasks",
+        tasks_dir=tmp_path / "no-tasks",
+    )
+    assert with_manifest.read_bytes() == without_tasks.read_bytes()
+    assert with_manifest.read_text(encoding="utf-8") == _GOLDEN.read_text(encoding="utf-8")
+
+
+def test_a_pair_naming_an_unknown_arm_gets_a_note_line(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    declared = _PAIR.format(t="ghost", c="bare") + _PAIR.format(t="nudge", c="bare")
+    content = _ct_render(tmp_path, records, declared)
+    assert "> Not compared: ghost vs bare. The ledger has no arm named ghost." in _ct_block(content)
+    rows = _ct_rows(content)
+    assert [r[0] for r in rows] == ["nudge vs bare"]
+    assert rows[0][5] == "0.0500"  # the family is the one pair that was compared
+
+
+def test_an_arm_without_trials_in_the_section_is_left_out_of_the_family(tmp_path):
+    # add has trials only on a holdout task, so in the dev section it has none.
+    holdout = _hc_trial("add", "h1", 0, {"a": True})
+    holdout["holdout"] = True
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2) + [holdout]
+    declared = _PAIR.format(t="add", c="bare") + _PAIR.format(t="nudge", c="bare")
+    rows = _ct_rows(_ct_render(tmp_path, records, declared))
+    assert [r[0] for r in rows] == ["nudge vs bare", "add vs bare"]
+    assert rows[0][5:] == ["0.0500", "yes"]
+    assert rows[1] == ["add vs bare", "all criteria", "0/0", _arm_cell(2, 10), "N/A", "—", "—"]
+
+
+def test_the_contrasts_block_follows_the_fraction_and_carries_a_neutral_note(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    content = _ct_render(tmp_path, records, _PAIR.format(t="nudge", c="bare"))
+    assert content.index("### Hard-Criteria Fraction") < content.index(_CONTRASTS_HEADING)
+    assert content.index(_CONTRASTS_HEADING) < content.index("### Efficiency")
+    note = " ".join(line for line in _ct_block(content) if line.startswith(">"))
+    assert "`[contrasts]`" in note and "Wilson 95%" in note and "directional" in note
+
+
+def test_a_malformed_pair_warns_and_is_skipped(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    declared = '[[contrasts.pair]]\ntreatment = "nudge"\n' + _PAIR.format(t="nudge", c="bare")
+    with pytest.warns(UserWarning, match=r"contrasts\.pair 1 .*control"):
+        content = _ct_render(tmp_path, records, declared)
+    assert [r[0] for r in _ct_rows(content)] == ["nudge vs bare"]
+
+
+def test_an_alpha_outside_zero_and_one_warns_and_renders_no_contrasts(tmp_path):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    declared = "[contrasts]\nalpha = 5\n" + _PAIR.format(t="nudge", c="bare")
+    with pytest.warns(UserWarning, match="alpha"):
+        content = _ct_render(tmp_path, records, declared)
+    assert _CONTRASTS_HEADING not in content
+
+
+@pytest.mark.parametrize(
+    ("declared", "message"),
+    [
+        ("contrasts = 3\n", "contrasts must be a table"),
+        ('[[contrasts.pair]]\ntreatment = "nudge"\ncontrol = "bare"\ncriterion = 3\n', "criterion"),
+    ],
+)
+def test_a_declaration_of_the_wrong_type_warns_instead_of_failing(tmp_path, declared, message):
+    records = _ct_trials("nudge", 10, 8) + _ct_trials("bare", 10, 2)
+    with pytest.warns(UserWarning, match=message):
+        content = _ct_render(tmp_path, records, declared)
+    assert _CONTRASTS_HEADING not in content

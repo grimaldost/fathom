@@ -33,6 +33,11 @@ When reading it:
   `[verify] hard_criteria` limits the count to those criteria; the last column
   says whether the tasks declared them. Two arms with the same pass rate can
   differ here. It has no interval, so quote it as a point estimate.
+- **Contrasts** appears when the bank's `bank.toml` declares `[contrasts]` pairs. Per
+  pair: both arms' counts with Wilson intervals, a one-sided Fisher p for the treatment
+  passing more often than the control, and a Holm threshold over the section's pairs.
+  Quote the counts with the p; at small N a contrast is directional. A `Not compared`
+  line means a pair names an arm the ledger does not hold.
 - **Economy** gives min/median/max per trial; where the ranges overlap, the arms
   are not separated at this number of trials. **Arm Health**, when present, marks
   arms whose trials reached `max_turns`: their pass rates are lower bounds.

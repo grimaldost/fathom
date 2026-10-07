@@ -13,7 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from fathom.calibration import hard_fraction
+from fathom.calibration import fisher_one_sided, hard_fraction
 
 LEDGER_DIR = pathlib.Path("ledger")
 REPORT_DIR = pathlib.Path("report")
@@ -48,6 +48,9 @@ _MCP_CALLS_NOTE = (
     " describe the arm without its treatment. Re-runs of one cell share a stream name, so a"
     " cell run more than once sums the streams of every run."
 )
+_CONTRAST_ALPHA = 0.05
+_CONTRAST_ALL_CRITERIA = "all criteria"
+_CONTRASTS_HEADING = "### Contrasts"
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -219,6 +222,94 @@ def _load_task_tags(bank: str, tasks_dir: pathlib.Path = TASKS_DIR) -> dict[str,
     except Exception:
         return {}
     return {t.id: dict(t.tags) for t in loaded.tasks}
+
+
+@dataclass(frozen=True)
+class ContrastPair:
+    """One declared comparison: does *treatment* pass more often than *control*?"""
+
+    treatment: str
+    control: str
+    criterion: str | None = None  # None compares the all-criteria pass
+
+
+def _load_contrasts(
+    bank: str, tasks_dir: pathlib.Path = TASKS_DIR
+) -> tuple[float, list[ContrastPair]]:
+    """(alpha, pairs) from the optional ``[contrasts]`` table of tasks/<bank>/bank.toml.
+
+    The shape is ``[contrasts]`` with an optional ``alpha`` (default 0.05), and one
+    ``[[contrasts.pair]]`` per comparison with ``treatment``, ``control`` and an optional
+    ``criterion``. ``load_bank`` reads only the three manifest keys and nothing hashes
+    bank.toml, so the declaration changes no trial and no resume key.
+
+    No table, no bank.toml, or a bank.toml that cannot be read gives no pairs (the
+    Hard-Criteria Fraction's loader already warns about an unreadable bank). An alpha that is
+    not a number between 0 and 1 warns and gives no pairs; a pair without a string
+    ``treatment`` and ``control``, or with a ``criterion`` that is not a string, warns and is
+    skipped.
+    """
+    import tomllib
+
+    path = pathlib.Path(tasks_dir) / bank / "bank.toml"
+    try:
+        with open(path, "rb") as f:
+            declared = tomllib.load(f).get("contrasts")
+    except (OSError, tomllib.TOMLDecodeError):
+        return _CONTRAST_ALPHA, []
+    if declared is None:
+        return _CONTRAST_ALPHA, []
+    if not isinstance(declared, dict):
+        warnings.warn(f"{path}: contrasts must be a table; no contrasts rendered", stacklevel=2)
+        return _CONTRAST_ALPHA, []
+    alpha = declared.get("alpha", _CONTRAST_ALPHA)
+    if isinstance(alpha, bool) or not isinstance(alpha, int | float) or not 0 < alpha < 1:
+        warnings.warn(
+            f"{path}: contrasts alpha must be a number between 0 and 1, got {alpha!r}; "
+            "no contrasts rendered",
+            stacklevel=2,
+        )
+        return _CONTRAST_ALPHA, []
+    raw_pairs = declared.get("pair", [])
+    if not isinstance(raw_pairs, list):
+        raw_pairs = [raw_pairs]
+    pairs: list[ContrastPair] = []
+    for number, raw in enumerate(raw_pairs, 1):
+        entry = raw if isinstance(raw, dict) else {}
+        problems = [key for key in ("treatment", "control") if not isinstance(entry.get(key), str)]
+        criterion = entry.get("criterion")
+        if criterion is not None and not isinstance(criterion, str):
+            problems.append("criterion")
+        if problems:
+            warnings.warn(
+                f"{path}: contrasts.pair {number} needs a string {' and '.join(problems)}; "
+                "the pair is skipped",
+                stacklevel=2,
+            )
+            continue
+        pairs.append(ContrastPair(entry["treatment"], entry["control"], criterion))
+    return float(alpha), pairs
+
+
+def _holm(p_values: Sequence[float], alpha: float) -> list[tuple[float, bool]]:
+    """Holm's step-down over one family: (threshold, below) for each p, in the input order.
+
+    In ascending p order (ties keep the input order) the i-th p, counting from 0, has the
+    threshold alpha / (m - i). A p is below when it is at or under its threshold and every
+    p before it in that order is too: the first miss stops the step-down.
+    """
+    m = len(p_values)
+    out: list[tuple[float, bool]] = [(alpha, False)] * m
+    below = True
+    for rank, i in enumerate(sorted(range(m), key=lambda j: p_values[j])):
+        threshold = alpha / (m - rank)
+        below = below and p_values[i] <= threshold
+        out[i] = (threshold, below)
+    return out
+
+
+def _fmt_p(p: float) -> str:
+    return "<0.0001" if p < 0.0001 else f"{p:.4f}"
 
 
 # --- Spread and health: qualify the point estimates the ledger already lets us qualify ---
@@ -462,6 +553,7 @@ def render(
     turn_caps = _load_turn_caps(bank, tasks_dir)
     task_criteria = _load_task_criteria(bank, tasks_dir)
     task_tags = _load_task_tags(bank, tasks_dir)
+    contrast_alpha, contrast_pairs = _load_contrasts(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
@@ -631,6 +723,99 @@ def render(
                     if is_pass(t.get("verifier_results")):
                         passes += 1
         return passes, n, infra, len(completed_tasks)
+
+    def _criterion_counts(sc: str, task_list: list[str], criterion: str | None) -> tuple[int, int]:
+        # (passes, completed trials) on *criterion*, counted as in Per-Criterion Pass Rates:
+        # the completed trials whose verifier returned it. None counts the all-criteria pass.
+        if criterion is None:
+            passes, n, _infra, _k = _stats(sc, task_list)
+            return passes, n
+        passes = n = 0
+        for tid in task_list:
+            for rep in reps_for.get((sc, tid), []):
+                t = trials.get((sc, tid, rep))
+                if t is None or t.get("infra_error") or t.get("status") != "completed":
+                    continue
+                vr = t.get("verifier_results")
+                if isinstance(vr, dict) and criterion in vr:
+                    n += 1
+                    passes += bool(vr[criterion])
+        return passes, n
+
+    def _contrasts_block(task_list: list[str]) -> list[str]:
+        # One row per declared pair whose arms the ledger holds: both arms' counts with a
+        # Wilson interval, a one-sided Fisher p for "treatment passes more often", and Holm's
+        # step-down over the pairs of this section that have a p. A pair naming an arm the
+        # ledger does not hold gets a note line instead. Empty when the bank declares none.
+        if not contrast_pairs:
+            return []
+
+        def _arm_cell(passes: int, n: int) -> str:
+            if not n:
+                return "0/0"
+            lo, hi = wilson_interval(passes, n)
+            return f"{passes}/{n} ({_pct(passes / n)}) [{_pct(lo)}, {_pct(hi)}]"
+
+        tested: list[tuple[float, str]] = []  # (p, the row's cells up to the p)
+        untested: list[str] = []
+        notes: list[str] = []
+        for pair in contrast_pairs:
+            missing = [arm for arm in (pair.treatment, pair.control) if arm not in all_sc]
+            if missing:
+                notes.append(
+                    f"> Not compared: {pair.treatment} vs {pair.control}. The ledger has no arm"
+                    f" named {' or '.join(dict.fromkeys(missing))}."
+                )
+                continue
+            tp, tn = _criterion_counts(pair.treatment, task_list, pair.criterion)
+            cp, cn = _criterion_counts(pair.control, task_list, pair.criterion)
+            cells = (
+                f"| {pair.treatment} vs {pair.control}"
+                f" | {pair.criterion or _CONTRAST_ALL_CRITERIA}"
+                f" | {_arm_cell(tp, tn)} | {_arm_cell(cp, cn)} |"
+            )
+            if tn and cn:
+                tested.append((fisher_one_sided(cp, cn, tp, tn), cells))
+            else:
+                untested.append(cells)
+        holm = _holm([p for p, _ in tested], contrast_alpha)
+        out = [_CONTRASTS_HEADING, ""]
+        if tested or untested:
+            out += [
+                (
+                    "| Treatment vs control | Criterion | Treatment | Control"
+                    " | Fisher p (one-sided) | Holm threshold | Below threshold |"
+                ),
+                "|---|---|---|---|---|---|---|",
+            ]
+            # In p order, so the step-down reads top to bottom; sorted() keeps ties in
+            # declaration order, as _holm does.
+            for (p, cells), (threshold, below) in sorted(
+                zip(tested, holm, strict=True), key=lambda item: item[0][0]
+            ):
+                out.append(f"{cells} {_fmt_p(p)} | {threshold:.4f} | {'yes' if below else 'no'} |")
+            out += [f"{cells} N/A | — | — |" for cells in untested]
+            out.append("")
+        for note in notes:
+            out += [note, ""]
+        if tested or untested:
+            out += [
+                (
+                    "> Pairs declared in the bank's `bank.toml` under `[contrasts]`. Each arm"
+                    " cell is passes/completed trials, the rate and its Wilson 95% interval;"
+                    " infra and errored trials are left out, and on a named criterion only the"
+                    " trials whose verifier returned it count. The p is a one-sided Fisher exact"
+                    " test of the treatment passing more often than the control. Holm's"
+                    " step-down runs over this section's pairs that have a p, at α ="
+                    f" {contrast_alpha:g}: in p order the thresholds are α/m, α/(m-1), … α, and"
+                    " a pair is below threshold when its p and every smaller p are at or under"
+                    " theirs. A pair with an arm that has no completed trial here has no p."
+                    " Trials pool tasks and repeats, which are correlated, and N per cell is"
+                    " small, so read a contrast as directional."
+                ),
+                "",
+            ]
+        return out
 
     def _saturation_banner(task_list: list[str]) -> str | None:
         # An arm passes a task when at least half of its completed trials on that task pass.
@@ -840,6 +1025,8 @@ def render(
                 " within one trial tend to pass or fail together (ADR-0009)."
             )
             lines.append("")
+
+        lines.extend(_contrasts_block(task_list))
 
         if bare_ch:
             pw_rows: list[tuple] = []
