@@ -1267,6 +1267,9 @@ def main(argv: list[str] | None = None) -> int:
     """Standalone entry: parse smoke flags, run the gate. Returns the exit code."""
     import argparse
 
+    from fathom.cli import use_utf8_streams
+
+    use_utf8_streams()
     p = argparse.ArgumentParser(
         prog="fathom smoke",
         description="Check spawn isolation on real spawns; run it before any paid matrix "

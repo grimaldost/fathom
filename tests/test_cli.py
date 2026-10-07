@@ -2490,6 +2490,68 @@ class VersionFlagTests(unittest.TestCase):
         self.assertIn("not installed", out)
 
 
+class _Cp1252Console:
+    """Swaps sys.stdout and sys.stderr for strict cp1252 text streams, as a Windows console
+    of the legacy code page has, and keeps the bytes each one received."""
+
+    def __enter__(self):
+        self.out_raw, self.err_raw = io.BytesIO(), io.BytesIO()
+        self.out = io.TextIOWrapper(self.out_raw, encoding="cp1252", errors="strict")
+        self.err = io.TextIOWrapper(self.err_raw, encoding="cp1252", errors="strict")
+        self._saved = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = self.out, self.err
+        return self
+
+    def __exit__(self, *exc):
+        sys.stdout, sys.stderr = self._saved
+        return False
+
+    def text(self, stream: str) -> str:
+        wrapper, raw = (self.out, self.out_raw) if stream == "out" else (self.err, self.err_raw)
+        wrapper.flush()
+        return raw.getvalue().decode("utf-8")
+
+
+class Utf8StreamsTests(unittest.TestCase):
+    """A character outside the console's code page never crashes a command."""
+
+    NON_CP1252 = "日本語"  # not encodable in cp1252
+
+    def test_an_error_on_stderr_survives_a_cp1252_console(self):
+        from fathom.cli import main
+
+        with _Cp1252Console() as console:
+            code = main(["--home", f"no/such/{self.NON_CP1252}", "report", "example"])
+            written = console.text("err")
+        self.assertEqual(code, 1)
+        self.assertIn(self.NON_CP1252, written)
+
+    def test_output_on_stdout_survives_a_cp1252_console(self):
+        from unittest import mock
+
+        from fathom import smoke
+
+        def _say(_probes, **_kw):
+            print(f"checked {self.NON_CP1252}")
+            return 0
+
+        with _Cp1252Console() as console, mock.patch.object(smoke, "run_smoke", _say):
+            code = smoke.main(["--no-engine-boundary"])
+            written = console.text("out")
+        self.assertEqual(code, 0)
+        self.assertIn(self.NON_CP1252, written)
+
+    def test_a_stream_that_cannot_be_reconfigured_is_left_alone(self):
+        from fathom.cli import use_utf8_streams
+
+        saved = sys.stdout, sys.stderr
+        sys.stdout, sys.stderr = io.StringIO(), io.StringIO()
+        try:
+            use_utf8_streams()
+        finally:
+            sys.stdout, sys.stderr = saved
+
+
 class UnpublishedWarningTests(unittest.TestCase):
     """`fathom report` warns when no write-up names the bank.
 

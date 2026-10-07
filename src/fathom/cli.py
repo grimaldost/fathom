@@ -1513,8 +1513,22 @@ def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | 
     )
 
 
+def use_utf8_streams() -> None:
+    """Make stdout and stderr write UTF-8, replacing what still cannot be encoded.
+
+    A Windows console on a legacy code page raises UnicodeEncodeError on the first character
+    outside it, in a path, a task name or an agent's reply. A stream without ``reconfigure``
+    (the StringIO a test substitutes) is left as it is.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code (called via sys.exit by setuptools)."""
+    use_utf8_streams()
     parser = _build_parser()
     args = parser.parse_args(argv)
 

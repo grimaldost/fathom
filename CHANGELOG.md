@@ -6,6 +6,12 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **No crash on a character outside the console's code page.** `fathom` and `fathom smoke`
+  now write stdout and stderr as UTF-8, replacing what cannot be encoded, so a non-ASCII path
+  or reply no longer ends a run with a UnicodeEncodeError on a Windows console.
+
 ## [0.9.0] - 2026-10-07
 
 A minor release, pre-1.0: it adds ledger fields, scorecard sections, a fresh-agent acceptance
