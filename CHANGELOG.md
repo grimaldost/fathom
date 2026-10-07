@@ -16,6 +16,8 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   `config_hash`, its preimage or the resume key, and it changes no scorecard. Rows written
   before it load with an empty list and are never rewritten; series-strategy runs, which
   are built from the engine's spawn events rather than a CLI stream, carry an empty list.
+  Run rows written from now on carry the key, so a reader that checks a row against a fixed
+  set of keys sees one more.
 
 - **The authoring guide covers a mounted plugin's MCP servers and an answer key beside the
   verifier.** `arming.md`, section 10, says where a plugin declares its MCP servers (under
@@ -44,10 +46,12 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   their numbers, so a section number names the same text it did before; a citation of a
   section outside `authoring.md` now names its file (`arming.md`, section 10), in the guide,
   the skill, the READMEs, `CLAUDE.md`, ADR-0003, the backlog and the `validate.py`
-  docstrings. Each file states a line budget in its header (800,
-  450 and 175 lines), so an addition past it has to displace something, and a test holds
-  each file to its budget and checks that every cited section is in the file the citation
-  names. The skill links all three files.
+  docstrings. Each file states a line budget in its header (800, 450 and 175 lines), so an
+  addition past it has to displace something, and a test holds each file to its budget and
+  checks that every cited section is in the file the citation names. The skill links all
+  three files. A citation kept outside this repository, in a data root's notes for example,
+  that names `authoring.md` and a section that moved must now name the section's new file;
+  the number is unchanged.
 
 ### Fixed
 
@@ -60,7 +64,8 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   was written, which is the end of the spawn, so the files of a trial's retries and of
   trials that overlapped sorted by their ends. The `<ms>` part is now the wall-clock time
   just before the spawn began. The name keeps its shape, so `fathom report` finds the
-  files as before; the adapter takes an optional `wall_clock` for tests.
+  files as before; the adapter takes an optional `wall_clock` for tests. A tool of your own
+  that reads `<ms>` as the time a stream ended now reads the time its spawn started.
 
 ## [0.9.0] - 2026-10-07
 
