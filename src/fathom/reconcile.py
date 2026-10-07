@@ -82,6 +82,11 @@ from fathom import ledgerindex
 # because the CLI and callers of this module name them through it.
 CONFIG_FILE = ledgerindex.CONFIG_FILE
 PLUGIN_MANIFEST = ledgerindex.PLUGIN_MANIFEST
+# Front-door documents that tell a reader how to install a release. A pinned install line
+# (`git+https://.../fathom@vX.Y.Z`) in one of them is a version site; a document without
+# one is not. Nothing held these pins, and they stayed two releases behind.
+INSTALL_PIN_DOCS = ("README.md", "README-plugin.md", "skills/fathom-eval/reference/authoring.md")
+_INSTALL_PIN = re.compile(r"git\+https://\S+?/fathom@v(\d+\.\d+\.\d+)")
 is_data_root = ledgerindex.is_data_root
 root_kind = ledgerindex.root_kind
 not_a_root_message = ledgerindex.not_a_root_message
@@ -288,7 +293,10 @@ def version_sites(root: Path) -> dict[str, str | None]:
     on — the runtime fetches a plugin again only when this value moves), and the newest
     ``## [X.Y.Z]`` heading of ``CHANGELOG.md`` (what the record says shipped).
     ``[Unreleased]`` is not a site: entries accumulate there between cuts while every
-    versioned site correctly stays at the previous release.
+    versioned site correctly stays at the previous release. Each pinned install line in
+    :data:`INSTALL_PIN_DOCS` is a site too (``<doc> (install pin)``), so a release that
+    leaves a reader installing the previous tag fails here; a pin that disagrees wins over
+    one that agrees, so one stale line in a document is not hidden by another.
     """
     sites: dict[str, str | None] = {}
 
@@ -318,6 +326,15 @@ def version_sites(root: Path) -> dict[str, str | None]:
     except (OSError, UnicodeDecodeError):
         version = None
     sites["CHANGELOG.md"] = version
+
+    for doc in INSTALL_PIN_DOCS:
+        try:
+            pins = _INSTALL_PIN.findall((root / doc).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        if pins:
+            stale = [pin for pin in pins if pin != sites["pyproject.toml"]]
+            sites[f"{doc} (install pin)"] = stale[0] if stale else pins[0]
 
     return sites
 
@@ -362,7 +379,7 @@ def check_version_sites(root: Path) -> list[Discrepancy]:
                     detail=(
                         f"states {version} while pyproject.toml states {reference} — a "
                         "release moved one version site without the others; bump this site "
-                        "to match (the release ritual owns all three in one commit)"
+                        "to match (the release ritual owns all of them in one commit)"
                     ),
                 )
             )

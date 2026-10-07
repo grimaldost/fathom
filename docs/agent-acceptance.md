@@ -186,7 +186,8 @@ scenarios selected. The preflight is one session capped at $0.20.
 From an engine checkout, with your data root as an argument (it defaults to `FATHOM_HOME`):
 
 ```sh
-# Prepare the workspaces and print each subject's command, env changes and prompt.
+# Prepare the workspaces, print each subject's command, env changes and prompt, then remove
+# the workspaces (add --keep-workspaces to inspect them).
 uv run python tools/agent_acceptance.py --dry-run --data-root DIR
 
 # One short session: is the plugin visible, and does its MCP server answer? Cents.

@@ -3179,7 +3179,19 @@ def print_plan(
         print()
     for line in spend_summary([p.scenario for p in prepared], budget_usd):
         print(line)
-    print("Dry run: workspaces prepared, nothing spawned.")
+    print("Dry run: nothing spawned.")
+
+
+def discard_workspaces(prepared: Sequence[Prepared]) -> list[str]:
+    """Remove the workspace and scratch directories of subjects that will not run, and
+    return them. A clone workspace holds a copy of the data root, and on Windows the
+    default root (``%PUBLIC%``) is readable by every local account."""
+    removed: list[str] = []
+    for p in prepared:
+        for directory in (p.workspace.parent, p.scratch):
+            cleanup_dir(str(directory))
+            removed.append(str(directory))
+    return removed
 
 
 # ---------------------------------------------------------------------------
@@ -3251,6 +3263,11 @@ def _parser() -> argparse.ArgumentParser:
         "--keep-data-instructions",
         action="store_true",
         help="leave the data root's CLAUDE.md, AGENTS.md and .claude/ in the clones",
+    )
+    parser.add_argument(
+        "--keep-workspaces",
+        action="store_true",
+        help="with --dry-run, keep the prepared workspaces for inspection (default: remove them)",
     )
     parser.add_argument(
         "--dry-run",
@@ -3431,8 +3448,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         for sid, found in exposures.items():
             for problem in found:
                 print(f"error: {sid}: {problem}", file=sys.stderr)
+        discard_workspaces(prepared)
         return EXIT_USAGE
     if args.dry_run:
+        if args.keep_workspaces:
+            print("Workspaces kept for inspection at the paths above; delete them when done.")
+        else:
+            discard_workspaces(prepared)
+            print("Workspaces removed (pass --keep-workspaces to keep them).")
         return EXIT_PASSED
 
     claude = shutil.which("claude")

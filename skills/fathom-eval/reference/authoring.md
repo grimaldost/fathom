@@ -61,7 +61,7 @@ A working example of everything described here is in
 Install the engine once, as a command-line tool:
 
 ```sh
-uv tool install git+https://github.com/grimaldost/fathom@v0.8.0
+uv tool install git+https://github.com/grimaldost/fathom@v0.10.0
 ```
 
 or work from a clone: `uv run --project <clone> fathom …` runs the clone's engine from any
