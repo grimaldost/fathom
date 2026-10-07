@@ -73,5 +73,7 @@ Tell the user before and while running:
 - The argument hint lists every flag except the older spelling `--max-budget-usd`;
   `fathom run --help` describes each one.
 - Results append to `ledger/<bank>.jsonl` in the data root. Afterwards, re-render
-  the ledger index (`index --write`, same invocation form as above), run
+  the ledger index (`index --write`, same invocation form as above); the `run summary:`
+  line says `ledger index is now stale: refresh it with fathom index --write` when the
+  run left a kept index out of date, and says nothing otherwise. Then run
   `/fathom:reconcile`, and render the scorecard with `/fathom:report <bank>`.

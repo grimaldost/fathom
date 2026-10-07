@@ -49,7 +49,7 @@ from fathom import ledger as _ledger  # noqa: E402
 from fathom import reconcile as _reconcile  # noqa: E402
 from fathom.adapters.base import ExitStatus  # noqa: E402
 from fathom.adapters.base import RunRecord as AdapterRunRecord  # noqa: E402
-from fathom.cli import main  # noqa: E402
+from fathom.cli import EXIT_UNRECONCILED, main  # noqa: E402
 from fathom.strategies.base import PIN_STRONG, TrialResult, TrialStatus  # noqa: E402
 
 BANK = "example"
@@ -282,6 +282,92 @@ class SameResultFromAnywhereTests(unittest.TestCase):
         for _mode, r in self._each():
             for line in r["after"][len(r["before"]) :]:
                 self.assertEqual(json.loads(line)["engine_version"], _ledger.engine_version())
+
+
+class RunSummaryIndexHintTests(unittest.TestCase):
+    """The run summary says when the rows it appended left the ledger index stale.
+
+    A fresh agent ran a measurement and skipped ``fathom index --write``, so ``fathom
+    reconcile`` failed afterwards. The summary line is where an agent looks when a run ends,
+    so it names the command; it says nothing when there is nothing to refresh.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = _copy_fixture(Path(self._tmp.name))
+        self.assertTrue(
+            ledgerindex.is_current(self.root), "the fixture starts with a current index"
+        )
+
+    def _summary(self, argv: list[str]) -> str:
+        with _no_spawns():
+            code, out, err = _call(argv, cwd=self.root)
+        self.assertEqual(code, 0, out + err)
+        lines = [ln for ln in out.splitlines() if ln.startswith("run summary:")]
+        self.assertEqual(len(lines), 1, out)
+        return lines[0]
+
+    def test_a_run_that_appended_rows_names_the_command_that_refreshes_the_index(self) -> None:
+        line = self._summary(RUN)
+        self.assertFalse(ledgerindex.is_current(self.root), "the run left the index stale")
+        self.assertIn("ledger index is now stale", line)
+        self.assertIn("fathom index --write", line)
+        # The resume command stays the last field, so a reader copying it gets it whole.
+        self.assertTrue(line.index("fathom index --write") < line.index("; resume: fathom run"))
+        code, out, err = _call(["reconcile"], cwd=self.root)
+        self.assertEqual(
+            code, EXIT_UNRECONCILED, "reconcile flags the stale index the clause warned of"
+        )
+        self.assertIn("ledger-index", out)
+        # Running what the clause names is enough.
+        code, out, err = _call(["index", "--write"], cwd=self.root)
+        self.assertEqual(code, 0, out + err)
+        code, out, err = _call(["reconcile"], cwd=self.root)
+        self.assertEqual(code, 0, out + err)
+        self.assertIn("RECONCILE: OK", out)
+
+    def test_a_run_from_elsewhere_names_the_command_with_its_home(self) -> None:
+        elsewhere = self.root.parent / "elsewhere"
+        elsewhere.mkdir()
+        with _no_spawns():
+            code, out, err = _call(["--home", str(self.root), *RUN], cwd=elsewhere)
+        self.assertEqual(code, 0, out + err)
+        line = next(ln for ln in out.splitlines() if ln.startswith("run summary:"))
+        self.assertIn(f"fathom --home {self.root} index --write", line)
+
+    def test_a_dry_run_prints_no_summary_and_so_no_clause(self) -> None:
+        with _no_spawns():
+            code, out, err = _call([*RUN, "--dry-run"], cwd=self.root)
+        self.assertEqual(code, 0, out + err)
+        self.assertNotIn("run summary", out)
+        self.assertNotIn("index --write", out)
+        self.assertTrue(ledgerindex.is_current(self.root), "a dry run appends nothing")
+
+    def test_a_root_that_keeps_no_index_gets_no_clause(self) -> None:
+        (self.root / ledgerindex.INDEX_PATH).unlink()
+        line = self._summary(RUN)
+        self.assertNotIn("index", line)
+
+    def test_a_side_ledger_leaves_the_roots_index_alone_and_says_nothing(self) -> None:
+        side = self.root.parent / "side-ledger"
+        shutil.copytree(self.root / "ledger", side)
+        line = self._summary([*RUN, "--ledger-dir", str(side)])
+        self.assertNotIn("index", line)
+        self.assertTrue(ledgerindex.is_current(self.root))
+
+    def test_a_current_index_or_no_appended_rows_says_nothing(self) -> None:
+        from fathom.cli import _index_stale_clause
+
+        cmd = "fathom index --write"
+        ledger = self.root / "ledger"
+        self.assertIsNone(_index_stale_clause(self.root, ledger, 2, cmd), "index is current")
+        row = '{"kind": "trial", "scenario": "seeded", "status": "completed"}\n'
+        with _ledger_path(self.root).open("a", encoding="utf-8", newline="\n") as fh:
+            fh.write(row)
+        self.assertFalse(ledgerindex.is_current(self.root))
+        self.assertIsNone(_index_stale_clause(self.root, ledger, 0, cmd), "nothing appended")
+        self.assertIsNotNone(_index_stale_clause(self.root, ledger, 1, cmd))
 
 
 class PrecedenceTests(unittest.TestCase):

@@ -82,7 +82,8 @@ What each step does:
   smoke can still end in `SMOKE RESULT: ALL PASS`.
 - **`fathom index --write`** re-renders `docs/reports/LEDGER-INDEX.md`, which records each
   ledger's hash and completed trials per arm. Run it after each paid run and commit it with
-  the ledger; `fathom reconcile` fails while it is out of date.
+  the ledger; `fathom reconcile` fails while it is out of date. When a run leaves the index
+  stale, its `run summary:` line says so and names this command.
 
 ## The data root
 
