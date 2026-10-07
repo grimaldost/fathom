@@ -171,10 +171,16 @@ what enters `config_hash` updates it in the same pull request. The parsers
 
 A release is a metadata-only commit on its own branch, merged through a pull request:
 
-1. Roll `[Unreleased]` into a dated `## [X.Y.Z] - YYYY-MM-DD` heading, and state the bump
+1. For a release that changes `commands/`, `skills/`, `mcp/` or the authoring guide, run
+   the fresh-agent acceptance test on the release branch before merging:
+   `uv run python tools/agent_acceptance.py --preflight-only --data-root DIR`, then
+   `--scenarios S1,S3,S2`. Record its verdict in the release PR. It needs a working
+   Claude login and spends money; link [`docs/agent-acceptance.md`](docs/agent-acceptance.md)
+   and its Cost section for the caps.
+2. Roll `[Unreleased]` into a dated `## [X.Y.Z] - YYYY-MM-DD` heading, and state the bump
    class and the reason for it in the heading's prose.
-2. Bump the version in `pyproject.toml` and `.claude-plugin/plugin.json`.
-3. Run `uv lock`.
+3. Bump the version in `pyproject.toml` and `.claude-plugin/plugin.json`.
+4. Run `uv lock`.
 
 The `version-sites` reconciliation holds the three version sites together, so a half-done
 bump fails the suite. Keep feature work out of the release commit, so that bisect and
