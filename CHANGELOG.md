@@ -55,9 +55,14 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Fixed
 
-- **No crash on a character outside the console's code page.** `fathom` and `fathom smoke`
-  now write stdout and stderr as UTF-8, replacing what cannot be encoded, so a non-ASCII path
-  or reply no longer ends a run with a UnicodeEncodeError on a Windows console.
+- **No crash on a character outside the locale's code page.** On Windows, Python encodes
+  output sent to a pipe or a file in the locale's code page (cp1252, for example), so a path,
+  task name or reply holding a character outside it ended `fathom` or `fathom smoke` with a
+  UnicodeEncodeError. Both now write stdout and stderr as UTF-8 on every platform, replacing
+  what cannot be encoded. A program that reads their output through a pipe on Windows and
+  decodes it in the locale's code page now misreads each non-ASCII character and must decode
+  it as UTF-8. The plugin's MCP server did that; it now reads the engine's output as UTF-8,
+  and a test compares what it reads with what the engine wrote.
 
 - **A kept stream is named by when its spawn started.** The file `fathom run` keeps
   for a trial's agent stream (`<tag>--a<attempt>--<ms>.ndjson`) carried the time the stream

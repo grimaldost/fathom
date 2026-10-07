@@ -77,8 +77,17 @@ def _engine_env() -> dict[str, str]:
 
 def _run_fathom(args: list[str], home: pathlib.Path, timeout: float) -> dict[str, Any]:
     cmd = fathom_command(home, args)
+    # The engine writes UTF-8 whatever the locale (fathom.cli.use_utf8_streams); read in the
+    # locale's code page, cp1252 on Windows, each non-ASCII character would come back garbled.
     proc = subprocess.run(
-        cmd, cwd=home, env=_engine_env(), capture_output=True, text=True, timeout=timeout
+        cmd,
+        cwd=home,
+        env=_engine_env(),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=timeout,
     )
     return {
         "cmd": " ".join(cmd),
