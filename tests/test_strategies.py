@@ -106,7 +106,7 @@ branch = "demo/pr01"
 prompt = "pr01.md"
 phase = "1"
 depends_on = []
-model = "claude-haiku-4-5"
+model = "claude-haiku-5-5"
 effort = "low"
 budget = 1.0
 

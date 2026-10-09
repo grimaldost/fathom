@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from fathom.adapters.claude_cli import Spawn
 
 # Cheap defaults — the probe reads pre-turn events, so capability is irrelevant.
-PROBE_MODEL = "claude-haiku-4-5"
+PROBE_MODEL = "claude-haiku-5-5"
 PROBE_EFFORT = "low"
 PROBE_TIMEOUT_S = 180.0
 PROBE_MAX_BUDGET_USD = 0.20

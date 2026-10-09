@@ -234,7 +234,7 @@ def _arm(name: str, extras: tuple[str, ...], strategy: str = "gated-session") ->
     return ResolvedScenario(
         name=name,
         adapter="claude-cli",
-        model="claude-haiku-4-5",
+        model="claude-haiku-5-5",
         strategy=strategy,
         effort="low",
         tools=ToolsConfig(source="none"),

@@ -53,6 +53,10 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 - **Scope note: `claude plugin eval`.** The README and the skill now say that a plain
   with/without check of one plugin, or whether a skill triggers, belongs to `claude plugin eval`
   (Claude Code v2.1.269 or later), and name what only fathom covers.
+- **Live model ids move to the 5.5 lineup.** `fathom smoke` and the arming probe now spawn
+  `claude-haiku-5-5`; the guide's and the guardrail recipe's example arms name `claude-haiku-5-5` and
+  `claude-sonnet-5-5`. The example data root stays pinned to `claude-haiku-4-5` because its arms'
+  model enters their recorded hashes.
 
 ### Fixed
 

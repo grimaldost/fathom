@@ -89,7 +89,7 @@ if TYPE_CHECKING:
 
 # Cheap, fast defaults for the real spawns — the smoke gate proves isolation, not
 # capability, so it uses a small model, low effort, few turns, and a low budget.
-DEFAULT_SMOKE_MODEL = "claude-haiku-4-5"
+DEFAULT_SMOKE_MODEL = "claude-haiku-5-5"
 DEFAULT_SMOKE_EFFORT = "low"
 DEFAULT_SPAWN_TIMEOUT_S = 180.0
 # The engine boundary uses a token-free shim, so its wall-clock is only the
@@ -154,7 +154,7 @@ prompts = "prompts"
 outputs = "outputs"
 
 [governance]
-model = "claude-haiku-4-5"
+model = "claude-haiku-5-5"
 effort = "low"
 permission_mode = "acceptEdits"
 timeout_seconds = 120

@@ -36,7 +36,7 @@ and for the deltas it prints beside series arms.
 ```toml
 name = "nudge"                 # required; the arm's name in the ledger and the scorecard
 adapter = "claude-cli"         # required; the only adapter
-model = "claude-haiku-4-5"     # required; passed to `claude --model`
+model = "claude-haiku-5-5"     # required; passed to `claude --model`
 strategy = "single-session"    # required; see the strategy table
 effort = "low"                 # required; passed to `claude --effort` unchanged
 # comparator = "bare"          # optional; buy a cell only after bare completed it ("Comparator")
