@@ -18,12 +18,12 @@ This repository is the engine: the harness, its command line and its Claude Code
 ships no task banks and no results. Those are your data, and they live in a **data root** of
 your own, usually a private repository.
 
-For a plain question of whether one plugin or skill helps, or whether a skill triggers, Claude Code's own
-[`claude plugin eval`](https://code.claude.com/docs/en/plugin-evals) (v2.1.269 or later) is the simpler tool.
-Use fathom when the question needs verifiers written as code that score the final workspace, more than two
-arms (control and placebo arms included), a model-tier or effort crossing, confidence intervals and a
-multiple-comparison correction, sealed holdout tasks, bank validation, or a ledger that accumulates and
-resumes across runs.
+For a plain question of whether one plugin or skill helps, or whether a skill triggers, Claude
+Code's own [`claude plugin eval`](https://code.claude.com/docs/en/plugin-evals) (v2.1.269 or later)
+is the simpler tool. Use fathom when the question needs verifiers written as code that score the
+final workspace, more than two arms (a reprompt control included), a tier-by-treatment or effort
+comparison read in one scorecard, confidence intervals and a multiple-comparison correction,
+sealed holdout tasks, bank validation, or a ledger that accumulates and resumes across runs.
 
 ## Install
 

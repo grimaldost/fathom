@@ -335,11 +335,12 @@ After `fathom report <bank>`, read `report/scorecard-<bank>.md` in the data root
 - The task is ordinary implementation or debugging, not an eval — just do the work.
 - You want to run convoy's multi-PR engine on real work — use convoy directly; fathom
   only drives it as a measured arm.
-- You only want a plain with/without check of one plugin, or to see whether a skill triggers — use
-  `claude plugin eval` (Claude Code v2.1.269 or later). It does not cover verifiers written as code, more
-  than two arms or control and placebo arms, model-tier or effort crossings, confidence intervals, sealed
-  holdout tasks, bank validation, or a ledger that accumulates and resumes; reach for fathom when the
-  question needs any of those.
+- You only want a plain with/without check of one plugin, or to see whether a skill triggers —
+  use `claude plugin eval` (Claude Code v2.1.269 or later). It does not cover verifiers written as
+  code, more than two arms (such as a reprompt control that matches a gated arm's extra spawn,
+  `reprompt-session`), tier-by-treatment or effort comparisons, confidence intervals, sealed
+  holdout tasks, bank validation, or a ledger that accumulates and resumes; reach for fathom when
+  the question needs any of those.
 - You want to change a past result — you cannot; the ledger is append-only, and an
   invalidated run is archived (`ledger/archive/`), never edited.
 - You only want an impression of whether a tool "feels" better, without a scored,
