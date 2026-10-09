@@ -141,15 +141,20 @@ that also changes effort measures both at once.
 
 ## 4. Declare the comparison
 
-The two comparisons the question needs go in `bank.toml` as contrasts. Only `fathom report`
-reads this table and nothing hashes `bank.toml`, so adding it changes no trial and needs no
-`dataset_version` bump. The block restates the example bank's three required keys.
+The two comparisons the question needs go in `bank.toml` as contrasts, and the study's
+replication plan as `[plan] repeats_per_cell`: three completed trials per arm and task, the
+repeats the paid run buys for each new arm. Nothing hashes either table, so adding them
+changes no trial and needs no `dataset_version` bump. The block restates the example bank's
+three required keys.
 
 ```toml
 # tasks/example/bank.toml
 name = "example"
 dataset_version = "1"
 holdout = []
+
+[plan]
+repeats_per_cell = 3
 
 [[contrasts.pair]]
 treatment = "guardrail-haiku"
@@ -182,7 +187,9 @@ Read three things in its output before you spend:
   first twelve characters of its `config_hash`. Four different prefixes are four separate
   histories. An arm that shows the prefix of another arm has the same configuration, so the
   two pool their trials: you did not change what you meant to.
-- **The trial count.** Four arms times one task times three repeats is 12 trials.
+- **The trial count.** Four arms times one task times three repeats is 12 trials. The
+  `replication:` line under it says the run asks for the three repeats the plan declares; a
+  run at fewer would be a screen, and the line would say its contrasts are directional.
 - **The ceiling and the expected spend.** The ceiling is a worst case (planned trials times
   the per-spawn cap). The `expected:` line is an estimate from what trials of this strategy
   and, for a model with at least five trials, that model have cost in this ledger. An empty
@@ -240,7 +247,15 @@ fathom report example
 It renders `report/scorecard-example.md` from the ledger and can be re-run at any time.
 In the copy of the example root the ledger holds only the example's own two arms, so before
 the paid run the four new arms have no rows and each contrast prints a `Not compared` line.
-After the run, read it in this order:
+The line under the title holds the ledger to the plan: while any arm x task cell has fewer
+than three completed trials it starts `> **Directional:**`. The example's own cells hold two
+(`bare/add`, `nudge/add`) and one (`nudge-draft/add`), and the paid run adds nothing to them,
+so the line stays Directional after the run too ("3 of 7 arm x task cells"), and the
+`fathom reconcile` below warns `short:bare/add` and `short:nudge/add` (the copied
+`fathom.toml` already excuses `short:nudge-draft/add`). The four new arms' cells are the ones
+the run fills to three. `nudge-draft` has no scenario file, so its cell cannot be topped up
+and the line stays Directional in this copy whatever else is bought. After the run, read the
+scorecard in this order:
 
 1. **Per-Criterion Pass Rates.** Where arms usually differ. Lead with it.
 2. **Hard-Criteria Fraction.** Criteria met over criteria present, per arm. Two arms with the
@@ -260,4 +275,5 @@ After the run, read it in this order:
    saying so, and cost is then the axis that separates the arms.
 
 Then write the result up under `docs/reports/`, list it in `docs/STATUS.md`, and run
-`fathom reconcile` and `fathom index --write` to keep the derived records current.
+`fathom reconcile` and `fathom index --write` to keep the derived records current. The
+reconcile exits 0 with the two `[WARNING] [replication]` lines above: a warning never fails.

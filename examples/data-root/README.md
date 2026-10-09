@@ -17,7 +17,7 @@ below are its sections, which are numbered across the three files; one outside
 
 ```
 data-root/
-  fathom.toml                        the data-root marker, and one accepted discrepancy
+  fathom.toml                        the data-root marker, and two accepted findings
   .gitignore                         keeps runtime state and rendered scorecards out of git
   .gitattributes                     LF line endings for every text file
   tasks/example/
@@ -46,11 +46,13 @@ which must be the integer 1 (a missing or different value is refused). fathom fi
 root through `--home`, `FATHOM_HOME`, or by walking up from the current directory to the
 nearest `fathom.toml` that has this table (authoring guide, section 2).
 
-The file also holds one `[[reconcile.known]]` entry. The ledger contains a trial from an arm
-called `nudge-draft` whose scenario file was never committed, so `fathom reconcile` reports
-it under the `scenario-known` check. The entry accepts that discrepancy and says why. If the
-discrepancy ever stopped occurring, the entry itself would fail the reconcile as a stale
-exception.
+The file also holds two `[[reconcile.known]]` entries. The ledger contains a trial from an
+arm called `nudge-draft` whose scenario file was never committed, so `fathom reconcile`
+reports it under the `scenario-known` check. The first entry accepts that discrepancy and
+says why. The same trial is the only one in its arm x task cell, one fewer than the bank's
+plan declares, so the `replication` check warns about the cell (`short:nudge-draft/add`); the
+second entry accepts that warning. If either finding ever stopped occurring, its entry would
+fail the reconcile as a stale exception.
 
 ### `.gitignore` and `.gitattributes`
 
@@ -68,7 +70,13 @@ on it, since it reads CRLF as LF before hashing a ledger.
 
 `name` equals the directory name, as it must: the ledger file is named after it.
 `dataset_version = "1"` is part of every trial's resume key; changing the task in a way that
-could change its outcome means bumping it. `holdout = []` seals no task. See section 4.
+could change its outcome means bumping it. `holdout = []` seals no task. The optional
+`[plan] repeats_per_cell = 2` is the study's replication plan: each arm x task cell needs two
+completed trials before a contrast from it counts as replicated. It is not hashed and changes
+nothing a run buys. See section 4. The `nudge-draft` cell holds one trial, so `fathom report
+example` opens with a `> **Directional:**` line ("1 of 3 arm x task cells"), and every contrast
+in it, `bare` against `nudge` included, reads as directional: the `[[reconcile.known]]` entry
+that excuses the cell silences `fathom reconcile` only, and the scorecard has no exceptions.
 
 ### `tasks/example/add/task.toml`
 
@@ -164,7 +172,7 @@ Everything `fathom init` creates is already here: `fathom.toml`, `.gitignore`,
 directory outside the engine repository, `fathom init` would list each of them as `kept` and
 write nothing. Inside the engine repository it refuses, as it refuses any directory inside an
 engine checkout. The one difference from a fresh data root is the content of `fathom.toml`,
-which carries this directory's own comments and its `[[reconcile.known]]` entry where
+which carries this directory's own comments and its `[[reconcile.known]]` entries where
 `fathom init` writes a commented-out template.
 
 ## Try it
@@ -177,9 +185,9 @@ prefix each command with `uv run --project <clone>`.
 ```sh
 fathom validate example           # 2 pass, 1 unverifiable (no gate); exit 0
 fathom run example --dry-run      # arms bare, nudge; 0 trials planned (4 already done)
-fathom report example             # writes report/scorecard-example.md
+fathom report example             # writes report/scorecard-example.md, marked Directional
 fathom index                      # the ledger index is current
-fathom reconcile                  # OK, with the nudge-draft discrepancy excused
+fathom reconcile                  # OK, with the two nudge-draft findings excused
 ```
 
 `fathom validate` needs `git` on PATH to stage the fixture. When `FATHOM_STREAM_DIR` is unset
@@ -188,5 +196,5 @@ it also prints a `note:` line, not a warning, and no action is needed: it says t
 `.fathom/streams/example/` in the data root.
 
 To start your own data root from this one, copy the directory, rename the bank, and delete
-the ledger, the ledger index, the status row and the `[[reconcile.known]]` entry, which all
+the ledger, the ledger index, the status row and the `[[reconcile.known]]` entries, which all
 describe this directory's history rather than yours. `fathom init` is the cleaner start.

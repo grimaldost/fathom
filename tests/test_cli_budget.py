@@ -256,6 +256,13 @@ class TestExpectedSpend(unittest.TestCase):
         self.assertNotIn("expected", lines[planned])
         self.assertTrue(lines[planned + 1].startswith("expected:"))
 
+    def test_the_replication_line_follows_the_expected_line(self):
+        self._history()
+        _, text = self._plan()
+        lines = text.splitlines()
+        expected = next(i for i, ln in enumerate(lines) if ln.startswith("expected:"))
+        self.assertTrue(lines[expected + 1].startswith("replication: "), lines)
+
     def test_a_trial_with_a_run_that_reported_no_cost_is_excluded(self):
         """FATH-B79: a missing cost is not free, so the trial leaves the median out."""
         self._history()

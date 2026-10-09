@@ -31,6 +31,12 @@ Plan a fathom eval matrix without spawning or spending anything.
    its trial count, and that median times the planned trials. Report it beside the
    ceiling, as an estimate from this ledger's own history. It is not a cap, and no
    run is refused or stopped by it. With no history, no line is printed.
+   Every plan then prints one `replication:` line: the bank's `[plan]
+   repeats_per_cell` (in `bank.toml`) against the repeats asked for. Report it
+   whenever it says `directional`: the bank declares no plan, declares 1, or the
+   run asks for fewer repeats than the plan declares (a screen), so any contrast
+   from the run is directional, not replicated. A malformed `[plan]` stops the
+   plan with exit 1 and an `error:` line naming the `bank.toml` and the fault.
    When nothing is planned (the bank is finished for the requested repeats), two more
    lines follow the `planned:` line: `one more repeat:` gives the ceiling of one more
    trial per arm and task and the `--repeats` value that plans it ("at least one more"

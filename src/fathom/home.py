@@ -274,8 +274,9 @@ _CONFIG_TEXT = """\
 [data_root]
 schema = 1
 
-# `fathom reconcile` fails on any discrepancy not declared here. Declare one only for a
-# permanent fact about the recorded history, with its reason:
+# `fathom reconcile` fails on any discrepancy not declared here. A warning (it never fails)
+# can be accepted the same way. Declare one only for a permanent fact about the recorded
+# history, with its reason:
 #
 # [[reconcile.known]]
 # check = "scenario-known"
@@ -283,7 +284,7 @@ schema = 1
 # key = "<arm>"
 # reason = "why this discrepancy is accepted"
 #
-# An entry whose discrepancy no longer occurs fails the reconcile, so none outlives its cause.
+# An entry whose finding no longer occurs fails the reconcile, so none outlives its cause.
 """
 
 _GITIGNORE_TEXT = """\

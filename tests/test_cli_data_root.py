@@ -675,6 +675,18 @@ extra = ["python ${task_dir}/probe.py"]
         self.assertEqual(code, 0, out)
         self.assertIn("[PASS] gate commands name paths that exist", out)
 
+    def test_a_malformed_plan_is_a_validation_failure(self) -> None:
+        manifest = self.root / "tasks" / BANK / "bank.toml"
+        text = manifest.read_text(encoding="utf-8")
+        text = text.replace("repeats_per_cell = 2", "repeats_per_cel = 2")
+        if "[plan]" not in text:
+            text += "\n[plan]\nrepeats_per_cel = 2\n"
+        manifest.write_text(text, encoding="utf-8")
+        code, out = self._validate()
+        self.assertEqual(code, 12, out)
+        self.assertIn("[FAIL] bank.toml [plan] is well formed", out)
+        self.assertIn("repeats_per_cel", out)
+
 
 class EngineVersionTests(unittest.TestCase):
     """Old rows, which carry no engine_version, behave exactly as rows that do."""

@@ -370,6 +370,7 @@ What an edit does to trials already recorded:
 | The content of an injected context or settings file; any file inside a mounted plugin; a new commit in, or a move of, a series engine repository | The same: a new `config_hash`. |
 | In a bank: an instruction, a fixture, a verifier, a limit, a gate, a criterion | Nothing automatic. Bump `dataset_version` (`authoring.md`, section 4) and every trial of the bank is bought again; without the bump, new trials mix with results measured on the old task. |
 | Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs; adding, changing or removing `comparator` | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
+| In `bank.toml`: adding, changing or removing `[plan] repeats_per_cell` or `[contrasts]` | No hash and no resume key moves, and no trial is bought again. The plan changes only what the plan line, new trial rows, the scorecard and `fathom reconcile` say about replication (`authoring.md`, section 4). |
 
 `config_hash` is the sha256 of a canonical JSON rendering (sorted keys) of the resolved arm.
 That exact string, the text that was hashed, is called the **preimage** and is stored on every

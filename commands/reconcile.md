@@ -21,8 +21,9 @@ the same fact and fail while they disagree.
 3. Read the exit code and the last line.
    - **0**: no unexcused disagreement and no stale exception. The last line reads
      `RECONCILE: OK (N check(s) run, N skipped, N disagreement(s), N excused, N stale
-     exception(s))`. Skipped checks and excused (accepted) discrepancies do not change
-     the exit code.
+     exception(s))`, with `, N warning(s)` before the closing parenthesis when a
+     `[WARNING]` line was printed. Skipped checks, warnings and excused (accepted)
+     findings do not change the exit code.
    - **13** (`EXIT_UNRECONCILED`), after the checks ran: at least one `[DISAGREES]` or
      `[STALE EXCEPTION]` line was printed, and the last line reads
      `RECONCILE: FAILED (...)`.
@@ -59,7 +60,15 @@ When reading the output:
   other without establishing which is right. A stale `docs/reports/LEDGER-INDEX.md` is
   fixed by rendering it again: `index --write`, with the same invocation form as in
   step 2.
-- **`[STALE EXCEPTION]`** — an accepted discrepancy stopped occurring, so its entry
+- **`[WARNING] [<check>] <subject> (<key>): <detail>`** — a finding of a check that
+  warns and never fails. Only `replication` does: for a bank with completed trials in its
+  current `dataset_version`, key `undeclared` (its `bank.toml` declares no
+  `[plan] repeats_per_cell`, has none, or has a malformed one; the detail says which) or
+  `one` (a plan of 1) means every result from the bank is directional, and
+  `short:<arm>/<task>` names a cell holding fewer completed
+  trials than the plan declares. Tell the user the results are directional, not
+  replicated. A warning is excused like a disagreement, by its check, subject and key.
+- **`[STALE EXCEPTION]`** — an accepted finding stopped occurring, so its entry
   must be deleted. This is a failure on purpose: an exception list that only grows
   lets the gate pass on anything.
 - **`preimage coverage: N/M`** — how many ledger rows carry the stored configuration
@@ -69,11 +78,13 @@ When reading the output:
 The registered checks: `ledger-index` (the committed index against a fresh render of
 `ledger/`), `config-hash-preimage` (each row's `config_hash` against the sha256 of its
 own stored preimage, computed again), `scenario-known` (every completed trial's arm
-against the scenario files in the data root) and `version-sites` (the engine's version
-declarations; engine checkouts only).
+against the scenario files in the data root), `version-sites` (the engine's version
+declarations; engine checkouts only) and `replication` (each bank's `[plan]
+repeats_per_cell` against the completed trials per arm and task, counted as the
+scorecard counts them; it warns and never fails).
 
-Accepted discrepancies are data, not engine code. They live in the data root's
-`fathom.toml`, one table per discrepancy, keyed by the check name, subject and key the
+Accepted discrepancies and warnings are data, not engine code. They live in the data
+root's `fathom.toml`, one table per finding, keyed by the check name, subject and key the
 output prints:
 
 ```toml

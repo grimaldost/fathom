@@ -797,6 +797,8 @@ def test_extra_keys_written_by_trial_loop_appear_in_contract():
         "scenario",
         "holdout",
         "fixture_sha",
+        "plan_repeats_per_cell",
+        "plan_replication",
     ]
 
     missing_keys = []

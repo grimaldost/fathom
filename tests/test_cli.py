@@ -42,6 +42,14 @@ from fathom.taskbank import Bank, Task, fixture_fingerprint
 # ---------------------------------------------------------------------------
 
 
+# The plan line of a run whose bank.toml declares no [plan] repeats_per_cell, which is every
+# run_matrix call that does not pass one.
+_UNDECLARED_PLAN_LINE = (
+    "replication: no [plan] repeats_per_cell in bank.toml; any contrast from this run is "
+    "directional"
+)
+
+
 def _make_scenario(name: str = "bare", config_hash: str = "a" * 64, **kw) -> ResolvedScenario:
     defaults: dict = {
         "adapter": "claude-cli",
@@ -3744,6 +3752,7 @@ class TestComparatorDependency(_Base):
             "fathom run: bank=test-bank  scenarios=2  tasks=2  repeats=2\n"
             "arms:     bare [aaaaaaaaaaaa], single-long [bbbbbbbbbbbb]\n"
             "planned:  8 trials (0 already done)  ceiling: $40.00\n"
+            f"{_UNDECLARED_PLAN_LINE}\n"
             "[dry-run] no spawns\n",
         )
 
@@ -3828,6 +3837,8 @@ class TestInterleave(unittest.TestCase):
         "fathom run: bank=test-bank  scenarios=2  tasks=1  repeats=2\n"
         "arms:     bare [aaaaaaaaaaaa], nudge [bbbbbbbbbbbb]\n"
         "planned:  4 trials (0 already done)  ceiling: $20.00\n"
+        "replication: no [plan] repeats_per_cell in bank.toml; any contrast from this run is "
+        "directional\n"
         "[dry-run] no spawns\n"
     )
     _DEFAULT_ORDER = ("bare/add r0", "bare/add r1", "nudge/add r0", "nudge/add r1")
@@ -3981,6 +3992,76 @@ class TestInterleave(unittest.TestCase):
         self.assertEqual(
             _resume_command(args, spawn_cap=None), "fathom run b --repeats 3 --interleave"
         )
+
+
+class TestReplicationPlan(_Base):
+    """The bank's ``[plan] repeats_per_cell``: one plan line, two keys on each trial row."""
+
+    def _trial_rows(self) -> list[dict]:
+        path = self.ledger_dir / "test-bank.jsonl"
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        return [row for row in rows if row.get("kind") == "trial"]
+
+    def test_the_plan_line_follows_the_planned_line(self):
+        for dry_run in (True, False):
+            with self.subTest(dry_run=dry_run):
+                ledger_dir = pathlib.Path(tempfile.mkdtemp())
+                self.addCleanup(shutil.rmtree, str(ledger_dir), ignore_errors=True)
+                _, text = _run_matrix(
+                    self.bank, self.scenarios, 1, ledger_dir=ledger_dir, dry_run=dry_run
+                )
+                lines = text.splitlines()
+                planned = next(i for i, ln in enumerate(lines) if ln.startswith("planned:"))
+                self.assertNotIn("replication", lines[planned])
+                self.assertEqual(lines[planned + 1], _UNDECLARED_PLAN_LINE)
+                self.assertEqual(sum(ln.startswith("replication:") for ln in lines), 1)
+
+    def test_the_plan_line_follows_the_declared_value(self):
+        cases = {
+            (None, 2): True,
+            (1, 1): True,
+            (1, 4): True,
+            (3, 1): True,
+            (3, 2): True,
+            (3, 3): False,
+            (2, 5): False,
+        }
+        for (declared, repeats), directional in cases.items():
+            with self.subTest(declared=declared, repeats=repeats):
+                _, text = _run_matrix(
+                    self.bank,
+                    self.scenarios,
+                    repeats,
+                    ledger_dir=self.ledger_dir,
+                    dry_run=True,
+                    repeats_per_cell=declared,
+                )
+                (line,) = [ln for ln in text.splitlines() if ln.startswith("replication:")]
+                self.assertIn("repeats_per_cell", line)
+                self.assertEqual("directional" in line, directional, line)
+
+    def test_trial_rows_carry_the_plan_in_force(self):
+        cases = {None: "directional", 1: "directional", 2: "replicated", 5: "replicated"}
+        for declared, label in cases.items():
+            with self.subTest(declared=declared):
+                shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
+                self.ledger_dir.mkdir()
+                code, _ = _run_matrix(
+                    self.bank, [self.sc_a], 1, ledger_dir=self.ledger_dir, repeats_per_cell=declared
+                )
+                self.assertEqual(code, EXIT_OK)
+                rows = self._trial_rows()
+                self.assertEqual(len(rows), 2)
+                for row in rows:
+                    self.assertIn("plan_repeats_per_cell", row)
+                    self.assertEqual(row["plan_repeats_per_cell"], declared)
+                    self.assertEqual(row["plan_replication"], label)
+
+    def test_the_plan_moves_no_resume_key(self):
+        _run_matrix(self.bank, [self.sc_a], 1, ledger_dir=self.ledger_dir, repeats_per_cell=3)
+        self.assertEqual(len(_ledger.completed_keys("test-bank", ledger_dir=self.ledger_dir)), 2)
+        _, text = _run_matrix(self.bank, [self.sc_a], 1, ledger_dir=self.ledger_dir, dry_run=True)
+        self.assertIn("planned:  0 trials (2 already done)", text)
 
 
 if __name__ == "__main__":

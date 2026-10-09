@@ -20,7 +20,9 @@ recomputation from the same row's own usage.  Where only one derivation exists, 
 is undetectable by any means.
 
 Here a reconciliation is a registered function, so adding one costs a function rather than
-a new tool and test.
+a new tool and test.  A check has a severity: ``fail`` (the default) or ``warn``.  The one
+warning check, ``replication``, compares no two derivations: it holds each bank's ledger to
+its ``[plan] repeats_per_cell`` and never fails the run.
 
 ## Where it runs
 
@@ -75,7 +77,7 @@ import tomllib
 from collections.abc import Callable, Iterable, Iterator, Mapping
 from pathlib import Path
 
-from fathom import ledgerindex
+from fathom import ledgerindex, replication
 
 # How a root is recognised is defined once, in ledgerindex, so that ``fathom reconcile`` and
 # ``python -m fathom.ledgerindex`` accept and refuse the same directories.  Re-exported here
@@ -92,6 +94,10 @@ root_kind = ledgerindex.root_kind
 not_a_root_message = ledgerindex.not_a_root_message
 
 Fingerprint = tuple[str, str, str]
+# What a check's findings do to the gate: a "fail" finding is a disagreement, a "warn"
+# finding is printed and never changes the exit code.
+SEVERITY_FAIL = "fail"
+SEVERITY_WARN = "warn"
 
 
 def resolve_root(root: Path | None = None) -> Path:
@@ -112,6 +118,8 @@ class Discrepancy:
     subject: str
     key: str
     detail: str
+    # Set from the check that found it (``Reconciliation.severity``) when the check runs.
+    severity: str = SEVERITY_FAIL
 
     @property
     def fingerprint(self) -> Fingerprint:
@@ -131,12 +139,18 @@ class Reconciliation:
 
     ``skip`` returns the reason the check does not apply at a root, or ``None`` when it
     does.  A skipped check is reported as skipped, never counted as passed silently.
+
+    ``severity`` is ``"fail"`` (a finding is a disagreement and fails the gate) or ``"warn"``
+    (a finding is printed as a warning and never fails it).  Either kind is excused by a
+    ``[[reconcile.known]]`` entry the same way, and an entry that excuses nothing is stale
+    either way.
     """
 
     name: str
     describe: str
     run: Callable[[Path], list[Discrepancy]]
     skip: Callable[[Path], str | None] = _applies_everywhere
+    severity: str = SEVERITY_FAIL
 
 
 # ---------------------------------------------------------------------------
@@ -386,6 +400,61 @@ def check_version_sites(root: Path) -> list[Discrepancy]:
     return found
 
 
+def check_replication(root: Path) -> list[Discrepancy]:
+    """Each bank's declared ``[plan] repeats_per_cell`` against the trials its ledger holds.
+
+    A warning, not a failure (severity ``"warn"``): a result bought at too few repeats is
+    still a result, and the reader is told it is directional.  For every ledger with at least
+    one completed trial in its current ``dataset_version`` (the scorecard's default view),
+    ``tasks/<bank>/bank.toml`` is read and the findings, subject the bank, are: ``undeclared``
+    (no plan, no ``bank.toml``, or a malformed plan; the detail says which), ``one`` (a plan
+    of 1), or one ``short:<arm>/<task>`` per cell holding fewer completed trials than a plan
+    of 2 or more declares.  The cells are counted as the scorecard counts them
+    (:mod:`fathom.replication`), so the two report the same cells.
+    """
+    by_bank: dict[str, list[dict]] = {}
+    for bank, row in ledger_rows(root):
+        by_bank.setdefault(bank, []).append(row)
+    found: list[Discrepancy] = []
+    consequence = "every result from this bank is directional, not replicated"
+    for bank, rows in sorted(by_bank.items()):
+        scoped = replication.current_version_rows(rows)
+        if not any(r.get("kind") == "trial" and r.get("status") == "completed" for r in scoped):
+            continue
+        where = f"tasks/{bank}"
+        reading = replication.read_plan(root / where)
+        declared = reading.repeats_per_cell
+        if declared is None:
+            reason = replication.undeclared_reason(reading, where)
+            found.append(Discrepancy("replication", bank, "undeclared", f"{reason}; {consequence}"))
+            continue
+        if declared == 1:
+            found.append(
+                Discrepancy(
+                    "replication",
+                    bank,
+                    "one",
+                    f"{where}/bank.toml declares {replication.REPEATS_KEY} = 1, one repeat per "
+                    f"cell; {consequence}",
+                )
+            )
+            continue
+        for (arm, task), count in replication.assess(
+            declared, replication.cell_counts(scoped)
+        ).short:
+            found.append(
+                Discrepancy(
+                    "replication",
+                    bank,
+                    f"short:{arm}/{task}",
+                    f"{count} completed trial(s) against the {declared} that "
+                    f"{replication.REPEATS_KEY} declares; a contrast that uses this cell is "
+                    "directional, not replicated",
+                )
+            )
+    return found
+
+
 def preimage_coverage(root: Path) -> tuple[int, int]:
     """(rows carrying a preimage, rows total) — reported, never gated.
 
@@ -428,6 +497,15 @@ CHECKS: tuple[Reconciliation, ...] = (
         ),
         run=check_version_sites,
         skip=version_sites_skip,
+    ),
+    Reconciliation(
+        name="replication",
+        describe=(
+            "each bank's [plan] repeats_per_cell against the completed trials per arm and "
+            "task in its ledger (warns, never fails)"
+        ),
+        run=check_replication,
+        severity=SEVERITY_WARN,
     ),
 )
 
@@ -532,7 +610,8 @@ def _execute(
             skipped.append((check.name, reason))
             continue
         ran.append(check.name)
-        found.extend(check.run(root))
+        # The registry, not the check function, says what a finding does to the gate.
+        found.extend(dataclasses.replace(d, severity=check.severity) for d in check.run(root))
     return ran, skipped, found
 
 
@@ -543,8 +622,18 @@ def run_all(root: Path | None = None, *, names: Iterable[str] | None = None) -> 
 
 
 def unexpected(found: Iterable[Discrepancy], known: Mapping[Fingerprint, str]) -> list[Discrepancy]:
-    """The discrepancies nobody has accepted — the ones that fail the gate."""
-    return [d for d in found if d.fingerprint not in known]
+    """The disagreements nobody has accepted — the ones that fail the gate.
+
+    Findings of a ``"warn"`` check are left out: :func:`unexcused_warnings` lists them.
+    """
+    return [d for d in found if d.severity != SEVERITY_WARN and d.fingerprint not in known]
+
+
+def unexcused_warnings(
+    found: Iterable[Discrepancy], known: Mapping[Fingerprint, str]
+) -> list[Discrepancy]:
+    """The warnings nobody has accepted: printed, counted, and never a failure."""
+    return [d for d in found if d.severity == SEVERITY_WARN and d.fingerprint not in known]
 
 
 def stale_exceptions(
@@ -587,8 +676,13 @@ class Outcome:
         return stale_exceptions(self.found, self.known, checks=selected)
 
     @property
+    def warnings(self) -> list[Discrepancy]:
+        return unexcused_warnings(self.found, self.known)
+
+    @property
     def excused(self) -> int:
-        return len(self.found) - len(self.unexpected)
+        """Findings, disagreements and warnings alike, that an exception accepts."""
+        return sum(1 for d in self.found if d.fingerprint in self.known)
 
     @property
     def ok(self) -> bool:

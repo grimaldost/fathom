@@ -12,3 +12,12 @@ check = "scenario-known"
 subject = "example"
 key = "nudge-draft"
 reason = "An early version of the nudge arm, run once before its scenario file was committed. The trial stays in the ledger and is not cited as a result."
+
+# The replication check warns on any arm x task cell holding fewer completed trials than
+# tasks/example/bank.toml's [plan] repeats_per_cell. A warning never fails the reconcile,
+# and it is excused here the same way a discrepancy is.
+[[reconcile.known]]
+check = "replication"
+subject = "example"
+key = "short:nudge-draft/add"
+reason = "The nudge-draft arm ran once and was never committed (see the scenario-known entry above); its one trial is not cited as a result, so its cell will not be filled."

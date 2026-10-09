@@ -66,6 +66,14 @@ errored, and the verifier's results if scoring succeeded.
   otherwise. Holdout trials are development data once spent; reports render them separately.
 - `fixture_sha` (str): The SHA256 hex digest of the task's fixture (as fingerprinted by
   `fixture_fingerprint`). Provenance only; used to detect fixture drift.
+- `plan_repeats_per_cell` (int or null): The bank's declared `[plan] repeats_per_cell`
+  (`bank.toml`) when the row was written; `null` when the bank declared none. Rows written
+  before the field existed lack it.
+- `plan_replication` (str): `"directional"` when the plan in force declared no
+  `repeats_per_cell` or declared 1, `"replicated"` when it declared 2 or more. It describes
+  the plan, not the cell: whether a cell holds enough completed trials is computed from the
+  ledger (the scorecard and `fathom reconcile` do), and no reader lets this field override
+  that. Neither key is part of `config_hash`, the preimage or the resume key.
 
 **Provenance-only fields** (not part of config_hash, resume key, or scoring logic, but
 added by the ledger module to every row):

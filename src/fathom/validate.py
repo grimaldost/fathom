@@ -85,6 +85,7 @@ PROP_FIXTURE_FAILS = "verifier fails on the unmodified fixture"
 PROP_SOLUTION_PASSES = "verifier passes on the reference solution"
 PROP_GATE_RUNNABLE = "task gate is runnable on the fixture"
 PROP_GATE_PATHS = "gate commands name paths that exist"
+PROP_PLAN = "bank.toml [plan] is well formed"
 
 # The strategies that run an arm's `[gate] extra` (`cli._default_executor_factory`).
 # Every other strategy ignores it, so an extra on such an arm never runs and is not checked.
@@ -207,6 +208,22 @@ def validate_bank(
             _check_task(task, stage_fn, verifier_fn, gate_fn, overlay_fn, base_branch, scenarios)
         )
     return checks
+
+
+def plan_checks(bank_dir: Path) -> list[BankCheck]:
+    """A FAIL when ``<bank_dir>/bank.toml`` carries a malformed ``[plan]``; nothing otherwise.
+
+    The plan is parsed apart from :func:`fathom.taskbank.load_bank`
+    (:func:`fathom.replication.read_plan`), so ``fathom validate`` checks it here: ``fathom
+    run`` refuses a malformed plan, and validation should not pass a bank that run refuses.
+    A well-formed or absent plan adds no line, so a bank without one validates as before.
+    """
+    from fathom.replication import read_plan
+
+    reading = read_plan(bank_dir)
+    if reading.problem is None:
+        return []
+    return [BankCheck("(bank)", PROP_PLAN, STATUS_FAIL, f"{reading.path}: {reading.problem}")]
 
 
 def _fixture_check(task: Task, result: Any) -> BankCheck:

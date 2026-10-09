@@ -131,6 +131,7 @@ taskbank → scenario (resolve + config_hash) → Runner (claude-cli adapter) �
 | `arming.py`, `armingprobe.py` | Proving on a live spawn that each declared treatment reached it. |
 | `ledger.py`, `ledgerindex.py` | Ledger records and appends; the generated `docs/reports/LEDGER-INDEX.md`. |
 | `reconcile.py` | Checks that compare two derivations of one fact, and accepted exceptions. |
+| `replication.py` | A bank's `[plan] repeats_per_cell`: parsing it, the plan line, the trial-row label, cells counted as the scorecard counts them, and the scorecard line. |
 | `report.py`, `calibration.py` | The scorecard, and the optional calibration views. |
 | `smoke.py`, `canary_plugin/` | The real-spawn smoke gate and the plugin it mounts. |
 | `runlock.py` | The per-bank run lock and stop requests. |
