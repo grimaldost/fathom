@@ -37,7 +37,7 @@ CACHE = "C:\\home\\.claude\\plugins\\cache\\fathom\\fathom\\0.8.0"
 INIT = {
     "type": "system",
     "subtype": "init",
-    "model": "claude-sonnet-5",
+    "model": "claude-sonnet-5-5",
     "tools": ["Bash", "Read", "Skill", "mcp__plugin_fathom_fathom__plan"],
     "mcp_servers": [
         {"name": "plugin:fathom:fathom", "status": "connected"},
@@ -1512,7 +1512,7 @@ class ReportTests(unittest.TestCase):
         )
         json.dumps(verdict)  # the verdict is plain JSON
         self.assertFalse(verdict["discovery_attributable"])
-        self.assertEqual(verdict["session"]["model"], "claude-sonnet-5")
+        self.assertEqual(verdict["session"]["model"], "claude-sonnet-5-5")
         skipped = {"scenario": "S9", "name": "later", "status": "skipped", "reason": "Skipped."}
         report = acc.render_report(
             {"run_id": "r1", "model": "sonnet", "out": "o", "exit_code": 1}, [verdict, skipped]

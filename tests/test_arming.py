@@ -42,7 +42,7 @@ def make_scenario(**kw) -> ResolvedScenario:
     base = {
         "name": "arm",
         "adapter": "claude-cli",
-        "model": "claude-haiku-4-5",
+        "model": "claude-haiku-5-5",
         "strategy": "single-session",
         "effort": "low",
         "tools": ToolsConfig(source="none", allowed=("Read",)),

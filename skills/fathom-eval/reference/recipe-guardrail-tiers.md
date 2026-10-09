@@ -69,7 +69,7 @@ same in all four. Only `name`, `model` and the `[context]` table differ.
 # scenarios/tiers/bare-haiku.toml
 name = "bare-haiku"
 adapter = "claude-cli"
-model = "claude-haiku-4-5"
+model = "claude-haiku-5-5"
 strategy = "single-session"
 effort = "low"
 
@@ -85,7 +85,7 @@ trial_timeout_s = 300
 # scenarios/tiers/guardrail-haiku.toml
 name = "guardrail-haiku"
 adapter = "claude-cli"
-model = "claude-haiku-4-5"
+model = "claude-haiku-5-5"
 strategy = "single-session"
 effort = "low"
 
@@ -105,7 +105,7 @@ trial_timeout_s = 300
 # scenarios/tiers/bare-sonnet.toml
 name = "bare-sonnet"
 adapter = "claude-cli"
-model = "claude-sonnet-5"
+model = "claude-sonnet-5-5"
 strategy = "single-session"
 effort = "low"
 
@@ -121,7 +121,7 @@ trial_timeout_s = 300
 # scenarios/tiers/guardrail-sonnet.toml
 name = "guardrail-sonnet"
 adapter = "claude-cli"
-model = "claude-sonnet-5"
+model = "claude-sonnet-5-5"
 strategy = "single-session"
 effort = "low"
 

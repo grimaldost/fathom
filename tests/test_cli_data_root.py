@@ -633,7 +633,7 @@ class ValidateGatePathTests(unittest.TestCase):
     _PROBE_ARM = """\
 name = "probe"
 adapter = "claude-cli"
-model = "claude-haiku-4-5"
+model = "claude-haiku-5-5"
 strategy = "gated-session"
 effort = "low"
 

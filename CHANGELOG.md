@@ -50,6 +50,13 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   workspace holds a copy of the data root, and on Windows the default workspace root
   (`%PUBLIC%`) is readable by every local account. `--keep-workspaces` keeps them for
   inspection.
+- **Scope note: `claude plugin eval`.** The README and the skill now say that a plain
+  with/without check of one plugin, or whether a skill triggers, belongs to
+  `claude plugin eval` (Claude Code v2.1.269 or later), and name what only fathom covers.
+- **Live model ids move to the 5.5 lineup.** `fathom smoke` and the arming probe now spawn
+  `claude-haiku-5-5`; the guide's and the guardrail recipe's example arms name `claude-haiku-5-5` and
+  `claude-sonnet-5-5`. The example data root stays pinned to `claude-haiku-4-5` because its arms'
+  model enters their recorded hashes.
 
 ### Fixed
 
@@ -57,7 +64,7 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   name 0.9.0. `tests/test_backlog_versions.py` fails when the changelog's `[Unreleased]` is
   empty and a backlog line still says "Unreleased", so the next cut cannot leave them behind.
 - **Model ids in examples.** The guardrail recipe's mid-tier arms and the ledger contract's
-  `judge_model` example named superseded Sonnet ids; they now name `claude-sonnet-5`.
+  `judge_model` example named superseded Sonnet ids; they now name `claude-sonnet-5-5`.
 
 ## [0.10.0] - 2026-10-07
 

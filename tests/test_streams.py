@@ -26,7 +26,7 @@ INIT = {
         {"name": "plugin:codenav:codenav", "status": "connected"},
         {"name": "claude.ai Mail", "status": "needs-auth"},
     ],
-    "model": "claude-haiku-4-5",
+    "model": "claude-haiku-5-5",
     "permissionMode": "default",
     "skills": ["example-plugin:example-skill", "fathom-smoke-canary:probe"],
     "plugins": [
