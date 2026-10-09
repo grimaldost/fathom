@@ -413,3 +413,4 @@ is the whole record.
 | FATH-B80 | The plan's `expected:` line, the median cost per trial from the bank's own completed trials. | 0.9.0 |
 | FATH-B82 | A finished plan prices one more repeat and counts the completed trials for its arms. | 0.9.0 |
 | FATH-B83 | Each spawn's `--settings` layer excludes the instruction files above its workspace (`claudeMdExcludes`), the claude.ai connectors are off, and `fathom smoke` checks it on a live spawn. | 0.9.0 |
+| FATH-B85 | A study declares repeats per cell; one-repeat studies are marked directional. | Unreleased |

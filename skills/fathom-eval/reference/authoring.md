@@ -246,6 +246,9 @@ holdout = []              # required; an array of task ids, may be empty
 # treatment = "nudge"     # arm names, as the ledger records them
 # control = "bare"
 # criterion = "correctness"  # optional; without it the pair compares the all-criteria pass
+
+# [plan]                  # optional; the study's replication plan
+# repeats_per_cell = 3    # an integer, 1 or more
 ```
 
 - **`name`** names the ledger file (`ledger/<name>.jsonl`) and the run lock. `fathom report
@@ -267,6 +270,14 @@ holdout = []              # required; an array of task ids, may be empty
   table and nothing hashes `bank.toml`, so adding or changing it changes no trial and needs no
   `dataset_version` bump. An `alpha` that is not a number between 0 and 1 warns and renders no
   contrasts; a pair without a string `treatment` and `control` warns and is skipped.
+- **`[plan]`** (optional) declares `repeats_per_cell`: the completed trials each arm x task
+  cell needs before a contrast from it counts as replicated. Without it, or at 1, every result
+  from the bank is directional (sections 13 and 14). A value that is not an integer of 1 or
+  more (a boolean included), another key in the table, or a `plan` that is not a table is
+  malformed: `fathom run` refuses it with exit 1, dry run included, `fathom validate` fails
+  it, and `fathom report` and `fathom reconcile` warn and read it as undeclared. Nothing
+  hashes it: it moves no `config_hash` or resume key, and `--repeats` still decides what a
+  run buys.
 
 Loading fails on a missing field, a scalar `holdout`, a holdout id that names no task, or two
 task directories that declare the same `id`.
@@ -584,6 +595,11 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   every `fathom run` and `fathom verify-arming`. Without it, the command takes every `*.toml`
   directly under `scenarios/` with no warning and runs those arms instead; only when there
   are none there does it stop, with `no scenarios found`.
+- **The `replication:` line** follows `planned:` (and `expected:`) in every plan. It says
+  `directional` when `bank.toml` declares no `[plan] repeats_per_cell`, declares 1, or
+  declares more than `--repeats` asks for (a screen), and states the plan otherwise. Each
+  trial row records the plan in force as `plan_repeats_per_cell` and `plan_replication`
+  (`directional` or `replicated`); neither enters the resume key.
 - **A finished plan prices one more repeat.** When every requested trial is already done,
   the plan prints two lines after `planned:` and before `nothing to do` (or `[dry-run] no
   spawns`), with no new flag. `one more repeat:` gives the ceiling of one more trial per
@@ -670,8 +686,11 @@ After a run:
   to check.
 - Run `fathom reconcile`. It compares facts the data root derives twice: the ledger index
   against the ledgers, each row's hash against its preimage, each completed trial's arm
-  against the committed scenarios. It exits 13 on a disagreement. A discrepancy you accept (an
-  arm whose file was lost, say) is declared in `fathom.toml`:
+  against the committed scenarios. It exits 13 on a disagreement. The `replication` check
+  only warns (`[WARNING] [replication] <bank> (<key>): …`, never exit 13): key `undeclared` or
+  `one` when the plan makes every result directional, and `short:<arm>/<task>` per cell below
+  the plan, counted as the scorecard counts it. A discrepancy or warning you accept (an arm
+  whose file was lost, say) is declared in `fathom.toml` by its printed check, subject and key:
 
   ```toml
   [[reconcile.known]]
@@ -689,7 +708,12 @@ After a run:
 ## 14. Reading the scorecard
 
 `report/scorecard-<bank>.md` has a section for development tasks and, if any holdout was run,
-one for holdout tasks. Each contains:
+one for holdout tasks. Above them, one line holds the view's arm x task cells to the
+`[plan] repeats_per_cell` of the current `tasks/<bank>/bank.toml` (`fathom report` has no
+`--tasks-dir`). It starts `> **Directional:**` when the plan is undeclared, malformed or 1,
+or when K of the M cells hold fewer completed trials than it declares; otherwise it says the
+plan is met. The `directional, not final` beside each verdict is printed regardless. Each
+section contains:
 
 - **Pass Rates** — per arm: passes (completed trials with every criterion true), completed
   trials, the pass rate, a Wilson 95% interval, and infrastructure errors. Errored trials are
@@ -757,9 +781,6 @@ one for holdout tasks. Each contains:
   other arm is at least as good on both quality and tokens and better on one, `★?` when that
   holds on the means but the per-trial token ranges overlap.
 - **Calibration** — only for calibration banks (`bank-design.md`, section 9).
-
-With few trials, treat every difference as directional. The scorecard says so beside each
-verdict.
 
 A scorecard written with `--dataset-version` for a version other than the current one opens
 with a line naming that version and the current one. Quote it only with that line; its numbers

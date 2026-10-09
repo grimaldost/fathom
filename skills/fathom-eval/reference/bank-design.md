@@ -32,7 +32,9 @@ What helps:
 - **A turn budget from evidence.** Set `max_turns` from what a pilot used. A trial that reaches
   the cap was cut short, and its arm's pass rate is a lower bound.
 - **A pilot before the matrix.** `fathom run <bank> --tasks ID[,ID…] --repeats 1` buys a small
-  screen. Check that the control arm fails some criterion before paying for repeats.
+  screen. Check that the control arm fails some criterion before paying for repeats. A pilot
+  below the bank's `[plan] repeats_per_cell` is directional by construction: its plan line,
+  the scorecard and `fathom reconcile` say so until every cell holds what the plan declares.
 - **A holdout.** Keep one or more tasks in `holdout` to confirm a result on tasks the bank was
   not tuned against.
 

@@ -70,6 +70,11 @@ Tell the user before and while running:
   them (ADR-0005), never by default.
 - An authentication or usage-limit failure stops the matrix cleanly (exit 10) and
   records nothing for that trial; re-invoke once it is fixed.
+- The plan's `replication:` line holds `--repeats` to the bank's `[plan]
+  repeats_per_cell`. When it says `directional`, tell the user that the results will
+  be directional, not replicated, before spending. A malformed `[plan]` refuses the
+  run with exit 1 before anything is planned. Each trial row records the plan in
+  force (`plan_repeats_per_cell`, `plan_replication`); the plan changes no resume key.
 - The argument hint lists every flag except the older spelling `--max-budget-usd`;
   `fathom run --help` describes each one.
 - Results append to `ledger/<bank>.jsonl` in the data root. Afterwards, re-render

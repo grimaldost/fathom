@@ -21,6 +21,11 @@ Render the fathom scorecard for a bank from its committed ledger.
    committed; regenerable at any time). Open it and summarize it for the user.
 
 When reading it:
+- The line under the title holds the ledger to the bank's `[plan] repeats_per_cell`.
+  A `> **Directional:**` line (no plan, a malformed plan, a plan of 1, or K of M arm x
+  task cells below the plan) means every verdict and contrast is directional, not
+  replicated: say so first, with its reason. A plain line means every cell holds what
+  the plan declares.
 - Lead with the **Per-Criterion Pass Rates** table: it shows where arms differ.
   The headline pass rate counts a trial as a pass only when every criterion is
   true.
@@ -50,7 +55,8 @@ When reading it:
   rows; `fathom run` does not write them, so it is normally absent.
 - Calibration sections render only for banks that ship `scores.toml` and
   `[verify] hard_criteria`.
-- With few trials, every difference is directional; the verdict lines say so.
+- The verdict lines end `directional, not final` whatever the plan; the line under
+  the title is the one that says whether the plan is met.
 - By default the scorecard shows the bank's current `dataset_version` and warns which older
   versions it left out. `--dataset-version V` renders an older one instead, into
   `report/scorecard-<bank>--V.md` so the current scorecard stays; its first line says it is a

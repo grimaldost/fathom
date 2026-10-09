@@ -176,7 +176,9 @@ After a run, keep the data root's derived records current:
   when the index is current, when the root keeps no index, or for a `--ledger-dir` side
   ledger.
 - `fathom reconcile` checks every fact the data root records twice; exit 13 means a
-  disagreement or a stale accepted exception.
+  disagreement or a stale accepted exception. A `[WARNING] [replication]` line never fails
+  it, but means the bank's results are directional: its `bank.toml` declares no `[plan]
+  repeats_per_cell`, declares 1, or a cell holds fewer completed trials than declared.
 - Write the result up under `docs/reports/` and list it in `docs/STATUS.md`.
 
 ## Cost, and when not to run

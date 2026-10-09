@@ -156,7 +156,7 @@ completed trials.
 | `fathom void <bank> …` | Append a row that excludes one recorded trial; the next resume buys it again. | nothing |
 | `fathom report <bank>` | Render `report/scorecard-<bank>.md` from the ledger. | nothing |
 | `fathom index [--write]` | Check, or re-render, `docs/reports/LEDGER-INDEX.md`: each ledger's hash and completed trials per arm. | nothing |
-| `fathom reconcile` | Check every fact the data root records twice (ledger index, config hashes, arm names). Exit 13 on a disagreement. | nothing |
+| `fathom reconcile` | Check every fact the data root records twice (ledger index, config hashes, arm names). Exit 13 on a disagreement. Warns, without failing, on a bank whose `[plan] repeats_per_cell` is missing, 1, or not yet met. | nothing |
 
 Cost rails on `fathom run`: `--max-spawn-usd` caps each spawn (default $5), `--max-run-usd`
 stops the invocation between trials once it has spent that much, `--limit N` caps new trials,
