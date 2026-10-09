@@ -50,6 +50,9 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   workspace holds a copy of the data root, and on Windows the default workspace root
   (`%PUBLIC%`) is readable by every local account. `--keep-workspaces` keeps them for
   inspection.
+- **Scope note: `claude plugin eval`.** The README and the skill now say that a plain
+  with/without check of one plugin, or whether a skill triggers, belongs to `claude plugin eval`
+  (Claude Code v2.1.269 or later), and name what only fathom covers.
 
 ### Fixed
 
