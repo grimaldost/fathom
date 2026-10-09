@@ -1,5 +1,7 @@
 # Scorecard — test-bank
 
+> **Directional:** tasks/test-bank/bank.toml declares no [plan] repeats_per_cell; every verdict and contrast below is directional, not replicated.
+
 ## Dev Tasks
 
 ### Pass Rates

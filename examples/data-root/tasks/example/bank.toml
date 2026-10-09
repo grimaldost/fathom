@@ -1,4 +1,4 @@
-# The bank manifest. All three keys are required.
+# The bank manifest. The three keys below are required; the [plan] table is optional.
 #
 # name            must equal this directory's name: it names ledger/<name>.jsonl, and
 #                 `fathom report` and `fathom stop` take the directory name.
@@ -10,3 +10,9 @@
 name = "example"
 dataset_version = "1"
 holdout = []
+
+# The study's replication plan: the completed trials each arm x task cell needs before a
+# contrast from it counts as replicated. Without it, or at 1, every result is directional.
+# It is not hashed and changes no resume key; `--repeats` still decides what a run buys.
+[plan]
+repeats_per_cell = 2

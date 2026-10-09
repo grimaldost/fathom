@@ -2511,3 +2511,108 @@ def test_a_declaration_of_the_wrong_type_warns_instead_of_failing(tmp_path, decl
     with pytest.warns(UserWarning, match=message):
         content = _ct_render(tmp_path, records, declared)
     assert _CONTRASTS_HEADING not in content
+
+
+# ---------------------------------------------------------------------------
+# The replication line under the title: the bank's [plan] repeats_per_cell against the cells
+# ---------------------------------------------------------------------------
+
+
+def _plan_line(content: str) -> list[str]:
+    """The non-blank lines between the title and the first section heading."""
+    lines = content.splitlines()
+    title = next(i for i, line in enumerate(lines) if line.startswith("# Scorecard"))
+    end = next(i for i, line in enumerate(lines) if i > title and line.startswith("## "))
+    return [line for line in lines[title + 1 : end] if line.strip()]
+
+
+def test_an_undeclared_plan_opens_the_scorecard_with_a_directional_line(tmp_path):
+    content = _ct_render(tmp_path, _ct_trials("bare", 3, 2), None)
+    lines = content.splitlines()
+    assert lines[0] == "# Scorecard — hc-bank"
+    assert lines[1] == ""
+    assert lines[2].startswith("> **Directional:** ")
+    assert "repeats_per_cell" in lines[2]
+    assert lines[2].endswith("every verdict and contrast below is directional, not replicated.")
+    assert lines[3] == ""
+    assert lines[4].startswith("## ")
+
+
+def test_a_plan_of_one_is_directional(tmp_path):
+    content = _ct_render(tmp_path, _ct_trials("bare", 3, 2), "[plan]\nrepeats_per_cell = 1\n")
+    (line,) = _plan_line(content)
+    assert line.startswith("> **Directional:** ")
+    assert "1 repeat" in line
+
+
+def test_a_cell_below_the_plan_is_directional_and_counted(tmp_path):
+    records = _ct_trials("bare", 3, 2) + _ct_trials("nudge", 2, 2)
+    content = _ct_render(tmp_path, records, "[plan]\nrepeats_per_cell = 3\n")
+    (line,) = _plan_line(content)
+    assert line.startswith("> **Directional:** 1 of 2 arm x task cells")
+    assert "repeats_per_cell = 3" in line
+
+
+def test_a_cell_counts_completed_trials_only(tmp_path):
+    records = _ct_trials("bare", 3, 2)
+    records[2] = _hc_trial("bare", "t1", 2, None, status="errored")
+    content = _ct_render(tmp_path, records, "[plan]\nrepeats_per_cell = 3\n")
+    (line,) = _plan_line(content)
+    assert line.startswith("> **Directional:** 1 of 1 arm x task cells")
+
+
+def test_a_met_plan_says_so_without_the_directional_mark(tmp_path):
+    records = _ct_trials("bare", 3, 2) + _ct_trials("nudge", 4, 2)
+    content = _ct_render(tmp_path, records, "[plan]\nrepeats_per_cell = 3\n")
+    (line,) = _plan_line(content)
+    assert not line.startswith(">")
+    assert "irectional" not in line
+    assert "repeats_per_cell = 3" in line
+
+
+def test_a_malformed_plan_warns_and_reads_as_undeclared(tmp_path):
+    with pytest.warns(UserWarning, match=r"\[plan\]"):
+        content = _ct_render(tmp_path, _ct_trials("bare", 3, 2), "[plan]\nrepeats_per_cell = 0\n")
+    (line,) = _plan_line(content)
+    assert line.startswith("> **Directional:** ")
+    assert "malformed" in line
+
+
+def test_the_plan_line_holds_the_version_the_view_renders(tmp_path):
+    # v1 holds three completed trials of bare; the current v2 holds one.
+    bank = tmp_path / "tasks" / "hc-bank"
+    bank.mkdir(parents=True)
+    (bank / "bank.toml").write_text(
+        'name = "hc-bank"\ndataset_version = "v2"\nholdout = []\n[plan]\nrepeats_per_cell = 3\n',
+        encoding="utf-8",
+    )
+    records = [
+        *_ct_trials("bare", 3, 3),
+        {**_hc_trial("bare", "t1", 0, {"a": True}), "dataset_version": "v2"},
+    ]
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir()
+    (ldgr / "hc-bank.jsonl").write_text(
+        "".join(json.dumps(r, sort_keys=True) + "\n" for r in records), encoding="utf-8"
+    )
+    tasks = tmp_path / "tasks"
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        current = render("hc-bank", ledger_dir=ldgr, report_dir=tmp_path / "r", tasks_dir=tasks)
+        old = render(
+            "hc-bank",
+            ledger_dir=ldgr,
+            report_dir=tmp_path / "r",
+            tasks_dir=tasks,
+            dataset_version="v1",
+        )
+    assert _plan_line(current.read_text(encoding="utf-8"))[0].startswith("> **Directional:** ")
+    old_lines = _plan_line(old.read_text(encoding="utf-8"))
+    assert not old_lines[-1].startswith(">"), old_lines
+    assert "repeats_per_cell = 3" in old_lines[-1]
+
+
+def test_the_verdict_suffix_is_unchanged(tmp_path):
+    records = _ct_trials("bare", 3, 2) + _ct_trials("nudge", 4, 2)
+    content = _ct_render(tmp_path, records, "[plan]\nrepeats_per_cell = 3\n")
+    assert "— directional, not final" in content

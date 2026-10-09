@@ -44,6 +44,8 @@ from fathom.reconcile import Discrepancy, KnownExceptionsError  # noqa: E402
 from fathom.scenario import load_scenario, resolve_scenario  # noqa: E402
 
 DRAFT = ("scenario-known", "example", "nudge-draft")
+# The example declares [plan] repeats_per_cell = 2; the draft arm's cell holds one trial.
+SHORT = ("replication", "example", "short:nudge-draft/add")
 
 
 class _Resolver:
@@ -143,10 +145,16 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual([str(d) for d in outcome.unexpected], [])
         self.assertEqual(outcome.stale, [])
         self.assertTrue(outcome.ok)
-        self.assertEqual(outcome.ran, ("ledger-index", "config-hash-preimage", "scenario-known"))
+        self.assertEqual(
+            outcome.ran,
+            ("ledger-index", "config-hash-preimage", "scenario-known", "replication"),
+        )
         self.assertEqual([name for name, _reason in outcome.skipped], ["version-sites"])
-        self.assertEqual(_fingerprints(outcome.found), [DRAFT], "the declared exception is used")
-        self.assertEqual(outcome.excused, 1)
+        self.assertEqual(
+            _fingerprints(outcome.found), [DRAFT, SHORT], "the declared exceptions are used"
+        )
+        self.assertEqual(outcome.excused, 2)
+        self.assertEqual(outcome.warnings, [])
 
     def test_the_fixture_is_not_vacuous(self) -> None:
         """A clean result over nothing would prove nothing."""
@@ -156,7 +164,7 @@ class FixtureTests(unittest.TestCase):
         self.assertGreater(total, 0)
         self.assertEqual(have, total, "every fixture row carries its preimage")
         self.assertEqual(reconcile.scenario_names(FIXTURE), {"bare", "nudge"})
-        self.assertEqual(list(reconcile.load_known(FIXTURE)), [DRAFT])
+        self.assertEqual(list(reconcile.load_known(FIXTURE)), [DRAFT, SHORT])
 
     def test_the_fixture_rows_carry_the_hash_the_engine_computes(self) -> None:
         """Each committed arm resolves to exactly the identity its ledger rows record.
@@ -319,7 +327,7 @@ class EachCheckCanFail(unittest.TestCase):
             )
             outcome = reconcile.run(root)
             self.assertEqual(outcome.unexpected, [])
-            self.assertEqual(outcome.stale, [DRAFT])
+            self.assertEqual(outcome.stale, [DRAFT, SHORT])
             self.assertFalse(outcome.ok)
 
     def test_version_sites_fires_when_a_manifest_appears_and_disagrees(self) -> None:
@@ -342,10 +350,11 @@ class KnownExceptionsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(reconcile.load_known(Path(tmp)), {})
 
-    def test_the_fixture_declares_one_exception_with_its_reason(self) -> None:
+    def test_the_fixture_declares_its_exceptions_with_their_reasons(self) -> None:
         known = reconcile.load_known(FIXTURE)
-        self.assertEqual(list(known), [DRAFT])
+        self.assertEqual(list(known), [DRAFT, SHORT])
         self.assertTrue(known[DRAFT].strip())
+        self.assertTrue(known[SHORT].strip())
 
     def test_malformed_entries_are_refused_by_name(self) -> None:
         entry = 'check = "scenario-known"\nsubject = "example"\nkey = "nudge-draft"\n'
@@ -406,7 +415,7 @@ class KnownExceptionsTests(unittest.TestCase):
             root = _copy_fixture(tmp)
             raw = (root / "fathom.toml").read_bytes()
             (root / "fathom.toml").write_bytes(b"\xef\xbb\xbf" + raw)
-            self.assertEqual(list(reconcile.load_known(root)), [DRAFT])
+            self.assertEqual(list(reconcile.load_known(root)), [DRAFT, SHORT])
             self.assertEqual(reconcile.root_kind(root), "data root")
             self.assertTrue(reconcile.run(root).ok)
 
@@ -614,8 +623,9 @@ class CliTests(unittest.TestCase):
             self.assertIn("reconciling the data root at", proc.stdout)
             self.assertIn("[SKIPPED] version-sites", proc.stdout)
             self.assertIn("preimage coverage: 10/10", proc.stdout)
-            self.assertIn("RECONCILE: OK (3 check(s) run, 1 skipped", proc.stdout)
-            self.assertIn("1 excused", proc.stdout)
+            self.assertIn("RECONCILE: OK (4 check(s) run, 1 skipped", proc.stdout)
+            self.assertIn("2 excused", proc.stdout)
+            self.assertNotIn("warning(s)", proc.stdout)
 
     def test_the_engine_checkout_reports_no_rows_without_dividing_by_zero(self) -> None:
         proc = _fathom(ENGINE, "reconcile")
@@ -676,6 +686,148 @@ class CliTests(unittest.TestCase):
         unknown = _fathom(FIXTURE, "reconcile", "--check", "no-such-check")
         self.assertEqual(unknown.returncode, 13)
         self.assertIn("no-such-check", unknown.stderr)
+
+
+def _set_plan(root: Path, plan: str | None) -> None:
+    """Rewrite the example bank.toml's plan: its three keys, then *plan* when given."""
+    manifest = root / "tasks" / "example" / "bank.toml"
+    text = 'name = "example"\ndataset_version = "1"\nholdout = []\n'
+    manifest.write_text(text + (plan or ""), encoding="utf-8", newline="\n")
+
+
+_DRAFT_ENTRY = (
+    '[[reconcile.known]]\ncheck = "scenario-known"\nsubject = "example"\n'
+    'key = "nudge-draft"\nreason = "kept for the test"\n'
+)
+
+
+class ReplicationTests(unittest.TestCase):
+    """The `replication` check: a warning, never a failure, and excused like a disagreement."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = _copy_fixture(self._tmp.name)
+
+    def test_it_is_registered_as_a_warning(self) -> None:
+        severities = {c.name: c.severity for c in reconcile.CHECKS}
+        self.assertEqual(severities.pop("replication"), "warn")
+        self.assertEqual(set(severities.values()), {"fail"})
+
+    def test_the_fixture_draws_one_short_cell(self) -> None:
+        found = reconcile.check_replication(FIXTURE)
+        self.assertEqual(_fingerprints(found), [SHORT])
+        self.assertIn("1 completed trial", found[0].detail)
+        self.assertIn("2", found[0].detail)
+
+    def test_an_undeclared_plan_is_one_finding(self) -> None:
+        _set_plan(self.root, None)
+        found = reconcile.check_replication(self.root)
+        self.assertEqual(_fingerprints(found), [("replication", "example", "undeclared")])
+        self.assertIn("declares no [plan] repeats_per_cell", found[0].detail)
+
+    def test_a_missing_or_malformed_manifest_reads_as_undeclared_and_says_which(self) -> None:
+        manifest = self.root / "tasks" / "example" / "bank.toml"
+        _set_plan(self.root, "[plan]\nrepeats_per_cell = true\n")
+        (malformed,) = reconcile.check_replication(self.root)
+        self.assertEqual(malformed.key, "undeclared")
+        self.assertIn("malformed", malformed.detail)
+        manifest.unlink()
+        (missing,) = reconcile.check_replication(self.root)
+        self.assertEqual(missing.key, "undeclared")
+        self.assertIn("no tasks/example/bank.toml", missing.detail)
+
+    def test_a_plan_of_one(self) -> None:
+        _set_plan(self.root, "[plan]\nrepeats_per_cell = 1\n")
+        found = reconcile.check_replication(self.root)
+        self.assertEqual(_fingerprints(found), [("replication", "example", "one")])
+
+    def test_every_short_cell_is_its_own_finding(self) -> None:
+        _set_plan(self.root, "[plan]\nrepeats_per_cell = 3\n")
+        found = reconcile.check_replication(self.root)
+        self.assertEqual(
+            [d.key for d in found],
+            ["short:bare/add", "short:nudge/add", "short:nudge-draft/add"],
+        )
+
+    def test_a_ledger_without_a_completed_trial_draws_nothing(self) -> None:
+        def errored(rows: list[dict]) -> list[dict]:
+            for row in rows:
+                if row.get("kind") == "trial":
+                    row["status"] = "errored"
+            return rows
+
+        _rewrite_rows(self.root, errored)
+        _set_plan(self.root, None)
+        self.assertEqual(reconcile.check_replication(self.root), [])
+
+    def test_only_the_current_dataset_version_counts(self) -> None:
+        """A newer version with one completed cell is what the scorecard shows by default."""
+
+        def bump(rows: list[dict]) -> list[dict]:
+            extra = dict(next(r for r in rows if r.get("scenario") == "bare"))
+            extra["dataset_version"] = "2"
+            return [*rows, extra]
+
+        _rewrite_rows(self.root, bump)
+        self.assertEqual(
+            [d.key for d in reconcile.check_replication(self.root)], ["short:bare/add"]
+        )
+
+    def test_a_warning_does_not_fail_the_gate(self) -> None:
+        _set_plan(self.root, None)
+        outcome = reconcile.run(self.root)
+        self.assertEqual(outcome.unexpected, [])
+        self.assertEqual(
+            _fingerprints(outcome.warnings), [("replication", "example", "undeclared")]
+        )
+        self.assertEqual(outcome.stale, [SHORT], "the excuse for the short cell outlived it")
+        self.assertFalse(outcome.ok)
+
+    def test_an_excused_warning_is_counted_as_excused(self) -> None:
+        outcome = reconcile.run(self.root)
+        self.assertTrue(outcome.ok)
+        self.assertEqual(outcome.warnings, [])
+        self.assertEqual(outcome.excused, 2)
+
+    def test_the_cli_prints_warnings_and_exits_0(self) -> None:
+        _set_plan(self.root, "[plan]\nrepeats_per_cell = 3\n")
+        _write_config(self.root, "[data_root]\nschema = 1\n" + _DRAFT_ENTRY)
+        proc = _fathom(self.root, "reconcile")
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        printed = [line for line in proc.stdout.splitlines() if line.startswith("[WARNING] ")]
+        self.assertEqual(len(printed), 3, proc.stdout)
+        self.assertTrue(
+            printed[0].startswith("[WARNING] [replication] example (short:bare/add): "),
+            printed[0],
+        )
+        last = proc.stdout.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("RECONCILE: OK ("), last)
+        self.assertTrue(last.endswith(", 3 warning(s))"), last)
+        self.assertIn("0 disagreement(s), 1 excused", last)
+
+    def test_a_disagreement_and_a_warning_together_fail_on_the_disagreement(self) -> None:
+        _set_plan(self.root, None)
+        _write_config(self.root, "[data_root]\nschema = 1\n")
+        proc = _fathom(self.root, "reconcile")
+        self.assertEqual(proc.returncode, 13, proc.stdout + proc.stderr)
+        last = proc.stdout.strip().splitlines()[-1]
+        self.assertTrue(last.startswith("RECONCILE: FAILED ("), last)
+        self.assertIn("1 disagreement(s), 0 excused", last)
+        self.assertTrue(last.endswith(", 1 warning(s))"), last)
+
+    def test_the_report_and_the_check_count_the_same_cells(self) -> None:
+        from fathom.report import render
+
+        _set_plan(self.root, "[plan]\nrepeats_per_cell = 3\n")
+        short = reconcile.check_replication(self.root)
+        scorecard = render(
+            "example",
+            ledger_dir=self.root / "ledger",
+            report_dir=self.root / "report",
+            tasks_dir=self.root / "tasks",
+        ).read_text(encoding="utf-8")
+        self.assertIn(f"> **Directional:** {len(short)} of 3 arm x task cells", scorecard)
 
 
 if __name__ == "__main__":

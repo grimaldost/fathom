@@ -13,6 +13,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from fathom import replication as _replication
 from fathom.calibration import fisher_one_sided, hard_fraction
 
 LEDGER_DIR = pathlib.Path("ledger")
@@ -509,6 +510,25 @@ def _historical_note(raw: list[dict], scoped: list[dict], dataset_version: str |
     )
 
 
+def _replication_line(bank: str, tasks_dir: pathlib.Path, scoped: list[dict]) -> str:
+    """The line under the title: the bank's ``[plan] repeats_per_cell`` against the cells.
+
+    The plan is read from the current ``tasks/<bank>/bank.toml`` (there is no other copy of
+    it); a malformed plan warns and reads as undeclared, so the scorecard still renders. The
+    cells are this view's (arm, task) cells, attributed as the rest of the scorecard is,
+    counting completed trials (:func:`fathom.replication.cell_counts`).
+    """
+    reading = _replication.read_plan(pathlib.Path(tasks_dir) / bank)
+    if reading.problem is not None:
+        warnings.warn(
+            f"bank {bank!r}: {reading.path.name} has a malformed [plan] ({reading.problem}); "
+            "the scorecard reads it as undeclared",
+            stacklevel=3,
+        )
+    counts = _replication.cell_counts(scoped)
+    return _replication.scorecard_line(reading, counts, f"tasks/{bank}")
+
+
 def calibration_heading(*, is_context: bool) -> str:
     """The calibration section's heading. Pinned: a scorecard renders the same across releases."""
     return "## Context-Size Calibration" if is_context else "## Model-Tier Calibration"
@@ -639,7 +659,7 @@ def render(
     for k in reps_for:
         reps_for[k].sort()
 
-    lines: list[str] = [f"# Scorecard — {bank}", ""]
+    lines: list[str] = [f"# Scorecard — {bank}", "", _replication_line(bank, tasks_dir, raw), ""]
     if historical_note:
         lines = [historical_note, "", *lines]
 

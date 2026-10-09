@@ -6,6 +6,38 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Added
+
+- **A bank declares its replication plan, and a study below it is marked directional.**
+  `bank.toml` takes an optional `[plan] repeats_per_cell = N` (an integer, 1 or more): the
+  completed trials each arm x task cell needs before a contrast from it counts as replicated.
+  It is not hashed and changes no `config_hash`, resume key or `dataset_version`, and
+  `--repeats` still decides what a run buys. A malformed plan (a value that is not an
+  integer of 1 or more, another key in the table, or a `plan` that is not a table) stops
+  `fathom run`, dry run included, with exit 1, and fails `fathom validate`; `fathom report`
+  and `fathom reconcile` warn and read it as undeclared. The shared logic is
+  `src/fathom/replication.py`, and the calibration control's `min_repeats` check uses its
+  `underpowered` rule. Where the plan shows:
+  - **The plan line.** Every `fathom run` plan prints a `replication:` line after
+    `planned:` (and `expected:`). It says `directional` when the bank declares no plan,
+    declares 1, or declares more repeats than the run asks for.
+  - **The trial row.** New trial rows carry `plan_repeats_per_cell` (the declared value,
+    or null) and `plan_replication` (`directional` for none or 1, `replicated` for 2 or
+    more), the plan in force when the row was written. Earlier rows are not rewritten.
+  - **The scorecard.** A line under the title holds the view's arm x task cells to the
+    plan: `> **Directional:** ...` when the plan is undeclared, malformed or 1, or when K
+    of M cells hold fewer completed trials than it declares; a plain line once every cell
+    holds what it declares.
+  - **The `replication` reconcile check, and a warn severity.** A reconciliation now has
+    a severity, `fail` (the default) or `warn`. The new `replication` check warns
+    (`[WARNING] [replication] <bank> (<key>): ...`, keys `undeclared`, `one` and
+    `short:<arm>/<task>`) for each bank with completed trials, never exits 13, and adds
+    `, N warning(s)` to the summary line. A `[[reconcile.known]]` entry excuses a warning
+    as it excuses a disagreement, and goes stale the same way; the summary's `excused`
+    count now counts excused findings of either kind.
+  - **The example data root** declares `repeats_per_cell = 2` and excuses its one short
+    cell, the uncommitted `nudge-draft` arm's.
+
 ### Changed
 
 - **The pinned install lines are version sites.** `README.md`, `README-plugin.md` and the

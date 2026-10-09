@@ -47,6 +47,8 @@ from collections import defaultdict
 from math import comb
 from typing import Any
 
+from fathom.replication import underpowered as _underpowered
+
 EPS = 0.10  # ε in per-trial pass-rate units (ADR-0007 D3 as amended by ADR-0009)
 
 # The capacity ladder: tier → cheapness rank (weak cheapest, frontier dearest). The one
@@ -389,7 +391,7 @@ def control_separation(trials: dict, task_meta: dict[str, dict]) -> dict | None:
         alpha = float(spec.get("alpha", 0.05))
         min_repeats = int(spec.get("min_repeats", 0))
         p = fisher_one_sided(*weak["draws"], *strong["draws"])
-        underpowered = min(weak["n_trials"], strong["n_trials"]) < min_repeats
+        underpowered = _underpowered(min(weak["n_trials"], strong["n_trials"]), min_repeats)
         return {
             "task_id": tid,
             "weak_arm": weak_arm,

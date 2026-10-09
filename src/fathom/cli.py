@@ -27,6 +27,7 @@ from typing import Any, TextIO
 import fathom.arming as _arming
 import fathom.home as _home
 import fathom.ledger as _ledger
+import fathom.replication as _replication
 from fathom.grading.verifier import run_verifier
 from fathom.scenario import ResolvedScenario
 from fathom.taskbank import (
@@ -827,6 +828,7 @@ def run_matrix(
     interleave: bool = False,
     data_root: pathlib.Path | None = None,
     index_cmd: str = "fathom index --write",
+    repeats_per_cell: int | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -864,6 +866,11 @@ def run_matrix(
     arms. The order is the only difference: the same trials are planned and the same resume
     keys are written. The plan then prints an ``order:`` line and a ``first:`` line; without
     it nothing new is printed.
+
+    ``repeats_per_cell`` is the bank's declared ``[plan] repeats_per_cell``, ``None`` when it
+    declares none (:mod:`fathom.replication`). It changes nothing the run buys: the plan
+    prints one ``replication:`` line, and every trial row records the plan in force
+    (``plan_repeats_per_cell``, ``plan_replication``).
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
@@ -992,6 +999,9 @@ def run_matrix(
     )
     if expected:
         print(expected, file=_out)
+    # Whether a contrast from this run can be replicated: the bank's declared plan against
+    # --repeats. Its own line, never inside `planned:`; it changes nothing that is bought.
+    print(_replication.plan_line(repeats_per_cell, repeats), file=_out)
     # Show the arithmetic for any multi-spawn arm. A ceiling many times the per-trial
     # rail reads as a typo unless the spawn count is named; naming it is what makes
     # the number actionable (chunk it with --limit, lower the rail, or don't run).
@@ -1360,6 +1370,10 @@ def run_matrix(
             trial_dict["scenario"] = sc.name
             trial_dict["holdout"] = task.id in bank.holdout
             trial_dict["fixture_sha"] = fixture_shas[task.id]
+            # The plan in force when the row was written, not the cell's status. Outside
+            # the dataclass, so no resume key or config_hash can see it.
+            trial_dict["plan_repeats_per_cell"] = repeats_per_cell
+            trial_dict["plan_replication"] = _replication.label(repeats_per_cell)
             _ledger.append_record(bank.name, trial_dict, ledger_dir=_ledger_dir)
             if valid:
                 completed += 1
@@ -1894,6 +1908,15 @@ def _cmd_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    # The bank's [plan], parsed apart from load_bank. A malformed plan stops the run here,
+    # before anything is planned, dry run included: a typo must not read as "undeclared".
+    plan = _replication.read_plan(tasks_dir / args.bank)
+    if plan.problem is not None:
+        print(
+            f"error: could not load bank '{args.bank}': {plan.path}: {plan.problem}",
+            file=sys.stderr,
+        )
+        return 1
 
     resolver = _DefaultResolver()
     resolved_scenarios: list[ResolvedScenario] = []
@@ -1997,6 +2020,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             interleave=getattr(args, "interleave", False),
             data_root=data_root,
             index_cmd=_index_command(args),
+            repeats_per_cell=plan.repeats_per_cell,
         )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
@@ -2136,7 +2160,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     # The arms' `[gate] extra` commands are path-checked against every task (FATH-B54).
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
     scenarios = _load_resolved_scenarios(scenarios_dir)
-    checks = _validate.validate_bank(
+    checks = _validate.plan_checks(tasks_dir / args.bank) + _validate.validate_bank(
         bank, stage_fn=stage_task, verifier_fn=run_verifier, scenarios=scenarios
     )
     print(_validate.render_validation(bank.name, checks))
@@ -2403,6 +2427,8 @@ def _cmd_reconcile(args: argparse.Namespace) -> int:
         print(f"[SKIPPED] {name}: {reason}")
     for d in bad:
         print(f"[DISAGREES] {d}")
+    for d in outcome.warnings:
+        print(f"[WARNING] {d}")
     for fp in stale:
         print(
             f"[STALE EXCEPTION] {fp} no longer excuses anything — delete its "
@@ -2425,7 +2451,9 @@ def _cmd_reconcile(args: argparse.Namespace) -> int:
         f"RECONCILE: {'OK' if outcome.ok else 'FAILED'} "
         f"({len(outcome.ran)} check(s) run, {len(outcome.skipped)} skipped, "
         f"{len(bad)} disagreement(s), {outcome.excused} excused, "
-        f"{len(stale)} stale exception(s))"
+        f"{len(stale)} stale exception(s)"
+        + (f", {len(outcome.warnings)} warning(s)" if outcome.warnings else "")
+        + ")"
     )
     return EXIT_OK if not bad and not stale else EXIT_UNRECONCILED
 
