@@ -398,8 +398,9 @@ def _build_parser() -> argparse.ArgumentParser:
     rec_p = sub.add_parser(
         "reconcile",
         help=(
-            "Check every fact the data root derives twice (free — no spawns); in an "
-            "engine checkout, its version sites"
+            "Check every fact the data root derives twice, and warn where a bank's "
+            "replication plan is not met (free — no spawns); in an engine checkout, its "
+            "version sites"
         ),
     )
     rec_p.add_argument(

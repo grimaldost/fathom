@@ -20,7 +20,9 @@ recomputation from the same row's own usage.  Where only one derivation exists, 
 is undetectable by any means.
 
 Here a reconciliation is a registered function, so adding one costs a function rather than
-a new tool and test.
+a new tool and test.  A check has a severity: ``fail`` (the default) or ``warn``.  The one
+warning check, ``replication``, compares no two derivations: it holds each bank's ledger to
+its ``[plan] repeats_per_cell`` and never fails the run.
 
 ## Where it runs
 
