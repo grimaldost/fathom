@@ -211,7 +211,7 @@ so, and state which side owns the with/without comparison.
 
 **FATH-B29 — Two CLI naming and ergonomics fixes.** *(S)*
 `--no-engine-boundary` reads as disabling a safety control when it only skips a check group;
-rename it `--skip-engine-check` (moot if FATH-B36 retires the group). Consider `--limit-per-arm
+rename it `--skip-engine-check` (moot: FATH-B36 retires the group). Consider `--limit-per-arm
 N` beside `--limit`, so a pilot cannot spend its whole budget on the first arm; document the
 scenario-major behaviour first (FATH-B10).
 
@@ -248,13 +248,31 @@ same executor, yet it is a distinct strategy name in the docs and the parser. Re
 `review = true` key on `gated-session`, with the old name accepted for one release so committed
 `config_hash`es stay interpretable.
 
-**FATH-B36 — Keep or retire the `series` strategy on the strength of a measurement.** *(M)*
+**FATH-B36 — Retire the `series` strategy.** *(M)*
 It is the largest strategy, the one sanctioned non-adapter model call, a smoke check group and
-an engine contract spec. Its remaining claim is dependency-ordered execution under per-phase
-budgets with gates that can reject "done". Retire it, with the contract spec and the smoke
-group, only if a measurement in a data root shows that claim adds nothing over a gated
-single-session arm; if it goes, the smoke check count drops by one and `--no-engine-boundary`
-goes with it.
+an engine contract spec. This row used to ask for a measurement in a data root before retiring
+it. On 2026-10-08 the maintainer decided to retire it without one: the measurement was declined,
+and the series engine it would have measured froze its runner the same day. The retirement unit
+is unchanged: the strategy (`src/fathom/strategies/series.py`), the contract spec
+(`docs/specs/2026-07-03-series-engine-contract.md`) and the engine-boundary smoke group go
+together, and the smoke check count drops from 11 to 10. Some things must stay, or the change
+breaks what it does not mean to touch:
+- the `tools`, `tool_invocation_cmd` and `tool_repo_sha` keys of every arm's `config_hash`
+  preimage, fixed at their empty values, since dropping them moves every arm's hash; refuse
+  `[tools] source = "repo"` when an arm is loaded instead;
+- the ledger field `tool_git_sha` and the `pin_level` value `"series"`, which old rows carry;
+- the scorecard's series line in `report.py`, or the golden scorecard changes with it;
+- `--no-engine-boundary`, accepted and ignored for one release, since every documented smoke
+  command passes it;
+- a short "12. Series arms (retired)" in `arming.md`, since the guide's sections are numbered
+  without gaps and renumbering 13 to 15 breaks their citations;
+- `NON_BYPASS_PERMISSION_MODE`, which `smoke.py` imports from `series.py`, moved first.
+
+A data root with a series arm deletes it in the same change that takes the release without the
+strategy: `fathom run` refuses an unknown strategy, and smoke's engine check reads that arm until
+the check goes. Until the retirement lands, a series arm's spawns do not get the instruction-file
+exclusion of 0.9.0 (FATH-B83; `CHANGELOG.md`, 0.9.0), so do not buy series trials. The retirement
+moots FATH-B56, FATH-B73, FATH-B74 and the flag-rename half of FATH-B29.
 
 **FATH-B33 — Fold `/fathom:plan` into `/fathom:run`.** *(S)*
 `/fathom:plan` is `fathom run <bank> --dry-run`, and much of `/fathom:report` repeats the skill's
