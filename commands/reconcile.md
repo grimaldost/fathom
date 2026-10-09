@@ -61,10 +61,11 @@ When reading the output:
   fixed by rendering it again: `index --write`, with the same invocation form as in
   step 2.
 - **`[WARNING] [<check>] <subject> (<key>): <detail>`** — a finding of a check that
-  warns and never fails. Only `replication` does: for a bank with completed trials, key
-  `undeclared` (its `bank.toml` declares no `[plan] repeats_per_cell`, has none, or has a
-  malformed one; the detail says which) or `one` (a plan of 1) means every result from
-  the bank is directional, and `short:<arm>/<task>` names a cell holding fewer completed
+  warns and never fails. Only `replication` does: for a bank with completed trials in its
+  current `dataset_version`, key `undeclared` (its `bank.toml` declares no
+  `[plan] repeats_per_cell`, has none, or has a malformed one; the detail says which) or
+  `one` (a plan of 1) means every result from the bank is directional, and
+  `short:<arm>/<task>` names a cell holding fewer completed
   trials than the plan declares. Tell the user the results are directional, not
   replicated. A warning is excused like a disagreement, by its check, subject and key.
 - **`[STALE EXCEPTION]`** — an accepted finding stopped occurring, so its entry

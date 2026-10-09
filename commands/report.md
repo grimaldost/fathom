@@ -25,7 +25,7 @@ When reading it:
   A `> **Directional:**` line (no plan, a malformed plan, a plan of 1, or K of M arm x
   task cells below the plan) means every verdict and contrast is directional, not
   replicated: say so first, with its reason. A plain line means every cell holds what
-  the plan declares.
+  the plan declares, or, while no cell holds a trial yet, only states the plan.
 - Lead with the **Per-Criterion Pass Rates** table: it shows where arms differ.
   The headline pass rate counts a trial as a pass only when every criterion is
   true.

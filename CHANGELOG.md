@@ -31,10 +31,11 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   - **The `replication` reconcile check, and a warn severity.** A reconciliation now has
     a severity, `fail` (the default) or `warn`. The new `replication` check warns
     (`[WARNING] [replication] <bank> (<key>): ...`, keys `undeclared`, `one` and
-    `short:<arm>/<task>`) for each bank with completed trials, never exits 13, and adds
-    `, N warning(s)` to the summary line. A `[[reconcile.known]]` entry excuses a warning
-    as it excuses a disagreement, and goes stale the same way; the summary's `excused`
-    count now counts excused findings of either kind.
+    `short:<arm>/<task>`) for each bank with completed trials in its current
+    `dataset_version`, never exits 13, and adds `, N warning(s)` to the summary line. A
+    `[[reconcile.known]]` entry excuses a warning as it excuses a disagreement, and goes
+    stale the same way; the summary's `excused` count now counts excused findings of
+    either kind. The `fathom.toml` that `fathom init` writes says so in its comment.
   - **The example data root** declares `repeats_per_cell = 2` and excuses its one short
     cell, the uncommitted `nudge-draft` arm's.
 

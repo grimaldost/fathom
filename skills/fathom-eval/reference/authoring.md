@@ -498,7 +498,7 @@ locally, and spawns nothing. The verifier and the gate run as they do in a trial
 in its reduced environment and empty working directory (section 7), the gate in the workspace
 with the environment a trial gives it (`arming.md`, section 10, "Tools and default-deny"). A
 gate that finds its tools only through a virtual environment inside the data root therefore
-fails here, as it would in a run.
+fails here, as it would in a run. A malformed `[plan]` (section 4) adds a bank-level `fail` line.
 
 | Property | pass | fail | otherwise |
 |---|---|---|---|
@@ -712,8 +712,8 @@ one for holdout tasks. Above them, one line holds the view's arm x task cells to
 `[plan] repeats_per_cell` of the current `tasks/<bank>/bank.toml` (`fathom report` has no
 `--tasks-dir`). It starts `> **Directional:**` when the plan is undeclared, malformed or 1,
 or when K of the M cells hold fewer completed trials than it declares; otherwise it says the
-plan is met. The `directional, not final` beside each verdict is printed regardless. Each
-section contains:
+plan is met, or only states it while no cell holds a trial. The `directional, not final`
+beside each verdict is printed regardless. Each section contains:
 
 - **Pass Rates** — per arm: passes (completed trials with every criterion true), completed
   trials, the pass rate, a Wilson 95% interval, and infrastructure errors. Errored trials are

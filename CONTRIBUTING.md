@@ -56,7 +56,8 @@ first, which removes the variable for the rest of the session.
   sites (`pyproject.toml`, `.claude-plugin/plugin.json`, the newest `CHANGELOG.md`
   heading, and the pinned install lines in `README.md`, `README-plugin.md` and the authoring
   guide) to each other. Against `examples/data-root/` it checks that the example data root
-  still reconciles: its ledger index, its rows' config hashes and its arm names. Exit 13 also
+  still reconciles: its ledger index, its rows' config hashes, its arm names and its
+  replication plan (one warning, excused). Exit 13 also
   covers a refusal before any check ran: a malformed `fathom.toml`, an unknown `--check`
   name, or a directory that is neither a data root nor an engine checkout.
 - Both reconcile runs are written so that a developer's own `FATHOM_HOME` cannot redirect
