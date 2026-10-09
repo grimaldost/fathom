@@ -6,6 +6,34 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-09
+
+A minor release, pre-1.0: it adds an optional study plan to `bank.toml`, a warning severity
+to `fathom reconcile` and two keys to trial rows, and moves fathom's own spawns to a new
+model, so a data root or caller that reads reconcile output, ledger rows or a scorecard's
+first lines strictly needs a change. The release serves studies that state their
+replication: a bank declares how many completed trials each arm x task cell needs, and a
+study that declares none or one, or whose cells hold fewer, is marked directional in the
+run's plan, the ledger, the scorecard and `fathom reconcile`. It also points a plain
+with/without check of one plugin at `claude plugin eval`, and moves the live model ids to
+the 5.5 lineup.
+
+What changes behaviour for an existing data root or caller:
+
+- `fathom reconcile` prints a `[WARNING] [replication]` line for each bank with completed
+  trials whose `bank.toml` declares no `[plan] repeats_per_cell`, declares 1, or has an arm x
+  task cell below the declared count. Warnings never change the exit code, and the summary
+  adds `, N warning(s)`. An existing data root sees one `undeclared` warning per bank until
+  the bank declares a plan or `fathom.toml` excuses the warning.
+- Trial rows written from now on carry `plan_repeats_per_cell` and `plan_replication`; a
+  reader that checks a row against a fixed set of keys sees two more. Old rows load
+  unchanged and are never rewritten, and `config_hash` and the resume key do not change.
+- Every scorecard has a replication line under its title: `> **Directional:** ...`, or a
+  plain line when the plan is met.
+- The plan `fathom run` prints, with or without `--dry-run`, has a `replication:` line after
+  `expected:`.
+- `fathom smoke` and the arming probe spawn `claude-haiku-5-5` instead of `claude-haiku-4-5`.
+
 ### Added
 
 - **A bank declares its replication plan, and a study below it is marked directional.**

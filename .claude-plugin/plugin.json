@@ -1,6 +1,6 @@
 {
   "name": "fathom",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "Scenario-blind tool-effectiveness evals. Run a coding tool, skill, model tier, or execution strategy through a task-bank matrix, score the results blind to which arm produced them, and join quality with cost (tokens, turns, USD) into a scorecard that accumulates over time. The plugin runs the engine it ships against your data root: the directory holding your banks, arms and committed ledger, marked by a fathom.toml with a [data_root] table (`fathom init` creates one). Set FATHOM_HOME to it, or work inside it. Requires uv.",
   "author": {
     "name": "Grimaldo Stanzani",
