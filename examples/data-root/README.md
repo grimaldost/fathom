@@ -73,7 +73,10 @@ on it, since it reads CRLF as LF before hashing a ledger.
 could change its outcome means bumping it. `holdout = []` seals no task. The optional
 `[plan] repeats_per_cell = 2` is the study's replication plan: each arm x task cell needs two
 completed trials before a contrast from it counts as replicated. It is not hashed and changes
-nothing a run buys. See section 4.
+nothing a run buys. See section 4. The `nudge-draft` cell holds one trial, so `fathom report
+example` opens with a `> **Directional:**` line ("1 of 3 arm x task cells"), and every contrast
+in it, `bare` against `nudge` included, reads as directional: the `[[reconcile.known]]` entry
+that excuses the cell silences `fathom reconcile` only, and the scorecard has no exceptions.
 
 ### `tasks/example/add/task.toml`
 
@@ -182,7 +185,7 @@ prefix each command with `uv run --project <clone>`.
 ```sh
 fathom validate example           # 2 pass, 1 unverifiable (no gate); exit 0
 fathom run example --dry-run      # arms bare, nudge; 0 trials planned (4 already done)
-fathom report example             # writes report/scorecard-example.md
+fathom report example             # writes report/scorecard-example.md, marked Directional
 fathom index                      # the ledger index is current
 fathom reconcile                  # OK, with the two nudge-draft findings excused
 ```
