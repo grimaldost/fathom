@@ -39,7 +39,7 @@ project explicitly.
 The **data root** is yours: the directory that holds your banks, arms and committed ledger,
 marked by a `fathom.toml` with a `[data_root]` table. It needs nothing else to be usable by
 the plugin; in particular it needs no `pyproject.toml`. To create one, use the command line
-(`uv tool install git+https://github.com/grimaldost/fathom@v0.10.0`, or a clone of this
+(`uv tool install git+https://github.com/grimaldost/fathom@v0.11.0`, or a clone of this
 repository with `uv run`):
 
 ```sh
