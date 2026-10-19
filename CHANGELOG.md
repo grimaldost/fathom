@@ -6,6 +6,23 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A matrix no longer dies on auth once it outlives its first access token (FATH-B55).**
+  Each spawn runs under a throwaway `CLAUDE_CONFIG_DIR` holding a copy of the credential,
+  and the CLI refreshes an expired access token inside it. The server rotates the refresh
+  token on every refresh, and the refreshed pair was deleted with the spawn's directory, so
+  the next spawn started again from the seat's file with a refresh token already spent and
+  stopped the matrix as an infrastructure error. `fathom run` now keeps one copy of the
+  credential for the run (`fathom.credentials.CredentialStore`): every spawn, every series
+  engine trial and the arming probe copy from it, and a spawn that refreshed hands the newer
+  credential back to it. It keeps whichever credential is newer by `expiresAt` and
+  `refreshTokenExpiresAt` only, so a new login on the seat mid-run is picked up too; no
+  token is read, and the copy is removed when the run ends. The seat's own file is not
+  written, so after a run that refreshed, that file still holds the spent refresh token
+  until the CLI is logged in again. Two spawns running at once inside one series engine
+  trial can still redeem the same refresh token; this change does not address that.
+
 ## [0.11.0] - 2026-10-09
 
 A minor release, pre-1.0: it adds an optional study plan to `bank.toml`, a warning severity

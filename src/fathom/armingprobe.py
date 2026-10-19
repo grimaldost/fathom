@@ -90,6 +90,7 @@ class RealArmingProbe:
         model: str = PROBE_MODEL,
         effort: str = PROBE_EFFORT,
         real_config_dir: str | None = None,
+        credential_store: Any | None = None,
         timeout_s: float = PROBE_TIMEOUT_S,
         max_budget_usd: float = PROBE_MAX_BUDGET_USD,
         spawn: Spawn | None = None,
@@ -97,6 +98,7 @@ class RealArmingProbe:
         self.model = model
         self.effort = effort
         self.real_config_dir = real_config_dir
+        self.credential_store = credential_store
         self.timeout_s = timeout_s
         self.max_budget_usd = max_budget_usd
         self._spawn = spawn
@@ -152,6 +154,7 @@ class RealArmingProbe:
             allowed_tools=scenario.tools.allowed,
             disallowed_tools=scenario.tools.disallowed,
             real_config_dir=self.real_config_dir,
+            credential_store=self.credential_store,
             append_system_prompt_file=scenario.context.inject,
             plugin_dirs=scenario.plugins.mount,
             stage_files=True,
