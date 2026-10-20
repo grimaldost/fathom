@@ -400,5 +400,75 @@ class SeriesExecutorCarriesTheCredentialTests(unittest.TestCase):
         self.assertIn("refresh-engine", held)
 
 
+class SmokeCarriesTheCredentialTests(unittest.TestCase):
+    """`fathom smoke` runs its spawns in sequence; each must start from the newest
+    credential, as a run's spawns do.
+
+    The seat's access token has already expired, so the first spawn refreshes and the
+    seat's own file is left holding a refresh token the server has spent. Before smoke
+    carried a store, every spawn after the first started from that file and died on auth,
+    and the gate reported a dead seat it had itself killed. The check outcomes do not
+    matter here (the stub's canned stream satisfies only some of them); what the seat saw
+    does.
+    """
+
+    def setUp(self) -> None:
+        self.real = Path(tempfile.mkdtemp(prefix="fake_real_cfg_"))
+        self.addCleanup(cleanup_dir, str(self.real))
+        self.seat = RotatingOAuthSeat(start_s=1_000_000.0)
+        self.seat_file = self.real / CREDENTIAL_FILE
+        self.seat_file.write_text(json.dumps(self.seat.issue()), encoding="utf-8")
+        # The access token issued above is already past its expiry when smoke starts.
+        self.seat.now_s += 2 * ACCESS_LIFE_S
+        self.seat_bytes = self.seat_file.read_bytes()
+        self.refresh_seen: list[str] = []
+        self.copies_during: list[int] = []
+
+    def _spawn(self, argv, *, input, timeout, env, cwd):
+        path = Path(env["CLAUDE_CONFIG_DIR"]) / CREDENTIAL_FILE
+        self.copies_during.append(len(list(Path(tempfile.gettempdir()).glob("fathom_cred_*"))))
+        self.refresh_seen.append(
+            json.loads(path.read_text(encoding="utf-8"))["claudeAiOauth"]["refreshToken"]
+        )
+        return self.seat.spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
+
+    def _smoke(self) -> str:
+        from fathom.smoke import RealProbes, run_smoke
+
+        # A temporary directory of this test's own, so another process's fathom run
+        # holding a copy at the same moment cannot be mistaken for one this smoke left.
+        tmp = Path(tempfile.mkdtemp(prefix="smoke_tmp_"))
+        self.addCleanup(cleanup_dir, str(tmp))
+        probes = RealProbes(real_config_dir=str(self.real), spawn=self._spawn, scenarios_dir=None)
+        out = io.StringIO()
+        with mock.patch.dict(os.environ), mock.patch.object(tempfile, "tempdir", str(tmp)):
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+            run_smoke(probes, include_engine=False, out=out, now_s=self.seat.now_s)
+        self.cred_dirs_after = sorted(p.name for p in tmp.glob("fathom_cred_*"))
+        return out.getvalue()
+
+    def test_every_spawn_after_the_first_starts_from_the_refreshed_pair(self):
+        out = self._smoke()
+        self.assertEqual(self.seat.auth_failures, 0, out)
+        # authed, deny, injection, memory, mount treatment, mount control.
+        self.assertEqual(self.seat.spawns, 6, out)
+        self.assertEqual(self.seat.refreshes, 6, out)
+        # The seat file's pair is serial 1; each refresh issues the next serial, and the
+        # next spawn is handed exactly that one.
+        self.assertEqual(self.refresh_seen, [f"refresh-{n}" for n in range(1, 7)], out)
+        self.assertNotIn("could not be refreshed", out)
+
+    def test_the_seat_file_is_left_as_it_was(self):
+        self._smoke()
+        self.assertEqual(self.seat_file.read_bytes(), self.seat_bytes)
+
+    def test_no_copy_of_the_credential_outlives_the_smoke(self):
+        self._smoke()
+        # One carried copy while the spawns ran (so the check below is not vacuous), and
+        # none once the gate ended.
+        self.assertEqual(set(self.copies_during), {1})
+        self.assertEqual(self.cred_dirs_after, [])
+
+
 if __name__ == "__main__":
     unittest.main()
