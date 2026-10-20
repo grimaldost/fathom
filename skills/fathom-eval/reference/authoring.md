@@ -660,7 +660,7 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
   given. An authentication or usage-limit failure stops the matrix with exit 10
   and records nothing for that trial.
 - **Exit codes of `fathom run`:** 0 done (blocked cells included); 1 usage error (bank not
-  loadable, no scenarios, unknown strategy, unknown `--tasks` id, a `comparator` that names
+  loadable, no scenarios, an unloadable scenario file, unknown strategy, unknown `--tasks` id, a `comparator` that names
   no loaded arm, the arm itself or a cycle); 10 infrastructure (auth, usage limit, fixture drift,
   lock timeout, an arm's files that could not be copied for a spawn); 11 unarmed arm; 12 bank invalid; 14 run budget reached; 15 credential
   expiring; 16 stopped by `fathom stop`.

@@ -1912,8 +1912,6 @@ def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    from fathom.scenario import load_scenario, resolve_scenario
-
     tasks_dir: pathlib.Path = args.tasks_dir if args.tasks_dir is not None else TASKS_DIR
     scenarios_dir: pathlib.Path = (
         args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
@@ -1938,15 +1936,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    resolver = _DefaultResolver()
-    resolved_scenarios: list[ResolvedScenario] = []
-    for sc_file in sorted(scenarios_dir.glob("*.toml")):
-        try:
-            config = load_scenario(sc_file)
-            resolved = resolve_scenario(config, resolver)
-            resolved_scenarios.append(resolved)
-        except Exception as exc:
-            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
+    resolved_scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    if load_failures:
+        # Before planning, the lock, the pre-flights or any spawn, dry run included: an arm
+        # that does not load would drop out of the matrix without a trace (FATH-B50).
+        _refuse_unloadable_scenarios(load_failures)
+        return 1
 
     if not resolved_scenarios:
         print(
@@ -2128,18 +2123,54 @@ def _cmd_stop(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenario]:
-    """Parse and resolve every arm in *scenarios_dir*, skipping unparsable files."""
+def _load_resolved_scenarios(
+    scenarios_dir: pathlib.Path,
+) -> tuple[list[ResolvedScenario], list[tuple[str, str]]]:
+    """Parse and resolve every arm in *scenarios_dir*.
+
+    Returns the arms that loaded and, for each file that did not, its name and the
+    error. Nothing is printed and nothing is dropped silently: the caller decides
+    whether a failure refuses the command (`run`, `verify-arming`) or is warned about
+    and skipped (`validate`).
+    """
     from fathom.scenario import load_scenario, resolve_scenario
 
     resolver = _DefaultResolver()
-    out: list[ResolvedScenario] = []
+    loaded: list[ResolvedScenario] = []
+    failures: list[tuple[str, str]] = []
     for sc_file in sorted(scenarios_dir.glob("*.toml")):
         try:
-            out.append(resolve_scenario(load_scenario(sc_file), resolver))
+            loaded.append(resolve_scenario(load_scenario(sc_file), resolver))
         except Exception as exc:
-            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
-    return out
+            failures.append((sc_file.name, str(exc)))
+    return loaded, failures
+
+
+def _refuse_unloadable_scenarios(failures: list[tuple[str, str]]) -> None:
+    """Print why a command stops when a scenario file does not load (FATH-B50).
+
+    An arm that fails to load is not in the matrix, so a paid run would go ahead
+    without it, and the arming pre-flight, which checks only the arms that loaded,
+    could not notice it was gone. The command is refused instead.
+    """
+    for name, error in failures:
+        print(f"error: scenario {name} could not be loaded: {error}", file=sys.stderr)
+    print(
+        "error: refused: an arm that does not load would silently drop out of the matrix. "
+        "Fix the file, or move it out of the scenarios directory (or rename it so it does "
+        "not end in .toml).",
+        file=sys.stderr,
+    )
+
+
+def _warn_unloadable_scenarios(failures: list[tuple[str, str]]) -> None:
+    """`validate` skips a scenario file that does not load, and says `run` will not."""
+    for name, error in failures:
+        print(
+            f"warning: skipping scenario {name}: {error}. `fathom run` will refuse this "
+            "directory until the file is fixed or moved out.",
+            file=sys.stderr,
+        )
 
 
 def _note_stream_dir(
@@ -2153,14 +2184,16 @@ def _note_stream_dir(
     prints a note saying where the streams go and that nothing needs doing — not a
     warning, which would ask the operator to act. Nothing is printed when
     FATHOM_STREAM_DIR is already set or no such arm is planned. Unparsable scenario
-    files are skipped (as `_load_resolved_scenarios` already does for `run`), never
-    turned into a validate failure. *scenarios*, when given, are the arms already loaded
-    from *scenarios_dir*, so a skipped file is not reported twice.
+    files are skipped, never turned into a validate failure (`fathom run` refuses such a
+    directory; `validate` says so in `_warn_unloadable_scenarios`). *scenarios*, when
+    given, are the arms already loaded from *scenarios_dir*, so a skipped file is not
+    reported twice.
     """
     if os.environ.get("FATHOM_STREAM_DIR"):
         return
     if scenarios is None:
-        scenarios = _load_resolved_scenarios(scenarios_dir)
+        scenarios, failures = _load_resolved_scenarios(scenarios_dir)
+        _warn_unloadable_scenarios(failures)
     streamed = [sc.name for sc in scenarios if _wants_stream_dir(sc)]
     if not streamed:
         return
@@ -2188,7 +2221,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     # The arms' `[gate] extra` commands are path-checked against every task (FATH-B54).
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    _warn_unloadable_scenarios(load_failures)
     checks = _validate.plan_checks(tasks_dir / args.bank) + _validate.validate_bank(
         bank, stage_fn=stage_task, verifier_fn=run_verifier, scenarios=scenarios
     )
@@ -2202,7 +2236,10 @@ def _cmd_verify_arming(args: argparse.Namespace) -> int:
     from fathom.armingprobe import RealArmingProbe
 
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    if load_failures:
+        _refuse_unloadable_scenarios(load_failures)
+        return 1
     if not scenarios:
         print(
             f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",
