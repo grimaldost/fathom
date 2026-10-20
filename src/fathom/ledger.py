@@ -205,6 +205,19 @@ def apply_voids(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return kept
 
 
+def run_cost(run: dict[str, Any]) -> float | None:
+    """A raw run row's USD, or None when the row records no cost.
+
+    A row with ``cost_source == "none"`` (tokens consumed, no cost reported) and a legacy
+    row with no ``cost_usd_est`` key both have an unknown cost, not a cost of 0. A report
+    sums the known costs and says how many runs it left out, so a sum over such rows reads
+    as a floor.
+    """
+    if run.get("cost_source") == "none" or "cost_usd_est" not in run:
+        return None
+    return float(run["cost_usd_est"] or 0.0)
+
+
 def _from_dict(data: dict[str, Any]) -> TrialRecord | RunRecord | GradingRecord | dict[str, Any]:
     kind = data.get("kind")
     cls = _KIND_MAP.get(kind)  # type: ignore[arg-type]

@@ -29,9 +29,11 @@ and its tests need no paid spawns.
 keep the latest trial per cell, but Economy, Efficiency and Arm Health sum the runs of every hash
 that carries the name. Re-running an arm after changing its injected content (a new hash, the
 same name) is the normal shape of a re-validation, and it averages the new trials' economy with
-the old ones, which can make a healthy arm look truncated. Change: aggregate on `config_hash` and
-render the name as a label beside it, with a hash prefix when one name carries more than one
-hash; or warn when a scoped `dataset_version` holds two hashes under one name.
+the old ones, which can make a healthy arm look truncated. Fixed (Unreleased): runs are keyed
+by `config_hash`, and a cell reads the runs of the hash of the trial it keeps, so Economy,
+Efficiency, Arm Health and the calibration cost views read the configuration the pass rate
+reads. A name that carries more than one hash in the view gets one line in the scorecard naming
+the hash prefixes.
 
 **FATH-B50 — A scenario that fails to load is dropped with a warning, and the matrix runs
 without it.** *(S)*
@@ -88,10 +90,11 @@ A run row whose spawn consumed tokens but reported no cost is written with `cost
 and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py` sums
 `cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it, then
 reads low with nothing on the page saying so. `calibration.py` (`_arm_cost`) sums the same field the
-same way, so the calibration views count the row as free too. Change: count the `cost_source =
-"none"` rows per arm, render that arm's USD as a floor with the count (or as unknown), and show the
-count in Arm Health, in `report.py` and `calibration.py` alike. This is a report-rendering change
-that ships independently of FATH-B63, which is a reconcile check; the two pair well.
+same way, so the calibration views count the row as free too. Fixed (Unreleased): a run with
+`cost_source = "none"` or with no `cost_usd_est` key has an unknown cost (`fathom.ledger.run_cost`).
+Economy, the per-trial view and the calibration cost views sum the known costs, mark a sum that
+left a run out as a floor, and state per arm on how many runs a cost was recorded. FATH-B63, the
+reconcile check, stays open.
 
 **FATH-B11 — Environment identity is declared, not fingerprinted at execution time.** *(M)*
 A plugin mounted from a path dependency can serve stale code (a cached wheel, say) under an
