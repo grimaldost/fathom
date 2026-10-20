@@ -115,8 +115,10 @@ orders them exactly as they arrived, and reports join them to their trial by `co
   before this field existed). Empty string means the arm identity is not recorded; the
   config_hash is the true key.
 - `cost_usd_est` (float): USD as the provider reported it (additive field; defaults to 0.0).
-  The sum of run-row costs is the per-experiment spend. Rows with `cost_source == "none"`
-  carry no cost (a gap in the provider's reporting); reports note trials with such rows.
+  The sum of run-row costs is the per-experiment spend. A row with `cost_source == "none"`
+  (a gap in the provider's reporting) or with no `cost_usd_est` key (a legacy row) has an
+  unknown cost, not a cost of 0: reports sum the known costs only, state on how many of
+  the runs a cost was recorded, and mark such a sum as a floor.
 - `cost_source` (str): `"reported"` (the provider gave a USD value) or `"none"` (provider
   gave no cost; this run's cost is unknown). Additive; defaults to `"reported"`.
   Disambiguates measured cost from estimates or gaps.
@@ -218,9 +220,9 @@ a trial has no run rows, the trial is treated as a run with no token data.
 ## Per-experiment cost
 
 The total cost for an arm × task × repeat cell is the sum of its run rows' `cost_usd_est`.
-Rows with `cost_source == "none"` carry no provider-reported cost and are left out of the
-sum; reports mark such trials. Cost is always computed, even when `cost_usd_est` is 0.0
-or missing (a legacy row defaults to 0.0 and is included in the sum).
+A row with `cost_source == "none"` or with no `cost_usd_est` key (a legacy row) has an
+unknown cost: it is left out of the sum, and reports state the coverage (cost recorded on
+K of N runs) and mark the sum as a floor. A recorded 0.0 is a known cost and is summed.
 
 ## Pass rate denominators
 

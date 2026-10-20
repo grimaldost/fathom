@@ -15,6 +15,7 @@ from typing import Any
 
 from fathom import replication as _replication
 from fathom.calibration import fisher_one_sided, hard_fraction
+from fathom.ledger import run_cost
 
 LEDGER_DIR = pathlib.Path("ledger")
 REPORT_DIR = pathlib.Path("report")
@@ -52,6 +53,8 @@ _MCP_CALLS_NOTE = (
 _CONTRAST_ALPHA = 0.05
 _CONTRAST_ALL_CRITERIA = "all criteria"
 _CONTRASTS_HEADING = "### Contrasts"
+# Characters of a config_hash shown where one arm name carries more than one hash.
+_HASH_PREFIX_CHARS = 12
 
 
 def wilson_interval(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -576,6 +579,9 @@ def render(
     contrast_alpha, contrast_pairs = _load_contrasts(bank, tasks_dir)
 
     trials: dict[tuple, dict] = {}
+    # Runs are keyed by (config_hash, task, repeat), not by arm name: one name can carry
+    # more than one hash (an arm re-run with changed content), and a cell reads the runs of
+    # the hash of the trial it keeps (_cell_runs), as its pass rate does (FATH-B49).
     runs: defaultdict[tuple, list[dict]] = defaultdict(list)
     gradings: list[dict] = []
     ch_to_sc: dict[str, str] = {}
@@ -634,10 +640,9 @@ def render(
                     "is excluded from the scorecard (likely a trial interrupted mid-write)",
                     stacklevel=2,
                 )
-            sc = ch_to_sc.get(ch, ch)
             tid = rec.get("task_id", "")
             rep = rec.get("repeat", 0)
-            runs[(sc, tid, rep)].append(rec)
+            runs[(ch, tid, rep)].append(rec)
         elif kind == "grading":
             gradings.append(rec)
 
@@ -659,9 +664,30 @@ def render(
     for k in reps_for:
         reps_for[k].sort()
 
+    def _cell_runs(sc: str, tid: str, rep: int) -> list[dict]:
+        # The runs of the config_hash of the trial the cell keeps (FATH-B49).
+        t = trials.get((sc, tid, rep))
+        if t is None:
+            return []
+        return runs.get((t.get("config_hash", ""), tid, rep), [])
+
     lines: list[str] = [f"# Scorecard — {bank}", "", _replication_line(bank, tasks_dir, raw), ""]
     if historical_note:
         lines = [historical_note, "", *lines]
+    hashes_of: dict[str, list[str]] = {}
+    for ch, sc in ch_to_sc.items():
+        hashes_of.setdefault(sc, []).append(ch)
+    for sc in all_sc:
+        if len(hashes_of.get(sc, [])) > 1:
+            prefixes = ", ".join(f"`{ch[:_HASH_PREFIX_CHARS]}`" for ch in hashes_of[sc])
+            lines += [
+                (
+                    f"> Arm {sc} carries {len(hashes_of[sc])} config hashes in this view"
+                    f" ({prefixes}); the scorecard uses the latest trial per cell and that"
+                    " trial's runs."
+                ),
+                "",
+            ]
 
     # The kept stream files, listed on first use: only an arm that mounts a plugin reads them.
     kept: dict[str, list[pathlib.Path]] | None = None
@@ -1085,13 +1111,15 @@ def render(
         # when there is at least one data row (avoids an orphaned header when all
         # trials in the section are infra-errored).
         economy_rows: list[str] = []
+        # Arms with a run that has no recorded cost: (runs with a cost, runs).
+        cost_gaps: dict[str, tuple[int, int]] = {}
         # Per-trial values, kept rather than only summed: the spread beside each
         # mean is what lets a reader see whether two arms are separated at this N.
         per_trial_tokens: dict[str, list[float]] = {}
         per_trial_turns: dict[str, list[float]] = {}
         turn_cap_hits: dict[str, tuple[int, int]] = {}
         for sc in all_sc:
-            tokens = turns = 0
+            tokens = turns = runs_known = runs_n = 0
             wall = usd = 0.0
             sc_counts: list[int] = []
             tok_list: list[float] = []
@@ -1102,7 +1130,7 @@ def render(
                     t = trials.get((sc, tid, rep))
                     if t is None or t.get("infra_error") or t.get("status") != "completed":
                         continue
-                    trial_runs = runs.get((sc, tid, rep), [])
+                    trial_runs = _cell_runs(sc, tid, rep)
                     # Only count trials that have run records in the sessions-per-trial
                     # average; a completed trial with no runs represents missing data,
                     # not a zero-session trial.
@@ -1118,8 +1146,13 @@ def render(
                         # Cost lives on the run record's top-level
                         # cost_usd_est (the adapter figure persisted by cli.py),
                         # NOT usage['cost_usd'] — the CLI never emits that key.
-                        # Legacy lines without the field default to 0.0.
-                        usd += run.get("cost_usd_est", 0.0)
+                        # A run with no recorded cost is left out and counted, so
+                        # the sum can be marked as a floor (FATH-B79).
+                        runs_n += 1
+                        cost = run_cost(run)
+                        if cost is not None:
+                            usd += cost
+                            runs_known += 1
                     tokens += trial_tokens
                     turns += trial_turns
                     if trial_runs:
@@ -1134,9 +1167,13 @@ def render(
             per_trial_turns[sc] = turn_list
             turn_cap_hits[sc] = (capped, len(tok_list))
             spt = sum(sc_counts) / len(sc_counts)
+            usd_cell = f"{usd:.4f}"
+            if runs_known < runs_n:
+                cost_gaps[sc] = (runs_known, runs_n)
+                usd_cell = f"≥{usd_cell}"
             economy_rows.append(
                 f"| {sc} | {len(tok_list)} | {tokens} | {_fmt_spread(tok_list)} | {turns}"
-                f" | {_fmt_spread(turn_list)} | {wall:.1f} | {spt:.2f} | {usd:.4f} |"
+                f" | {_fmt_spread(turn_list)} | {wall:.1f} | {spt:.2f} | {usd_cell} |"
             )
         if economy_rows:
             lines.append("### Economy")
@@ -1155,6 +1192,17 @@ def render(
                 " between arms, the arms are not separated at this N."
             )
             lines.append("")
+            if cost_gaps:
+                coverage = "; ".join(
+                    f"{sc}: cost recorded on {known} of {n} runs, {n - known} with no recorded cost"
+                    for sc, (known, n) in cost_gaps.items()
+                )
+                lines.append(
+                    "> **Est. USD is a floor where marked ≥.** A run with `cost_source`"
+                    ' `"none"` or no `cost_usd_est` has no recorded cost and is left out of'
+                    f" the sum. {coverage}."
+                )
+                lines.append("")
 
             # --- Arm Health: what makes a pass rate a lower bound ------
             health_rows = [
@@ -1193,7 +1241,7 @@ def render(
                     n_trials += 1
                     if is_pass(t.get("verifier_results")):
                         passes_count += 1
-                    for run in runs.get((sc, tid, rep), []):
+                    for run in _cell_runs(sc, tid, rep):
                         u = run.get("usage") or {}
                         in_tok += u.get("input_tokens", 0)
                         out_tok += u.get("output_tokens", 0)
@@ -1345,8 +1393,8 @@ class PerTrialRow:
     repeat: int
     status: str
     runs: int  # run rows summed into this row
-    usd: float  # the sum of the run rows' cost_usd_est
-    usd_missing: bool  # a run row carries cost_source "none": the sum leaves that run out
+    usd: float  # the sum of the run rows' known costs (fathom.ledger.run_cost)
+    usd_missing: bool  # a run row has no recorded cost: the sum leaves it out, a floor
     input_tokens: int
     output_tokens: int
     turns: int
@@ -1399,8 +1447,8 @@ def per_trial_rows(
                 repeat=rep,
                 status=rec.get("status", ""),
                 runs=len(trial_runs),
-                usd=sum(r.get("cost_usd_est", 0.0) for r in trial_runs),
-                usd_missing=any(r.get("cost_source") == "none" for r in trial_runs),
+                usd=sum((c for r in trial_runs if (c := run_cost(r)) is not None), 0.0),
+                usd_missing=any(run_cost(r) is None for r in trial_runs),
                 input_tokens=sum(u.get("input_tokens", 0) for u in usage),
                 output_tokens=sum(u.get("output_tokens", 0) for u in usage),
                 turns=sum(r.get("turns", 0) for r in trial_runs),
@@ -1430,8 +1478,8 @@ def render_per_trial(bank: str, rows: Sequence[PerTrialRow]) -> str:
         )
     if any(r.usd_missing for r in rows):
         note = (
-            "`*` marks a trial with a run that reported no cost (cost_source `none`); its USD"
-            " leaves that run out."
+            "`*` marks a trial with a run that has no cost recorded (cost_source `none`, or"
+            " no `cost_usd_est` on a legacy row); its USD leaves that run out and is a floor."
         )
         lines += ["", note]
     return "\n".join(lines) + "\n"

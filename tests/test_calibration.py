@@ -857,6 +857,66 @@ class TestRoutingSubstrate(unittest.TestCase):
         self.assertTrue(any("config hashes" in str(w.message) for w in caught))
 
 
+class TestCostCoverage(unittest.TestCase):
+    """FATH-B79: a run with no recorded cost is unknown, and a sum over one is a floor."""
+
+    META: ClassVar[dict] = {"t": {"score": 45, "hard_criteria": HARD}}
+
+    def _raw(self, *, unknown: bool) -> list[dict]:
+        raw = []
+        for rep in range(2):
+            raw.append(_prod_run("opus", "t", rep, 0.5))
+            raw.append(_trial("opus", "t", rep, 2))
+            raw.append(_prod_run("haiku", "t", rep, 0.1))
+            raw.append(_trial("haiku", "t", rep, 2))
+        if unknown:
+            no_cost = _prod_run("opus", "t", 0, 0.0)
+            no_cost["cost_source"] = "none"
+            legacy = _prod_run("opus", "t", 1, 0.0)
+            del legacy["cost_usd_est"]
+            raw += [no_cost, legacy]
+        return raw
+
+    def test_the_pareto_cost_of_an_arm_with_an_unknown_run_is_a_floor(self):
+        out = cal.build_calibration(self._raw(unknown=True), self.META)
+        points = {p["arm"]: p for p in out["pareto"]}
+        self.assertAlmostEqual(points["opus"]["cost"], 0.5)
+        self.assertTrue(points["opus"]["cost_floor"])
+        self.assertFalse(points["haiku"]["cost_floor"])
+        text = "\n".join(cal.render_calibration(out))
+        opus_row = next(ln for ln in text.splitlines() if ln.startswith("| opus |"))
+        haiku_row = next(ln for ln in text.splitlines() if ln.startswith("| haiku |"))
+        self.assertIn("≥$0.500", opus_row)
+        self.assertNotIn("≥", haiku_row)
+        self.assertIn("cost recorded on 4 of 6 runs", text)
+
+    def test_a_fully_costed_ledger_renders_no_floor(self):
+        out = cal.build_calibration(self._raw(unknown=False), self.META)
+        text = "\n".join(cal.render_calibration(out))
+        self.assertNotIn("≥", text)
+        self.assertNotIn("cost recorded on", text)
+
+
+class TestTwoConfigHashesUnderOneArm(unittest.TestCase):
+    """FATH-B49: a cell's runs are those of the config_hash of the trial it keeps."""
+
+    def test_the_cost_reads_the_kept_trials_config_hash_only(self):
+        meta = {"t": {"score": 45, "hard_criteria": HARD}}
+        raw = []
+        for ch, cost in (("ch-opus-old", 9.0), ("ch-opus", 0.5)):
+            for rep in range(2):
+                run = _prod_run("opus", "t", rep, cost)
+                run["config_hash"] = ch
+                trial = _trial("opus", "t", rep, 2)
+                trial["config_hash"] = ch
+                raw += [run, trial]
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            out = cal.build_calibration(raw, meta)
+        points = {p["arm"]: p for p in out["pareto"]}
+        self.assertAlmostEqual(points["opus"]["cost"], 0.5)
+
+
 if __name__ == "__main__":
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromModule(sys.modules[__name__])

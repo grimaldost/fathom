@@ -22,6 +22,20 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   written, so after a run that refreshed, that file still holds the spent refresh token
   until the CLI is logged in again. Two spawns running at once inside one series engine
   trial can still redeem the same refresh token; this change does not address that.
+- **A run with no recorded cost no longer counts as free, and Economy no longer pools
+  configurations that share an arm name (FATH-B79, FATH-B49).** A run row with
+  `cost_source = "none"` or with no `cost_usd_est` key (a legacy row) has an unknown cost.
+  The scorecard's Economy table, the `--per-trial` view and the calibration cost views sum
+  the known costs only. Where an arm's sum leaves such a run out, its USD is marked `≥` as a
+  floor and a note under the table says on how many of the arm's runs a cost was recorded;
+  the per-trial `*` now covers rows without the key too. Separately, when an arm is re-run
+  with changed content (a new `config_hash`, the same name), each cell now reads the runs of
+  the configuration whose trial the cell keeps, so Economy, Efficiency, Arm Health and the
+  calibration costs no longer add the old configuration's runs to the new one's, and the
+  scorecard names the arm and its hash prefixes in one line. A scorecard whose runs all
+  record a cost and whose arms each carry one hash renders as before. The ledger is not
+  changed.
+
 - **A scenario file that does not load now refuses the run (FATH-B50).** `fathom run`
   (a dry run included) and `fathom verify-arming` used to print `warning: skipping scenario`
   for a file that was not valid TOML, lacked a key, or named a `[plugins]` mount that was not
