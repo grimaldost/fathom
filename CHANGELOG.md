@@ -22,6 +22,29 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   written, so after a run that refreshed, that file still holds the spent refresh token
   until the CLI is logged in again. Two spawns running at once inside one series engine
   trial can still redeem the same refresh token; this change does not address that.
+- **A scenario file that does not load now refuses the run (FATH-B50).** `fathom run`
+  (a dry run included) and `fathom verify-arming` used to print `warning: skipping scenario`
+  for a file that was not valid TOML, lacked a key, or named a `[plugins]` mount that was not
+  there, and went on with the arms that did load. A treatment arm that dropped out that way
+  left a control-only ledger, and the arming check could not see it, since it checks only the
+  arms that loaded. Both commands now print `error: scenario <file> could not be loaded` for
+  each such file and exit 1 before planning or any spawn. In an existing data root, a
+  `scenarios/` directory that holds a file like this is refused until the file is fixed, moved
+  out of the directory, or renamed so it does not end in `.toml`. `fathom validate` still
+  skips the file and now says that `run` will refuse the directory. There is no flag to
+  proceed anyway.
+
+- **The acceptance harness judges from evidence, and names a failed login.**
+  `measurement_ran` now passes on the subject's engine-written trial rows in the data root
+  and fails on hand-written results, whatever form the `fathom run` took in the command text,
+  so an executable wrapper (`sh f.sh`) no longer fails a measurement the engine ran;
+  `plan_ran` and `reconcile_ran` look for fathom's marker lines in every Bash and PowerShell
+  result, not only in the calls the classifier read as fathom. The classifier stays for the
+  behaviour facts. A subject whose result event is an authentication failure is now an
+  environment failure, in a scenario and in the preflight, with the CLI's message in the
+  line, instead of reading as a pending MCP server or as the agent's own failure. The live
+  acceptance run is the owner's, at the next release.
+
 - **`fathom smoke` no longer kills the seat it checks.** Its spawns run one after another,
   and each copied the seat's credential file on its own, so when the first spawn refreshed
   an expired access token every later spawn started from a spent refresh token and failed

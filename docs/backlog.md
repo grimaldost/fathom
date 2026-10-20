@@ -34,13 +34,17 @@ render the name as a label beside it, with a hash prefix when one name carries m
 hash; or warn when a scoped `dataset_version` holds two hashes under one name.
 
 **FATH-B50 — A scenario that fails to load is dropped with a warning, and the matrix runs
-without it.** *(S)*
-`fathom run` prints `warning: skipping scenario …` and plans the arms that did load. A treatment
-arm whose plugin tree is missing therefore drops out of a paid matrix, leaving a control-only
-ledger and a scorecard with no treatment in it. The arming pre-flight cannot catch this, because
-an arm that never loaded is not on the list it checks. Change: refuse the run with a dedicated
-exit code when any scenario file fails to load, with an explicit flag to proceed anyway, and
-print the resolved arm count beside the file count on the plan line.
+without it.** *(S)* **Fixed (Unreleased), without the flag.**
+`fathom run` printed `warning: skipping scenario …` and planned the arms that did load. A treatment
+arm whose plugin tree is missing therefore dropped out of a paid matrix, leaving a control-only
+ledger and a scorecard with no treatment in it. The arming pre-flight could not catch this, because
+an arm that never loaded is not on the list it checks. Now `fathom run` (dry run included) and
+`fathom verify-arming` refuse a scenarios directory in which any file fails to load, with exit 1
+and one error line per file, before planning or any spawn; `fathom validate` still skips and
+warns, and says that `run` will refuse. Left out: the explicit flag to proceed anyway and a
+dedicated exit code. An additive flag waits under policy D8, and exit 1 is the class an
+unloadable bank already uses. The proposed arm-count line is moot: every file now loads or the
+run stops.
 
 **FATH-B52 — `verify-arming` can report a working MCP arm as unarmed, and its only escape is
 the blanket override.** *(S)*
