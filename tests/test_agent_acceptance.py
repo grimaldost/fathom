@@ -22,6 +22,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from typing import ClassVar
 from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
@@ -988,6 +989,75 @@ class GroundTruthTests(unittest.TestCase):
         self.assertFalse(checks["measurement_ran"].passed)
         self.assertIn("written by hand", checks["measurement_ran"].evidence)
 
+    # The verdict reads the engine's own rows and the lines fathom printed, not the command
+    # text, so an invocation form the classifier does not know (an executable wrapper) must
+    # not turn a measurement the engine ran into a failure.
+    WRAPPERS = ("sh f.sh", "./f.sh run tiny", "/opt/f.sh run tiny --max-run-usd 1")
+
+    def _wrapped(self, command: str, output: str = "ok") -> tuple[dict, ...]:
+        return (_use("w", "Bash", {"command": command}), _result("w", output), _final())
+
+    def test_a_measurement_through_a_wrapper_script_is_recognised_by_its_rows(self) -> None:
+        for command in self.WRAPPERS:
+            with self.subTest(command):
+                tmp = Path(tempfile.mkdtemp(dir=self.tmp))
+                self._authored_root(tmp)
+                checks = self._from_scratch(tmp, events=self._wrapped(command))
+                evidence = checks["measurement_ran"].evidence
+                self.assertTrue(checks["measurement_ran"].passed, evidence)
+                self.assertIn("no paid call was recognised", evidence)
+                self.assertIn("2 trial(s) the engine wrote", evidence)
+
+    def test_a_recognised_paid_call_is_named_in_the_evidence(self) -> None:
+        self._authored_root(self.tmp)
+        checks = self._from_scratch(self.tmp)
+        self.assertIn("#0", checks["measurement_ran"].evidence)
+        self.assertNotIn("no paid call", checks["measurement_ran"].evidence)
+
+    def test_a_wrapper_that_printed_the_plan_and_the_reconcile_line_counts(self) -> None:
+        for command in self.WRAPPERS:
+            with self.subTest(command):
+                analysis = _analysis(*self._wrapped(command, PLANNED + "\n" + RECONCILED))
+                scenario = _scenario(checks=("plan_ran", "reconcile_ran"))
+                checks = _checks(scenario, analysis, acc.Facts())
+                self.assertTrue(checks["plan_ran"].passed, checks["plan_ran"].evidence)
+                self.assertTrue(checks["reconcile_ran"].passed, checks["reconcile_ran"].evidence)
+                self.assertIn("ceiling: $10.00", checks["plan_ran"].evidence)
+
+    def test_a_wrapper_that_printed_neither_line_still_fails_both(self) -> None:
+        analysis = _analysis(*self._wrapped("sh f.sh", "nothing useful"))
+        scenario = _scenario(checks=("plan_ran", "reconcile_ran"))
+        checks = _checks(scenario, analysis, acc.Facts())
+        self.assertFalse(checks["plan_ran"].passed)
+        self.assertFalse(checks["reconcile_ran"].passed)
+
+    def test_the_rows_alone_do_not_make_a_measurement(self) -> None:
+        """Guards: whatever the command text says, rows written by hand, no completed trial
+        and trials without the engine's fields stay failures."""
+        self._authored_root(self.tmp, engine_fields=False)
+        checks = self._from_scratch(self.tmp, events=self._wrapped("sh f.sh"))
+        self.assertFalse(checks["measurement_ran"].passed)
+        self.assertIn("lack what the engine writes", checks["measurement_ran"].evidence)
+
+        for command in ("sh f.sh", "uv run fathom run tiny --max-run-usd 1"):
+            with self.subTest(command):
+                tmp = Path(tempfile.mkdtemp(dir=self.tmp))
+                self._authored_root(tmp, trials=0)
+                checks = self._from_scratch(tmp, events=self._wrapped(command))
+                self.assertFalse(checks["measurement_ran"].passed)
+                self.assertIn("no completed trial", checks["measurement_ran"].evidence)
+
+        tmp = Path(tempfile.mkdtemp(dir=self.tmp))
+        self._authored_root(tmp)
+        events = (
+            *self._wrapped("sh f.sh")[:-1],
+            _use("h", "Bash", {"command": f"echo '{{}}' >> {tmp}/ledger/tiny.jsonl"}),
+            _result("h", ""),
+        )
+        checks = self._from_scratch(tmp, events=events)
+        self.assertFalse(checks["measurement_ran"].passed)
+        self.assertIn("written by hand", checks["measurement_ran"].evidence)
+
     def test_new_spend_leaves_out_the_baseline(self) -> None:
         self._authored_root(self.tmp, cost=0.5)
         baseline = acc.workspace_rows(self.tmp)
@@ -1000,13 +1070,113 @@ class GroundTruthTests(unittest.TestCase):
         visible = acc.assess_visibility(acc.analyze(stream_lines()))
         passed = [acc.Check("a", "behaviour", True, "")]
         failed = [acc.Check("a", "behaviour", False, "")]
-        self.assertEqual(acc.status_of(visible, passed), "pass")
-        self.assertEqual(acc.status_of(visible, failed), "fail")
+        self.assertEqual(acc.status_of(visible, passed, None), "pass")
+        self.assertEqual(acc.status_of(visible, failed, None), "fail")
         blind = acc.assess_visibility(acc.analyze([]))
-        self.assertEqual(acc.status_of(blind, passed), "environment")
+        self.assertEqual(acc.status_of(blind, passed, None), "environment")
         self.assertEqual(acc.exit_code_for(["pass", "pass"]), acc.EXIT_PASSED)
         self.assertEqual(acc.exit_code_for(["pass", "fail"]), acc.EXIT_FAILED)
         self.assertEqual(acc.exit_code_for(["fail", "environment", "skipped"]), 2)
+
+
+class AuthFailureTests(unittest.TestCase):
+    """A subject that could not authenticate is an environment failure, not behaviour."""
+
+    MESSAGE = "Failed to authenticate. API Error: 401 authentication_error: invalid credentials"
+    PENDING: ClassVar[dict] = dict(
+        INIT, mcp_servers=[{"name": "plugin:fathom:fathom", "status": "pending"}]
+    )
+
+    def _failed(self, text: str = MESSAGE, **fields: object) -> dict:
+        return {
+            "type": "result",
+            "subtype": "success",
+            "is_error": True,
+            "result": text,
+            "total_cost_usd": 0,
+            **fields,
+        }
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def _preflight(self, events: list[dict]) -> tuple[int, str]:
+        def fake_subject(*_args: object, transcript: Path, **_kwargs: object) -> acc.SubjectRun:
+            lines = stream_lines(events, malformed=False)
+            transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return acc.SubjectRun(exit_code=1, timed_out=False, wall_s=0.3)
+
+        out = io.StringIO()
+        with (
+            mock.patch.object(acc, "run_subject", fake_subject),
+            contextlib.redirect_stdout(out),
+        ):
+            code = acc.run_preflight(
+                claude="claude",
+                out=self.tmp / "out",
+                model="m",
+                effort="low",
+                plugin_dirs=[],
+                config_mode="user",
+                real_config=self.tmp / "config",
+                data_root=None,
+                workspace_base=self.tmp,
+            )
+        return code, out.getvalue()
+
+    def test_the_classifier_reads_the_result_event(self) -> None:
+        for text in (
+            self.MESSAGE,
+            "Please run /login to continue",
+            "OAuth token has expired",
+            "FAILED TO AUTHENTICATE",
+        ):
+            with self.subTest(text):
+                self.assertEqual(acc.auth_failure(self._failed(text)), text)
+        self.assertIsNone(acc.auth_failure(self._failed("Reached the maximum budget")))
+        self.assertIsNone(acc.auth_failure(self._failed(self.MESSAGE, is_error=False)))
+        self.assertIsNone(acc.auth_failure(None))
+        long = acc.auth_failure(self._failed("Failed to authenticate\n" + "x " * 200)) or ""
+        self.assertLessEqual(len(long), 160)
+        self.assertNotIn("\n", long)
+
+    def test_the_preflight_names_the_authentication_failure(self) -> None:
+        code, printed = self._preflight([self.PENDING, self._failed()])
+        self.assertEqual(code, acc.EXIT_ENVIRONMENT)
+        line = next(x for x in printed.splitlines() if x.startswith("PREFLIGHT:"))
+        self.assertTrue(
+            line.startswith(
+                "PREFLIGHT: ENVIRONMENT FAILURE: the subject could not authenticate (Failed to"
+            ),
+            line,
+        )
+        self.assertTrue(line.endswith("); log in with claude, then retry"), line)
+        self.assertNotIn("pending at init", printed)
+        verdict = json.loads((self.tmp / "out" / "preflight" / "verdict.json").read_text())
+        self.assertEqual(verdict["status"], "environment")
+
+    def test_a_pending_server_without_an_error_result_keeps_its_own_line(self) -> None:
+        code, printed = self._preflight([self.PENDING, _final()])
+        self.assertEqual(code, acc.EXIT_ENVIRONMENT)
+        self.assertIn("pending at init and never answered the probe", printed)
+        self.assertNotIn("could not authenticate", printed)
+
+    def test_a_scenario_that_could_not_authenticate_is_an_environment_failure(self) -> None:
+        analysis = _analysis(self._failed())
+        visibility = acc.assess_visibility(analysis)
+        self.assertTrue(visibility.ok)
+        checks = acc.evaluate(_scenario(), analysis, acc.Facts())
+        self.assertEqual(acc.status_of(visibility, checks, analysis.result), "environment")
+        finished = next(c for c in checks if c.name == "session_finished")
+        self.assertFalse(finished.passed)
+        self.assertIn("Failed to authenticate", finished.evidence)
+
+    def test_another_error_result_stays_a_failure(self) -> None:
+        analysis = _analysis(self._failed("Reached the maximum budget", subtype="error_budget"))
+        visibility = acc.assess_visibility(analysis)
+        checks = acc.evaluate(_scenario(), analysis, acc.Facts())
+        self.assertEqual(acc.status_of(visibility, checks, analysis.result), "fail")
 
 
 class ContextTests(unittest.TestCase):
@@ -1501,7 +1671,7 @@ class ReportTests(unittest.TestCase):
         checks = acc.evaluate(scenario, analysis, facts)
         verdict = acc.verdict_record(
             scenario=scenario,
-            status=acc.status_of(visibility, checks),
+            status=acc.status_of(visibility, checks, analysis.result),
             setup={"workspace": "ws", "command": ["claude", "-p"], "env_unset": ["CLAUDECODE"]},
             run=acc.SubjectRun(exit_code=0, timed_out=False, wall_s=12.3),
             analysis=analysis,

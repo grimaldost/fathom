@@ -23,6 +23,17 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   until the CLI is logged in again. Two spawns running at once inside one series engine
   trial can still redeem the same refresh token; this change does not address that.
 
+- **The acceptance harness judges from evidence, and names a failed login.**
+  `measurement_ran` now passes on the subject's engine-written trial rows in the data root
+  and fails on hand-written results, whatever form the `fathom run` took in the command text,
+  so an executable wrapper (`sh f.sh`) no longer fails a measurement the engine ran;
+  `plan_ran` and `reconcile_ran` look for fathom's marker lines in every Bash and PowerShell
+  result, not only in the calls the classifier read as fathom. The classifier stays for the
+  behaviour facts. A subject whose result event is an authentication failure is now an
+  environment failure, in a scenario and in the preflight, with the CLI's message in the
+  line, instead of reading as a pending MCP server or as the agent's own failure. The live
+  acceptance run is the owner's, at the next release.
+
 ## [0.11.0] - 2026-10-09
 
 A minor release, pre-1.0: it adds an optional study plan to `bank.toml`, a warning severity
