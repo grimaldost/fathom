@@ -6,6 +6,32 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Changed
+
+- **The repository adopts railform, the shared CI and commit-lane standard, pinned at one
+  commit.** Nothing in the installed package changes; the repository tooling does.
+  - **CI.** `ci.yml` calls railform's reusable workflow for the lock check, sync, ruff, pytest,
+    commit lane, changelog gate, hook wrapper check and workflow lint, and keeps the engine
+    checks (MCP server tests at two `fastmcp` versions, the example data root reconciled three
+    ways, the installed wheel) as its own job. The `gate` context the branch ruleset requires
+    is now railform's aggregate job and needs both.
+  - **Hooks.** The tracked hooks move from `tools/git-hooks/` to `.githooks/`, tracked as
+    `100755`, and gain a `pre-push` hook that judges the branch name. `tools/git-hooks/` holds
+    stubs that fail with the command to run. A clone armed to the old directory must run
+    `railform arm` (or `git config core.hooksPath .githooks`) once; see CONTRIBUTING.md,
+    "Hooks".
+  - **Commit messages.** Railform's rules replace the `conventional-pre-commit` and
+    `no-ai-attribution` hooks: the same types plus `revert`, and the attribution trailers now
+    include `Copilot` and the `Signed-off-by`, `Assisted-by` and `Generated-by` trailers.
+  - **Changelog declaration.** The exemption is the trailer `Changelog: none (<reason>)` on each
+    commit that needs it; `Changelog: not needed (<reason>)` no longer counts. The check is
+    `railform changelog-gate` over the rows in `railform.toml`, so `tools/changelog_currency.py`
+    and its test are deleted; `tests/test_changelog_records.py` keeps the check that every
+    top-level entry of the tree is charged or exempt.
+  - **Release tags.** A daily `railform release-check` also judges the tags from v0.9.0 on
+    (annotated, on the release pull request's merge commit, a metadata-only release commit);
+    the existing `tag-watch` workflow stays for released headings with no tag.
+
 ### Fixed
 
 - **A matrix no longer dies on auth once it outlives its first access token (FATH-B55).**

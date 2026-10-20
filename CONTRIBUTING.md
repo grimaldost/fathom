@@ -22,8 +22,10 @@ dependency to the core without an ADR.
 ## Gates
 
 All of these must pass before a commit. This is the one gate list: `README.md` and
-`CLAUDE.md` point here rather than repeat it. It matches `.github/workflows/ci.yml`; a change
-to the gates is made in both.
+`CLAUDE.md` point here rather than repeat it. CI runs the same checks, from two places: the
+shared pipeline that railform writes from this repository's frame (`railform.toml`; see
+[CI](#ci)), and the engine checks in `.github/workflows/ci.yml`. A change to the gates is made
+there and here.
 
 ```sh
 uv lock --check
@@ -79,50 +81,86 @@ first, which removes the variable for the rest of the session.
 - `fathom verify-arming` is not a gate here. It proves a data root's own treatment arms on
   real spawns, costs money, and the engine has no arms.
 
-CI (`.github/workflows/ci.yml`) runs every gate above except `fathom smoke`, on ubuntu and
-windows. It also reconciles the example data root the two other ways a user reaches one:
-named by `FATHOM_HOME`, and found from inside it (`uv run --project ../.. fathom reconcile`
-in `examples/data-root/`, with `FATHOM_HOME` empty). Then three more checks:
+### CI
 
-- **The installed wheel.** The steps above import the source tree, so a file the wheel leaves
-  out would pass them and be missing from every installed copy (the smoke canary plugin is
-  package data). CI builds the wheel (`uv build --wheel -o dist`) and runs it in a
-  throwaway environment that holds the wheel alone
-  (`uv run --isolated --no-project --with <wheel> …`): from inside `examples/data-root/`,
-  `fathom --version`, `fathom reconcile` and import checks; from a directory outside it,
-  `fathom --home <example> reconcile` and `fathom --home <example> run example --dry-run`.
-- **Changelog currency** (pull requests only); see below.
-- **Workflow lint**: `zizmor` over `.github/workflows`.
+`.github/workflows/ci.yml` runs every gate above except `fathom smoke`, on ubuntu and windows,
+in two parts. Both are required through one context, `gate`, which the branch ruleset names.
+
+- **railform.** The `railform` job calls the shared workflow of
+  [railform](https://github.com/grimaldost/railform) at the commit pinned in `ci.yml`, which
+  `.pre-commit-config.yaml` and `.github/workflows/railform-tag-watch.yml` name too. It runs
+  the lock check, the sync, `ruff format --check`, `ruff check` and pytest on Python 3.12
+  (`railform frame` prints the exact commands), and these checks:
+  - `frame`: `railform.toml` is valid, and a value that departs from the project type's
+    preset has an `exceptions` row with a reason. This repository has two rows: no type check
+    (fathom has no type checker), and the files a release commit may edit.
+  - **Changelog currency** (pull requests only); see below.
+  - **Commit lane** (pull requests only): every commit subject is a conventional subject,
+    no commit or pull request text carries an AI-attribution line, and the head branch has a
+    conventional name (`<category>/<slug>`, or Dependabot's).
+  - `hooks`: the hook wrappers are tracked as `100755` and are the text railform renders, the
+    owned parts of the CI, hook and Dependabot files have not been edited by hand, and the
+    hygiene hooks pass over the pull request's changed files.
+  - `checks` also runs railform's private-reference check over every tracked file.
+  - **Workflow lint**: `zizmor` over `.github/workflows`.
+- **The engine checks** (`engine-checks` in `ci.yml`). They reconcile the example data root
+  the two other ways a user reaches one: named by `FATHOM_HOME`, and found from inside it
+  (`uv run --project ../.. fathom reconcile` in `examples/data-root/`, with `FATHOM_HOME`
+  empty). The MCP server's tests run at both `fastmcp` versions. Then one more check:
+  - **The installed wheel.** The steps above import the source tree, so a file the wheel leaves
+    out would pass them and be missing from every installed copy (the smoke canary plugin is
+    package data). CI builds the wheel (`uv build --wheel -o dist`) and runs it in a
+    throwaway environment that holds the wheel alone
+    (`uv run --isolated --no-project --with <wheel> …`): from inside `examples/data-root/`,
+    `fathom --version`, `fathom reconcile` and import checks; from a directory outside it,
+    `fathom --home <example> reconcile` and `fathom --home <example> run example --dry-run`.
 
 `fathom reconcile` is also exercised inside pytest (`tests/test_reconcile.py`).
 
+Moving the railform pin is one change to every reference at once, made with
+`railform adopt --pin <sha>`, never by hand; `railform adopt --check` fails while any owned
+line differs. A job added to `ci.yml` is picked up by `gate` on the next `railform adopt`.
+
 ### Hooks
 
-The fast half of the gates runs before every commit. Install the tracked hooks once per
-clone:
+The fast half of the gates runs before every commit. Arm the tracked hooks once per clone,
+with railform's own command, run from the pinned commit (`<sha>` is the `rev` of the railform
+entry in `.pre-commit-config.yaml`):
 
 ```sh
-git config core.hooksPath tools/git-hooks
+uvx --from "git+https://github.com/grimaldost/railform@<sha>" railform arm
 ```
+
+`railform arm` sets `core.hooksPath` to `.githooks`, so `git config core.hooksPath .githooks`
+does the same. `railform hooks-check --armed` fails in a clone that is armed to another
+directory. Worktrees share their clone's configuration, so arm each clone, not each worktree.
+The hooks used to live in `tools/git-hooks/`; that directory holds stubs that fail with the
+command to run, so a clone still armed to it cannot commit unchecked. They are removed in a
+later change, once every clone has been armed again.
 
 Do not use `pre-commit install`. It writes a hook that invokes the bare `pre-commit`
 console-script shim, and where an application-control policy blocks such shims the hook
-silently never runs. The tracked hooks call `uv run python -m pre_commit` instead. The
-pre-commit stage runs ruff format and check and, for the paths listed in
-`.pre-commit-config.yaml`, the `fathom reconcile` runs and the pytest test that re-derives
-the example data root's config hashes. Each hook that runs fathom clears `FATHOM_HOME` or
-names its root with `--home`, for the reason given under the gates. The commit-msg stage
-enforces conventional-commit subjects and rejects AI-attribution trailers. Skip a single
-commit with `git commit --no-verify` when you mean to; CI runs the full set regardless.
+silently never runs. The tracked hooks call `uv run --frozen python -m pre_commit` instead.
+The pre-commit stage runs railform's hygiene hooks, its private-reference check, its hook
+wrapper check, ruff format and check and, for the paths listed in `.pre-commit-config.yaml`,
+the `fathom reconcile` runs and the pytest test that re-derives the example data root's config
+hashes. Each hook that runs fathom clears `FATHOM_HOME` or names its root with `--home`, for the
+reason given under the gates. The commit-msg stage enforces conventional-commit subjects and
+rejects AI-attribution trailers (railform's `commit.types` and `commit.attribution_patterns`),
+and the pre-push stage judges the branch name. Skip a single commit with `git commit --no-verify`
+when you mean to; CI runs the full set regardless.
 
 ### The changelog moves with the change
 
 A pull request whose diff touches a harness path fails CI unless `CHANGELOG.md` moves with
-it (an `[Unreleased]` entry) or a commit in the range carries a
-`Changelog: not needed (<reason>)` line. Harness paths are `src/`, `pyproject.toml`,
-`.claude-plugin/`, `commands/`, `mcp/`, `skills/` and `tools/`: what reaches an installed
-copy, plus the tooling the gates run from. Docs, examples, tests, CI configuration and
-`uv.lock` are exempt. The check is `tools/changelog_currency.py`.
+it (an `[Unreleased]` entry) or each commit that touches one carries a trailer line
+`Changelog: none (<reason>)`, which declares its own commit only. The older spelling,
+`Changelog: not needed (<reason>)`, no longer counts. Harness paths are `src/`, `pyproject.toml`, `.claude-plugin/`,
+`commands/`, `mcp/`, `skills/`, `tools/` and `.githooks/`: what reaches an installed copy, plus
+the tooling the gates and hooks run from. They are the `[changelog] records` rows of
+`railform.toml`. Docs, examples, tests, CI configuration and `uv.lock` are exempt, and
+`tests/test_changelog_records.py` holds every top-level entry of the tree to one decision or
+the other. The check is `railform changelog-gate`, run by the `changelog` job.
 
 ## Invariants
 
@@ -207,6 +245,15 @@ Tags start at 0.8.0, the first version in this repository's history; the `CHANGE
 preamble records that floor. The `tag-watch` workflow checks every released version from the
 floor on, once a day, and fails while any of them has no tag. It is scheduled rather than
 triggered by the push, because the release commit lands before it can be tagged.
+
+`railform release-check` (the `railform-tag-watch` workflow: every tag push, once a day, on
+demand) judges the tags that exist, from v0.9.0 on: each is annotated, sits on the merge commit
+of its release pull request, and that pull request's `release:` commit changes only release
+metadata (`release.metadata_paths` in `railform.toml`: the files this section names, the lock and
+`docs/backlog.md`). A release pull request is identified by its head branch,
+`release/X.Y.Z`, or by a title that starts `release:` and carries the version. The `tag-watch`
+workflow above stays because it judges the other direction, a released changelog heading with
+no tag.
 
 Users take a release with `uv tool install git+https://github.com/grimaldost/fathom@vX.Y.Z`
 (which replaces an installed version), then run `fathom smoke` and `fathom reconcile` in
