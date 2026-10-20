@@ -113,6 +113,19 @@ EXECUTING = ("cli", "mcp")
 RECONCILE_MARK = re.compile(r"^RECONCILE: (?:OK|FAILED)\b.*$", re.MULTILINE)
 PLAN_MARK = re.compile(r"^planned:\s+\d+ trials\b.*\bceiling: \$\d[\d,]*\.\d\d.*$", re.MULTILINE)
 CEILING = re.compile(r"ceiling: \$(\d[\d,]*\.\d\d)")
+SHELL_TOOLS = ("Bash", "PowerShell")
+
+# What a result event's text says when the subject could not authenticate, matched
+# case-insensitively. The session ends in a second or two at no cost, and the plugin's MCP
+# server is still pending at init, so without this the failure reads as the agent's own.
+AUTH_FAILURE_MARKERS = (
+    "failed to authenticate",
+    "oauth",
+    "authentication_error",
+    "401",
+    "/login",
+)
+AUTH_MESSAGE_CHARS = 160
 
 # How far a measurement may overrun the budget its prompt states before its check fails,
 # and before the harness stops the session.
@@ -762,6 +775,18 @@ def marker_line(call: ToolCall, op: str) -> str | None:
         return None
     match = pattern.search(call.text)
     return match.group(0).strip() if match else None
+
+
+def marker_calls(analysis: Analysis, op: str) -> list[ToolCall]:
+    """Calls whose result may hold fathom's *op* marker line: the calls the classifier read
+    as *op*, and every other shell call, in order. fathom's own output is the evidence; the
+    command text, which a wrapper script or a shell function hides, is only a hint."""
+    return [
+        c
+        for c in analysis.calls
+        if c.name in SHELL_TOOLS
+        or (c.surface in EXECUTING and any(i.op == op for i in c.invocations))
+    ]
 
 
 @dataclasses.dataclass
@@ -1956,6 +1981,17 @@ def _where(root: RootScan, ctx: Context) -> str:
     return "the workspace" if rel in ("", ".") else rel
 
 
+def auth_failure(result: Mapping[str, Any] | None) -> str | None:
+    """The message of a result event that says the subject could not authenticate (an
+    error result whose text names one of :data:`AUTH_FAILURE_MARKERS`), on one line, or
+    ``None``."""
+    if not result or not result.get("is_error"):
+        return None
+    text = _oneline(str(result.get("result") or ""), AUTH_MESSAGE_CHARS)
+    lowered = text.lower()
+    return text if text and any(m in lowered for m in AUTH_FAILURE_MARKERS) else None
+
+
 def check_session_finished(ctx: Context) -> tuple[bool, str]:
     result = ctx.analysis.result
     if ctx.facts.killed:
@@ -1965,7 +2001,9 @@ def check_session_finished(ctx: Context) -> tuple[bool, str]:
     if result is None:
         return False, "the stream has no result event"
     if result.get("is_error"):
-        return False, f"the session ended in error ({result.get('subtype', 'no subtype')})"
+        detail = f"the session ended in error ({result.get('subtype', 'no subtype')})"
+        auth = auth_failure(result)
+        return False, detail + (f": the subject could not authenticate ({auth})" if auth else "")
     return True, f"{result.get('subtype', 'success')} after {result.get('num_turns', '?')} turns"
 
 
@@ -2043,10 +2081,10 @@ def check_no_spend(ctx: Context) -> tuple[bool, str]:
 
 def check_reconcile_ran(ctx: Context) -> tuple[bool, str]:
     calls = ctx.analysis.executed("reconcile")
-    for call in calls:
+    for call in marker_calls(ctx.analysis, "reconcile"):
         line = marker_line(call, "reconcile")
         if line:
-            return True, f"#{call.index} {call.surface}: {_oneline(line, 160)}"
+            return True, f"#{call.index} {call.surface or 'shell'}: {_oneline(line, 160)}"
     if calls:
         return False, (
             f"{len(calls)} reconcile call(s), none printed a RECONCILE: line: "
@@ -2057,7 +2095,7 @@ def check_reconcile_ran(ctx: Context) -> tuple[bool, str]:
 
 def check_plan_ran(ctx: Context) -> tuple[bool, str]:
     calls = ctx.analysis.executed(DRY_RUN)
-    for call in calls:
+    for call in marker_calls(ctx.analysis, DRY_RUN):
         if call.surface == "mcp":
             if call.succeeded:
                 ceilings = CEILING.findall(call.text)
@@ -2066,7 +2104,7 @@ def check_plan_ran(ctx: Context) -> tuple[bool, str]:
             continue
         line = marker_line(call, DRY_RUN)
         if line:
-            return True, f"#{call.index} {call.surface}: {_oneline(line, 160)}"
+            return True, f"#{call.index} {call.surface or 'shell'}: {_oneline(line, 160)}"
     if calls:
         return False, (
             f"{len(calls)} dry-run call(s), none printed a plan: {_oneline(calls[0].text)}"
@@ -2142,15 +2180,24 @@ def check_trials_completed(ctx: Context) -> tuple[bool, str]:
 
 
 def check_measurement_ran(ctx: Context) -> tuple[bool, str]:
-    paid = [c for c in ctx.analysis.executed(PAID_RUN) if c.surface == "cli"]
-    if not paid:
-        return False, "no fathom run without --dry-run was executed"
+    """Passes on the engine's own rows: the subject's completed trials, every one carrying
+    what only the engine writes, and no ledger or scorecard written by hand. The command
+    text is not consulted for the verdict, only to name the paid call when one was read."""
     written = hand_written_results(ctx.analysis)
     if written:
         return False, "a ledger or scorecard was written by hand: " + _listing(written)
+    paid = [c for c in ctx.analysis.executed(PAID_RUN) if c.surface == "cli"]
     root = _root_or_none(ctx)
     if root is None or not root.completed_trials:
-        return False, f"#{paid[0].index} ran, but no completed trial of the subject's is recorded"
+        if paid:
+            return (
+                False,
+                f"#{paid[0].index} ran, but no completed trial of the subject's is recorded",
+            )
+        return False, (
+            "no completed trial of the subject's is recorded, and no fathom run without "
+            "--dry-run was recognised in the command text"
+        )
     if root.engine_written < root.completed_trials:
         missing = root.completed_trials - root.engine_written
         return False, (
@@ -2158,9 +2205,13 @@ def check_measurement_ran(ctx: Context) -> tuple[bool, str]:
             "writes (config_preimage, fixture_sha, verifier output, a run row with usage and "
             "model_id)"
         )
-    return (
-        True,
-        f"#{paid[0].index} {paid[0].summary}; {root.engine_written} trial(s) the engine wrote",
+    if paid:
+        return True, (
+            f"#{paid[0].index} {paid[0].summary}; {root.engine_written} trial(s) the engine wrote"
+        )
+    return True, (
+        f"no paid call was recognised in the command text; {root.engine_written} trial(s) "
+        "the engine wrote"
     )
 
 
@@ -2252,9 +2303,12 @@ def evaluate(scenario: Scenario, analysis: Analysis, facts: Facts) -> list[Check
     return out
 
 
-def status_of(visibility: Visibility, checks: Sequence[Check]) -> str:
-    """``environment`` when the plugin was not fully visible, else ``pass`` or ``fail``."""
-    if not visibility.ok:
+def status_of(
+    visibility: Visibility, checks: Sequence[Check], result: Mapping[str, Any] | None
+) -> str:
+    """``environment`` when the plugin was not fully visible or the subject could not
+    authenticate, else ``pass`` or ``fail``."""
+    if not visibility.ok or auth_failure(result):
         return "environment"
     return "pass" if all(c.passed for c in checks) else "fail"
 
@@ -2988,7 +3042,7 @@ def run_scenario(
         setup["additional_directories"] = additional_directories(real_config)
     verdict = verdict_record(
         scenario=scenario,
-        status=status_of(visibility, checks),
+        status=status_of(visibility, checks, analysis.result),
         setup=setup,
         run=run,
         analysis=analysis,
@@ -3015,9 +3069,15 @@ def additional_directories(config_dir: Path) -> list[str]:
     return [str(d) for d in dirs] if isinstance(dirs, list) else []
 
 
-def preflight_problems(visibility: Visibility) -> list[str]:
-    """What stops the preflight: every visibility problem, and an MCP server that no call
-    confirmed, which a scenario tolerates but the preflight exists to rule out."""
+def preflight_problems(
+    visibility: Visibility, result: Mapping[str, Any] | None = None
+) -> list[str]:
+    """What stops the preflight: an authentication failure in the result event, which
+    explains the rest and so stands alone; else every visibility problem, and an MCP server
+    that no call confirmed, which a scenario tolerates but the preflight exists to rule out."""
+    auth = auth_failure(result)
+    if auth:
+        return [f"the subject could not authenticate ({auth}); log in with claude, then retry"]
     problems = visibility.problems()
     if visibility.mcp_unconfirmed:
         problems.append("the fathom MCP server was pending at init and never answered the probe")
@@ -3077,7 +3137,7 @@ def run_preflight(
             cleanup_dir(str(config_dir))
     analysis = analyze(read_transcript(transcript), doc_roots=plugin_dirs)
     visibility = assess_visibility(analysis, plugin_commands(fathom_plugins(analysis.init)))
-    problems = preflight_problems(visibility)
+    problems = preflight_problems(visibility, analysis.result)
     record = {
         "status": "environment" if problems else "pass",
         "config_mode": config_mode,
