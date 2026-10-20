@@ -60,6 +60,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 from fathom.adapters.base import ExitStatus, RunRecord
 
 if TYPE_CHECKING:
+    from fathom.credentials import CredentialStore
     from fathom.scenario import ResolvedScenario
 
 # stderr/stdout signatures that justify a retry (transient server/network
@@ -972,6 +973,13 @@ class ClaudeCliRunner:
     (:func:`stage_arm_files`), so the agent cannot learn where the declared files, and
     so the data root, are. A trial's runner turns it on (``fathom run``); it is off by
     default, and the attributes keep the declared paths either way.
+
+    ``credential_store`` is the run's carried credential
+    (:class:`fathom.credentials.CredentialStore`, FATH-B55). When given, each spawn copies
+    its credential from the store instead of from ``real_config_dir``, and the store
+    keeps the credential the spawn leaves behind if the CLI refreshed it, so the next
+    spawn does not start from a refresh token that is already spent. ``None`` (the
+    default) copies from ``real_config_dir`` every time, as before.
     """
 
     def __init__(
@@ -984,6 +992,7 @@ class ClaudeCliRunner:
         stage_files: bool = False,
         settings_file: str | None = None,
         real_config_dir: str | None = None,
+        credential_store: CredentialStore | None = None,
         max_attempts: int = 3,
         default_max_turns: int = 30,
         default_max_budget_usd: float = 5.0,
@@ -1002,6 +1011,7 @@ class ClaudeCliRunner:
         self.stage_files = stage_files
         self.settings_file = settings_file
         self.real_config_dir = real_config_dir
+        self.credential_store = credential_store
         self.max_attempts = max_attempts
         self.default_max_turns = default_max_turns
         self.default_max_budget_usd = default_max_budget_usd
@@ -1034,7 +1044,9 @@ class ClaudeCliRunner:
         """
         timeout = scenario.limits.trial_timeout_s or self.default_timeout_s
         turns = max_turns if max_turns else self.default_max_turns
-        config_dir = make_isolated_config(self.real_config_dir, settings_file=self.settings_file)
+        store = self.credential_store
+        source = store.seed_dir() if store is not None else self.real_config_dir
+        config_dir = make_isolated_config(source, settings_file=self.settings_file)
         stage_dir: str | None = None
         try:
             isolation = write_isolation_settings(config_dir, workspace)
@@ -1068,6 +1080,10 @@ class ClaudeCliRunner:
                 isolation_settings=isolation,
             )
         finally:
+            if store is not None:
+                # Before the directory goes: a credential the CLI refreshed in it is the
+                # only one whose refresh token is still live.
+                store.absorb(config_dir)
             cleanup_dir(config_dir)
             if stage_dir is not None:
                 cleanup_dir(stage_dir)

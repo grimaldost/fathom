@@ -109,14 +109,16 @@ outside the data root or is untracked.
 
 **FATH-B55 — A matrix longer than the credential's life only survives if it is chunked.** *(M)*
 Each spawn copies the shared OAuth credential into a throwaway `CLAUDE_CONFIG_DIR` (ADR-0004),
-the CLI refreshes it inside that spawn, and the refreshed credential is discarded with the
-directory. Two consequences: concurrent spawns can redeem the same refresh token and invalidate
-each other, and a matrix that runs longer than the credential lives fails part-way however good
-the launch-time check was. Change: document the chunked, resumable run shape in the cost
-section operators read (resume is free, so re-invoking per block costs nothing); add a `--chunk
-N` that stops cleanly on a stated boundary and prints the resume command; and either copy the
-config once per run or write the refreshed credential back, so spawns stop racing each other's
-refresh.
+and the CLI refreshes it inside that spawn. The sequential half is fixed (Unreleased):
+`fathom run` keeps one copy of the credential for the run, every spawn copies from it, and a
+spawn that refreshed hands the newer credential back, so the next spawn no longer starts from a
+spent refresh token. Still open: the seat's own file is not written, so after a run that
+refreshed it holds a spent refresh token until the next login (writing it back is the owner's
+call); two spawns running at once inside one series engine trial can still redeem the same
+refresh token; and a refresh token that reaches its own end of life mid-run still stops the
+matrix. Change for the rest: document the chunked, resumable run shape in the cost section
+operators read (resume is free, so re-invoking per block costs nothing), and add a `--chunk N`
+that stops cleanly on a stated boundary and prints the resume command.
 
 **FATH-B12 — `smoke` takes no model or effort.** *(S)*
 `smoke` does not accept `--model` / `--effort`, which blocks a cheap acceptance probe before a

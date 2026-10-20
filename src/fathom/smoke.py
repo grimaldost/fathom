@@ -81,6 +81,12 @@ from typing import TYPE_CHECKING, Protocol, TextIO
 
 from fathom.adapters.base import ExitStatus
 from fathom.adapters.claude_cli import ClaudeCliRunner, cleanup_dir, make_isolated_config
+from fathom.credentials import (
+    _CRED_EXPIRES_AT,
+    _CRED_REFRESH_EXPIRES_AT,
+    CredentialStatus,
+    read_credential_status,
+)
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
 
@@ -127,12 +133,6 @@ CANARY_SKILL = "fathom-smoke-canary:probe"
 # Thirty minutes is long enough that a green gate is not immediately followed by an
 # auth failure mid-trial, and short enough that it refuses no legitimate run.
 CREDENTIAL_MIN_TTL_S = 1800.0
-
-# The only two fields the pre-flight reads.  Named as constants so a reviewer can see
-# the whole of what leaves the credential file in one place (ADR-0004).
-_CRED_BLOCK = "claudeAiOauth"
-_CRED_EXPIRES_AT = "expiresAt"
-_CRED_REFRESH_EXPIRES_AT = "refreshTokenExpiresAt"
 
 # Minimal one-PR series template for the engine-boundary scratch run.  Structure
 # mirrors the committed bank templates (§12); the §6 executor overwrites
@@ -208,57 +208,6 @@ class SmokeResult:
 def _skipped(name: str, detail: str) -> SmokeResult:
     """A check whose precondition did not hold: reported, never counted as a pass."""
     return SmokeResult(name, False, f"SKIPPED (spawn not live): {detail}", skipped=True)
-
-
-@dataclasses.dataclass(frozen=True)
-class CredentialStatus:
-    """What the credential file says about its own remaining life — and nothing else.
-
-    Exactly two values are lifted out of it (``expiresAt``, ``refreshTokenExpiresAt``,
-    both epoch **milliseconds**).  No token, no scope list, no subscription field, and
-    nothing from the ``mcpOAuth`` block ever enters this object, so nothing a smoke
-    run prints or logs can carry one (ADR-0004).
-    """
-
-    found: bool
-    readable: bool
-    expires_at_ms: int | None = None
-    refresh_expires_at_ms: int | None = None
-    detail: str = ""
-
-
-def read_credential_status(path: str | Path | None = None) -> CredentialStatus:
-    """Read the two expiry timestamps from *path* (default ``~/.claude/.credentials.json``).
-
-    Zero cost and no spawn.  Every failure to read is reported as a failure to read —
-    a missing, locked or shapeless file gives ``found``/``readable``/values that say so,
-    never a silent default that would let the gate pass by absence.
-    """
-    p = Path(path) if path is not None else Path.home() / ".claude" / ".credentials.json"
-    if not p.is_file():
-        return CredentialStatus(
-            found=False, readable=False, detail=f"no credential file at {p.name}"
-        )
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return CredentialStatus(found=True, readable=False, detail=f"{type(exc).__name__}")
-    block = data.get(_CRED_BLOCK) if isinstance(data, dict) else None
-    if not isinstance(block, dict):
-        return CredentialStatus(
-            found=True, readable=True, detail=f"no {_CRED_BLOCK} block in the credential file"
-        )
-
-    def _ms(key: str) -> int | None:
-        value = block.get(key)
-        return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-    return CredentialStatus(
-        found=True,
-        readable=True,
-        expires_at_ms=_ms(_CRED_EXPIRES_AT),
-        refresh_expires_at_ms=_ms(_CRED_REFRESH_EXPIRES_AT),
-    )
 
 
 # ---------------------------------------------------------------------------

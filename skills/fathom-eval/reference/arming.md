@@ -106,7 +106,8 @@ refused, and fathom never passes `bypassPermissions` or `--dangerously-skip-perm
 - The order of `allowed` enters `config_hash`; reordering it forks the arm's history.
 
 Each spawn also gets a temporary `CLAUDE_CONFIG_DIR` holding only a copy of the credential
-file. Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
+file, taken from a copy `fathom run` keeps for the run, so a credential one spawn refreshed
+reaches the next. Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
 directory above its working directory, whatever that directory says, so each spawn gets a
 settings layer (`--settings`) whose `claudeMdExcludes` lists those files, and the account's
 claude.ai connectors are turned off. No personal instructions, settings, history, plugins or
