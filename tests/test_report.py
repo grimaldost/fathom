@@ -604,7 +604,9 @@ def test_economy_usd_reads_ledger_cost_field():
 
     'ledgercost' carries cost only at top level → renders its USD.
     'legacyusage' carries cost only inside usage (the old, wrong key) → renders
-    0.0000, proving the report no longer keys on usage['cost_usd'].
+    ≥0.0000, proving the report no longer keys on usage['cost_usd']. A run with no
+    top-level cost_usd_est has no recorded cost, so the sum is marked as a floor
+    (FATH-B79).
     """
 
     def _trial(sc, ch):
@@ -670,7 +672,7 @@ def test_economy_usd_reads_ledger_cost_field():
     lc_row = next(ln for ln in econ if ln.startswith("| ledgercost |"))
     lu_row = next(ln for ln in econ if ln.startswith("| legacyusage |"))
     assert lc_row.rstrip().endswith("| 0.0500 |"), lc_row
-    assert lu_row.rstrip().endswith("| 0.0000 |"), lu_row
+    assert lu_row.rstrip().endswith("| ≥0.0000 |"), lu_row
 
 
 def test_holdout_section_separated_from_dev():
@@ -2616,3 +2618,158 @@ def test_the_verdict_suffix_is_unchanged(tmp_path):
     records = _ct_trials("bare", 3, 2) + _ct_trials("nudge", 4, 2)
     content = _ct_render(tmp_path, records, "[plan]\nrepeats_per_cell = 3\n")
     assert "— directional, not final" in content
+
+
+# ---------------------------------------------------------------------------
+# Cost coverage (FATH-B79): a run with no recorded cost is unknown, not $0
+# ---------------------------------------------------------------------------
+
+
+def _render_records(tmp_path, bank: str, records: list[dict]) -> str:
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir(parents=True, exist_ok=True)
+    with open(ldgr / f"{bank}.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        out = render(bank, ledger_dir=ldgr, report_dir=tmp_path / "report")
+    return out.read_text(encoding="utf-8")
+
+
+def _economy_row(content: str, sc: str) -> str:
+    lines = content.splitlines()
+    start = lines.index("### Economy")
+    for ln in lines[start + 1 :]:
+        if ln.startswith("###"):
+            break
+        if ln.startswith(f"| {sc} |"):
+            return ln
+    raise AssertionError(f"no Economy row for {sc!r} in:\n{content}")
+
+
+def _economy_block(content: str) -> list[str]:
+    lines = content.splitlines()
+    start = lines.index("### Economy")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("###")), len(lines))
+    return lines[start:end]
+
+
+def test_economy_marks_a_floor_and_states_coverage_for_an_arm_with_unknown_costs(tmp_path):
+    bank = "coverage"
+    no_cost_source = _real_run(bank, "t1", 0, "h-treat", 10, 10, cost=0.0)
+    no_cost_source["cost_source"] = "none"
+    legacy = _real_run(bank, "t2", 0, "h-treat", 10, 10)
+    del legacy["cost_usd_est"]
+    records = [
+        _real_run(bank, "t1", 0, "h-bare", 100, 50, cost=0.01),
+        _real_trial(bank, "t1", 0, "h-bare", "bare"),
+        _real_run(bank, "t2", 0, "h-bare", 10, 6, cost=0.02),
+        _real_trial(bank, "t2", 0, "h-bare", "bare"),
+        _real_run(bank, "t1", 0, "h-treat", 10, 10, cost=0.05),
+        no_cost_source,
+        _real_trial(bank, "t1", 0, "h-treat", "treat"),
+        legacy,
+        _real_trial(bank, "t2", 0, "h-treat", "treat"),
+    ]
+    content = _render_records(tmp_path, bank, records)
+    # The fully-costed arm's row is exactly what it was.
+    assert _economy_row(content, "bare") == (
+        "| bare | 2 | 166 | 16/83/150 | 8 | 4/4/4 | 24.0 | 1.00 | 0.0300 |"
+    )
+    # The arm with unknown costs shows the known sum, marked as a floor.
+    treat_usd = _economy_row(content, "treat").split("|")[-2].strip()
+    assert treat_usd == "≥0.0500", treat_usd
+    block = "\n".join(_economy_block(content))
+    assert "treat: cost recorded on 1 of 3 runs" in block, block
+    assert "2 with no recorded cost" in block, block
+    assert "bare: cost recorded" not in block, block
+
+
+def test_a_fully_costed_ledger_has_no_coverage_note(tmp_path):
+    bank = "coverage-full"
+    records = [
+        _real_run(bank, "t1", 0, "h-bare", 100, 50, cost=0.01),
+        _real_trial(bank, "t1", 0, "h-bare", "bare"),
+    ]
+    content = _render_records(tmp_path, bank, records)
+    assert "cost recorded on" not in content
+    assert "≥" not in content
+
+
+def test_per_trial_marks_a_trial_whose_run_lacks_the_cost_key(tmp_path):
+    legacy = _pt_run("aaa", "add", 0, usd=0.0, inp=1, out=1, turns=1, wall=1.0)
+    del legacy["cost_usd_est"]
+    del legacy["cost_source"]
+    records = [
+        _pt_run("aaa", "add", 0, usd=0.10, inp=1, out=1, turns=1, wall=1.0),
+        legacy,
+        _pt_trial("bare", "aaa", "add", 0),
+    ]
+    (row,) = _pt_rows(tmp_path, records)
+    assert row.usd == pytest.approx(0.10)
+    assert row.usd_missing is True
+    table = render_per_trial("dv-bank", [row])
+    assert "0.1000*" in table
+    assert "cost_usd_est" in table, table
+
+
+# ---------------------------------------------------------------------------
+# FATH-B49: a cell's runs are those of the config_hash of the trial it keeps
+# ---------------------------------------------------------------------------
+
+_HASH_A = "aaaa1111bbbb2222cccc3333"
+_HASH_B = "dddd4444eeee5555ffff6666"
+
+
+def _two_hash_records(bank: str) -> list[dict]:
+    records = []
+    # Hash A first, expensive; then hash B re-runs the same cells, cheap.
+    for ch, tokens, cost in ((_HASH_A, 1000, 1.0), (_HASH_B, 10, 0.01)):
+        for tid in ("t1", "t2"):
+            records.append(_real_run(bank, tid, 0, ch, tokens, tokens, cost=cost))
+            records.append(_real_trial(bank, tid, 0, ch, "treat"))
+    return records
+
+
+def test_economy_reads_the_runs_of_the_kept_trials_config_hash(tmp_path):
+    bank = "two-hash"
+    content = _render_records(tmp_path, bank, _two_hash_records(bank))
+    assert _economy_tokens(content, "treat") == 40, _economy_block(content)
+    assert _economy_row(content, "treat").split("|")[-2].strip() == "0.0200"
+    eff = next(
+        ln
+        for ln in content.splitlines()[content.splitlines().index("### Efficiency") :]
+        if ln.startswith("| treat |")
+    )
+    assert eff.split("|")[3].strip() == "10", eff  # mean input tokens per trial: B's only
+
+
+def test_the_scorecard_names_an_arm_that_carries_two_config_hashes(tmp_path):
+    bank = "two-hash-line"
+    content = _render_records(tmp_path, bank, _two_hash_records(bank))
+    lines = [ln for ln in content.splitlines() if _HASH_A[:12] in ln]
+    assert len(lines) == 1, content
+    assert "treat" in lines[0] and _HASH_B[:12] in lines[0]
+    assert "latest trial per cell" in lines[0]
+
+
+def test_a_two_hash_ledger_still_warns_on_a_duplicate_and_a_dangling_run(tmp_path):
+    bank = "two-hash-warn"
+    records = [
+        *_two_hash_records(bank),
+        _real_run(bank, "t1", 0, _HASH_B, 10, 10, cost=0.01),
+        _real_trial(bank, "t1", 0, _HASH_B, "treat"),
+        _real_run(bank, "t1", 0, "h-ghost", 5, 5),
+    ]
+    ldgr = tmp_path / "ledger"
+    ldgr.mkdir()
+    with open(ldgr / f"{bank}.jsonl", "w", encoding="utf-8") as f:
+        for rec in records:
+            f.write(json.dumps(rec, sort_keys=True) + "\n")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        render(bank, ledger_dir=ldgr, report_dir=tmp_path / "report")
+    msgs = [str(w.message) for w in caught]
+    assert any("duplicate completed trial" in m for m in msgs), msgs
+    assert any("has no trial line" in m for m in msgs), msgs

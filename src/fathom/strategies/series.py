@@ -494,7 +494,9 @@ class SeriesExecutor:
 
     Satisfies the :class:`~fathom.strategies.base.StrategyExecutor` protocol.  The
     engine subprocess and the isolated-config helpers are injectable so every
-    test runs without a real engine or a real credential.
+    test runs without a real engine or a real credential.  ``credential_store`` is the
+    run's carried credential (:class:`fathom.credentials.CredentialStore`); when given,
+    the trial's config is made from it and hands a refreshed credential back to it.
     """
 
     def __init__(
@@ -510,6 +512,7 @@ class SeriesExecutor:
         real_config_dir: str | None = None,
         make_config: Any = make_isolated_config,
         cleanup: Any = cleanup_dir,
+        credential_store: Any | None = None,
     ) -> None:
         self.run_engine = run_engine
         self.template_name = template_name
@@ -521,6 +524,7 @@ class SeriesExecutor:
         self.real_config_dir = real_config_dir
         self.make_config = make_config
         self.cleanup = cleanup
+        self.credential_store = credential_store
 
     # -- StrategyExecutor protocol ------------------------------------------
 
@@ -537,7 +541,12 @@ class SeriesExecutor:
         assets_dir = Path(
             tempfile.mkdtemp(prefix="fathom-series-", dir=self.assets_root or str(workspace.parent))
         )
-        config_dir = self.make_config(self.real_config_dir)
+        # The engine's spawns share this one directory, so a refresh one of them makes
+        # reaches the rest; the run's store carries it on to the next trial (FATH-B55).
+        store = self.credential_store
+        config_dir = self.make_config(
+            store.seed_dir() if store is not None else self.real_config_dir
+        )
         try:
             series_toml, outputs_dir = self._instantiate(task, template, assets_dir, scenario)
             argv = _build_argv(scenario, series_toml)
@@ -569,6 +578,8 @@ class SeriesExecutor:
                 detail=detail,
             )
         finally:
+            if store is not None:
+                store.absorb(config_dir)
             self.cleanup(str(config_dir))
             cleanup_dir(str(assets_dir))
 

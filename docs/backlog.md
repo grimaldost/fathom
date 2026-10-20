@@ -29,18 +29,24 @@ and its tests need no paid spawns.
 keep the latest trial per cell, but Economy, Efficiency and Arm Health sum the runs of every hash
 that carries the name. Re-running an arm after changing its injected content (a new hash, the
 same name) is the normal shape of a re-validation, and it averages the new trials' economy with
-the old ones, which can make a healthy arm look truncated. Change: aggregate on `config_hash` and
-render the name as a label beside it, with a hash prefix when one name carries more than one
-hash; or warn when a scoped `dataset_version` holds two hashes under one name.
+the old ones, which can make a healthy arm look truncated. Fixed (Unreleased): runs are keyed
+by `config_hash`, and a cell reads the runs of the hash of the trial it keeps, so Economy,
+Efficiency, Arm Health and the calibration cost views read the configuration the pass rate
+reads. A name that carries more than one hash in the view gets one line in the scorecard naming
+the hash prefixes.
 
 **FATH-B50 — A scenario that fails to load is dropped with a warning, and the matrix runs
-without it.** *(S)*
-`fathom run` prints `warning: skipping scenario …` and plans the arms that did load. A treatment
-arm whose plugin tree is missing therefore drops out of a paid matrix, leaving a control-only
-ledger and a scorecard with no treatment in it. The arming pre-flight cannot catch this, because
-an arm that never loaded is not on the list it checks. Change: refuse the run with a dedicated
-exit code when any scenario file fails to load, with an explicit flag to proceed anyway, and
-print the resolved arm count beside the file count on the plan line.
+without it.** *(S)* **Fixed (Unreleased), without the flag.**
+`fathom run` printed `warning: skipping scenario …` and planned the arms that did load. A treatment
+arm whose plugin tree is missing therefore dropped out of a paid matrix, leaving a control-only
+ledger and a scorecard with no treatment in it. The arming pre-flight could not catch this, because
+an arm that never loaded is not on the list it checks. Now `fathom run` (dry run included) and
+`fathom verify-arming` refuse a scenarios directory in which any file fails to load, with exit 1
+and one error line per file, before planning or any spawn; `fathom validate` still skips and
+warns, and says that `run` will refuse. Left out: the explicit flag to proceed anyway and a
+dedicated exit code. An additive flag waits under policy D8, and exit 1 is the class an
+unloadable bank already uses. The proposed arm-count line is moot: every file now loads or the
+run stops.
 
 **FATH-B52 — `verify-arming` can report a working MCP arm as unarmed, and its only escape is
 the blanket override.** *(S)*
@@ -88,10 +94,11 @@ A run row whose spawn consumed tokens but reported no cost is written with `cost
 and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py` sums
 `cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it, then
 reads low with nothing on the page saying so. `calibration.py` (`_arm_cost`) sums the same field the
-same way, so the calibration views count the row as free too. Change: count the `cost_source =
-"none"` rows per arm, render that arm's USD as a floor with the count (or as unknown), and show the
-count in Arm Health, in `report.py` and `calibration.py` alike. This is a report-rendering change
-that ships independently of FATH-B63, which is a reconcile check; the two pair well.
+same way, so the calibration views count the row as free too. Fixed (Unreleased): a run with
+`cost_source = "none"` or with no `cost_usd_est` key has an unknown cost (`fathom.ledger.run_cost`).
+Economy, the per-trial view and the calibration cost views sum the known costs, mark a sum that
+left a run out as a floor, and state per arm on how many runs a cost was recorded. FATH-B63, the
+reconcile check, stays open.
 
 **FATH-B11 — Environment identity is declared, not fingerprinted at execution time.** *(M)*
 A plugin mounted from a path dependency can serve stale code (a cached wheel, say) under an
@@ -109,14 +116,17 @@ outside the data root or is untracked.
 
 **FATH-B55 — A matrix longer than the credential's life only survives if it is chunked.** *(M)*
 Each spawn copies the shared OAuth credential into a throwaway `CLAUDE_CONFIG_DIR` (ADR-0004),
-the CLI refreshes it inside that spawn, and the refreshed credential is discarded with the
-directory. Two consequences: concurrent spawns can redeem the same refresh token and invalidate
-each other, and a matrix that runs longer than the credential lives fails part-way however good
-the launch-time check was. Change: document the chunked, resumable run shape in the cost
-section operators read (resume is free, so re-invoking per block costs nothing); add a `--chunk
-N` that stops cleanly on a stated boundary and prints the resume command; and either copy the
-config once per run or write the refreshed credential back, so spawns stop racing each other's
-refresh.
+and the CLI refreshes it inside that spawn. The sequential half is fixed (Unreleased):
+`fathom run` keeps one copy of the credential for the run, every spawn copies from it, and a
+spawn that refreshed hands the newer credential back, so the next spawn no longer starts from a
+spent refresh token. `fathom smoke` now carries the credential the same way across its
+spawns (Unreleased). Still open: the seat's own file is not written, so after a run that
+refreshed it holds a spent refresh token until the next login (writing it back is the owner's
+call); two spawns running at once inside one series engine trial can still redeem the same
+refresh token; and a refresh token that reaches its own end of life mid-run still stops the
+matrix. Change for the rest: document the chunked, resumable run shape in the cost section
+operators read (resume is free, so re-invoking per block costs nothing), and add a `--chunk N`
+that stops cleanly on a stated boundary and prints the resume command.
 
 **FATH-B12 — `smoke` takes no model or effort.** *(S)*
 `smoke` does not accept `--model` / `--effort`, which blocks a cheap acceptance probe before a

@@ -830,6 +830,7 @@ def run_matrix(
     data_root: pathlib.Path | None = None,
     index_cmd: str = "fathom index --write",
     repeats_per_cell: int | None = None,
+    credential_store: Any | None = None,
 ) -> int:
     """Execute or plan a scenario matrix against a task bank.
 
@@ -872,6 +873,12 @@ def run_matrix(
     declares none (:mod:`fathom.replication`). It changes nothing the run buys: the plan
     prints one ``replication:`` line, and every trial row records the plan in force
     (``plan_repeats_per_cell``, ``plan_replication``).
+
+    ``credential_store`` is the invocation's carried credential
+    (:class:`fathom.credentials.CredentialStore`, FATH-B55). The default runner, the
+    series executor and the arming probe copy each spawn's credential from it and hand a
+    refreshed one back, so a matrix outlives the access token it started with. ``None``
+    (every test that stubs the factories) copies from the seat's file at each spawn.
     """
     _ledger_dir = ledger_dir if ledger_dir is not None else _ledger.LEDGER_DIR
     _out = out if out is not None else sys.stdout
@@ -1089,7 +1096,7 @@ def run_matrix(
             # plain control arms neither spawns nor imports the probe.
             from fathom.armingprobe import RealArmingProbe
 
-            probe = RealArmingProbe()
+            probe = RealArmingProbe(credential_store=credential_store)
         if to_verify:
             print(
                 f"arming: verifying {len(to_verify)} treatment arm(s) on real spawns...",
@@ -1114,14 +1121,18 @@ def run_matrix(
     else:
 
         def _executor_factory(sc: ResolvedScenario) -> Any:
-            return _default_executor_factory(sc, max_budget_usd=max_budget_usd)
+            return _default_executor_factory(
+                sc, max_budget_usd=max_budget_usd, credential_store=credential_store
+            )
 
     if runner_factory is not None:
         _runner_factory = runner_factory
     else:
 
         def _runner_factory(sc: ResolvedScenario) -> Any:
-            return _default_runner_factory(sc, max_budget_usd=max_budget_usd)
+            return _default_runner_factory(
+                sc, max_budget_usd=max_budget_usd, credential_store=credential_store
+            )
 
     # Spend this INVOCATION has observed. Deliberately not read back from the ledger:
     # `fathom run` is resumable, so `<bank>.jsonl` holds every prior invocation's spend and
@@ -1466,13 +1477,15 @@ def _print_run_summary(
 
 
 def _default_executor_factory(
-    scenario: ResolvedScenario, max_budget_usd: float | None = None
+    scenario: ResolvedScenario,
+    max_budget_usd: float | None = None,
+    credential_store: Any | None = None,
 ) -> Any:
     if scenario.strategy == "series":
         from fathom.strategies.series import SeriesExecutor
 
         if max_budget_usd is None:
-            return SeriesExecutor()
+            return SeriesExecutor(credential_store=credential_store)
         # `--max-budget-usd` is the per-spawn cost rail, and the engine's spawns are
         # spawns. Without this the flag silently did nothing on a series arm — the
         # runner it caps is the one the engine never uses (ADR-0001) — so the only
@@ -1483,6 +1496,7 @@ def _default_executor_factory(
             budget_impl=max_budget_usd,
             budget_review=max_budget_usd,
             budget_fix=max_budget_usd,
+            credential_store=credential_store,
         )
     if scenario.strategy in ("gated-session", "gated-review"):
         from fathom.strategies.gated_session import GatedSessionExecutor
@@ -1512,7 +1526,11 @@ def _default_executor_factory(
     )
 
 
-def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | None = None) -> Any:
+def _default_runner_factory(
+    scenario: ResolvedScenario,
+    max_budget_usd: float | None = None,
+    credential_store: Any | None = None,
+) -> Any:
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     inject = scenario.context.inject
@@ -1566,6 +1584,7 @@ def _default_runner_factory(scenario: ResolvedScenario, max_budget_usd: float | 
         # agent: each spawn gets copies of its own (ADR-0003).
         stage_files=True,
         settings_file=settings_file,
+        credential_store=credential_store,
         **budget_kw,
     )
 
@@ -1893,8 +1912,6 @@ def _resume_command(args: argparse.Namespace, spawn_cap: float | None) -> str:
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    from fathom.scenario import load_scenario, resolve_scenario
-
     tasks_dir: pathlib.Path = args.tasks_dir if args.tasks_dir is not None else TASKS_DIR
     scenarios_dir: pathlib.Path = (
         args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
@@ -1919,15 +1936,12 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    resolver = _DefaultResolver()
-    resolved_scenarios: list[ResolvedScenario] = []
-    for sc_file in sorted(scenarios_dir.glob("*.toml")):
-        try:
-            config = load_scenario(sc_file)
-            resolved = resolve_scenario(config, resolver)
-            resolved_scenarios.append(resolved)
-        except Exception as exc:
-            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
+    resolved_scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    if load_failures:
+        # Before planning, the lock, the pre-flights or any spawn, dry run included: an arm
+        # that does not load would drop out of the matrix without a trace (FATH-B50).
+        _refuse_unloadable_scenarios(load_failures)
+        return 1
 
     if not resolved_scenarios:
         print(
@@ -1999,30 +2013,39 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"credential: {credential.detail}", file=sys.stderr)
 
     def _go(run_lock: Any | None) -> int:
-        return run_matrix(
-            bank,
-            resolved_scenarios,
-            args.repeats,
-            dry_run=args.dry_run,
-            limit=args.limit,
-            task_ids=(
-                [t.strip() for t in args.tasks.split(",") if t.strip()]
-                if args.tasks is not None
-                else None
-            ),
-            ledger_dir=ledger_dir,
-            max_budget_usd=spawn_cap,
-            max_run_usd=args.max_run_usd,
-            include_holdout=args.include_holdout,
-            skip_arming_check=args.skip_arming_check,
-            skip_bank_validation=args.skip_bank_validation,
-            run_lock=run_lock,
-            resume_cmd=_resume_command(args, spawn_cap),
-            interleave=getattr(args, "interleave", False),
-            data_root=data_root,
-            index_cmd=_index_command(args),
-            repeats_per_cell=plan.repeats_per_cell,
-        )
+        # The run's carried credential (FATH-B55): every spawn copies its credential from
+        # it and hands a refreshed one back, so the spawn after a refresh does not start
+        # from a refresh token the server has already rotated. It copies nothing until the
+        # first spawn and is removed when the run ends. A dry run spawns nothing.
+        from fathom.credentials import CredentialStore
+
+        with CredentialStore() as store:
+            credential_store = None if args.dry_run else store
+            return run_matrix(
+                bank,
+                resolved_scenarios,
+                args.repeats,
+                dry_run=args.dry_run,
+                limit=args.limit,
+                task_ids=(
+                    [t.strip() for t in args.tasks.split(",") if t.strip()]
+                    if args.tasks is not None
+                    else None
+                ),
+                ledger_dir=ledger_dir,
+                max_budget_usd=spawn_cap,
+                max_run_usd=args.max_run_usd,
+                include_holdout=args.include_holdout,
+                skip_arming_check=args.skip_arming_check,
+                skip_bank_validation=args.skip_bank_validation,
+                run_lock=run_lock,
+                resume_cmd=_resume_command(args, spawn_cap),
+                interleave=getattr(args, "interleave", False),
+                data_root=data_root,
+                index_cmd=_index_command(args),
+                repeats_per_cell=plan.repeats_per_cell,
+                credential_store=credential_store,
+            )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
     # A dry run spawns nothing and consumes no seat, so it queues for nothing.
@@ -2100,18 +2123,54 @@ def _cmd_stop(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _load_resolved_scenarios(scenarios_dir: pathlib.Path) -> list[ResolvedScenario]:
-    """Parse and resolve every arm in *scenarios_dir*, skipping unparsable files."""
+def _load_resolved_scenarios(
+    scenarios_dir: pathlib.Path,
+) -> tuple[list[ResolvedScenario], list[tuple[str, str]]]:
+    """Parse and resolve every arm in *scenarios_dir*.
+
+    Returns the arms that loaded and, for each file that did not, its name and the
+    error. Nothing is printed and nothing is dropped silently: the caller decides
+    whether a failure refuses the command (`run`, `verify-arming`) or is warned about
+    and skipped (`validate`).
+    """
     from fathom.scenario import load_scenario, resolve_scenario
 
     resolver = _DefaultResolver()
-    out: list[ResolvedScenario] = []
+    loaded: list[ResolvedScenario] = []
+    failures: list[tuple[str, str]] = []
     for sc_file in sorted(scenarios_dir.glob("*.toml")):
         try:
-            out.append(resolve_scenario(load_scenario(sc_file), resolver))
+            loaded.append(resolve_scenario(load_scenario(sc_file), resolver))
         except Exception as exc:
-            print(f"warning: skipping scenario {sc_file.name}: {exc}", file=sys.stderr)
-    return out
+            failures.append((sc_file.name, str(exc)))
+    return loaded, failures
+
+
+def _refuse_unloadable_scenarios(failures: list[tuple[str, str]]) -> None:
+    """Print why a command stops when a scenario file does not load (FATH-B50).
+
+    An arm that fails to load is not in the matrix, so a paid run would go ahead
+    without it, and the arming pre-flight, which checks only the arms that loaded,
+    could not notice it was gone. The command is refused instead.
+    """
+    for name, error in failures:
+        print(f"error: scenario {name} could not be loaded: {error}", file=sys.stderr)
+    print(
+        "error: refused: an arm that does not load would silently drop out of the matrix. "
+        "Fix the file, or move it out of the scenarios directory (or rename it so it does "
+        "not end in .toml).",
+        file=sys.stderr,
+    )
+
+
+def _warn_unloadable_scenarios(failures: list[tuple[str, str]]) -> None:
+    """`validate` skips a scenario file that does not load, and says `run` will not."""
+    for name, error in failures:
+        print(
+            f"warning: skipping scenario {name}: {error}. `fathom run` will refuse this "
+            "directory until the file is fixed or moved out.",
+            file=sys.stderr,
+        )
 
 
 def _note_stream_dir(
@@ -2125,14 +2184,16 @@ def _note_stream_dir(
     prints a note saying where the streams go and that nothing needs doing — not a
     warning, which would ask the operator to act. Nothing is printed when
     FATHOM_STREAM_DIR is already set or no such arm is planned. Unparsable scenario
-    files are skipped (as `_load_resolved_scenarios` already does for `run`), never
-    turned into a validate failure. *scenarios*, when given, are the arms already loaded
-    from *scenarios_dir*, so a skipped file is not reported twice.
+    files are skipped, never turned into a validate failure (`fathom run` refuses such a
+    directory; `validate` says so in `_warn_unloadable_scenarios`). *scenarios*, when
+    given, are the arms already loaded from *scenarios_dir*, so a skipped file is not
+    reported twice.
     """
     if os.environ.get("FATHOM_STREAM_DIR"):
         return
     if scenarios is None:
-        scenarios = _load_resolved_scenarios(scenarios_dir)
+        scenarios, failures = _load_resolved_scenarios(scenarios_dir)
+        _warn_unloadable_scenarios(failures)
     streamed = [sc.name for sc in scenarios if _wants_stream_dir(sc)]
     if not streamed:
         return
@@ -2160,7 +2221,8 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     # The arms' `[gate] extra` commands are path-checked against every task (FATH-B54).
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    _warn_unloadable_scenarios(load_failures)
     checks = _validate.plan_checks(tasks_dir / args.bank) + _validate.validate_bank(
         bank, stage_fn=stage_task, verifier_fn=run_verifier, scenarios=scenarios
     )
@@ -2174,7 +2236,10 @@ def _cmd_verify_arming(args: argparse.Namespace) -> int:
     from fathom.armingprobe import RealArmingProbe
 
     scenarios_dir = args.scenarios_dir if args.scenarios_dir is not None else SCENARIOS_DIR
-    scenarios = _load_resolved_scenarios(scenarios_dir)
+    scenarios, load_failures = _load_resolved_scenarios(scenarios_dir)
+    if load_failures:
+        _refuse_unloadable_scenarios(load_failures)
+        return 1
     if not scenarios:
         print(
             f"error: no scenarios found in {scenarios_dir}{_path_hint(args, 'scenarios_dir')}",

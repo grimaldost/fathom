@@ -47,6 +47,7 @@ from collections import defaultdict
 from math import comb
 from typing import Any
 
+from fathom.ledger import run_cost
 from fathom.replication import underpowered as _underpowered
 
 EPS = 0.10  # ε in per-trial pass-rate units (ADR-0007 D3 as amended by ADR-0009)
@@ -135,10 +136,18 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
     appears on a trial line (its economy is dropped from the scorecard with no trace).
     Both warn rather than corrupt the cost silently — the remedy is to archive the invalid
     ledger and re-run fresh.
+
+    A cell's runs are those of the config_hash of the trial the cell keeps (FATH-B49): one
+    arm name can carry more than one hash when the arm was re-run with changed content, and
+    pooling every hash's runs would price the old configuration with the new one's pass
+    rate. The kept trial is the cell's last completed one, or its last trial of any status
+    when none completed.
     """
     ch_to_sc: dict[str, str] = {}
     trials: dict[tuple, Any] = {}
-    runs: defaultdict[tuple, list[dict]] = defaultdict(list)
+    runs_by_hash: defaultdict[tuple, list[dict]] = defaultdict(list)
+    last_hash: dict[tuple, str] = {}
+    completed_hash: dict[tuple, str] = {}
     # Pass 1 — the COMPLETE config_hash → scenario-name map, from every trial record.
     for rec in raw:
         if rec.get("kind") == "trial":
@@ -154,6 +163,7 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
         tid = rec.get("task_id", "")
         rep = rec.get("repeat", 0)
         if kind == "trial":
+            last_hash[(sc, tid, rep)] = ch
             if rec.get("status") == "completed" and not rec.get("infra_error"):
                 ckey = (rec.get("dataset_version"), ch, tid, rep)
                 if ckey in seen_completed:
@@ -165,6 +175,7 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
                     )
                 seen_completed.add(ckey)
                 trials[(sc, tid, rep)] = rec.get("verifier_results")
+                completed_hash[(sc, tid, rep)] = ch
         elif kind == "run":
             if ch not in ch_to_sc and ch not in dangling_warned:
                 dangling_warned.add(ch)
@@ -173,7 +184,13 @@ def parse_ledger(raw: list[dict]) -> tuple[dict, dict]:
                     "is excluded from the calibration cost (likely a trial interrupted mid-write)",
                     stacklevel=2,
                 )
-            runs[(sc, tid, rep)].append(rec)
+            runs_by_hash[(ch, tid, rep)].append(rec)
+    runs: dict[tuple, list[dict]] = {}
+    for cell, ch in last_hash.items():
+        kept = completed_hash.get(cell, ch)
+        cell_runs = runs_by_hash.get((kept, cell[1], cell[2]))
+        if cell_runs:
+            runs[cell] = cell_runs
     return trials, runs
 
 
@@ -498,6 +515,9 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
         "control": control_separation(trials, task_meta),
         "dose_response": _dose_response(trials, runs, task_meta),
         "pareto": _pareto(trials, runs, task_meta),
+        # (runs with a recorded cost, runs) behind this section's cost figures. Rendered
+        # only when the two differ; not part of the routing substrate.
+        "cost_coverage": _cost_coverage(runs, task_meta),
         # Context view: empty list for banks with no `[context]` tags.
         "pairs": _context_pairs(trials, task_meta),
         # Routing layer — the substrate the mechanism comparison is scored against.
@@ -508,16 +528,37 @@ def build_calibration(raw: list[dict], task_meta: dict[str, dict]) -> dict:
     }
 
 
-def _arm_cost(runs: dict, arm: str, tasks: list[str]) -> float:
-    """Mean estimated USD per trial for an arm over the given tasks."""
+def _arm_cost(runs: dict, arm: str, tasks: list[str]) -> tuple[float, bool]:
+    """(mean USD per trial for an arm over the given tasks, whether that mean is a floor).
+
+    Only known costs are summed (:func:`fathom.ledger.run_cost`). When a run in scope has
+    no recorded cost, the mean leaves it out and is a floor, so the second value is True.
+    """
     total = 0.0
+    floor = False
     keys = set()
     for (sc, tid, rep), rlist in runs.items():
         if sc != arm or tid not in tasks:
             continue
         keys.add((sc, tid, rep))
-        total += sum(r.get("cost_usd_est", 0.0) for r in rlist)
-    return total / len(keys) if keys else 0.0
+        for r in rlist:
+            cost = run_cost(r)
+            if cost is None:
+                floor = True
+            else:
+                total += cost
+    return (total / len(keys) if keys else 0.0), floor
+
+
+def _cost_coverage(runs: dict, tasks: Any) -> tuple[int, int]:
+    """(runs with a recorded cost, runs) over the cells of *tasks*."""
+    known = total = 0
+    for (_sc, tid, _rep), rlist in runs.items():
+        if tid not in tasks:
+            continue
+        total += len(rlist)
+        known += sum(run_cost(r) is not None for r in rlist)
+    return known, total
 
 
 def _dose_response(trials: dict, runs: dict, task_meta: dict) -> dict:
@@ -545,9 +586,11 @@ def _dose_response(trials: dict, runs: dict, task_meta: dict) -> dict:
                 if s:
                     fracs.append(s["mean"])
             if fracs:
+                cost, floor = _arm_cost(runs, arm, ran)
                 per_arm[arm] = {
                     "quality": sum(fracs) / len(fracs),
-                    "cost": _arm_cost(runs, arm, ran),
+                    "cost": cost,
+                    "cost_floor": floor,
                 }
         if per_arm:
             out[band] = per_arm
@@ -572,8 +615,9 @@ def _pareto(trials: dict, runs: dict, task_meta: dict) -> list[dict]:
                 fracs.append(s["mean"])
         if not fracs:
             continue
+        cost, floor = _arm_cost(runs, arm, tasks)
         points.append(
-            {"arm": arm, "quality": sum(fracs) / len(fracs), "cost": _arm_cost(runs, arm, tasks)}
+            {"arm": arm, "quality": sum(fracs) / len(fracs), "cost": cost, "cost_floor": floor}
         )
     for p in points:
         p["frontier"] = not any(
@@ -725,7 +769,7 @@ def _tier_costs(stats: dict[str, dict], runs: dict, task_id: str) -> dict[str, d
             "ci": list(s["ci"]),
             "gate_caught_failures": gate_caught,
             "silent_failures": silent,
-            "mean_cost_usd": _arm_cost(runs, arm, [task_id]),
+            "mean_cost_usd": _arm_cost(runs, arm, [task_id])[0],
         }
     return out
 
@@ -962,6 +1006,11 @@ def discordance_analysis(rows: list[dict], params: dict | None = None) -> dict:
 
 def _pct(x: float) -> str:
     return f"{100 * x:.0f}%"
+
+
+def _usd(cost: float, entry: dict) -> str:
+    """A $/trial cell, marked ≥ when *entry* says its sum left out a run with no cost."""
+    return f"{'≥' if entry.get('cost_floor') else ''}${cost:.3f}"
 
 
 def _render_control(control: dict | None) -> list[str]:
@@ -1298,7 +1347,9 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
             for arm in sorted(dr[band], key=_ladder_key):
                 d = dr[band][arm]
                 dq = "—" if prev_q is None else f"{d['quality'] - prev_q:+.2f}"
-                lines.append(f"| {band} | {arm} | {d['quality']:.2f} | ${d['cost']:.3f} | {dq} |")
+                lines.append(
+                    f"| {band} | {arm} | {d['quality']:.2f} | {_usd(d['cost'], d)} | {dq} |"
+                )
                 prev_q = d["quality"]
         lines.append("")
 
@@ -1310,10 +1361,23 @@ def render_calibration(cal: dict, *, heading: str = "## Model-Tier Calibration")
         lines.append("|---|---|---|---|")
         for p in sorted(pareto, key=lambda x: x["cost"]):
             lines.append(
-                f"| {p['arm']} | {p['quality']:.2f} | ${p['cost']:.3f} | "
+                f"| {p['arm']} | {p['quality']:.2f} | {_usd(p['cost'], p)} | "
                 f"{'★' if p['frontier'] else ''} |"
             )
         lines.append("")
+
+    known, total = cal.get("cost_coverage") or (0, 0)
+    if known < total and (dr or pareto):
+        lines += [
+            (
+                f"> **Cost coverage:** cost recorded on {known} of {total} runs. A run with"
+                ' `cost_source` `"none"` or no `cost_usd_est` has no recorded cost and is'
+                " left out of every $ figure in this section. A figure marked ≥ left out"
+                " such a run and is a floor; the routing tables carry no mark, so read"
+                " their $ figures as floors too."
+            ),
+            "",
+        ]
 
     # Context size: per-pair small→large shift — only for context banks.
     lines += _render_context_pairs(cal.get("pairs") or [])

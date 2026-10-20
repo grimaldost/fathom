@@ -2662,6 +2662,123 @@ class UnpublishedWarningTests(unittest.TestCase):
         self.assertEqual(self._warning(files), "")
 
 
+class UnloadableScenarioTests(unittest.TestCase):
+    """A scenario file that fails to load stops `run` and `verify-arming` (FATH-B50).
+
+    An arm that does not load would otherwise drop out of the matrix with a warning, and
+    the arming pre-flight, which checks only the arms that loaded, could not see it go.
+    `validate` keeps skipping such a file, as before, and says that `run` will refuse.
+    """
+
+    GOOD = (
+        'name = "nudge"\nadapter = "claude-cli"\nmodel = "m"\n'
+        'strategy = "single-session"\neffort = "high"\n'
+        '[tools]\nsource = "none"\nallowed = ["Read"]\n'
+        '[context]\ninject = "note.md"\n'
+    )
+    MOUNT = (
+        'name = "mounted"\nadapter = "claude-cli"\nmodel = "m"\n'
+        'strategy = "single-session"\neffort = "high"\n'
+        '[tools]\nsource = "none"\nallowed = ["Read"]\n'
+        '[plugins]\nmount = ["missing-plugin"]\n'
+    )
+    REFUSED = "would silently drop out of the matrix"
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self._tmp.name)
+        (self.root / "fathom.toml").write_text("[data_root]\nschema = 1\n", encoding="utf-8")
+        bank_dir = self.root / "tasks" / "b"
+        (bank_dir / "t1").mkdir(parents=True)
+        (bank_dir / "bank.toml").write_text(
+            'name = "b"\ndataset_version = "1"\nholdout = []\n', encoding="utf-8"
+        )
+        (bank_dir / "t1" / "task.toml").write_text(
+            'id = "t1"\ninstruction = "x"\n[limits]\ntrial_timeout_s = 1\n'
+            '[verify]\nentry = "verify.py"\n',
+            encoding="utf-8",
+        )
+        (bank_dir / "t1" / "verify.py").write_text("print('{}')", encoding="utf-8")
+        self.scenarios = self.root / "scenarios"
+        self.scenarios.mkdir()
+        (self.scenarios / "note.md").write_text("a note\n", encoding="utf-8")
+        (self.scenarios / "nudge.toml").write_text(self.GOOD, encoding="utf-8")
+        (self.root / "ledger").mkdir()
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def _main(self, *argv: str) -> tuple[int, str, str]:
+        return _call_main(["--home", str(self.root), *argv])
+
+    def _break(self, how: str) -> str:
+        """Add one unloadable file; return its name."""
+        if how == "malformed":
+            (self.scenarios / "broken.toml").write_text("name = [unclosed\n", encoding="utf-8")
+            return "broken.toml"
+        (self.scenarios / "mounted.toml").write_text(self.MOUNT, encoding="utf-8")
+        return "mounted.toml"
+
+    def test_a_dry_run_refuses_a_directory_with_an_unloadable_file(self):
+        for how in ("malformed", "missing plugin tree"):
+            with self.subTest(how=how):
+                name = self._break(how)
+                code, out, err = self._main("run", "b", "--repeats", "1", "--dry-run")
+                self.assertEqual(code, 1, err)
+                self.assertIn(f"error: scenario {name} could not be loaded:", err)
+                self.assertIn(self.REFUSED, err)
+                self.assertIn("move it out of the scenarios directory", err)
+                self.assertNotIn("[dry-run]", out)
+                self.assertNotIn("nudge", out, "no arm may be planned")
+                (self.scenarios / name).unlink()
+
+    def test_every_failing_file_is_named(self):
+        self._break("malformed")
+        self._break("missing plugin tree")
+        code, _, err = self._main("run", "b", "--repeats", "1", "--dry-run")
+        self.assertEqual(code, 1, err)
+        self.assertIn("scenario broken.toml could not be loaded", err)
+        self.assertIn("scenario mounted.toml could not be loaded", err)
+        self.assertEqual(err.count(self.REFUSED), 1, "one refusal line, not one per file")
+
+    def test_a_clean_directory_still_plans(self):
+        code, out, err = self._main("run", "b", "--repeats", "1", "--dry-run")
+        self.assertEqual(code, EXIT_OK, err)
+        self.assertIn("nudge", out)
+        self.assertNotIn(self.REFUSED, err)
+
+    def test_a_file_not_ending_in_toml_is_not_a_scenario(self):
+        (self.scenarios / "broken.toml.off").write_text("name = [unclosed\n", encoding="utf-8")
+        code, _, err = self._main("run", "b", "--repeats", "1", "--dry-run")
+        self.assertEqual(code, EXIT_OK, err)
+
+    def test_verify_arming_refuses_before_it_builds_a_probe(self):
+        from unittest import mock
+
+        def _no_probe(*_a, **_k):
+            raise AssertionError("verify-arming built a probe for a refused directory")
+
+        for how in ("malformed", "missing plugin tree"):
+            with self.subTest(how=how):
+                name = self._break(how)
+                with mock.patch("fathom.armingprobe.RealArmingProbe", _no_probe):
+                    code, _, err = self._main("verify-arming")
+                self.assertEqual(code, 1, err)
+                self.assertIn(f"error: scenario {name} could not be loaded:", err)
+                self.assertIn(self.REFUSED, err)
+                (self.scenarios / name).unlink()
+
+    def test_validate_still_skips_and_says_run_will_refuse(self):
+        clean_code, _, clean_err = self._main("validate", "b")
+        self.assertNotIn("skipping scenario", clean_err)
+        name = self._break("malformed")
+        code, _, err = self._main("validate", "b")
+        self.assertEqual(code, clean_code, err)
+        self.assertIn(f"warning: skipping scenario {name}:", err)
+        self.assertIn("`fathom run` will refuse this directory", err)
+        self.assertEqual(err.count(f"skipping scenario {name}"), 1, "reported once")
+
+
 class DataRootWarningTests(unittest.TestCase):
     """An unmarked working directory that holds tasks/ or ledger/ is used, with a warning.
 

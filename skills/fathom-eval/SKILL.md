@@ -265,15 +265,15 @@ limit, fixture drift, lock timeout — the matrix stops cleanly and the ledger s
 resume checkpoint), `11` on an unarmed treatment arm, `12` on an invalid bank, `14`
 on the per-invocation spend rail, `15` when the credential has too little life left,
 `16` when `fathom stop` halted it, and `1` on a usage error (unloadable bank, no
-scenarios in the scenarios directory, unknown strategy, unknown `--tasks` id). Every
-nonzero exit leaves the ledger as the resume checkpoint.
+scenarios in the scenarios directory, an unloadable scenario file, unknown strategy,
+unknown `--tasks` id). Every nonzero exit leaves the ledger as the resume checkpoint.
 
 `fathom smoke` exits `0` only when every check was **proven**: a failed check and a
 skipped one both make it nonzero. `fathom verify-arming` exits `0` when every
 declaring arm is proven armed (or none declares a treatment), `11` when one is not,
-and `1` when the scenarios directory holds no scenarios. `fathom validate` exits `12`
-when a property fails (or, under `--strict`, warns or is unverifiable).
-`fathom reconcile` exits `13` on a disagreement, a stale accepted exception, or a
+and `1` when the scenarios directory holds no scenarios or an unloadable scenario file.
+`fathom validate` exits `12` when a property fails (or, under `--strict`, warns or is
+unverifiable). `fathom reconcile` exits `13` on a disagreement, a stale accepted exception, or a
 refusal before any check ran.
 
 ## Strategy catalog

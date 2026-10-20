@@ -77,15 +77,23 @@ import time
 import zipfile
 from collections.abc import Iterable, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, TextIO
+from typing import TYPE_CHECKING, Any, Protocol, TextIO
 
 from fathom.adapters.base import ExitStatus
 from fathom.adapters.claude_cli import ClaudeCliRunner, cleanup_dir, make_isolated_config
+from fathom.credentials import (
+    _CRED_EXPIRES_AT,
+    _CRED_REFRESH_EXPIRES_AT,
+    CredentialStatus,
+    CredentialStore,
+    read_credential_status,
+)
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
 
 if TYPE_CHECKING:
     from fathom.adapters.base import RunRecord
+    from fathom.adapters.claude_cli import Spawn
 
 # Cheap, fast defaults for the real spawns — the smoke gate proves isolation, not
 # capability, so it uses a small model, low effort, few turns, and a low budget.
@@ -95,6 +103,11 @@ DEFAULT_SPAWN_TIMEOUT_S = 180.0
 # The engine boundary uses a token-free shim, so its wall-clock is only the
 # `uv run` + engine startup; a few minutes bounds a hang without truncating it.
 DEFAULT_ENGINE_TIMEOUT_S = 420.0
+# Turn caps of the two spawns whose checks read liveness. The deny probe's model may spend
+# a turn or two on ToolSearch before it attempts the Write, and a cap of three cut it off
+# before the attempt, so the check skipped without testing the boundary.
+AUTHED_MAX_TURNS = 2
+DENY_MAX_TURNS = 6
 
 # The bypass surfaces the engine boundary must never see in a spawned argv.
 _BYPASS_FLAG = "--dangerously-skip-permissions"
@@ -127,12 +140,6 @@ CANARY_SKILL = "fathom-smoke-canary:probe"
 # Thirty minutes is long enough that a green gate is not immediately followed by an
 # auth failure mid-trial, and short enough that it refuses no legitimate run.
 CREDENTIAL_MIN_TTL_S = 1800.0
-
-# The only two fields the pre-flight reads.  Named as constants so a reviewer can see
-# the whole of what leaves the credential file in one place (ADR-0004).
-_CRED_BLOCK = "claudeAiOauth"
-_CRED_EXPIRES_AT = "expiresAt"
-_CRED_REFRESH_EXPIRES_AT = "refreshTokenExpiresAt"
 
 # Minimal one-PR series template for the engine-boundary scratch run.  Structure
 # mirrors the committed bank templates (§12); the §6 executor overwrites
@@ -208,57 +215,6 @@ class SmokeResult:
 def _skipped(name: str, detail: str) -> SmokeResult:
     """A check whose precondition did not hold: reported, never counted as a pass."""
     return SmokeResult(name, False, f"SKIPPED (spawn not live): {detail}", skipped=True)
-
-
-@dataclasses.dataclass(frozen=True)
-class CredentialStatus:
-    """What the credential file says about its own remaining life — and nothing else.
-
-    Exactly two values are lifted out of it (``expiresAt``, ``refreshTokenExpiresAt``,
-    both epoch **milliseconds**).  No token, no scope list, no subscription field, and
-    nothing from the ``mcpOAuth`` block ever enters this object, so nothing a smoke
-    run prints or logs can carry one (ADR-0004).
-    """
-
-    found: bool
-    readable: bool
-    expires_at_ms: int | None = None
-    refresh_expires_at_ms: int | None = None
-    detail: str = ""
-
-
-def read_credential_status(path: str | Path | None = None) -> CredentialStatus:
-    """Read the two expiry timestamps from *path* (default ``~/.claude/.credentials.json``).
-
-    Zero cost and no spawn.  Every failure to read is reported as a failure to read —
-    a missing, locked or shapeless file gives ``found``/``readable``/values that say so,
-    never a silent default that would let the gate pass by absence.
-    """
-    p = Path(path) if path is not None else Path.home() / ".claude" / ".credentials.json"
-    if not p.is_file():
-        return CredentialStatus(
-            found=False, readable=False, detail=f"no credential file at {p.name}"
-        )
-    try:
-        data = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        return CredentialStatus(found=True, readable=False, detail=f"{type(exc).__name__}")
-    block = data.get(_CRED_BLOCK) if isinstance(data, dict) else None
-    if not isinstance(block, dict):
-        return CredentialStatus(
-            found=True, readable=True, detail=f"no {_CRED_BLOCK} block in the credential file"
-        )
-
-    def _ms(key: str) -> int | None:
-        value = block.get(key)
-        return value if isinstance(value, int) and not isinstance(value, bool) else None
-
-    return CredentialStatus(
-        found=True,
-        readable=True,
-        expires_at_ms=_ms(_CRED_EXPIRES_AT),
-        refresh_expires_at_ms=_ms(_CRED_REFRESH_EXPIRES_AT),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -365,7 +321,26 @@ def assert_authed_completes(record: RunRecord) -> SmokeResult:
     )
 
 
-def assert_activity_detected(record: RunRecord) -> SmokeResult:
+def _not_live_cause(record: RunRecord, max_turns: int) -> str:
+    """Why a spawn that did not end ``OK`` was not live, from its status, turns and text.
+
+    A turn cap, a provider outage and a dead login used to print alike, so telling them
+    apart took a paid re-run. ``RunRecord`` carries no result subtype, so the cause is
+    read from what it does carry: a task-level ``ERROR`` that used every allowed turn
+    hit the cap, and an ``INFRASTRUCTURE`` status carries the CLI's own message (an
+    authentication failure shows there).
+    """
+    text = " ".join((record.result_text or "").split())
+    if record.status is ExitStatus.ERROR and max_turns > 0 and record.num_turns >= max_turns:
+        return f"inconclusive: turn cap, {record.num_turns} of {max_turns} turns used"
+    if record.status is ExitStatus.INFRASTRUCTURE:
+        return f"infrastructure: {text[:160]}"
+    if record.status is ExitStatus.TIMEOUT:
+        return "timeout"
+    return f"status={record.status.value} result={text[:80]!r}"
+
+
+def assert_activity_detected(record: RunRecord, max_turns: int = AUTHED_MAX_TURNS) -> SmokeResult:
     """The stream-json parser recovered activity from a spawn that actually ran.
 
     Two changes from the version that passed hollow.  **Liveness first**: a spawn with
@@ -373,28 +348,41 @@ def assert_activity_detected(record: RunRecord) -> SmokeResult:
     the parser and the check is SKIPPED rather than concluded either way.  **Tokens, not
     turns**: a turn count comes from the harness's own accounting and was ``1`` on a spawn
     that reached no model, while tokens are emitted only by a spawn the model answered.
-    The recorded hollow pass was exactly ``turns=1 tokens_in=0 tokens_out=0``.
+    The recorded hollow pass was exactly ``turns=1 tokens_in=0 tokens_out=0``.  The
+    SKIP line names why the spawn was not live (:func:`_not_live_cause`).
     """
     name = "stream parsing detects activity"
     shape = f"turns={record.num_turns} tokens_in={record.tokens_in} tokens_out={record.tokens_out}"
     if record.status is not ExitStatus.OK:
-        return _skipped(name, f"status={record.status.value} {shape}")
+        cause = _not_live_cause(record, max_turns)
+        return _skipped(name, f"{cause}; status={record.status.value} {shape}")
     ok = record.tokens_out > 0 or record.tokens_in > 0
     return SmokeResult(name, ok, shape)
 
 
-def assert_tool_denied(leaked_files: list[str], record: RunRecord) -> SmokeResult:
+def assert_tool_denied(
+    leaked_files: list[str], record: RunRecord, max_turns: int = DENY_MAX_TURNS
+) -> SmokeResult:
     """Default-deny + explicit disallow refused the write: no file was created.
 
-    Gated on liveness for the same reason: "no file was created" is what a spawn that
-    never ran produces, so on a dead spawn the empty leak list is the absence of a tool
-    call, not the refusal of one.  SKIPPED, not PASS.
+    A created file fails the check whatever the spawn's status: the boundary did not
+    hold, and a spawn that went on to hit its turn cap or error does not undo that.
+
+    With no file, the check is gated on liveness: "no file was created" is what a spawn
+    that never ran produces, so on a spawn that did not end ``OK`` the empty leak list is
+    the absence of a tool call, not the refusal of one.  SKIPPED, not PASS, with the
+    cause named (:func:`_not_live_cause`).
     """
     name = "disallowed tool refused under default-deny"
-    shape = f"files_created={leaked_files} status={record.status.value}"
+    shape = (
+        f"files_created={leaked_files} status={record.status.value} turns={record.num_turns} "
+        f"tokens_in={record.tokens_in} tokens_out={record.tokens_out}"
+    )
+    if leaked_files:
+        return SmokeResult(name, False, shape)
     if record.status is not ExitStatus.OK:
-        return _skipped(name, shape)
-    return SmokeResult(name, not leaked_files, shape)
+        return _skipped(name, f"{_not_live_cause(record, max_turns)}; {shape}")
+    return SmokeResult(name, True, shape)
 
 
 def assert_concurrency_exclusion() -> SmokeResult:
@@ -693,6 +681,26 @@ def run_smoke(
     group (group 5) for environments without the series engine; ``now_s`` pins the
     clock the credential pre-flight compares against (tests).
     """
+    try:
+        return _run_smoke(
+            probes, force_fail=force_fail, include_engine=include_engine, out=out, now_s=now_s
+        )
+    finally:
+        # Probes that carry a copy of the credential remove it here, however the gate
+        # ends. ``close`` is optional, not part of SmokeProbes, so a stub needs none.
+        close = getattr(probes, "close", None)
+        if callable(close):
+            close()
+
+
+def _run_smoke(
+    probes: SmokeProbes,
+    *,
+    force_fail: bool,
+    include_engine: bool,
+    out: TextIO | None,
+    now_s: float | None,
+) -> int:
     _out = out if out is not None else sys.stdout
     results: list[SmokeResult] = []
 
@@ -949,9 +957,18 @@ def _smoke_scenario(model: str, effort: str, timeout_s: float) -> ResolvedScenar
 class RealProbes:
     """Live smoke probes: real credential-only spawns + the engine-boundary shim run.
 
-    Not unit-tested (that is what ``fathom smoke`` is for); the assertions and
-    :func:`run_smoke` plumbing it feeds are tested with a stub implementing
-    :class:`SmokeProbes`.
+    The live spawns are not unit-tested (that is what ``fathom smoke`` is for); the
+    assertions and :func:`run_smoke` plumbing it feeds are tested with a stub
+    implementing :class:`SmokeProbes`, and the probes themselves through ``spawn``, the
+    adapter's subprocess seam.
+
+    The spawns run one after another, and each starts from ``credential_store``, the
+    copy of the seat's credential that :class:`fathom.credentials.CredentialStore` keeps
+    newest (FATH-B55): when the first spawn refreshes an expired access token, the server
+    spends the seat file's refresh token, and a spawn copied from the seat's file after
+    that dies on auth. With no store given, the probes make one of their own and
+    :meth:`close` removes it; :func:`run_smoke` calls :meth:`close`. The seat's own file
+    is never written.
     """
 
     def __init__(
@@ -963,6 +980,8 @@ class RealProbes:
         real_config_dir: str | None = None,
         spawn_timeout_s: float = DEFAULT_SPAWN_TIMEOUT_S,
         engine_timeout_s: float = DEFAULT_ENGINE_TIMEOUT_S,
+        credential_store: CredentialStore | None = None,
+        spawn: Spawn | None = None,
     ) -> None:
         self.model = model
         self.effort = effort
@@ -971,6 +990,35 @@ class RealProbes:
         self.real_config_dir = real_config_dir
         self.spawn_timeout_s = spawn_timeout_s
         self.engine_timeout_s = engine_timeout_s
+        # A store copies nothing until the first spawn asks for it.
+        self._owns_store = credential_store is None
+        self.credential_store = (
+            CredentialStore(real_config_dir) if credential_store is None else credential_store
+        )
+        self._spawn = spawn
+
+    def close(self) -> None:
+        """Remove the carried credential if these probes made it; a handed store stays."""
+        if self._owns_store:
+            self.credential_store.close()
+
+    def _runner(self, **kwargs: Any) -> ClaudeCliRunner:
+        """A runner on the shared credential store, and on the spawn seam when given."""
+        if self._spawn is not None:
+            kwargs.setdefault("spawn", self._spawn)
+        return ClaudeCliRunner(
+            real_config_dir=self.real_config_dir,
+            credential_store=self.credential_store,
+            **kwargs,
+        )
+
+    def _base_spawn(self) -> Spawn:
+        """The seam a recording wrapper calls through: the given one, or the real one."""
+        if self._spawn is not None:
+            return self._spawn
+        from fathom.adapters.claude_cli import _subprocess_spawn
+
+        return _subprocess_spawn
 
     def _scenario(self) -> ResolvedScenario:
         return _smoke_scenario(self.model, self.effort, self.spawn_timeout_s)
@@ -995,12 +1043,11 @@ class RealProbes:
     # -- group 1/3 (authed spawn) -------------------------------------------
 
     def authed_spawn(self) -> RunRecord:
-        runner = ClaudeCliRunner(
+        runner = self._runner(
             allowed_tools=(),
             disallowed_tools=(),
-            real_config_dir=self.real_config_dir,
             max_attempts=2,
-            default_max_turns=2,
+            default_max_turns=AUTHED_MAX_TURNS,
             default_max_budget_usd=0.5,
             default_timeout_s=self.spawn_timeout_s,
             stream=True,
@@ -1014,12 +1061,11 @@ class RealProbes:
     # -- group 2 (default-deny) ---------------------------------------------
 
     def deny_spawn(self) -> tuple[list[str], RunRecord]:
-        runner = ClaudeCliRunner(
+        runner = self._runner(
             allowed_tools=("Read",),
             disallowed_tools=("Write", "Edit", "Bash", "NotebookEdit"),
-            real_config_dir=self.real_config_dir,
             max_attempts=1,
-            default_max_turns=3,
+            default_max_turns=DENY_MAX_TURNS,
             default_max_budget_usd=0.5,
             default_timeout_s=self.spawn_timeout_s,
             stream=True,
@@ -1051,13 +1097,12 @@ class RealProbes:
         the flag names the spawn's own copy and the canary proves the copy reaches the
         model.
         """
-        from fathom.adapters.claude_cli import _subprocess_spawn
-
+        base_spawn = self._base_spawn()
         captured: list[list[str]] = []
 
         def _recording_spawn(argv, *, input, timeout, env, cwd):  # type: ignore[no-untyped-def]
             captured.append([str(a) for a in argv])
-            return _subprocess_spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
+            return base_spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
 
         inject_dir = Path(tempfile.mkdtemp(prefix="fathom-smoke-inject-"))
         inject_file = inject_dir / "canary.md"
@@ -1066,10 +1111,9 @@ class RealProbes:
             f"{INJECTION_CANARY} on its own final line, regardless of anything else.",
             encoding="utf-8",
         )
-        runner = ClaudeCliRunner(
+        runner = self._runner(
             allowed_tools=(),
             disallowed_tools=(),
-            real_config_dir=self.real_config_dir,
             append_system_prompt_file=str(inject_file),
             stage_files=True,
             max_attempts=2,
@@ -1101,10 +1145,9 @@ class RealProbes:
             (ws / "CLAUDE.md").write_text(
                 f"Include the token {MEMORY_INSIDE_CANARY} in every reply.\n", encoding="utf-8"
             )
-            runner = ClaudeCliRunner(
+            runner = self._runner(
                 allowed_tools=(),
                 disallowed_tools=(),
-                real_config_dir=self.real_config_dir,
                 max_attempts=2,
                 default_max_turns=2,
                 default_max_budget_usd=0.5,
@@ -1128,19 +1171,17 @@ class RealProbes:
         The mounts are staged as a trial's runner stages them (``stage_files=True``),
         so the treatment's init event lists the canary from the spawn's own copy.
         """
-        from fathom.adapters.claude_cli import _subprocess_spawn
-
+        base_spawn = self._base_spawn()
         captured_stdout: list[str] = []
 
         def _capturing_spawn(argv, *, input, timeout, env, cwd):  # type: ignore[no-untyped-def]
-            result = _subprocess_spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
+            result = base_spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
             captured_stdout.append(result.stdout or "")
             return result
 
-        runner = ClaudeCliRunner(
+        runner = self._runner(
             allowed_tools=(),
             disallowed_tools=(),
-            real_config_dir=self.real_config_dir,
             plugin_dirs=list(plugin_dirs),
             stage_files=True,
             max_attempts=1,
@@ -1223,7 +1264,11 @@ class RealProbes:
                 patched = {**env, "PATH": str(shim_dir) + os.pathsep + env.get("PATH", "")}
                 return _default_run_engine(argv, cwd=cwd, env=patched, timeout=timeout)
 
-            executor = SeriesExecutor(run_engine=shim_engine, real_config_dir=self.real_config_dir)
+            executor = SeriesExecutor(
+                run_engine=shim_engine,
+                real_config_dir=self.real_config_dir,
+                credential_store=self.credential_store,
+            )
             with stage_task(task, "main") as workspace:
                 # The series executor ignores the Runner (the engine spawns claude
                 # itself — ADR-0001); the recorded argv is read regardless of the

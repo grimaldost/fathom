@@ -80,10 +80,15 @@ name = "nudge"
 
 What `fathom run` does with a faulty arm file:
 
-- A file that is not valid TOML, or lacks one of the five keys, is skipped with a warning,
-  and the run goes on with the other arms. For a missing key the warning quotes only the
-  key: `warning: skipping scenario nudge.toml: 'name'`. With no arm left the run stops with
-  `no scenarios found`.
+- A file that fails to load or resolve (not valid TOML, a missing one of the five keys, a
+  `[plugins]` mount or file it names that is not there) refuses the run, `--dry-run`
+  included, and `fathom verify-arming`, with exit 1 before anything is planned or spawned.
+  One line per file: `error: scenario nudge.toml could not be loaded: 'name'` (for a
+  missing key the error quotes only the key). An arm that does not load would otherwise
+  drop out of the matrix without a trace, and the arming check could not see it go. Fix
+  the file, move it out of the directory, or rename it so it does not end in `.toml`.
+  `fathom validate` still skips such a file, with a warning that says `run` will refuse.
+  A directory with no scenario file at all stops with `no scenarios found`.
 - Tables and keys the parser does not know are ignored without a warning. A misspelled
   treatment table (`[contxt]` for `[context]`) leaves the arm without its treatment, so it
   runs as the control would, under its own name. Check the spelling of every table.
@@ -106,7 +111,8 @@ refused, and fathom never passes `bypassPermissions` or `--dangerously-skip-perm
 - The order of `allowed` enters `config_hash`; reordering it forks the arm's history.
 
 Each spawn also gets a temporary `CLAUDE_CONFIG_DIR` holding only a copy of the credential
-file. Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
+file, taken from a copy `fathom run` keeps for the run, so a credential one spawn refreshed
+reaches the next. Claude Code also reads `CLAUDE.md`, `CLAUDE.local.md` and `.claude/CLAUDE.md` in every
 directory above its working directory, whatever that directory says, so each spawn gets a
 settings layer (`--settings`) whose `claudeMdExcludes` lists those files, and the account's
 claude.ai connectors are turned off. No personal instructions, settings, history, plugins or
@@ -336,7 +342,7 @@ With it, `fathom run`:
   exactly one arm loaded from the same scenarios directory, not the arm itself, and the
   declarations must not form a cycle (`one` on `two` and `two` on `one`). Otherwise the run
   stops with exit 1 before anything spawns. A value that is not a string makes the file
-  faulty, so the arm is skipped with a warning like any other faulty file.
+  faulty, so the run is refused like any other faulty file.
 - runs the comparator's trials before the dependent's. The arms otherwise keep the order they
   were loaded in (by file name); a comparator moves just ahead of the first arm that depends
   on it, and a set of arms with no `comparator` keeps its order.

@@ -32,6 +32,73 @@ versions are not part of this repository's history. Tags start at 0.8.0.
     (annotated, on the release pull request's merge commit, a metadata-only release commit);
     the existing `tag-watch` workflow stays for released headings with no tag.
 
+### Fixed
+
+- **A matrix no longer dies on auth once it outlives its first access token (FATH-B55).**
+  Each spawn runs under a throwaway `CLAUDE_CONFIG_DIR` holding a copy of the credential,
+  and the CLI refreshes an expired access token inside it. The server rotates the refresh
+  token on every refresh, and the refreshed pair was deleted with the spawn's directory, so
+  the next spawn started again from the seat's file with a refresh token already spent and
+  stopped the matrix as an infrastructure error. `fathom run` now keeps one copy of the
+  credential for the run (`fathom.credentials.CredentialStore`): every spawn, every series
+  engine trial and the arming probe copy from it, and a spawn that refreshed hands the newer
+  credential back to it. It keeps whichever credential is newer by `expiresAt` and
+  `refreshTokenExpiresAt` only, so a new login on the seat mid-run is picked up too; no
+  token is read, and the copy is removed when the run ends. The seat's own file is not
+  written, so after a run that refreshed, that file still holds the spent refresh token
+  until the CLI is logged in again. Two spawns running at once inside one series engine
+  trial can still redeem the same refresh token; this change does not address that.
+- **A run with no recorded cost no longer counts as free, and Economy no longer pools
+  configurations that share an arm name (FATH-B79, FATH-B49).** A run row with
+  `cost_source = "none"` or with no `cost_usd_est` key (a legacy row) has an unknown cost.
+  The scorecard's Economy table, the `--per-trial` view and the calibration cost views sum
+  the known costs only. Where an arm's sum leaves such a run out, its USD is marked `≥` as a
+  floor and a note under the table says on how many of the arm's runs a cost was recorded;
+  the per-trial `*` now covers rows without the key too. Separately, when an arm is re-run
+  with changed content (a new `config_hash`, the same name), each cell now reads the runs of
+  the configuration whose trial the cell keeps, so Economy, Efficiency, Arm Health and the
+  calibration costs no longer add the old configuration's runs to the new one's, and the
+  scorecard names the arm and its hash prefixes in one line. A scorecard whose runs all
+  record a cost and whose arms each carry one hash renders as before. The ledger is not
+  changed.
+
+- **A scenario file that does not load now refuses the run (FATH-B50).** `fathom run`
+  (a dry run included) and `fathom verify-arming` used to print `warning: skipping scenario`
+  for a file that was not valid TOML, lacked a key, or named a `[plugins]` mount that was not
+  there, and went on with the arms that did load. A treatment arm that dropped out that way
+  left a control-only ledger, and the arming check could not see it, since it checks only the
+  arms that loaded. Both commands now print `error: scenario <file> could not be loaded` for
+  each such file and exit 1 before planning or any spawn. In an existing data root, a
+  `scenarios/` directory that holds a file like this is refused until the file is fixed, moved
+  out of the directory, or renamed so it does not end in `.toml`. `fathom validate` still
+  skips the file and now says that `run` will refuse the directory. There is no flag to
+  proceed anyway.
+
+- **The acceptance harness judges from evidence, and names a failed login.**
+  `measurement_ran` now passes on the subject's engine-written trial rows in the data root
+  and fails on hand-written results, whatever form the `fathom run` took in the command text,
+  so an executable wrapper (`sh f.sh`) no longer fails a measurement the engine ran;
+  `plan_ran` and `reconcile_ran` look for fathom's marker lines in every Bash and PowerShell
+  result, not only in the calls the classifier read as fathom. The classifier stays for the
+  behaviour facts. A subject whose result event is an authentication failure is now an
+  environment failure, in a scenario and in the preflight, with the CLI's message in the
+  line, instead of reading as a pending MCP server or as the agent's own failure. The live
+  acceptance run is the owner's, at the next release.
+
+- **`fathom smoke` no longer kills the seat it checks.** Its spawns run one after another,
+  and each copied the seat's credential file on its own, so when the first spawn refreshed
+  an expired access token every later spawn started from a spent refresh token and failed
+  on auth, and the seat's login was left dead. The smoke probes now carry one copy of the
+  credential across their spawns, as `fathom run` does (`CredentialStore`), and remove it
+  when the gate ends. The seat's own file is still not written.
+- **The default-deny check in `fathom smoke` has room to attempt the write, and its SKIP
+  line says why.** The deny probe ran with a cap of 3 turns, and a model that spent two on
+  ToolSearch hit the cap before it tried the Write; the cap is now 6. A check whose spawn
+  did not end OK now names the cause on its SKIP line (a turn cap with the turns used, an
+  infrastructure error with the CLI's message, or a timeout), for the activity check as
+  well, so telling them apart no longer takes a paid re-run. A file created by a spawn that
+  did not end OK now fails the default-deny check instead of skipping it.
+
 ## [0.11.0] - 2026-10-09
 
 A minor release, pre-1.0: it adds an optional study plan to `bank.toml`, a warning severity
