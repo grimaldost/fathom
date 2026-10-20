@@ -7,19 +7,60 @@
 # cleared or overridden by each hook that runs fathom (see the reconcile hooks below).
 #
 # Install (one-off, per clone):
-#     git config core.hooksPath tools/git-hooks
+#     railform arm
+# which sets core.hooksPath to .githooks, the same as `git config core.hooksPath .githooks`.
+# The railform command is run from the pinned commit, as CONTRIBUTING.md ("Hooks") spells out.
 #
 # NOT `pre-commit install`: that writes a hook invoking the bare `pre-commit` executable
 # shim, and in environments where the console-script shim is blocked the hook silently
-# never runs. The tracked hooks in tools/git-hooks/ call this config through
-# `uv run python -m pre_commit`, pinned by uv.lock.
+# never runs. The tracked hooks in .githooks/ call this config through
+# `uv run --frozen python -m pre_commit`, pinned by uv.lock.
+#
+# The entries between the railform markers are owned by `railform adopt`: the commit message
+# rules (conventional subjects, no AI attribution, the types and patterns of railform's frame),
+# the branch name rail, the hook wrapper check, the private reference check and the hygiene
+# hooks. The hooks below are this repository's own.
 #
 # ruff runs as a local `language: system` hook so the version is uv.lock's, never a second
 # pinned copy drifting from CI. pytest stays CI-owned: the suite takes minutes, and the
 # commit lane must not. The one exception is a single test that takes about a second and
 # runs only when the arm-hashing code or the example data root is staged.
 
+# Files no hook touches. The SVG artwork in assets/ has no final newline, and the truncated
+# stream fixture is cut mid-line on purpose (tests/test_adapter_claude_cli.py reads it as a
+# stream that ended early); the end-of-file hygiene hook would "fix" both.
+exclude: ^(assets/[^/]+\.svg|tests/fixtures/stream_truncated\.jsonl)$
+
 repos:
+  # >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+  - repo: https://github.com/grimaldost/railform
+    rev: 65bf54ae6f4ed7bd027fee9e0806d9dfa2df3c48
+    hooks:
+      - id: railform-commit-msg
+      - id: railform-branch-name
+      - id: railform-hooks-check
+        files: '^\.githooks/'
+      - id: railform-private-refs
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: cef0300fd0fc4d2a87a85fa2093c6b283ea36f4b  # frozen: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: check-merge-conflict
+        args: [--assume-in-merge]
+        stages: [pre-commit]
+      - id: check-added-large-files
+        stages: [pre-commit]
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-toml
+        stages: [pre-commit]
+      - id: check-json
+        stages: [pre-commit]
+  # <<< railform
   - repo: local
     hooks:
       - id: ruff-format
@@ -76,29 +117,3 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
         files: ^(examples/data-root/(scenarios|ledger)/|src/fathom/scenario\.py$)
-
-  - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
-    hooks:
-      - id: conventional-pre-commit
-        stages: [commit-msg]
-        args:
-          - feat
-          - fix
-          - docs
-          - style
-          - refactor
-          - perf
-          - test
-          - chore
-          - build
-          - ci
-          - release
-
-  - repo: local
-    hooks:
-      - id: no-ai-attribution
-        name: Reject AI attribution trailers in commit messages
-        entry: bash -c 'if grep -Ei "^(Co-Authored-By|Co-authored-by):.*(Claude|GPT|Anthropic|noreply@anthropic)" "$1"; then echo "Commit message contains a forbidden AI attribution trailer — the contribution guidelines forbid these. Remove the line and re-commit."; exit 1; fi' --
-        language: system
-        stages: [commit-msg]
