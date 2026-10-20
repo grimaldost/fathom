@@ -112,7 +112,8 @@ Each spawn copies the shared OAuth credential into a throwaway `CLAUDE_CONFIG_DI
 and the CLI refreshes it inside that spawn. The sequential half is fixed (Unreleased):
 `fathom run` keeps one copy of the credential for the run, every spawn copies from it, and a
 spawn that refreshed hands the newer credential back, so the next spawn no longer starts from a
-spent refresh token. Still open: the seat's own file is not written, so after a run that
+spent refresh token. `fathom smoke` now carries the credential the same way across its
+spawns (Unreleased). Still open: the seat's own file is not written, so after a run that
 refreshed it holds a spent refresh token until the next login (writing it back is the owner's
 call); two spawns running at once inside one series engine trial can still redeem the same
 refresh token; and a refresh token that reaches its own end of life mid-run still stops the

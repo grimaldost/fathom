@@ -270,6 +270,172 @@ class TestToolDenied(unittest.TestCase):
         self.assertIn("probe.txt", r.detail)
 
 
+class TestSkipNamesItsCause(unittest.TestCase):
+    """A spawn that was not live is SKIPPED with the reason it was not, so a turn cap, an
+    outage and a dead login no longer print alike and need no paid re-run to tell apart."""
+
+    def test_a_deny_spawn_that_hit_the_turn_cap_says_so(self):
+        record = _ok_record(status=ExitStatus.ERROR, num_turns=6, result_text="")
+        r = assert_tool_denied([], record)
+        self.assertFalse(r.ok)
+        self.assertTrue(r.skipped)
+        self.assertIn("turn cap", r.detail)
+        self.assertIn("6 of 6", r.detail)
+        # The fields an operator greps for are still there.
+        for field in ("files_created=", "status=error", "turns=6", "tokens_in=", "tokens_out="):
+            self.assertIn(field, r.detail)
+
+    def test_an_infrastructure_spawn_carries_its_message(self):
+        record = _ok_record(
+            status=ExitStatus.INFRASTRUCTURE,
+            num_turns=0,
+            tokens_in=0,
+            tokens_out=0,
+            result_text="Failed to authenticate",
+        )
+        r = assert_tool_denied([], record)
+        self.assertTrue(r.skipped)
+        self.assertIn("infrastructure", r.detail)
+        self.assertIn("Failed to authenticate", r.detail)
+
+    def test_a_file_created_by_a_spawn_that_was_not_ok_fails(self):
+        record = _ok_record(status=ExitStatus.ERROR, num_turns=6)
+        r = assert_tool_denied(["probe.txt"], record)
+        self.assertFalse(r.ok)
+        self.assertFalse(r.skipped, "a created file is a broken boundary whatever the status")
+        self.assertIn("probe.txt", r.detail)
+
+    def test_the_activity_skip_names_its_cause_too(self):
+        record = _ok_record(
+            status=ExitStatus.INFRASTRUCTURE, num_turns=0, result_text="Failed to authenticate"
+        )
+        r = assert_activity_detected(record)
+        self.assertTrue(r.skipped)
+        self.assertIn("Failed to authenticate", r.detail)
+        self.assertIn("tokens_in=", r.detail)
+
+    def test_a_timeout_is_named(self):
+        r = assert_tool_denied([], _ok_record(status=ExitStatus.TIMEOUT, num_turns=2))
+        self.assertTrue(r.skipped)
+        self.assertIn("timeout", r.detail)
+
+    def test_an_infrastructure_message_is_kept_to_one_short_line(self):
+        long = "Failed to authenticate\n" + "x" * 400
+        record = _ok_record(status=ExitStatus.INFRASTRUCTURE, num_turns=0, result_text=long)
+        r = assert_tool_denied([], record)
+        self.assertNotIn("\n", r.detail)
+        self.assertNotIn("x" * 161, r.detail)
+
+
+def _scripted_deny_cli(argv, *, input, timeout, env, cwd):
+    """A deny spawn as a real model runs it: two ToolSearch turns, a Write the CLI
+    refuses, then a final reply. Four turns, which the old cap of three cut short."""
+
+    def _assistant(content):
+        usage = {"input_tokens": 10, "output_tokens": 5}
+        return {"type": "assistant", "message": {"content": content, "usage": usage}}
+
+    events = [
+        {"type": "system", "subtype": "init", "skills": []},
+        _assistant([{"type": "tool_use", "id": "t1", "name": "ToolSearch", "input": {}}]),
+        _assistant([{"type": "tool_use", "id": "t2", "name": "ToolSearch", "input": {}}]),
+        _assistant(
+            [
+                {
+                    "type": "tool_use",
+                    "id": "t3",
+                    "name": "Write",
+                    "input": {"file_path": "probe.txt", "content": "leak"},
+                }
+            ]
+        ),
+        {
+            "type": "user",
+            "message": {
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "t3",
+                        "is_error": True,
+                        "content": "Permission to use Write has been denied.",
+                    }
+                ]
+            },
+        },
+        _assistant([{"type": "text", "text": "I cannot write the file."}]),
+        {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "num_turns": 4,
+            "result": "I cannot write the file.",
+            "total_cost_usd": 0.001,
+            "usage": {"input_tokens": 40, "output_tokens": 20},
+        },
+    ]
+    stdout = "".join(json.dumps(e) + "\n" for e in events)
+    return subprocess.CompletedProcess(argv, 0, stdout, "")
+
+
+class TestDenyProbeHasRoomToAttemptTheWrite(unittest.TestCase):
+    def test_a_four_turn_deny_spawn_passes_under_a_cap_of_six(self):
+        from fathom import smoke
+
+        seen = []
+
+        def _spawn(argv, **kw):
+            seen.append([str(a) for a in argv])
+            return _scripted_deny_cli(argv, **kw)
+
+        with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ):
+            os.environ.pop("FATHOM_STREAM_DIR", None)
+            probes = smoke.RealProbes(real_config_dir=td, spawn=_spawn, scenarios_dir=None)
+            self.addCleanup(lambda: probes.close())
+            leaked, record = probes.deny_spawn()
+        result = assert_tool_denied(leaked, record)
+        self.assertTrue(result.ok, result.detail)
+        (argv,) = seen
+        self.assertEqual(argv[argv.index("--max-turns") + 1], "6")
+
+
+class _ClosingProbes(StubProbes):
+    def __init__(self, **kw):
+        super().__init__(**kw)
+        self.closed = 0
+
+    def close(self):
+        self.closed += 1
+
+
+class TestRunSmokeClosesTheProbes(unittest.TestCase):
+    """The probes own a carried copy of the credential; run_smoke removes it however the
+    gate ends."""
+
+    def test_close_is_called_after_the_checks(self):
+        probes = _ClosingProbes()
+        run_smoke(probes, out=io.StringIO())
+        self.assertEqual(probes.closed, 1)
+
+    def test_close_is_called_when_a_probe_raises(self):
+        probes = _ClosingProbes(raise_on={"deny"})
+        run_smoke(probes, out=io.StringIO())
+        self.assertEqual(probes.closed, 1)
+
+    def test_close_is_called_when_the_run_is_interrupted(self):
+        class _Interrupting(_ClosingProbes):
+            def authed_spawn(self):
+                raise KeyboardInterrupt
+
+        probes = _Interrupting()
+        with self.assertRaises(KeyboardInterrupt):
+            run_smoke(probes, out=io.StringIO())
+        self.assertEqual(probes.closed, 1)
+
+    def test_probes_without_close_still_run(self):
+        code = run_smoke(StubProbes(), out=io.StringIO())
+        self.assertEqual(code, 0)
+
+
 # ---------------------------------------------------------------------------
 # The credential pre-flight, and the two checks that passed HOLLOW
 #

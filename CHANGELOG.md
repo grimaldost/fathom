@@ -22,6 +22,19 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   written, so after a run that refreshed, that file still holds the spent refresh token
   until the CLI is logged in again. Two spawns running at once inside one series engine
   trial can still redeem the same refresh token; this change does not address that.
+- **`fathom smoke` no longer kills the seat it checks.** Its spawns run one after another,
+  and each copied the seat's credential file on its own, so when the first spawn refreshed
+  an expired access token every later spawn started from a spent refresh token and failed
+  on auth, and the seat's login was left dead. The smoke probes now carry one copy of the
+  credential across their spawns, as `fathom run` does (`CredentialStore`), and remove it
+  when the gate ends. The seat's own file is still not written.
+- **The default-deny check in `fathom smoke` has room to attempt the write, and its SKIP
+  line says why.** The deny probe ran with a cap of 3 turns, and a model that spent two on
+  ToolSearch hit the cap before it tried the Write; the cap is now 6. A check whose spawn
+  did not end OK now names the cause on its SKIP line (a turn cap with the turns used, an
+  infrastructure error with the CLI's message, or a timeout), for the activity check as
+  well, so telling them apart no longer takes a paid re-run. A file created by a spawn that
+  did not end OK now fails the default-deny check instead of skipping it.
 
 ## [0.11.0] - 2026-10-09
 

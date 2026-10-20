@@ -102,7 +102,7 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
   (the CLI reads them whatever `CLAUDE_CONFIG_DIR` says), the claude.ai connectors off, headless
   default-deny, explicit allow and disallow lists, never `bypassPermissions` or
   `--dangerously-skip-permissions` (`src/fathom/adapters/claude_cli.py`). Under `fathom run`
-  each spawn's credential is copied from one copy the run carries, which keeps a credential a
+  and `fathom smoke` (`RealProbes` in `src/fathom/smoke.py`) each spawn's credential is copied from one copy the run carries, which keeps a credential a
   spawn refreshed and never writes the seat's own file (`src/fathom/credentials.py`,
   FATH-B55). Every model call goes
   through a `Runner` adapter (ADR-0001); the one sanctioned exception is the series-engine
