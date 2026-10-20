@@ -44,6 +44,9 @@ The harness judges each session three ways.
   `F() { uv run ... python -m fathom "$@"; }; F run b`), as agents often write it, is read as
   the command it stands for, also when the definition sits in a file the session wrote earlier
   (with `cat` and a here-document, or the Write tool) and sources (`. /tmp/f.sh && F run b`).
+  This reading is informational: it fills the verdict's behaviour facts and names the call in
+  a check's evidence, and it decides no check. An invocation form it does not know, such as an
+  executable wrapper (`sh f.sh`, `./f.sh run b`), costs a behaviour fact, never a verdict.
   Results are paired with their calls, and errors on a fathom
   surface are kept, 300 characters each.
 - **Ground truth**, read by the harness after the subject exits: files in the workspace, the
@@ -67,15 +70,15 @@ Every scenario gets three checks:
 |---|---|---|
 | `no_ledger_change` | ground truth | nothing under the clone's `ledger*/` is new or modified (`report/` and `.fathom/` are ignored) |
 | `no_spend` | ground truth | no `claude` spawn reached the stub on the subject's PATH; a run, smoke or arming check that was tried and spent nothing is noted |
-| `reconcile_ran` | behaviour | a reconcile printed its `RECONCILE: OK` or `RECONCILE: FAILED` line |
-| `plan_ran` | behaviour | a dry-run printed its `planned: ... ceiling: $X` line, or the MCP `plan` tool returned `ok` |
+| `reconcile_ran` | behaviour | a shell call printed a `RECONCILE: OK` or `RECONCILE: FAILED` line |
+| `plan_ran` | behaviour | a shell call printed a `planned: ... ceiling: $X` line, or the MCP `plan` tool returned `ok` |
 | `answer_names_banks` | answer | the final answer (the result text and the assistant's text after its last tool call) names at least half of the banks that have a `ledger/<bank>.jsonl` in the clone |
 | `fathom_used` | behaviour | any fathom surface was used |
 | `data_root_created` | ground truth | a `fathom.toml` with a `[data_root]` table exists under the workspace |
 | `bank_authored` | ground truth | that data root has a bank with at least one task whose `[verify] entry` file exists |
 | `arms_authored` | ground truth | at least two TOML files in it declare a `strategy` (outside `tasks/`, `ledger/` and `report/`) |
 | `trials_completed` | ground truth | at least two of the subject's `completed` trial rows, of a task that has its verifier, across at least two `config_hash` values |
-| `measurement_ran` | ground truth | a `fathom run` without `--dry-run` was executed, no ledger or scorecard was written by hand (Write, Edit, `>` or `tee`), and every counted trial row carries what only the engine writes |
+| `measurement_ran` | ground truth | at least one of the subject's completed trial rows exists, every counted row carries what only the engine writes, and no ledger or scorecard was written by hand (Write, Edit, `>` or `tee`); how the engine was invoked is not asked |
 | `measurement_within_budget` | ground truth | the subject's ledger rows sum to at most 1.5 times the budget the prompt states |
 | `reconcile_passes` | ground truth | `fathom reconcile`, run by the harness in that data root, exits 0 |
 | `scorecard_rendered` | ground truth | a non-empty `report/scorecard-<bank>.md` exists |
@@ -84,9 +87,10 @@ A row counts as the subject's when the workspace did not start with it and it is
 the rows the plugin's example data root ships, so a copy of `examples/data-root/` is not a
 measurement. A fathom call over the CLI counts only by what fathom printed: Bash reports the
 exit status of a pipeline's last command, so `fathom reconcile | tail` that failed still
-looks like success. A command call (`/fathom:reconcile` through the Skill tool) only expands
-the command's text; the engine runs in the Bash call that follows it, which is why the
-operation checks count CLI and MCP calls only.
+looks like success. The harness therefore looks for fathom's marker lines in the result of
+every Bash and PowerShell call, whatever its command text, and for the engine's own rows in
+the data root. A command call (`/fathom:reconcile` through the Skill tool) only expands the
+command's text and prints nothing, so it counts for neither.
 
 The verdict also records, without passing or failing on them: the surfaces used in order,
 how many tool calls came before the first fathom use, every fathom operation and the ones
@@ -247,6 +251,12 @@ of each scenario, then each scenario's checks, behaviour and final answer.
 | 1 | a check failed |
 | 2 | an environment or preflight failure: the plugin was not visible, the stream had no init event (for example, `claude` could not start), `claude` is not on `PATH`, the plugin is not installed or the credential is missing in isolated mode, or a workspace could not be prepared |
 | 3 | a usage error: a bad option, an unusable data root, a used output directory, a workspace that would show the subject something it must not see, or a scenario file or prompt the harness refuses |
+
+A subject that could not authenticate (the result event is an error whose text names a
+failed authentication, an OAuth problem, a 401 or `/login`) is reported as an environment
+failure, in a scenario and in the preflight, with the CLI's message; the plugin's MCP server
+is usually still pending at init then, and that is a consequence, not a cause. Log in with
+`claude` and run again.
 
 Start with the visibility row. If the MCP server is `failed`, `needs-auth` or not listed, or
 a command is missing, fix the installation (`/plugin`, `/mcp`) and run `--preflight-only`
