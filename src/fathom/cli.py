@@ -1998,9 +1998,24 @@ def _cmd_run(args: argparse.Namespace) -> int:
     # whether the numbers would mean anything, and this one is about whether there
     # will be numbers. A dry run plans and spawns nothing, so it is exempt.
     if not args.dry_run and not args.skip_credential_check:
-        from fathom.smoke import assert_credential_live, read_credential_status
+        from fathom.smoke import (
+            assert_access_token_unexpired,
+            assert_credential_live,
+            read_credential_status,
+        )
 
-        credential = assert_credential_live(read_credential_status())
+        status = read_credential_status()
+        credential = assert_credential_live(status)
+        access = assert_access_token_unexpired(status)
+        if credential.ok and not access.ok and not access.skipped:
+            # A spawn under an expired access token would refresh it inside a copy and
+            # spend the seat's refresh token (T53b): the cure is one claude command.
+            print(f"credential: {access.detail}", file=sys.stderr)
+            print(
+                "REFUSING TO RUN: nothing was spawned; re-invoke to continue from the ledger.",
+                file=sys.stderr,
+            )
+            return EXIT_CREDENTIAL
         if not credential.ok:
             print(f"credential: {credential.detail}", file=sys.stderr)
             print(
@@ -2016,36 +2031,47 @@ def _cmd_run(args: argparse.Namespace) -> int:
         # The run's carried credential (FATH-B55): every spawn copies its credential from
         # it and hands a refreshed one back, so the spawn after a refresh does not start
         # from a refresh token the server has already rotated. It copies nothing until the
-        # first spawn and is removed when the run ends. A dry run spawns nothing.
+        # first spawn and is removed when the run ends. A dry run spawns nothing. However
+        # the run ends, the newest pair is handed back to the seat's own file first (T53b),
+        # under the guard in `write_back_to_seat`.
         from fathom.credentials import CredentialStore
 
         with CredentialStore() as store:
             credential_store = None if args.dry_run else store
-            return run_matrix(
-                bank,
-                resolved_scenarios,
-                args.repeats,
-                dry_run=args.dry_run,
-                limit=args.limit,
-                task_ids=(
-                    [t.strip() for t in args.tasks.split(",") if t.strip()]
-                    if args.tasks is not None
-                    else None
-                ),
-                ledger_dir=ledger_dir,
-                max_budget_usd=spawn_cap,
-                max_run_usd=args.max_run_usd,
-                include_holdout=args.include_holdout,
-                skip_arming_check=args.skip_arming_check,
-                skip_bank_validation=args.skip_bank_validation,
-                run_lock=run_lock,
-                resume_cmd=_resume_command(args, spawn_cap),
-                interleave=getattr(args, "interleave", False),
-                data_root=data_root,
-                index_cmd=_index_command(args),
-                repeats_per_cell=plan.repeats_per_cell,
-                credential_store=credential_store,
-            )
+            try:
+                return _matrix(credential_store, run_lock)
+            finally:
+                if credential_store is not None:
+                    result = credential_store.write_back()
+                    if result.notable:
+                        print(f"credential: {result.detail}", file=sys.stderr)
+
+    def _matrix(credential_store: Any | None, run_lock: Any | None) -> int:
+        return run_matrix(
+            bank,
+            resolved_scenarios,
+            args.repeats,
+            dry_run=args.dry_run,
+            limit=args.limit,
+            task_ids=(
+                [t.strip() for t in args.tasks.split(",") if t.strip()]
+                if args.tasks is not None
+                else None
+            ),
+            ledger_dir=ledger_dir,
+            max_budget_usd=spawn_cap,
+            max_run_usd=args.max_run_usd,
+            include_holdout=args.include_holdout,
+            skip_arming_check=args.skip_arming_check,
+            skip_bank_validation=args.skip_bank_validation,
+            run_lock=run_lock,
+            resume_cmd=_resume_command(args, spawn_cap),
+            interleave=getattr(args, "interleave", False),
+            data_root=data_root,
+            index_cmd=_index_command(args),
+            repeats_per_cell=plan.repeats_per_cell,
+            credential_store=credential_store,
+        )
 
     # --- Run lock: one paid matrix per bank at a time (FATH-B53) --------------
     # A dry run spawns nothing and consumes no seat, so it queues for nothing.

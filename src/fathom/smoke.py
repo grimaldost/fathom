@@ -86,6 +86,7 @@ from fathom.credentials import (
     _CRED_REFRESH_EXPIRES_AT,
     CredentialStatus,
     CredentialStore,
+    WriteBack,
     read_credential_status,
 )
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
@@ -293,6 +294,47 @@ def assert_credential_live(
             f"{shape}; less than the {_hms(min_ttl_s)} this gate requires before spend; {reauth}",
         )
     return SmokeResult(name, True, shape)
+
+
+# What to do when the seat's access token has expired before a spend starts (T53b).
+ACCESS_TOKEN_CURE = (
+    "run any claude command once (for example `claude -p hi`), so the seat refreshes its "
+    "own credential in place, then re-run"
+)
+ACCESS_TOKEN_CHECK = "seat's access token has not expired (free, no spawn)"
+
+
+def assert_access_token_unexpired(
+    status: CredentialStatus, *, now_s: float | None = None
+) -> SmokeResult:
+    """The seat's access token has not expired yet, so no spawn starts by refreshing it.
+
+    Each spawn runs on a copy of the seat's credential. A spawn that meets an expired
+    access token refreshes it inside the copy, the server rotates the refresh token, and
+    the seat's own file keeps the spent one. The run writes the newer pair back when it
+    ends (:func:`fathom.credentials.write_back_to_seat`), but that write is skipped when
+    another session changed the seat meanwhile, so a spend does not start by spending the
+    seat's refresh token at all (T53b, option 2). :func:`assert_credential_live` still
+    judges the refresh window; this check judges only the access token.
+    """
+    if not status.readable:
+        return SmokeResult(
+            ACCESS_TOKEN_CHECK, False, "the credential could not be read", skipped=True
+        )
+    if status.expires_at_ms is None:
+        return SmokeResult(
+            ACCESS_TOKEN_CHECK, True, f"the credential carries no {_CRED_EXPIRES_AT} to judge"
+        )
+    now = time.time() if now_s is None else now_s
+    left = status.expires_at_ms / 1000.0 - now
+    if left <= 0:
+        return SmokeResult(
+            ACCESS_TOKEN_CHECK,
+            False,
+            "the seat's access token has expired; the first spawn would refresh it inside "
+            "a copy and spend the seat's refresh token; " + ACCESS_TOKEN_CURE,
+        )
+    return SmokeResult(ACCESS_TOKEN_CHECK, True, f"access {_hms(left)}")
 
 
 def assert_isolated_config_is_credential_only(contents: list[str]) -> SmokeResult:
@@ -686,6 +728,18 @@ def run_smoke(
             probes, force_fail=force_fail, include_engine=include_engine, out=out, now_s=now_s
         )
     finally:
+        # Probes that carried a copy of the credential hand a refreshed pair back to the
+        # seat's file (T53b) before the copy is removed. Optional, like ``close``.
+        give_back = getattr(probes, "return_credential", None)
+        if callable(give_back):
+            _out = out if out is not None else sys.stdout
+            try:
+                result = give_back()
+            except Exception as exc:
+                print(f"credential: write-back raised {type(exc).__name__}", file=_out)
+            else:
+                if result is not None and result.notable:
+                    print(f"credential: {result.detail}", file=_out)
         # Probes that carry a copy of the credential remove it here, however the gate
         # ends. ``close`` is optional, not part of SmokeProbes, so a stub needs none.
         close = getattr(probes, "close", None)
@@ -706,10 +760,26 @@ def _run_smoke(
 
     # Check 0, first and free: every group below it reads a spawn, and a spawn under
     # a dead credential cannot prove anything the groups below claim to prove.
-    results += _guard(
-        "credential pre-flight",
-        lambda: [assert_credential_live(probes.credential_status(), now_s=now_s)],
-    )
+    def _credential() -> list[SmokeResult]:
+        status = probes.credential_status()
+        live = assert_credential_live(status, now_s=now_s)
+        if not live.ok:
+            # A dead seat's cure is a new login, which the check above names; the cure
+            # for an expired access token would mislead here.
+            access = SmokeResult(
+                ACCESS_TOKEN_CHECK, False, "not judged: the check above failed", skipped=True
+            )
+        else:
+            access = assert_access_token_unexpired(status, now_s=now_s)
+        return [live, access]
+
+    results += _guard("credential pre-flight", _credential)
+    # The one check that stops the gate: a spawn under an expired access token would spend
+    # the seat's refresh token (T53b), so nothing below it runs.
+    if any(r.name == ACCESS_TOKEN_CHECK and not r.ok and not r.skipped for r in results):
+        code = _report(results, _out)
+        print("REFUSING TO SMOKE: no spawn was started.", file=_out)
+        return code
 
     # Operational, free, spawn-free — and it ships in the same release as the lock it
     # checks: an operational check ships alongside its own mechanism, not after it.
@@ -767,6 +837,11 @@ def _run_smoke(
             )
         )
 
+    return _report(results, _out)
+
+
+def _report(results: list[SmokeResult], _out: TextIO) -> int:
+    """Print each result and the verdict line; 0 only when every check was proven."""
     for r in results:
         print(f"[{_label(r)}] {r.name}\n        {r.detail}", file=_out)
 
@@ -967,8 +1042,9 @@ class RealProbes:
     newest (FATH-B55): when the first spawn refreshes an expired access token, the server
     spends the seat file's refresh token, and a spawn copied from the seat's file after
     that dies on auth. With no store given, the probes make one of their own and
-    :meth:`close` removes it; :func:`run_smoke` calls :meth:`close`. The seat's own file
-    is never written.
+    :meth:`close` removes it; :func:`run_smoke` calls :meth:`return_credential`, which
+    writes a newer pair back to the seat's own file under the guard of
+    :func:`fathom.credentials.write_back_to_seat` (T53b), and then :meth:`close`.
     """
 
     def __init__(
@@ -996,6 +1072,11 @@ class RealProbes:
             CredentialStore(real_config_dir) if credential_store is None else credential_store
         )
         self._spawn = spawn
+
+    def return_credential(self) -> WriteBack | None:
+        """Write the carried credential back to the seat (T53b) if these probes made the
+        store; a handed store belongs to its caller, who writes it back."""
+        return self.credential_store.write_back() if self._owns_store else None
 
     def close(self) -> None:
         """Remove the carried credential if these probes made it; a handed store stays."""

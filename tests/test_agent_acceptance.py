@@ -1537,6 +1537,76 @@ class GitStateTests(unittest.TestCase):
             self.assertEqual(acc.changed_ignored(before, after), ["report/scorecard-a.md"])
 
 
+def _seat_text(expires_at_s: float, refresh_expires_at_s: float, tag: str) -> str:
+    return json.dumps(
+        {
+            "claudeAiOauth": {
+                "accessToken": f"access-{tag}",
+                "refreshToken": f"refresh-{tag}",
+                "expiresAt": int(expires_at_s * 1000),
+                "refreshTokenExpiresAt": int(refresh_expires_at_s * 1000),
+            },
+            "otherKey": tag,
+        }
+    )
+
+
+class SubjectCredentialWriteBackTests(unittest.TestCase):
+    """A subject that refreshed the credential in its own configuration directory hands
+    the newer pair back to the seat (T53b), under the same guard as a run."""
+
+    def setUp(self) -> None:
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.config = self.tmp / "config"
+        self.seat = self.config / acc.CREDENTIAL_FILE
+        now = time.time()
+        _write(self.seat, _seat_text(now + 3600, now + 86400, "seat"))
+        self.later = (now + 7200, now + 2 * 86400)
+
+    def _preflight(self, *, touch_seat: bool = False) -> str:
+        def refreshing_subject(*_args: object, transcript: Path, env, **_kw) -> acc.SubjectRun:
+            held = Path(env["CLAUDE_CONFIG_DIR"]) / acc.CREDENTIAL_FILE
+            held.write_text(_seat_text(*self.later, "refreshed"), encoding="utf-8")
+            if touch_seat:
+                self.seat.write_text(_seat_text(*self.later, "elsewhere"), encoding="utf-8")
+            lines = stream_lines([INIT, _final()], malformed=False)
+            transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return acc.SubjectRun(exit_code=0, timed_out=False, wall_s=0.3)
+
+        out = io.StringIO()
+        with (
+            mock.patch.object(acc, "run_subject", refreshing_subject),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(out),
+        ):
+            acc.run_preflight(
+                claude="claude",
+                out=self.tmp / "out",
+                model="m",
+                effort="low",
+                plugin_dirs=[],
+                config_mode="isolated",
+                real_config=self.config,
+                data_root=None,
+                workspace_base=self.tmp,
+            )
+        return out.getvalue()
+
+    def test_the_refreshed_pair_is_written_back_to_the_seat(self) -> None:
+        printed = self._preflight()
+        seat = json.loads(self.seat.read_text(encoding="utf-8"))
+        self.assertEqual(seat["claudeAiOauth"]["refreshToken"], "refresh-refreshed", printed)
+        self.assertEqual(seat["otherKey"], "seat")
+        self.assertIn("written back", printed)
+
+    def test_a_seat_changed_meanwhile_is_left_untouched(self) -> None:
+        printed = self._preflight(touch_seat=True)
+        seat = json.loads(self.seat.read_text(encoding="utf-8"))
+        self.assertEqual(seat["claudeAiOauth"]["refreshToken"], "refresh-elsewhere", printed)
+        self.assertIn("left as it is", printed)
+
+
 @unittest.skipUnless(shutil.which("git"), "needs git")
 class DryRunTests(unittest.TestCase):
     """The harness end to end with --dry-run: workspaces prepared, nothing spawned."""
@@ -1596,6 +1666,45 @@ class DryRunTests(unittest.TestCase):
         clones = list(self.workspaces.glob("ws-*/project/data"))
         self.assertEqual(len(clones), 2)  # S1 and S3
         return clones[0]
+
+    def test_an_expired_seat_access_token_refuses_before_any_subject(self) -> None:
+        """Isolated mode copies the seat's credential into each subject, so an access token
+        that has already expired would be refreshed in a copy and spend the seat's refresh
+        token; the harness refuses and prints the cure (T53b)."""
+        now = time.time()
+        _write(
+            self.config / acc.CREDENTIAL_FILE,
+            _seat_text(now - 3600, now + 86400, "expired"),
+        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        argv = [
+            "--preflight-only",
+            "--data-root",
+            str(self.root),
+            "--out",
+            str(self.out),
+            "--workspace-root",
+            str(self.workspaces),
+            "--plugin-dir",
+            str(self.plugin),
+        ]
+        env = {"CLAUDE_CONFIG_DIR": str(self.config)}
+        real, tmp = acc.ancestor_instructions, Path(self._tmp.name).resolve()
+
+        def inside_test(directory: Path) -> list[Path]:
+            return [p for p in real(directory) if tmp in p.resolve().parents]
+
+        with (
+            mock.patch.object(acc, "ancestor_instructions", side_effect=inside_test),
+            mock.patch.object(acc, "run_subject", side_effect=AssertionError("spawned")),
+            mock.patch.dict(os.environ, env),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            code = acc.main(argv)
+        self.assertEqual(code, acc.EXIT_ENVIRONMENT, stderr.getvalue())
+        self.assertIn("access token has expired", stderr.getvalue())
+        self.assertIn("refreshes its own credential in place", stderr.getvalue())
 
     def test_a_dry_run_removes_what_it_prepared_unless_asked_to_keep_it(self) -> None:
         """A clone workspace holds a copy of the data root, under a root other local

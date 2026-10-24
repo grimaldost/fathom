@@ -120,9 +120,9 @@ and the CLI refreshes it inside that spawn. The sequential half is fixed (0.12.0
 `fathom run` keeps one copy of the credential for the run, every spawn copies from it, and a
 spawn that refreshed hands the newer credential back, so the next spawn no longer starts from a
 spent refresh token. `fathom smoke` now carries the credential the same way across its
-spawns (0.12.0). Still open: the seat's own file is not written, so after a run that
-refreshed it holds a spent refresh token until the next login (writing it back is the owner's
-call); two spawns running at once inside one series engine trial can still redeem the same
+spawns (0.12.0). The seat's own file is written back when a run, a smoke or an
+acceptance subject ends, under a guard, and no spend starts on an expired access token
+(T53b, Unreleased; ADR-0004's 2026-10-24 amendment). Still open: two spawns running at once inside one series engine trial can still redeem the same
 refresh token; and a refresh token that reaches its own end of life mid-run still stops the
 matrix. Change for the rest: document the chunked, resumable run shape in the cost section
 operators read (resume is free, so re-invoking per block costs nothing), and add a `--chunk N`

@@ -6,6 +6,25 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A run, a smoke or an acceptance subject no longer leaves the seat's login dead (T53b,
+  FATH-B55).** A spawn that refreshes an expired access token does it inside its copy of
+  the credential, and the server then rotates the refresh token, so the seat's own
+  `.credentials.json` kept a spent refresh token and the next `claude` asked for `/login`.
+  When `fathom run`, `fathom smoke` or a subject of `tools/agent_acceptance.py` ends, the
+  newest pair is now written back to the seat's file, only when it is newer by both
+  `expiresAt` and `refreshTokenExpiresAt` and the seat's file is byte-identical to what was
+  copied from it. The write replaces the `claudeAiOauth` block, keeps every other key of
+  the seat's file, and goes through a temporary file in the same directory and one rename.
+  When another session changed the seat's file meanwhile, it is left as it is and a
+  `credential:` line says so. Separately, `fathom run`, `fathom smoke` and the acceptance
+  harness in isolated mode now refuse to start while the seat's access token has already
+  expired, since the first spawn would spend the seat's refresh token; the message gives the
+  cure (run any `claude` command once, so the seat refreshes its own file in place).
+  `--skip-credential-check` skips the refusal for `fathom run`. ADR-0004 gains a dated
+  amendment for the write.
+
 ## [0.12.0] - 2026-10-24
 
 A minor release, pre-1.0: a scenario file that does not load now refuses `fathom run`,

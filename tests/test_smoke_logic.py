@@ -40,6 +40,7 @@ from fathom.smoke import (
     MEMORY_INSIDE_CANARY,
     CredentialStatus,
     SmokeResult,
+    assert_access_token_unexpired,
     assert_activity_detected,
     assert_authed_completes,
     assert_canary_skill_absent,
@@ -463,6 +464,21 @@ class TestCredentialPreflight(unittest.TestCase):
         r = assert_credential_live(dead, now_s=_NOW_S)
         self.assertFalse(r.ok, "an expired refresh token is a dead seat, not a warning")
         self.assertIn("re-authenticate", r.detail.lower())
+
+    def test_an_expired_access_token_refuses_with_the_cure(self):
+        # T53b: the first spawn would refresh it inside a copy and spend the seat's
+        # refresh token.
+        expired = _live_credential(at=_NOW_S, expires_at_ms=int((_NOW_S - 60) * 1000))
+        r = assert_access_token_unexpired(expired, now_s=_NOW_S)
+        self.assertFalse(r.ok)
+        self.assertFalse(r.skipped)
+        self.assertIn("refreshes its own credential in place", r.detail)
+        self.assertTrue(assert_access_token_unexpired(_live_credential(at=_NOW_S), now_s=_NOW_S).ok)
+
+    def test_an_unreadable_credential_is_not_judged_for_its_access_token(self):
+        r = assert_access_token_unexpired(CredentialStatus(found=True, readable=False))
+        self.assertFalse(r.ok)
+        self.assertTrue(r.skipped)
 
     def test_expired_access_token_with_live_refresh_passes(self):
         # The CLI refreshes on demand; a short-lived access token is normal.
@@ -891,11 +907,11 @@ class TestRunSmoke(unittest.TestCase):
         self.assertNotIn("[FAIL]", output)
 
     def test_reports_every_check(self):
-        # 11 checks when engine included: credential, concurrency, config, authed,
-        # activity, deny, injection, memory, mount-treatment, mount-control, engine.
+        # 12 checks when engine included: credential, access token, concurrency, config,
+        # authed, activity, deny, injection, memory, mount-treatment, mount-control, engine.
         _code, output = self._run(StubProbes())
-        self.assertEqual(output.count("[PASS]"), 11, output)
-        self.assertIn("(11/11 checks)", output)
+        self.assertEqual(output.count("[PASS]"), 12, output)
+        self.assertIn("(12/12 checks)", output)
 
     # -- The hollow checks, and the headline that hid them ---------------
 
@@ -995,12 +1011,20 @@ class TestRunSmoke(unittest.TestCase):
         code, _ = self._run(probes)
         self.assertEqual(code, 1)
 
+    def test_an_expired_access_token_stops_the_gate_before_any_spawn(self):
+        expired = _live_credential(at=_NOW_S, expires_at_ms=int((_NOW_S - 60) * 1000))
+        probes = StubProbes(credential=expired)
+        code, output = self._run(probes, now_s=_NOW_S)
+        self.assertEqual(code, 1)
+        self.assertEqual(probes.calls, ["credential"])
+        self.assertIn("REFUSING TO SMOKE", output)
+
     def test_include_engine_false_skips_engine(self):
         probes = StubProbes()
         code, output = self._run(probes, include_engine=False)
         self.assertEqual(code, 0)
         self.assertNotIn("engine", probes.calls, "engine probe must not run when excluded")
-        self.assertEqual(output.count("[PASS]"), 10)
+        self.assertEqual(output.count("[PASS]"), 11)
 
     def test_order_credential_config_authed_deny_injection_mount_engine(self):
         probes = StubProbes()

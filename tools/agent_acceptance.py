@@ -63,7 +63,13 @@ from fathom.adapters.claude_cli import (
     hidden_from_children,
     terminate_process_tree,
 )
-from fathom.smoke import forge_claude_shim, read_argv_log
+from fathom.credentials import (
+    WriteBack,
+    copy_credential,
+    read_credential_status,
+    write_back_to_seat,
+)
+from fathom.smoke import assert_access_token_unexpired, forge_claude_shim, read_argv_log
 
 ENGINE_ROOT = Path(__file__).resolve().parents[1]
 SCENARIOS_FILE = Path(__file__).resolve().parent / "agent_acceptance_scenarios.toml"
@@ -586,16 +592,27 @@ def default_workspace_base(temp: Path, environ: Mapping[str, str]) -> Path | Non
     return None
 
 
-def make_subject_config(real_config: Path, dest: Path) -> bool:
+def make_subject_config(real_config: Path, dest: Path) -> str | None:
     """Fill *dest* the way fathom fills a trial spawn's configuration directory: with the
     credential file and nothing else. Its path names nothing (the engine's own prefix would
-    name fathom). Returns whether the credential was there to copy."""
+    name fathom). Returns the digest of the credential copied, which
+    :func:`return_subject_credential` guards the write-back with, or ``None`` when there
+    was none to copy."""
     dest.mkdir(parents=True, exist_ok=True)
     source = real_config / CREDENTIAL_FILE
     if not source.is_file():
-        return False
-    shutil.copy2(source, dest / CREDENTIAL_FILE)
-    return True
+        return None
+    return copy_credential(source, dest / CREDENTIAL_FILE)
+
+
+def return_subject_credential(config_dir: Path, real_config: Path, copied: str | None) -> WriteBack:
+    """Hand a credential the subject refreshed back to the seat's file (T53b), as a run
+    does: only when it is newer by both expiry timestamps and the seat's file is still
+    what was copied. Says so on stderr when the seat was written or was left as it is."""
+    result = write_back_to_seat(config_dir / CREDENTIAL_FILE, real_config / CREDENTIAL_FILE, copied)
+    if result.notable:
+        print(f"credential: {result.detail}", file=sys.stderr)
+    return result
 
 
 def install_claude_stub(directory: Path) -> Path:
@@ -3003,8 +3020,9 @@ def run_scenario(
         model=model, budget_usd=budget_usd, effort=effort, plugin_dirs=prepared.plugin_dirs
     )
     transcript = prepared.directory / "transcript.jsonl"
+    copied = None
     if prepared.config_dir is not None:
-        make_subject_config(real_config, prepared.config_dir)
+        copied = make_subject_config(real_config, prepared.config_dir)
     try:
         run = run_subject(
             claude,
@@ -3019,6 +3037,7 @@ def run_scenario(
         )
     finally:
         if prepared.config_dir is not None:
+            return_subject_credential(prepared.config_dir, real_config, copied)
             cleanup_dir(str(prepared.config_dir))
     analysis = analyze(read_transcript(transcript), doc_roots=prepared.plugin_dirs)
     visibility = assess_visibility(analysis, plugin_commands(fathom_plugins(analysis.init)))
@@ -3119,8 +3138,9 @@ def run_preflight(
         plugin_dirs=plugin_dirs,
     )
     transcript = directory / "transcript.jsonl"
+    copied = None
     if config_dir is not None:
-        make_subject_config(real_config, config_dir)
+        copied = make_subject_config(real_config, config_dir)
     try:
         run = run_subject(
             claude,
@@ -3134,6 +3154,7 @@ def run_preflight(
         )
     finally:
         if config_dir is not None:
+            return_subject_credential(config_dir, real_config, copied)
             cleanup_dir(str(config_dir))
     analysis = analyze(read_transcript(transcript), doc_roots=plugin_dirs)
     visibility = assess_visibility(analysis, plugin_commands(fathom_plugins(analysis.init)))
@@ -3439,6 +3460,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             file=sys.stderr,
         )
         return EXIT_ENVIRONMENT
+    if args.config == "isolated" and not args.dry_run:
+        # A subject started on an expired access token refreshes it inside its copy and
+        # spends the seat's refresh token (T53b), so no subject starts on one.
+        access = assert_access_token_unexpired(
+            read_credential_status(real_config / CREDENTIAL_FILE)
+        )
+        if not access.ok and not access.skipped:
+            print(f"error: {access.detail}", file=sys.stderr)
+            return EXIT_ENVIRONMENT
 
     if args.preflight_only:
         if args.dry_run:
