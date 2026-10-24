@@ -6,6 +6,18 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-24
+
+A minor release, pre-1.0: a scenario file that does not load now refuses `fathom run`,
+`fathom run --dry-run` and `fathom verify-arming` where they used to skip it with a warning, and
+a scorecard, the `--per-trial` view and the calibration cost views mark an unknown cost with a
+`≥` floor and a note, so a data root or caller that relied on the old behaviour needs a change.
+The release serves long matrices and honest accounting: a matrix and `fathom smoke` keep one
+credential copy across their spawns instead of dying on a spent refresh token, a run with no
+recorded cost no longer counts as free, and a broken scenario file can no longer leave a
+control-only ledger. The repository also adopts railform for CI, hooks and the commit lane;
+nothing in the installed package changes with that.
+
 ### Changed
 
 - **The repository adopts railform, the shared CI and commit-lane standard, pinned at one
