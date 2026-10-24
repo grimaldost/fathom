@@ -29,14 +29,14 @@ and its tests need no paid spawns.
 keep the latest trial per cell, but Economy, Efficiency and Arm Health sum the runs of every hash
 that carries the name. Re-running an arm after changing its injected content (a new hash, the
 same name) is the normal shape of a re-validation, and it averages the new trials' economy with
-the old ones, which can make a healthy arm look truncated. Fixed (Unreleased): runs are keyed
+the old ones, which can make a healthy arm look truncated. Fixed (0.12.0): runs are keyed
 by `config_hash`, and a cell reads the runs of the hash of the trial it keeps, so Economy,
 Efficiency, Arm Health and the calibration cost views read the configuration the pass rate
 reads. A name that carries more than one hash in the view gets one line in the scorecard naming
 the hash prefixes.
 
 **FATH-B50 — A scenario that fails to load is dropped with a warning, and the matrix runs
-without it.** *(S)* **Fixed (Unreleased), without the flag.**
+without it.** *(S)* **Fixed (0.12.0), without the flag.**
 `fathom run` printed `warning: skipping scenario …` and planned the arms that did load. A treatment
 arm whose plugin tree is missing therefore dropped out of a paid matrix, leaving a control-only
 ledger and a scorecard with no treatment in it. The arming pre-flight could not catch this, because
@@ -94,7 +94,7 @@ A run row whose spawn consumed tokens but reported no cost is written with `cost
 and `cost_usd_est = 0.0`. The adapter warns when it writes such a row, but `report.py` sums
 `cost_usd_est` without reading `cost_source`. An arm's USD, and any comparison built on it, then
 reads low with nothing on the page saying so. `calibration.py` (`_arm_cost`) sums the same field the
-same way, so the calibration views count the row as free too. Fixed (Unreleased): a run with
+same way, so the calibration views count the row as free too. Fixed (0.12.0): a run with
 `cost_source = "none"` or with no `cost_usd_est` key has an unknown cost (`fathom.ledger.run_cost`).
 Economy, the per-trial view and the calibration cost views sum the known costs, mark a sum that
 left a run out as a floor, and state per arm on how many runs a cost was recorded. FATH-B63, the
@@ -116,11 +116,11 @@ outside the data root or is untracked.
 
 **FATH-B55 — A matrix longer than the credential's life only survives if it is chunked.** *(M)*
 Each spawn copies the shared OAuth credential into a throwaway `CLAUDE_CONFIG_DIR` (ADR-0004),
-and the CLI refreshes it inside that spawn. The sequential half is fixed (Unreleased):
+and the CLI refreshes it inside that spawn. The sequential half is fixed (0.12.0):
 `fathom run` keeps one copy of the credential for the run, every spawn copies from it, and a
 spawn that refreshed hands the newer credential back, so the next spawn no longer starts from a
 spent refresh token. `fathom smoke` now carries the credential the same way across its
-spawns (Unreleased). The seat's own file is written back when a run, a smoke or an
+spawns (0.12.0). The seat's own file is written back when a run, a smoke or an
 acceptance subject ends, under a guard, and no spend starts on an expired access token
 (T53b, Unreleased; ADR-0004's 2026-10-24 amendment). Still open: two spawns running at once inside one series engine trial can still redeem the same
 refresh token; and a refresh token that reaches its own end of life mid-run still stops the
