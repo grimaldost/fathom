@@ -122,7 +122,7 @@ spawn that refreshed hands the newer credential back, so the next spawn no longe
 spent refresh token. `fathom smoke` now carries the credential the same way across its
 spawns (0.12.0). The seat's own file is written back when a run, a smoke or an
 acceptance subject ends, under a guard, and no spend starts on an expired access token
-(T53b, Unreleased; ADR-0004's 2026-10-24 amendment). Still open: two spawns running at once inside one series engine trial can still redeem the same
+(T53b, 0.12.1; ADR-0004's 2026-10-24 amendment). Still open: two spawns running at once inside one series engine trial can still redeem the same
 refresh token; and a refresh token that reaches its own end of life mid-run still stops the
 matrix. Change for the rest: document the chunked, resumable run shape in the cost section
 operators read (resume is free, so re-invoking per block costs nothing), and add a `--chunk N`
