@@ -6,6 +6,13 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-10-24
+
+A patch release: it fixes a defect of 0.12.0 and adds no option, command or ledger field. A run, a
+smoke or an acceptance subject now writes a refreshed credential back to the seat's own
+file instead of leaving its refresh token spent, and `fathom run`, `fathom smoke` and the
+acceptance harness now refuse to start while the seat's access token has expired.
+
 ### Fixed
 
 - **A run, a smoke or an acceptance subject no longer leaves the seat's login dead (T53b,
