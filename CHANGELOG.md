@@ -34,6 +34,22 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ### Fixed
 
+- **A run, a smoke or an acceptance subject no longer leaves the seat's login dead (T53b,
+  FATH-B55).** A spawn that refreshes an expired access token does it inside its copy of
+  the credential, and the server then rotates the refresh token, so the seat's own
+  `.credentials.json` kept a spent refresh token and the next `claude` asked for `/login`.
+  When `fathom run`, `fathom smoke` or a subject of `tools/agent_acceptance.py` ends, the
+  newest pair is now written back to the seat's file, only when it is newer by both
+  `expiresAt` and `refreshTokenExpiresAt` and the seat's file is byte-identical to what was
+  copied from it. The write replaces the `claudeAiOauth` block, keeps every other key of
+  the seat's file, and goes through a temporary file in the same directory and one rename.
+  When another session changed the seat's file meanwhile, it is left as it is and a
+  `credential:` line says so. Separately, `fathom run`, `fathom smoke` and the acceptance
+  harness in isolated mode now refuse to start while the seat's access token has already
+  expired, since the first spawn would spend the seat's refresh token; the message gives the
+  cure (run any `claude` command once, so the seat refreshes its own file in place).
+  `--skip-credential-check` skips the refusal for `fathom run`. ADR-0004 gains a dated
+  amendment for the write.
 - **A matrix no longer dies on auth once it outlives its first access token (FATH-B55).**
   Each spawn runs under a throwaway `CLAUDE_CONFIG_DIR` holding a copy of the credential,
   and the CLI refreshes an expired access token inside it. The server rotates the refresh
@@ -44,9 +60,8 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   engine trial and the arming probe copy from it, and a spawn that refreshed hands the newer
   credential back to it. It keeps whichever credential is newer by `expiresAt` and
   `refreshTokenExpiresAt` only, so a new login on the seat mid-run is picked up too; no
-  token is read, and the copy is removed when the run ends. The seat's own file is not
-  written, so after a run that refreshed, that file still holds the spent refresh token
-  until the CLI is logged in again. Two spawns running at once inside one series engine
+  token is read, and the copy is removed when the run ends. The seat's own file is now
+  written back when the run ends (see the next entry). Two spawns running at once inside one series engine
   trial can still redeem the same refresh token; this change does not address that.
 - **A run with no recorded cost no longer counts as free, and Economy no longer pools
   configurations that share an arm name (FATH-B79, FATH-B49).** A run row with
@@ -90,7 +105,7 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   an expired access token every later spawn started from a spent refresh token and failed
   on auth, and the seat's login was left dead. The smoke probes now carry one copy of the
   credential across their spawns, as `fathom run` does (`CredentialStore`), and remove it
-  when the gate ends. The seat's own file is still not written.
+  when the gate ends. The seat's own file is written back as for a run (see below).
 - **The default-deny check in `fathom smoke` has room to attempt the write, and its SKIP
   line says why.** The deny probe ran with a cap of 3 turns, and a model that spent two on
   ToolSearch hit the cap before it tried the Write; the cap is now 6. A check whose spawn

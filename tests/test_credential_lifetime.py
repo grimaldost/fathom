@@ -10,6 +10,11 @@ pair is written into the spawn's directory. Before this fix that directory was d
 with the new pair in it, so the next spawn started again from the seat's original file,
 whose refresh token was already spent, and died on auth part-way through the matrix.
 
+When the run or the smoke ends, the newer pair is written back to the seat's own file
+(T53b), but only when it is newer by both expiry timestamps and the seat's file is
+byte-identical to what was copied; and neither starts a spend while the seat's access token
+has already expired.
+
 No real spawns and no real credential: the subprocess boundary is a stub that plays a
 rotating OAuth server against a simulated clock, and ``Path.home`` points at a temporary
 directory holding a synthetic credential file.
@@ -35,9 +40,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 os.environ.pop("FATHOM_HOME", None)
 
+from fathom import credentials
 from fathom.adapters.base import ExitStatus
 from fathom.adapters.claude_cli import ClaudeCliRunner, cleanup_dir
-from fathom.credentials import CredentialStore
+from fathom.credentials import CredentialStore, write_back_to_seat
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
 from fathom.strategies.series import SeriesExecutor
 
@@ -193,11 +199,61 @@ class MatrixOutlivesAccessTokenTests(unittest.TestCase):
         # time with the refresh token the previous refresh issued.
         self.assertEqual(self.seat.refreshes, 3)
 
-    def test_the_seat_file_is_left_as_it_was(self):
-        """The run carries the refreshed credential in a copy of its own; writing it back
-        to the seat's file is a separate decision this change does not take."""
+    def test_the_seat_ends_with_the_live_pair(self):
+        """The problem itself (T53): after a run that refreshed, the seat's own file held a
+        spent refresh token and the owner's next ``claude`` asked for /login. Now the run
+        writes the newer pair back, so a spawn straight from the seat's file authenticates."""
+        code, out = self._run(repeats=3)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.seat.refreshes, 2, out)
+        oauth = json.loads(self.real_credential.read_text(encoding="utf-8"))["claudeAiOauth"]
+        self.assertIn(oauth["refreshToken"], self.seat.live_refresh, out)
+        self.assertIn("written back", out)
+        # The owner's next session, from the seat's own directory, after the access token
+        # has expired once more.
+        self.seat.now_s += 2 * ACCESS_LIFE_S
+        failures = self.seat.auth_failures
+        self.seat.spawn(
+            ["claude"],
+            input="",
+            timeout=1,
+            env={"CLAUDE_CONFIG_DIR": str(self.home / ".claude")},
+            cwd=None,
+        )
+        self.assertEqual(self.seat.auth_failures, failures)
+
+    def test_a_seat_changed_during_the_run_is_left_as_it_is_and_said_so(self):
+        """Another session wrote the seat's file after the run last copied it: the run
+        leaves that file alone and says so (option 2 of T53b, the fallback)."""
+        changed = json.dumps({**json.loads(self.real_credential.read_text()), "touched": 1})
+        spawn = self.seat.spawn
+
+        def spawn_then_touch_the_seat(argv, *, input, timeout, env, cwd):
+            result = spawn(argv, input=input, timeout=timeout, env=env, cwd=cwd)
+            self.real_credential.write_text(changed, encoding="utf-8")
+            return result
+
+        self.seat.spawn = spawn_then_touch_the_seat
+        code, out = self._run(repeats=3)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.real_credential.read_text(encoding="utf-8"), changed)
+        self.assertIn("changed while the run went on", out)
+        self.assertIn("left as it is", out)
+
+    def test_an_expired_seat_access_token_refuses_the_run_with_the_cure(self):
+        """Option 2 of T53b: the first spawn would redeem the seat's refresh token inside a
+        copy, so the run does not start; running any claude command once lets the seat
+        refresh its own file in place."""
+        self.seat.now_s = time.time() - 2 * ACCESS_LIFE_S
+        self.real_credential.write_text(json.dumps(self.seat.issue()), encoding="utf-8")
         before = self.real_credential.read_bytes()
-        self._run(repeats=3)
+        code, out = self._run(repeats=2)
+        from fathom.cli import EXIT_CREDENTIAL
+
+        self.assertEqual(code, EXIT_CREDENTIAL, out)
+        self.assertEqual(self.seat.spawns, 0, out)
+        self.assertIn("access token has expired", out)
+        self.assertIn("refreshes its own credential in place", out)
         self.assertEqual(self.real_credential.read_bytes(), before)
 
     def test_no_copy_of_the_credential_outlives_the_run(self):
@@ -362,6 +418,181 @@ class CredentialStoreTests(unittest.TestCase):
         store.close()
 
 
+def _seat_text(expires_at_s: float, refresh_expires_at_s: float, tag: str) -> str:
+    """A seat file with keys besides the OAuth block, which a write-back must keep."""
+    data = json.loads(_credential(expires_at_s, refresh_expires_at_s, tag))
+    data["mcpOAuth"] = {"server": {"accessToken": f"mcp-{tag}"}}
+    data["otherKey"] = tag
+    return json.dumps(data, indent=2)
+
+
+class SeatWriteBackTests(unittest.TestCase):
+    """:func:`write_back_to_seat` on fake files under a temporary home (T53b)."""
+
+    def setUp(self) -> None:
+        self.home = Path(tempfile.mkdtemp(prefix="fake_home_"))
+        self.addCleanup(cleanup_dir, str(self.home))
+        self.seat = self.home / ".claude" / CREDENTIAL_FILE
+        self.seat.parent.mkdir()
+        self.seat.write_text(_seat_text(100, 1000, "seat"), encoding="utf-8")
+        self.copy_dir = self.home / "copy"
+        self.copy_dir.mkdir()
+        self.copy = self.copy_dir / CREDENTIAL_FILE
+        self.copied = credentials.copy_credential(self.seat, self.copy)
+
+    def _copy_becomes(self, expires_at_s: float, refresh_expires_at_s: float, tag: str) -> None:
+        self.copy.write_text(_seat_text(expires_at_s, refresh_expires_at_s, tag), encoding="utf-8")
+
+    def _seat(self) -> dict:
+        return json.loads(self.seat.read_text(encoding="utf-8"))
+
+    def test_the_copy_records_the_digest_of_what_it_copied(self):
+        self.assertEqual(self.copy.read_bytes(), self.seat.read_bytes())
+        self.assertEqual(self.copied, credentials.file_digest(self.seat))
+
+    def test_a_newer_copy_is_written_back_when_the_seat_is_unchanged(self):
+        self._copy_becomes(200, 2000, "refreshed")
+        result = write_back_to_seat(self.copy, self.seat, self.copied)
+        self.assertTrue(result.written, result.detail)
+        self.assertEqual(result.outcome, "written")
+        seat = self._seat()
+        self.assertEqual(seat["claudeAiOauth"]["refreshToken"], "refresh-refreshed")
+        # The seat's other keys are the seat's, not the copy's.
+        self.assertEqual(seat["mcpOAuth"], {"server": {"accessToken": "mcp-seat"}})
+        self.assertEqual(seat["otherKey"], "seat")
+        self.assertEqual(list(seat), ["claudeAiOauth", "mcpOAuth", "otherKey"])
+        self.assertEqual(sorted(os.listdir(self.seat.parent)), [CREDENTIAL_FILE])
+
+    def test_a_seat_changed_since_the_copy_is_left_untouched_and_reported(self):
+        self._copy_becomes(200, 2000, "refreshed")
+        changed = _seat_text(100, 1000, "seat").replace('"otherKey"', '"otherKey2"')
+        self.seat.write_text(changed, encoding="utf-8")
+        result = write_back_to_seat(self.copy, self.seat, self.copied)
+        self.assertFalse(result.written)
+        self.assertEqual(result.outcome, "seat-changed")
+        self.assertTrue(result.notable)
+        self.assertIn("left as it is", result.detail)
+        self.assertEqual(self.seat.read_text(encoding="utf-8"), changed)
+
+    def test_an_older_or_equal_copy_is_left_untouched(self):
+        before = self.seat.read_bytes()
+        cases = {
+            "equal": (100, 1000),
+            "older": (50, 500),
+            "newer access only": (200, 1000),
+            "newer refresh only": (100, 2000),
+        }
+        for label, (access, refresh) in cases.items():
+            with self.subTest(label):
+                self._copy_becomes(access, refresh, label)
+                result = write_back_to_seat(self.copy, self.seat, self.copied)
+                self.assertFalse(result.written)
+                self.assertEqual(result.outcome, "not-newer")
+                self.assertEqual(self.seat.read_bytes(), before)
+
+    def test_nothing_copied_means_nothing_written(self):
+        before = self.seat.read_bytes()
+        self._copy_becomes(200, 2000, "refreshed")
+        result = write_back_to_seat(self.copy, self.seat, None)
+        self.assertEqual(result.outcome, "nothing-to-write")
+        self.assertFalse(result.notable)
+        self.assertEqual(self.seat.read_bytes(), before)
+
+    def test_the_replace_is_atomic(self):
+        """The new file is written in full beside the seat's file and moved over it in one
+        rename; until that rename the seat's file is the old one, byte for byte."""
+        self._copy_becomes(200, 2000, "refreshed")
+        before = self.seat.read_bytes()
+        calls: list[tuple[Path, Path]] = []
+        real_replace = os.replace
+
+        def recording_replace(src, dst):
+            calls.append((Path(src), Path(dst)))
+            self.assertEqual(self.seat.read_bytes(), before)
+            self.assertEqual(Path(src).parent, self.seat.parent)
+            self.assertIn("refresh-refreshed", Path(src).read_text(encoding="utf-8"))
+            real_replace(src, dst)
+
+        with mock.patch.object(credentials.os, "replace", recording_replace):
+            result = write_back_to_seat(self.copy, self.seat, self.copied)
+        self.assertTrue(result.written, result.detail)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], self.seat)
+
+    def test_a_failed_replace_leaves_the_seat_and_no_temporary_file(self):
+        self._copy_becomes(200, 2000, "refreshed")
+        before = self.seat.read_bytes()
+
+        def failing_replace(src, dst):
+            raise PermissionError("locked")
+
+        with mock.patch.object(credentials.os, "replace", failing_replace):
+            result = write_back_to_seat(self.copy, self.seat, self.copied)
+        self.assertEqual(result.outcome, "failed")
+        self.assertTrue(result.notable)
+        self.assertEqual(self.seat.read_bytes(), before)
+        self.assertEqual(sorted(os.listdir(self.seat.parent)), [CREDENTIAL_FILE])
+
+    def test_no_credential_value_reaches_the_report(self):
+        self._copy_becomes(200, 2000, "refreshed")
+        for result in (
+            write_back_to_seat(self.copy, self.seat, "0" * 64),
+            write_back_to_seat(self.copy, self.seat, self.copied),
+        ):
+            for value in ("access-", "refresh-", "mcp-"):
+                self.assertNotIn(value, result.detail)
+
+
+class CredentialStoreWriteBackTests(unittest.TestCase):
+    """The run's carried copy hands its newest pair back to the seat (T53b)."""
+
+    def setUp(self) -> None:
+        self.real = Path(tempfile.mkdtemp(prefix="fake_real_cfg_"))
+        self.addCleanup(cleanup_dir, str(self.real))
+        self.spawn_dir = Path(tempfile.mkdtemp(prefix="fake_spawn_cfg_"))
+        self.addCleanup(cleanup_dir, str(self.spawn_dir))
+        self.seat_file = self.real / CREDENTIAL_FILE
+        self.seat_file.write_text(_credential(100, 1000, "seat"), encoding="utf-8")
+
+    def _spawn_leaves(self, text: str) -> None:
+        (self.spawn_dir / CREDENTIAL_FILE).write_text(text, encoding="utf-8")
+
+    def test_a_store_that_never_copied_writes_nothing(self):
+        before = self.seat_file.read_bytes()
+        with CredentialStore(self.real) as store:
+            self.assertEqual(store.write_back().outcome, "nothing-to-write")
+        self.assertEqual(self.seat_file.read_bytes(), before)
+
+    def test_the_refreshed_copy_is_written_back(self):
+        with CredentialStore(self.real) as store:
+            store.seed_dir()
+            self._spawn_leaves(_credential(200, 2000, "refreshed"))
+            store.absorb(self.spawn_dir)
+            self.assertTrue(store.write_back().written)
+        self.assertIn("refresh-refreshed", self.seat_file.read_text(encoding="utf-8"))
+
+    def test_a_seat_changed_after_the_last_copy_is_left_untouched(self):
+        with CredentialStore(self.real) as store:
+            store.seed_dir()
+            self._spawn_leaves(_credential(200, 2000, "refreshed"))
+            store.absorb(self.spawn_dir)
+            # Not newer, so the store does not take it; but it is not what was copied.
+            self.seat_file.write_text(_credential(100, 1000, "other"), encoding="utf-8")
+            result = store.write_back()
+        self.assertEqual(result.outcome, "seat-changed")
+        self.assertIn("refresh-other", self.seat_file.read_text(encoding="utf-8"))
+
+    def test_a_new_login_taken_mid_run_is_what_the_guard_compares_against(self):
+        with CredentialStore(self.real) as store:
+            store.seed_dir()
+            self.seat_file.write_text(_credential(300, 3000, "relogin"), encoding="utf-8")
+            store.seed_dir()  # the next spawn takes the newer seat file
+            self._spawn_leaves(_credential(400, 4000, "refreshed"))
+            store.absorb(self.spawn_dir)
+            self.assertTrue(store.write_back().written)
+        self.assertIn("refresh-refreshed", self.seat_file.read_text(encoding="utf-8"))
+
+
 class SeriesExecutorCarriesTheCredentialTests(unittest.TestCase):
     """The series engine's spawns share one config dir per trial; the store carries what
     they refreshed on to the next trial's dir."""
@@ -404,10 +635,11 @@ class SmokeCarriesTheCredentialTests(unittest.TestCase):
     """`fathom smoke` runs its spawns in sequence; each must start from the newest
     credential, as a run's spawns do.
 
-    The seat's access token has already expired, so the first spawn refreshes and the
-    seat's own file is left holding a refresh token the server has spent. Before smoke
-    carried a store, every spawn after the first started from that file and died on auth,
-    and the gate reported a dead seat it had itself killed. The check outcomes do not
+    The seat's access token expires during the first spawn, so the second spawn refreshes
+    and the seat's own file is left holding a refresh token the server has spent. Before
+    smoke carried a store, every spawn after that started from that file and died on auth,
+    and the gate reported a dead seat it had itself killed. When the gate ends, the newer
+    pair is written back to the seat (T53b). The check outcomes do not
     matter here (the stub's canned stream satisfies only some of them); what the seat saw
     does.
     """
@@ -418,8 +650,8 @@ class SmokeCarriesTheCredentialTests(unittest.TestCase):
         self.seat = RotatingOAuthSeat(start_s=1_000_000.0)
         self.seat_file = self.real / CREDENTIAL_FILE
         self.seat_file.write_text(json.dumps(self.seat.issue()), encoding="utf-8")
-        # The access token issued above is already past its expiry when smoke starts.
-        self.seat.now_s += 2 * ACCESS_LIFE_S
+        # The access token issued above is live when smoke starts and expires during the
+        # first spawn, so every spawn after the first has to refresh.
         self.seat_bytes = self.seat_file.read_bytes()
         self.refresh_seen: list[str] = []
         self.copies_during: list[int] = []
@@ -452,14 +684,26 @@ class SmokeCarriesTheCredentialTests(unittest.TestCase):
         self.assertEqual(self.seat.auth_failures, 0, out)
         # authed, deny, injection, memory, mount treatment, mount control.
         self.assertEqual(self.seat.spawns, 6, out)
-        self.assertEqual(self.seat.refreshes, 6, out)
-        # The seat file's pair is serial 1; each refresh issues the next serial, and the
-        # next spawn is handed exactly that one.
-        self.assertEqual(self.refresh_seen, [f"refresh-{n}" for n in range(1, 7)], out)
+        self.assertEqual(self.seat.refreshes, 5, out)
+        # The seat file's pair is serial 1 and the first spawn uses it unrefreshed; each
+        # refresh issues the next serial, and the next spawn is handed exactly that one.
+        self.assertEqual(
+            self.refresh_seen, ["refresh-1", *(f"refresh-{n}" for n in range(1, 6))], out
+        )
         self.assertNotIn("could not be refreshed", out)
 
-    def test_the_seat_file_is_left_as_it_was(self):
-        self._smoke()
+    def test_the_seat_ends_with_the_live_pair(self):
+        out = self._smoke()
+        oauth = json.loads(self.seat_file.read_text(encoding="utf-8"))["claudeAiOauth"]
+        self.assertIn(oauth["refreshToken"], self.seat.live_refresh, out)
+        self.assertIn("written back", out)
+
+    def test_an_expired_seat_access_token_refuses_the_smoke_before_any_spawn(self):
+        self.seat.now_s += 2 * ACCESS_LIFE_S
+        out = self._smoke()
+        self.assertEqual(self.seat.spawns, 0, out)
+        self.assertIn("access token has expired", out)
+        self.assertIn("refreshes its own credential in place", out)
         self.assertEqual(self.seat_file.read_bytes(), self.seat_bytes)
 
     def test_no_copy_of_the_credential_outlives_the_smoke(self):

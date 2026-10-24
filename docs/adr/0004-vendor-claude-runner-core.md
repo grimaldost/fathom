@@ -52,3 +52,36 @@ directory, whose `claudeMdExcludes` lists those files; the arm's `settings.json`
 declared. The account's claude.ai connectors are turned off in the spawn environment. The
 smoke gate checks the effect on a live spawn, not the configuration directory's contents:
 the earlier check passed throughout, because it asserted the cause it had fixed.
+
+## Amendment (2026-10-24): fathom writes a refreshed credential back to the seat (T53b)
+
+Until this amendment fathom read two timestamps from the seat's credential file
+(`expiresAt`, `refreshTokenExpiresAt`) and copied the file, and never wrote it. A spawn
+that meets an expired access token refreshes it inside its copy; the server rotates the
+refresh token, and the seat's file kept the spent one, so after a run or a smoke that
+refreshed, the owner's next `claude` asked for `/login`. The owner chose on 2026-10-24 to
+let fathom write the seat's file, under these conditions:
+
+- **When.** Once, when `fathom run`, `fathom smoke` or a subject of the acceptance harness
+  ends, from the run's carried copy (`CredentialStore`) or the subject's configuration
+  directory (`fathom.credentials.write_back_to_seat`).
+- **Guard.** Only when the copy is newer than the seat's file by both expiry timestamps
+  (strictly later `expiresAt`, and strictly later `refreshTokenExpiresAt` when the seat's
+  file has one), and the seat's file is byte-identical to what was last copied from it
+  (compared by SHA-256, once before the merge and once just before the rename). When
+  another session changed the seat's file meanwhile, fathom leaves it as it is and says so.
+- **What is written.** The seat's `claudeAiOauth` block is replaced by the copy's; every
+  other key keeps the seat's value. The new file is written in full to a temporary file in
+  the seat's directory and moved over the seat's file with one `os.replace`.
+- **What is read.** The merge parses both files, so token values pass through the process
+  for the length of that call. None is printed, logged or kept: the result names an
+  outcome only.
+- **Refusal at start.** `fathom run`, `fathom smoke` and the acceptance harness in isolated
+  mode refuse to start while the seat's access token has already expired, and print the
+  cure: run any `claude` command once, so the seat refreshes its own file in place.
+
+The guard does not cover a write by another process in the moment between the last
+comparison and the rename; on Windows no file system primitive closes that window.
+If a real refresh does not move `refreshTokenExpiresAt` forward, the guard finds the copy
+not newer and nothing is written; the refusal at start then still keeps the next spend
+from starting on a spent seat.

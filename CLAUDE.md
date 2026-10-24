@@ -103,8 +103,10 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
   default-deny, explicit allow and disallow lists, never `bypassPermissions` or
   `--dangerously-skip-permissions` (`src/fathom/adapters/claude_cli.py`). Under `fathom run`
   and `fathom smoke` (`RealProbes` in `src/fathom/smoke.py`) each spawn's credential is copied from one copy the run carries, which keeps a credential a
-  spawn refreshed and never writes the seat's own file (`src/fathom/credentials.py`,
-  FATH-B55). Every model call goes
+  spawn refreshed (`src/fathom/credentials.py`, FATH-B55). When the run or the smoke ends, a
+  newer pair is written back to the seat's own file only if the seat's file is still what
+  was copied, and neither starts while the seat's access token has expired (T53b,
+  ADR-0004's 2026-10-24 amendment). Every model call goes
   through a `Runner` adapter (ADR-0001); the one sanctioned exception is the series-engine
   subprocess in `src/fathom/strategies/series.py`.
 - **Standard-library core**, with `typing.Protocol` at the seams (`Runner`,
