@@ -1537,7 +1537,7 @@ class GitStateTests(unittest.TestCase):
             self.assertEqual(acc.changed_ignored(before, after), ["report/scorecard-a.md"])
 
 
-def _oauth(expires_at_s: float, refresh_expires_at_s: float, tag: str) -> str:
+def _seat_text(expires_at_s: float, refresh_expires_at_s: float, tag: str) -> str:
     return json.dumps(
         {
             "claudeAiOauth": {
@@ -1561,15 +1561,15 @@ class SubjectCredentialWriteBackTests(unittest.TestCase):
         self.config = self.tmp / "config"
         self.seat = self.config / acc.CREDENTIAL_FILE
         now = time.time()
-        _write(self.seat, _oauth(now + 3600, now + 86400, "seat"))
+        _write(self.seat, _seat_text(now + 3600, now + 86400, "seat"))
         self.later = (now + 7200, now + 2 * 86400)
 
     def _preflight(self, *, touch_seat: bool = False) -> str:
         def refreshing_subject(*_args: object, transcript: Path, env, **_kw) -> acc.SubjectRun:
             held = Path(env["CLAUDE_CONFIG_DIR"]) / acc.CREDENTIAL_FILE
-            held.write_text(_oauth(*self.later, "refreshed"), encoding="utf-8")
+            held.write_text(_seat_text(*self.later, "refreshed"), encoding="utf-8")
             if touch_seat:
-                self.seat.write_text(_oauth(*self.later, "elsewhere"), encoding="utf-8")
+                self.seat.write_text(_seat_text(*self.later, "elsewhere"), encoding="utf-8")
             lines = stream_lines([INIT, _final()], malformed=False)
             transcript.write_text("\n".join(lines) + "\n", encoding="utf-8")
             return acc.SubjectRun(exit_code=0, timed_out=False, wall_s=0.3)
@@ -1674,7 +1674,7 @@ class DryRunTests(unittest.TestCase):
         now = time.time()
         _write(
             self.config / acc.CREDENTIAL_FILE,
-            _oauth(now - 3600, now + 86400, "expired"),
+            _seat_text(now - 3600, now + 86400, "expired"),
         )
         stdout, stderr = io.StringIO(), io.StringIO()
         argv = [
