@@ -24,9 +24,9 @@ records = [
 
 [private_refs]
 # User names that appear in home-directory paths in this repository's tests and docstrings and
-# name nobody: the neutral name its tests use (tests/test_public_tree.py), a one-letter test
-# value (tests/test_agent_acceptance.py) and the 8.3 short name in a docstring
-# (src/fathom/strategies/gated_session.py).
+# name nobody: "example" and "examples", the neutral names its path tests use
+# (tests/test_public_tree.py), "u", a one-letter test value (tests/test_agent_acceptance.py), and
+# "longna~1", the 8.3 short name in a docstring (src/fathom/strategies/gated_session.py).
 placeholders = ["example", "examples", "u", "longna~1"]
 
 [release]
@@ -57,4 +57,4 @@ reason = "a fathom release commit also sets the plugin manifest version, the pin
 [[exceptions]]
 key = "private_refs.placeholders"
 value = ["example", "examples", "u", "longna~1"]
-reason = "four user names that appear in home-directory paths in this repository's tests and docstrings and name nobody: the neutral name its tests use, a one-letter test value and the 8.3 short name in a docstring; they are not real accounts, and the private-reference scan would otherwise flag each path"
+reason = "four user names that appear in home-directory paths in this repository's tests and docstrings and name nobody: 'example' and 'examples', the neutral names its path tests use, 'u', a one-letter test value, and 'longna~1', the 8.3 short name in a docstring; they are not real accounts, and the private-reference scan would otherwise flag each path"

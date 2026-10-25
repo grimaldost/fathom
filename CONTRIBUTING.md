@@ -92,8 +92,9 @@ in two parts. Both are required through one context, `gate`, which the branch ru
   the lock check, the sync, `ruff format --check`, `ruff check` and pytest on Python 3.12
   (`railform frame` prints the exact commands), and these checks:
   - `frame`: `railform.toml` is valid, and a value that departs from the project type's
-    preset has an `exceptions` row with a reason. This repository has two rows: no type check
-    (fathom has no type checker), and the files a release commit may edit.
+    preset has an `exceptions` row with a reason. This repository has three rows: no type check
+    (fathom has no type checker), the files a release commit may edit, and the four user names
+    its tests and docstrings use in home-directory paths.
   - **Changelog currency** (pull requests only); see below.
   - **Commit lane** (pull requests only): every commit subject is a conventional subject,
     no commit or pull request text carries an AI-attribution line, and the head branch has a
