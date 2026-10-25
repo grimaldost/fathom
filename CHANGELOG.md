@@ -6,6 +6,16 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The railform pin moves to the 0.3.0 release (`railform adopt --pin`). The stubs in
+  `tools/git-hooks/` now also print the command that runs one git command without arming the
+  clone. `.gitattributes` gains the region railform owns: `.githooks/**` and
+  `tools/git-hooks/**` are LF on every platform, which ends the line-ending churn of the hook
+  wrappers on Windows checkouts. `railform.toml` gains an `exceptions` row for the four user
+  names this repository adds to `private_refs.placeholders`, which the new release counts as
+  loosening a check.
+
 ## [0.12.1] - 2026-10-24
 
 A patch release: it fixes a defect of 0.12.0 and adds no option, command or ledger field. A run, a

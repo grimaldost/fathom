@@ -7,3 +7,7 @@
 # A ledger's bytes are LF on every platform: the ledger index stamps each file by its bytes
 # (src/fathom/ledgerindex.py), including the example ledger under examples/data-root/ledger/.
 *.jsonl text eol=lf
+# >>> railform: owned by `railform adopt`; `railform adopt --check` fails on any edit
+.githooks/** text eol=lf
+tools/git-hooks/** text eol=lf
+# <<< railform
