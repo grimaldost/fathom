@@ -16,6 +16,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
   names this repository adds to `private_refs.placeholders`, which the new release counts as
   loosening a check.
 
+### Fixed
+
+- **The acceptance tool no longer reads a `401` inside a larger number as an authentication
+  failure (T58a).** `auth_failure` matched `401` as a substring, so a cost of `$0.0401` or a
+  line number such as 1401 in a failed result was reported as a failed login. `401` now counts
+  only as a whole number; the other markers keep their substring match. The statements that a
+  workspace under `%PUBLIC%` is readable by every local account now say it holds for
+  interpreters older than CPython 3.12.4.
+
 ## [0.12.1] - 2026-10-24
 
 A patch release: it fixes a defect of 0.12.0 and adds no option, command or ledger field. A run, a

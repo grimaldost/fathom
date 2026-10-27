@@ -238,9 +238,10 @@ with:
 
 The workspaces are kept for inspection at the paths the verdicts give. The scratch
 directories keep the stub and its call log; the configuration directory with the credential
-is deleted as soon as each subject exits. A clone workspace holds a copy of your data, and
-under `%PUBLIC%` every local account can read it, so delete the workspaces when you are done,
-or pass a `--workspace-root` of your own.
+is deleted as soon as each subject exits. A clone workspace holds a copy of your data. A
+directory made under `%PUBLIC%` by `tempfile.mkdtemp` is private to its owner on CPython
+3.12.4 and later, but on an older interpreter every local account can read it, so delete the
+workspaces when you are done, or pass a `--workspace-root` of your own.
 
 `report.md` starts with a table of scenario, verdict, cost and duration, then the visibility
 of each scenario, then each scenario's checks, behaviour and final answer.
