@@ -529,9 +529,13 @@ def parse_stream(lines: Iterable[str]) -> _Parsed:
         kind = obj.get("type")
         if kind == "system" and obj.get("subtype") == "init":
             p.model_id = obj.get("model") or p.model_id
-            version = obj.get("version")
-            if isinstance(version, str) and version:
-                p.cli_version = version
+            # A real init event names the CLI version `claude_code_version`; `version`
+            # is the older key some recorded streams carry.
+            for key in ("claude_code_version", "version"):
+                version = obj.get(key)
+                if isinstance(version, str) and version:
+                    p.cli_version = version
+                    break
         elif kind == "result":
             p.saw_result = True
             p.result_text = obj.get("result") or p.result_text
