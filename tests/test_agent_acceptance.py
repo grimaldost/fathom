@@ -1146,6 +1146,18 @@ class AuthFailureTests(unittest.TestCase):
             with self.subTest(text):
                 self.assertIsNone(acc.auth_failure(self._failed(text)))
 
+    def test_a_401_followed_by_a_digit_or_a_decimal_is_not_an_authentication_failure(self) -> None:
+        for text in ("status 4012", "waited 401.5 seconds"):
+            with self.subTest(text):
+                self.assertIsNone(acc.auth_failure(self._failed(text)))
+
+    def test_a_401_preceded_by_a_dollar_sign_or_a_dot_is_not_an_authentication_failure(
+        self,
+    ) -> None:
+        for text in ("cost $401", "version 4.401"):
+            with self.subTest(text):
+                self.assertIsNone(acc.auth_failure(self._failed(text)))
+
     def test_a_401_status_is_still_an_authentication_failure(self) -> None:
         for text in (
             'API Error: 401 {"type":"error"}',
