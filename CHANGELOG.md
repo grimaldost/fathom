@@ -6,6 +6,11 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-10-27
+
+A patch release: it fixes two defects and moves the railform pin, and adds no fathom option, command or
+ledger field.
+
 ### Fixed
 
 - **The ledger now records the Claude Code version real streams report (T59a, T57a).** The
