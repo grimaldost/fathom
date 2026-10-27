@@ -633,6 +633,45 @@ class TestParseComplete(AdapterTestBase):
         self.assertEqual(self._record().usage.get("cache_creation_input_tokens"), 100)
 
 
+class TestInitEventCliVersion(AdapterTestBase):
+    """A real Claude Code init event names the CLI version `claude_code_version`; the
+    older fixtures name it `version`. The parser reads the first, then the second."""
+
+    def _version_for(self, **init_keys: str) -> str:
+        init = {"type": "system", "subtype": "init", "model": "claude-opus-4-8", **init_keys}
+        result = {
+            "type": "result",
+            "subtype": "success",
+            "is_error": False,
+            "num_turns": 1,
+            "duration_ms": 1000,
+            "total_cost_usd": 0.01,
+            "result": "done",
+            "usage": {"input_tokens": 10, "output_tokens": 10},
+        }
+        stream = chr(10).join(json.dumps(obj) for obj in (init, result)) + chr(10)
+        spawn = RecordingSpawn(lambda i: _cp(0, stream))
+        runner = self.make_runner(spawn)
+        return runner.execute("p", self.workspace, _scenario()).cli_version
+
+    def test_claude_code_version_alone_is_recorded(self):
+        self.assertEqual(self._version_for(claude_code_version="2.1.295"), "2.1.295")
+
+    def test_version_alone_is_still_recorded(self):
+        self.assertEqual(self._version_for(version="1.2.3"), "1.2.3")
+
+    def test_claude_code_version_wins_when_both_are_present(self):
+        self.assertEqual(
+            self._version_for(claude_code_version="2.1.295", version="1.2.3"), "2.1.295"
+        )
+
+    def test_an_empty_claude_code_version_falls_back_to_version(self):
+        self.assertEqual(self._version_for(claude_code_version="", version="1.2.3"), "1.2.3")
+
+    def test_neither_key_leaves_the_version_empty(self):
+        self.assertEqual(self._version_for(), "")
+
+
 class TestParseTruncated(AdapterTestBase):
     """A killed spawn never reaches its result event, so the stream carries tokens but
     no reported cost. That gap is deliberate here: the run is recorded as cost_source=none
