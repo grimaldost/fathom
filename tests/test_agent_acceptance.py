@@ -1141,6 +1141,34 @@ class AuthFailureTests(unittest.TestCase):
         self.assertLessEqual(len(long), 160)
         self.assertNotIn("\n", long)
 
+    def test_a_401_inside_a_larger_number_is_not_an_authentication_failure(self) -> None:
+        for text in ("Spent $0.0401 before the tool failed", "error at line 1401"):
+            with self.subTest(text):
+                self.assertIsNone(acc.auth_failure(self._failed(text)))
+
+    def test_a_401_followed_by_a_digit_or_a_decimal_is_not_an_authentication_failure(self) -> None:
+        for text in ("status 4012", "waited 401.5 seconds"):
+            with self.subTest(text):
+                self.assertIsNone(acc.auth_failure(self._failed(text)))
+
+    def test_a_401_preceded_by_a_dollar_sign_or_a_dot_is_not_an_authentication_failure(
+        self,
+    ) -> None:
+        for text in ("cost $401", "version 4.401"):
+            with self.subTest(text):
+                self.assertIsNone(acc.auth_failure(self._failed(text)))
+
+    def test_a_401_status_is_still_an_authentication_failure(self) -> None:
+        for text in (
+            'API Error: 401 {"type":"error"}',
+            "401 Unauthorized",
+            "Failed to authenticate",
+            "OAuth token has expired",
+            "Request failed with status code 401.",
+        ):
+            with self.subTest(text):
+                self.assertEqual(acc.auth_failure(self._failed(text)), text)
+
     def test_the_preflight_names_the_authentication_failure(self) -> None:
         code, printed = self._preflight([self.PENDING, self._failed()])
         self.assertEqual(code, acc.EXIT_ENVIRONMENT)

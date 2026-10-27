@@ -128,9 +128,12 @@ AUTH_FAILURE_MARKERS = (
     "failed to authenticate",
     "oauth",
     "authentication_error",
-    "401",
     "/login",
 )
+# The 401 status counts only as a whole number: not inside a larger number, a cost such as
+# $0.0401 or a line number such as 1401. No digit, "." or "$" may precede it, and no digit or
+# "." followed by a digit may follow it, so a sentence-final "status code 401." still matches.
+AUTH_FAILURE_STATUS = re.compile(r"(?<![\d.$])401(?!\d|\.\d)")
 AUTH_MESSAGE_CHARS = 160
 
 # How far a measurement may overrun the budget its prompt states before its check fails,
@@ -2000,13 +2003,14 @@ def _where(root: RootScan, ctx: Context) -> str:
 
 def auth_failure(result: Mapping[str, Any] | None) -> str | None:
     """The message of a result event that says the subject could not authenticate (an
-    error result whose text names one of :data:`AUTH_FAILURE_MARKERS`), on one line, or
-    ``None``."""
+    error result whose text names one of :data:`AUTH_FAILURE_MARKERS`, or carries the 401
+    status as a whole number, :data:`AUTH_FAILURE_STATUS`), on one line, or ``None``."""
     if not result or not result.get("is_error"):
         return None
     text = _oneline(str(result.get("result") or ""), AUTH_MESSAGE_CHARS)
     lowered = text.lower()
-    return text if text and any(m in lowered for m in AUTH_FAILURE_MARKERS) else None
+    named = any(m in lowered for m in AUTH_FAILURE_MARKERS) or AUTH_FAILURE_STATUS.search(lowered)
+    return text if text and named else None
 
 
 def check_session_finished(ctx: Context) -> tuple[bool, str]:
@@ -3265,8 +3269,10 @@ def print_plan(
 
 def discard_workspaces(prepared: Sequence[Prepared]) -> list[str]:
     """Remove the workspace and scratch directories of subjects that will not run, and
-    return them. A clone workspace holds a copy of the data root, and on Windows the
-    default root (``%PUBLIC%``) is readable by every local account."""
+    return them. A clone workspace holds a copy of the data root. On Windows the default root
+    may be ``%PUBLIC%``; a directory made there by ``tempfile.mkdtemp`` is private to its
+    owner on CPython 3.12.4 and later (CVE-2024-4030) and readable by every local account on
+    older interpreters."""
     removed: list[str] = []
     for p in prepared:
         for directory in (p.workspace.parent, p.scratch):
