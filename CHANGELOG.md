@@ -6,6 +6,16 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The ledger now records the Claude Code version real streams report (T59a, T57a).** The
+  stream parser read only the init event's `version` key, which a real Claude Code stream does
+  not carry, so `cli_version` was empty on every real run. It now takes `claude_code_version`
+  first and `version` second. `docs/ledger-contract.md` describes `cli_version` as the version
+  of the Claude Code CLI the run spawned (empty when the stream reports none and for
+  series-pinned runs), and no longer says `cost_usd_est` defaults to 0.0: a row without the key
+  has an unknown cost.
+
 ### Changed
 
 - The railform pin moves to the 0.3.0 release (`railform adopt --pin`). The stubs in

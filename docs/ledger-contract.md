@@ -38,8 +38,9 @@ errored, and the verifier's results if scoring succeeded.
   fairly; a hash change invalidates prior results (the resume key includes it).
 - `tool_git_sha` (str): The SHA of the tool's repository at run time (e.g., the arm's tool
   repo). Provenance only; not part of the resume key or config_hash.
-- `cli_version` (str): The version of the fathom CLI that recorded this trial.
-  Provenance only; not part of the resume key or config_hash.
+- `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
+  reports it. Empty when the stream reports none, and for series-pinned runs. Provenance only;
+  not part of the resume key or config_hash.
 - `pin_level` (str): The pin strength: `"strong"` (single explicit model) or `"series"`
   (series engine chose a model per trial). Provenance only; not part of config_hash.
 - `verifier_results` (dict or None): The verifier's outcome. `None` means no verification
@@ -109,13 +110,14 @@ orders them exactly as they arrived, and reports join them to their trial by `co
 - `dataset_version` (str): The dataset version (same as the trial's).
 - `config_hash` (str): The configuration hash (same as the trial's; used to join run to trial).
 - `tool_git_sha` (str): The tool repository SHA at run time. Provenance only.
-- `cli_version` (str): The fathom CLI version. Provenance only.
+- `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
+  reports it. Empty when the stream reports none, and for series-pinned runs. Provenance only.
 - `pin_level` (str): The pin strength (`"strong"` or `"series"`). Provenance only.
 - `scenario` (str): The arm name (additive field; defaults to empty on legacy rows from
   before this field existed). Empty string means the arm identity is not recorded; the
   config_hash is the true key.
-- `cost_usd_est` (float): USD as the provider reported it (additive field; defaults to 0.0).
-  The sum of run-row costs is the per-experiment spend. A row with `cost_source == "none"`
+- `cost_usd_est` (float): USD as the provider reported it (additive field; a row without the
+  key has an unknown cost). The sum of run-row costs is the per-experiment spend. A row with `cost_source == "none"`
   (a gap in the provider's reporting) or with no `cost_usd_est` key (a legacy row) has an
   unknown cost, not a cost of 0: reports sum the known costs only, state on how many of
   the runs a cost was recorded, and mark such a sum as a floor.
@@ -155,7 +157,8 @@ when multiple arms compete.
 - `config_hash_a` (str): The first configuration (often the baseline or "bare" arm).
 - `config_hash_b` (str): The second configuration (the tested arm).
 - `tool_git_sha` (str): The tool repository SHA.
-- `cli_version` (str): The CLI version.
+- `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
+  reports it. Empty when the stream reports none, and for series-pinned runs.
 - `judge_config_hash` (str): The SHA256 hash of the judge's configuration. Provenance only.
 - `judge_model` (str): The model the judge used (e.g., `"claude-sonnet-5-5"`). Provenance only.
 - `pin_level` (str): The pin strength (`"strong"` or `"series"`).
