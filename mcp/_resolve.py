@@ -122,8 +122,10 @@ def resolve_fathom_home(
     return candidate
 
 
-def fathom_command(home_dir: pathlib.Path, args: list[str]) -> list[str]:
+def fathom_command(home_dir: pathlib.Path | None, args: list[str]) -> list[str]:
     """The argv that runs the engine the plugin ships against the data root *home_dir*.
+
+    With ``home_dir=None`` there is no ``--home`` (``fathom smoke`` reads no data root).
 
     ``python -m fathom`` rather than the ``fathom`` console script: the generated
     console-script ``.exe`` can be blocked by Windows Smart App Control (os error 4551),
@@ -139,7 +141,6 @@ def fathom_command(home_dir: pathlib.Path, args: list[str]) -> list[str]:
         "python",
         "-m",
         "fathom",
-        "--home",
-        str(home_dir),
+        *(["--home", str(home_dir)] if home_dir is not None else []),
         *args,
     ]

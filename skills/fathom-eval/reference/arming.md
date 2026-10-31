@@ -12,7 +12,7 @@ that file's name.
 This file covers the arms that attempt a bank: what an arm file holds, the tools and the
 isolation every spawn gets, the strategies, the treatments, the MCP servers a mounted plugin
 serves and the check that proves them armed (section 10); `config_hash` and the resume key
-(section 11); and series arms (section 12).
+(section 11); and the strategy retired in 0.13.0 (section 12).
 
 ## 10. Arms (scenario TOML)
 
@@ -31,7 +31,7 @@ Without the flag the run silently uses whatever arms sit in `scenarios/`. The pl
 arm names before anything spawns; read them.
 
 Name the control arm `bare`. The report treats `bare` as the anchor for pairwise comparisons
-and for the deltas it prints beside series arms.
+and for the deltas it prints beside every other arm.
 
 ```toml
 name = "nudge"                 # required; the arm's name in the ledger and the scorecard
@@ -42,10 +42,9 @@ effort = "low"                 # required; passed to `claude --effort` unchanged
 # comparator = "bare"          # optional; buy a cell only after bare completed it ("Comparator")
 
 [tools]
-source = "none"                # "none" (default) or "repo" (series arms)
+source = "none"                # "none" is the only value that loads (section 12)
 allowed = ["Read", "Write", "Edit", "Glob", "Grep", "Bash(python:*)"]
 # disallowed = ["WebFetch"]    # optional; refused even when allowed would permit it
-# repo = "/abs/path/to/engine" # series arms only (section 12)
 
 [context]                      # optional treatment: text appended to the system prompt
 inject = "assets/nudge.md"     # relative to this file
@@ -212,7 +211,6 @@ calls, so read them when a result looks better than the arm should manage.
 | `gated-session` | 1 + up to 2 fixes | After the implementation spawn, runs the task's `[gate] run` and then the arm's `[gate] extra` commands in the workspace (each stopped after a fixed 120 seconds and then counted red; the first red stops the list). What each command creates in the workspace is removed when it exits. On red, a fix spawn receives the gate commands (all of them, joined with `&&`, as written, placeholders not filled in) and the last 3000 characters of the failing command's output, with the task directory's and the data root's paths masked; up to 2 fix rounds. The trial detail records the first and final gate colour. |
 | `gated-review` | as gated-session, + 1 or 2 | As gated-session; once the gate is green, a review spawn replies `VERDICT: APPROVE` or `VERDICT: REQUEST_CHANGES`, and a request gets one more fix spawn. |
 | `reprompt-session` | 2 | The instruction, then one generic "re-examine and fix" prompt, always. It matches the gated arms' extra spawn without any gate information, so it separates the value of the gate from the value of a second attempt. |
-| `series` | many | Drives an external multi-PR engine (section 12). |
 
 The gated strategies need a gate. With neither a task `[gate] run` nor an arm `[gate] extra`,
 `gated-session` is a single spawn and `gated-review` is the implementation plus its review
@@ -313,17 +311,14 @@ little. `--skip-arming-check` turns it off for arms verified in the same session
 **Streams.** For any arm with a `[context]` inject or a tool grant, `fathom run` keeps each
 spawn's raw stream-json output under the data root's `.fathom/streams/<bank>/`, named after the
 trial. They are the only record of what the agent did (which tools it called, whether a skill
-activated). A series arm's agents are spawned by its engine, not by fathom (section 12), so
-none of their streams is kept. Set `FATHOM_STREAM_DIR` to keep them somewhere else (a relative value is taken
+activated). Set `FATHOM_STREAM_DIR` to keep them somewhere else (a relative value is taken
 from the directory the command starts in). Streams are written only by `fathom run`.
 When `FATHOM_STREAM_DIR` is unset, `fathom validate` prints a `note:` line naming such arms
 and the directory `fathom run` will use; it needs no action.
 
 ### `[limits]`
 
-`trial_timeout_s` is the wall-clock limit for each spawn, 1800 seconds when unset. For a
-series arm it is the limit for the whole engine run, and there is no limit when it is unset,
-so always set it there.
+`trial_timeout_s` is the wall-clock limit for each spawn, 1800 seconds when unset.
 
 ### Comparator
 
@@ -373,7 +368,7 @@ What an edit does to trials already recorded:
 | Edit | Effect |
 |---|---|
 | In an arm file: its name, model, effort, strategy, `[tools]` (including the order of `allowed`), `trial_timeout_s`; adding or removing a treatment table; an `[env]` template or a `[gate] extra` command | A new `config_hash`. The arm's old trials stop counting as done, and the next run buys the arm again from its first repeat. |
-| The content of an injected context or settings file; any file inside a mounted plugin; a new commit in, or a move of, a series engine repository | The same: a new `config_hash`. |
+| The content of an injected context or settings file; any file inside a mounted plugin | The same: a new `config_hash`. |
 | In a bank: an instruction, a fixture, a verifier, a limit, a gate, a criterion | Nothing automatic. Bump `dataset_version` (`authoring.md`, section 4) and every trial of the bank is bought again; without the bump, new trials mix with results measured on the old task. |
 | Comments or formatting in an arm file; the arm file's name; moving an injected file to another path; the content of a script that a `[gate] extra` command runs; adding, changing or removing `comparator` | Nothing. For the script, rename the arm when you change it, so one history does not hold two versions. |
 | In `bank.toml`: adding, changing or removing `[plan] repeats_per_cell` or `[contrasts]` | No hash and no resume key moves, and no trial is bought again. The plan changes only what the plan line, new trial rows, the scorecard and `fathom reconcile` say about replication (`authoring.md`, section 4). |
@@ -388,7 +383,7 @@ row as `config_preimage`. It contains:
 | `limits.trial_timeout_s` | the scenario file (`null` when unset) |
 | `model_id` | `null` for this adapter (the CLI reports the exact model at run time) |
 | `tools` | `source`, `repo`, and `allowed` / `disallowed` when non-empty, in file order |
-| `tool_repo_sha`, `tool_invocation_cmd` | for `source = "repo"`: the repo's git HEAD and the command that runs it, which contains the repo's absolute path |
+| `tool_repo_sha`, `tool_invocation_cmd` | always `null`; the keys stay so that no earlier arm's hash moves |
 | `context.inject_sha`, `settings.inject_sha` | the injected files' content sha256, when declared |
 | `plugins` | `name`, `version` and `tree_sha` of each mount, when declared |
 | `env` | the `[env]` templates, sorted by name, when declared |
@@ -412,38 +407,10 @@ the scenario files in the data root (`scenario-known`) and each row's `config_ha
 hash of its own stored preimage, computed again (`config-hash-preimage`). An arm whose file was
 never committed cannot be attributed later.
 
-## 12. Series arms
+## 12. Series arms (retired)
 
-A `series` arm hands the whole task to an external multi-PR engine that decomposes it,
-implements each PR with its own agent spawns, gates and integrates them. fathom drives it as a
-black box over a narrow contract, documented in
-[`docs/specs/2026-07-03-series-engine-contract.md`](../../../docs/specs/2026-07-03-series-engine-contract.md);
-[convoy](https://github.com/grimaldost/convoy) is the reference engine.
-
-- The arm sets `strategy = "series"`, `[tools] source = "repo"` and `repo` to a checkout of the
-  engine. A relative `repo` resolves against the data root, not the scenario file. The
-  engine runs as `uv run --project <repo> convoy run <series.toml>`, with the repository's
-  absolute path in that command.
-- Each task a series arm runs ships a `series.toml` template and the prompt directory it names
-  under `[paths] prompts`. Before each trial fathom copies the prompts outside the workspace,
-  rewrites `[paths]` to absolute locations, pins `[governance]` model and effort to the arm's,
-  sets a non-bypass permission mode and fixed per-spawn budgets (implementation $20, review $5,
-  fix $3, or `--max-spawn-usd` for all three), and strips per-PR model, effort and budget
-  overrides.
-- The engine spawns its agents itself, so the arm's `[tools] allowed`, `[context]`,
-  `[settings]`, `[plugins]` and `[env]` do not reach those spawns; the template's
-  `[governance.tools]` sets their tools.
-- The engine also runs the template's `[[checks]]` itself. fathom removes what a gated arm's
-  gate commands create in the workspace, but nothing the engine's checks leave there, so a
-  test runner's cache or compiled bytecode they write reaches the result view and can tell a
-  series trial apart from the others. Write checks that create nothing in the workspace (for
-  Python, `python -B`, and `-p no:cacheprovider` for pytest).
-- The plan prices a series trial as `PRs × (1 implementation + max_fix_attempts fixes +
-  reviews)` spawns, each at its cap, and prints that arithmetic. `max_fix_attempts` comes from
-  the template's `[review]` (2 when unset). When `[review] blocking = true` the engine reviews
-  each PR once and again after each fix, so `reviews` is `1 + max_fix_attempts`; otherwise it
-  is 0. At the default caps a PR under a blocking review with 2 fix attempts is priced at
-  $20 + 2 × $3 + 3 × $5 = $41.
-- `fathom smoke` checks the engine boundary without spending tokens, by running the data
-  root's `scenarios/series.toml` arm against a stub `claude`. Without that file the check fails;
-  pass `--no-engine-boundary` when the data root has no series arm.
+The strategy that handed a whole task to an external multi-PR engine was removed in 0.13.0.
+From 0.13.0 an arm with `strategy = "series"` or `[tools] source = "repo"` no longer loads
+or runs: since 0.13.0 `[tools] source = "repo"` is refused when the arm loads, and `fathom run`
+refuses the strategy as unknown. Remove such an arm, or set `source = "none"`; ledger rows
+written before 0.13.0 with `pin_level = "series"` still read.

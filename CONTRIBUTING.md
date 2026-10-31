@@ -36,7 +36,7 @@ uv run --with "fastmcp>=2.11.3" --with pytest python -m pytest mcp/test_server_s
 uv run --with "fastmcp==2.11.3" --with pytest python -m pytest mcp/test_server_schema.py
 FATHOM_HOME= uv run fathom reconcile                # the engine checkout: version sites
 uv run fathom --home examples/data-root reconcile   # the example data root
-uv run fathom smoke --no-engine-boundary            # manual: real spawns, a few cents
+uv run fathom smoke                                 # manual: real spawns, a few cents
 ```
 
 `FATHOM_HOME=` in front of a command sets the variable to empty for that command alone, and
@@ -73,11 +73,10 @@ first, which removes the variable for the rest of the session.
   `FATHOM_HOME` before any test runs.
 - `fathom smoke` makes tiny real spawns and needs a working `claude` login, so it stays
   manual and CI does not run it. Run it whenever a change touches spawning, isolation, the
-  run lock or the series-engine boundary: the unit suite stubs every spawn and cannot see
-  those regressions. Its engine-boundary check needs a data root with a series arm
-  (`scenarios/series.toml`); the engine has none, so at the engine root it is skipped with
-  `--no-engine-boundary`. For a change to that boundary, run
-  `uv run --project <engine checkout> fathom --home <data root with a series arm> smoke`.
+  run lock or the spawn environment: the unit suite stubs every spawn and cannot see those
+  regressions. It reads no data root, so it runs the same at the engine root and in a data
+  root. The engine-boundary check was retired in 0.13.0 with the series strategy, and
+  `--no-engine-boundary` is retired too: accepted and ignored for one release.
 - `fathom verify-arming` is not a gate here. It proves a data root's own treatment arms on
   real spawns, costs money, and the engine has no arms.
 
@@ -177,7 +176,7 @@ checked. [`CLAUDE.md`](CLAUDE.md) describes them with the modules that hold them
   empty temporary working directory, not the data root, with an environment reduced to
   system variables, none of which names the data root. Judges see A/B-labelled outputs only.
   Cost data joins after scoring. The agent under test is kept from the same facts: trial
-  spawns, the series engine and gate commands get no `FATHOM_*` variable, no launch-directory
+  spawns and gate commands get no `FATHOM_*` variable, no launch-directory
   variable (`PWD`, `OLDPWD`) and no variable whose value names the data root (`PATH` loses
   only its entries there), and each trial spawn is given staged copies of the arm's
   `[context]` and `[plugins]` files, so its command line names no path in the data root.
@@ -185,8 +184,8 @@ checked. [`CLAUDE.md`](CLAUDE.md) describes them with the modules that hold them
 - **Spawn isolation (ADR-0004).** Spawns run with a credential-only temporary
   `CLAUDE_CONFIG_DIR`, headless default-deny and explicit allow lists, never
   `bypassPermissions` or `--dangerously-skip-permissions`. All model calls go through
-  `Runner` adapters (ADR-0001); the one sanctioned exception is the series-engine subprocess
-  in `src/fathom/strategies/series.py`.
+  `Runner` adapters (ADR-0001), with no exception since the series strategy was retired in
+  0.13.0.
 - **Standard-library core.** `typing.Protocol` at the seams (`Runner`, `StrategyExecutor`).
   A convention, not a CI gate.
 
@@ -258,9 +257,9 @@ no tag.
 
 Users take a release with `uv tool install git+https://github.com/grimaldost/fathom@vX.Y.Z`
 (which replaces an installed version), then run `fathom smoke` and `fathom reconcile` in
-their data root. `fathom smoke` needs `--no-engine-boundary` there unless the data root has
-a series arm at `scenarios/series.toml`, which the engine-boundary check reads
-(`fathom smoke --help`). The plugin runtime re-pulls an installed plugin only when the
+their data root. A data root whose arms still use the retired `series` strategy or
+`[tools] source = "repo"` stops loading on 0.13.0 or later, so remove those arms first.
+The plugin runtime re-pulls an installed plugin only when the
 manifest's version moves, so a release is also what delivers plugin changes.
 
 ## Docs

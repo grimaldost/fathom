@@ -62,7 +62,7 @@ cp -r <engine>/examples/data-root/scenarios/. scenarios/         # its two arms
 # set name = "my-bank" in tasks/my-bank/bank.toml, then write your own tasks and arms
 fathom validate my-bank                       # free: checks each task (below)
 fathom run my-bank --dry-run --repeats 3      # free: arms, trial count, USD ceiling
-fathom smoke --no-engine-boundary             # a few cents: spawn isolation on real spawns
+fathom smoke                                  # a few cents: spawn isolation on real spawns
 fathom run my-bank --repeats 3                # paid; resumable
 fathom report my-bank                         # free: writes report/scorecard-my-bank.md
 fathom index --write                          # free: updates docs/reports/LEDGER-INDEX.md
@@ -82,11 +82,8 @@ What each step does:
   and a worst-case cost ceiling, and spawns nothing.
 - **`fathom smoke`** is the first step that spends. It tests the spawn environment on this
   machine (the login, isolation, the run lock), not the bank, so it belongs just before a paid
-  run. One of its checks drives a series engine against a stub `claude` and needs the data
-  root's `scenarios/series.toml`, so it fails in a data root without one.
-  `--no-engine-boundary` skips that check; pass it unless you have a series arm (authoring
-  guide, `arming.md` section 12). The check is then left out, not reported as skipped, so the
-  smoke can still end in `SMOKE RESULT: ALL PASS`.
+  run. It reads no data root, so it runs the same anywhere. `--no-engine-boundary` is retired:
+  the check it skipped was removed in 0.13.0, and the flag is accepted and ignored.
 - **`fathom index --write`** re-renders `docs/reports/LEDGER-INDEX.md`, which records each
   ledger's hash and completed trials per arm. Run it after each paid run and commit it with
   the ledger; `fathom reconcile` fails while it is out of date. When the rows a run appended
@@ -156,7 +153,7 @@ completed trials.
 | `fathom init [DIR]` | Create a data root. | nothing |
 | `fathom validate <bank>` | Check each task: the fixture fails the verifier, the reference solution passes it, the gate runs, and the paths the gate commands name exist. | nothing |
 | `fathom run <bank> --dry-run` | Print the arms, the trials still to buy, and a worst-case USD ceiling. | nothing |
-| `fathom smoke` | Prove credential isolation, default-deny, stream parsing, plugin mounting, the run lock and the series-engine boundary on tiny real spawns. `--no-engine-boundary` when the data root has no `scenarios/series.toml`. | a few cents |
+| `fathom smoke` | Prove credential isolation, default-deny, stream parsing, plugin mounting, the run lock and instruction files above the workspace on tiny real spawns. `--no-engine-boundary` is retired: accepted and ignored. | a few cents |
 | `fathom verify-arming` | Prove each treatment arm's injection reaches a live spawn. `fathom run` does this itself before spending. | a little |
 | `fathom run <bank>` | Run the matrix. Resumable; checks the credential, the bank and the arms before the first spawn. | yes |
 | `fathom stop <bank>` | Ask the run holding a bank's lock to stop after the trial in flight. | nothing |
@@ -182,7 +179,7 @@ taskbank → scenario (resolve + config_hash) → Runner (claude-cli adapter) �
   the final workspace as named true/false criteria.
 - An **arm** pins one way of attempting a task: model, effort, tool allowlist, injected
   context, settings or plugins, and execution strategy (one session, a session with a gate and
-  fix loop, a reprompt control, or a multi-PR series driven by an external engine). Its
+  fix loop, or a reprompt control). Its
   resolved configuration is hashed into `config_hash`, which makes runs resumable and keeps
   changed arms from mixing with old results.
 - Each **trial** spawns a headless `claude` CLI in a fresh workspace, with a temporary config

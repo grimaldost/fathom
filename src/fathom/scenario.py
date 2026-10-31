@@ -2,8 +2,9 @@
 
 A ScenarioConfig is the raw TOML representation.  A ResolvedScenario adds
 version pins recorded at resolution time: the exact model id as reported by
-the CLI (fillable at run time), the tool repo git SHA (for source="repo"),
-and the explicit tool invocation command.  config_hash is SHA-256 over the
+the CLI (fillable at run time), and the tool repo git SHA and invocation command,
+which are always None since the series strategy was retired in 0.13.0 (the keys stay
+in the preimage so no earlier arm's config_hash moves).  config_hash is SHA-256 over the
 canonicalized (sorted-keys JSON) resolved scenario including all pins.
 """
 
@@ -23,7 +24,7 @@ from typing import Protocol
 
 @dataclasses.dataclass(frozen=True)
 class ToolsConfig:
-    source: str  # "none" | "repo"
+    source: str  # "none"; "repo" is refused when a scenario loads (retired in 0.13.0)
     repo: str | None = None
     # Explicit spawn tool lists (spec §5: "explicit allow/disallow lists from
     # the scenario").  Under headless default-deny an empty allowlist means the
@@ -164,8 +165,8 @@ class ResolvedScenario:
     tools: ToolsConfig
     limits: LimitsOverride
     model_id: str | None  # exact id as reported by the CLI; fillable at run time
-    tool_repo_sha: str | None  # HEAD SHA of the tool repo (source="repo" only)
-    tool_invocation_cmd: str | None  # e.g. "uv run --project <repo> convoy"
+    tool_repo_sha: str | None  # always None; the key stays in the preimage (ADR-0002)
+    tool_invocation_cmd: str | None  # always None; the key stays in the preimage (ADR-0002)
     config_hash: str  # SHA-256 over canonicalized resolved scenario
     # The exact string config_hash digests, persisted to the ledger so a trial's identity
     # can be verified without re-deriving it from a tree that has since moved.  Defaulted
@@ -191,14 +192,6 @@ class ScenarioResolver(Protocol):
         """Return the exact model id that the CLI will report, or None to defer."""
         ...
 
-    def resolve_tool_repo_sha(self, repo: str) -> str:
-        """Return the HEAD git SHA of the tool repository."""
-        ...
-
-    def build_tool_invocation_cmd(self, repo: str) -> str:
-        """Return the explicit invocation command, e.g. 'uv run --project <repo> convoy'."""
-        ...
-
     def resolve_plugin_meta(self, plugin_dir: str) -> tuple[str, str, str]:
         """Return (name, version, tree_sha) for the plugin at plugin_dir.
 
@@ -214,22 +207,6 @@ class ScenarioResolver(Protocol):
 # ---------------------------------------------------------------------------
 # Hash computation
 # ---------------------------------------------------------------------------
-
-
-def resolve_repo_invocation_cmd(repo: str) -> str:
-    """Freeze a ``source="repo"`` scenario's engine invocation to a cwd-independent command.
-
-    The series engine runs with ``cwd = trial workspace`` (a temp dir), so a
-    *relative* ``[tools].repo`` (e.g. ``../convoy``) baked verbatim into
-    ``uv run --project <rel> convoy`` cannot resolve from there — the engine never
-    starts, spawns no ``claude``, and the arm silently mis-scores (the smoke gate's
-    engine-boundary check exists to catch this).  Resolve the repo to an absolute
-    path at resolution time (fathom's cwd) and normalize to forward slashes so the
-    string — which enters ``config_hash`` — is stable across path separators.
-    Shared by both real resolvers (cli.py, smoke.py) so they cannot drift.
-    """
-    abs_repo = str(Path(repo).resolve()).replace("\\", "/")
-    return f"uv run --project {abs_repo} convoy"
 
 
 def canonical_config_json(d: dict) -> str:
@@ -341,12 +318,19 @@ def _tools_to_dict(tools: ToolsConfig) -> dict:
 def load_scenario(path: Path) -> ScenarioConfig:
     """Parse a scenario TOML file into a ScenarioConfig.
 
-    No resolution is performed; no git or CLI calls are made.
+    No resolution is performed; no git or CLI calls are made.  The strategy is not
+    checked here: ``fathom run`` and the executor factory refuse an unknown one.
+    ``[tools] source = "repo"`` is refused: the strategy it served was retired in 0.13.0.
     """
     with open(path, "rb") as f:
         data = tomllib.load(f)
 
     tools_raw = data.get("tools", {})
+    if tools_raw.get("source") == "repo":
+        raise ValueError(
+            f'{path}: [tools] source = "repo" is retired: the series strategy it served '
+            'was removed in 0.13.0. Remove the arm, or set source = "none".'
+        )
     tools = ToolsConfig(
         source=tools_raw.get("source", "none"),
         repo=tools_raw.get("repo"),
@@ -417,17 +401,13 @@ def load_scenario(path: Path) -> ScenarioConfig:
 def resolve_scenario(config: ScenarioConfig, resolver: ScenarioResolver) -> ResolvedScenario:
     """Resolve version pins for *config* using *resolver*.
 
-    For source="repo" scenarios, calls the resolver to obtain the tool repo
-    git SHA and construct the explicit invocation command (never a bare PATH
-    lookup).  Computes config_hash over the full resolved representation.
+    The tool repo SHA and invocation command are always None (the preimage keeps their
+    keys).  Computes config_hash over the full resolved representation.
     """
     model_id = resolver.resolve_model_id(config.model)
 
     tool_repo_sha: str | None = None
     tool_invocation_cmd: str | None = None
-    if config.tools.source == "repo" and config.tools.repo:
-        tool_repo_sha = resolver.resolve_tool_repo_sha(config.tools.repo)
-        tool_invocation_cmd = resolver.build_tool_invocation_cmd(config.tools.repo)
 
     inject_sha: str | None = None
     if config.context.inject:

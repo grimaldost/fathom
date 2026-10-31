@@ -21,7 +21,7 @@ _EXCLUDED_ROOT_NAMES: frozenset[str] = frozenset(
         "tracker.jsonl",  # engine run tracker
         "outputs",  # engine outputs directory
         "logs",  # engine log directory
-        "series.toml",  # stray series config (belongs outside the workspace, spec §6)
+        "series.toml",  # stray engine config (belongs outside the workspace, spec §6)
         "prompts",  # stray prompt files directory (belongs outside the workspace, spec §6)
     ]
 )
@@ -39,7 +39,8 @@ _SCAFFOLDING_DIR_NAMES: frozenset[str] = frozenset(
     ]
 )
 
-# Marker line that starts the block a series engine may append to the root .gitignore.
+# Marker line that starts the block an engine run inside the workspace may append to the
+# root .gitignore.
 # The result view cuts the block and keeps the rest (see _gitignore_for_view).
 _AUTO_GITIGNORE_MARKER = "# PR automation"
 
@@ -93,9 +94,10 @@ def _scaffolding_ignore(src: str, names: list[str]) -> set[str]:
 def _gitignore_for_view(raw: bytes) -> bytes | None:
     """The root ``.gitignore`` as the result view holds it, the same in every arm.
 
-    A series engine appends a block that starts at :data:`_AUTO_GITIGNORE_MARKER` to a
-    fixture's ``.gitignore``, or creates the file when the fixture has none. Dropping
-    the whole file then told a series trial apart by the file's absence, so the block
+    An engine run inside the workspace appends a block that starts at
+    :data:`_AUTO_GITIGNORE_MARKER` to a fixture's ``.gitignore``, or creates the file
+    when the fixture has none. Dropping the whole file then told that arm apart by
+    the file's absence, so the block
     is cut instead (from the marker on) and the fixture's lines stay. Engines differ in
     how they join the block on (a blank line before it, a line break added to a last
     line that had none, or none at all), so in every arm the file ends at its last
@@ -123,8 +125,9 @@ def extract_result_view(workspace: Path, dest: Path) -> None:
     """Copy the working tree from *workspace* into *dest*, excluding engine artifacts.
 
     Only root-level exclusions apply (listed in _EXCLUDED_ROOT_NAMES).  The .git
-    directory is always skipped.  The root .gitignore loses the block a series engine
-    appends to it, and is left out when nothing else is in it (:func:`_gitignore_for_view`).
+    directory is always skipped.  The root .gitignore loses the block an engine run inside
+    the workspace appends to it, and is left out when nothing else is in it
+    (:func:`_gitignore_for_view`).
 
     *workspace* is never modified — this is a pure copy operation.
     """

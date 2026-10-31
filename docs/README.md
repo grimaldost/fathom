@@ -25,7 +25,6 @@ here.
 |---|---|
 | [`specs/2026-06-10-fathom-v1-design.md`](specs/2026-06-10-fathom-v1-design.md) | Architecture: purpose, constraints, module map, ledger and grading design, with as-built notes. |
 | [`specs/2026-06-10-fathom-v1-build.md`](specs/2026-06-10-fathom-v1-build.md) | Build spec: numbered sections, the invariants and how each is enforced. |
-| [`specs/2026-07-03-series-engine-contract.md`](specs/2026-07-03-series-engine-contract.md) | The engine-neutral contract the `series` arm drives; convoy is the reference engine. |
 | [`specs/2026-09-13-run-lock-and-credential-preflight-design.md`](specs/2026-09-13-run-lock-and-credential-preflight-design.md) | The run lock, the credential pre-flight, and decoding gate output. |
 | [`specs/spec-template.md`](specs/spec-template.md) | The blank template a new spec starts from. |
 
@@ -75,7 +74,6 @@ this repository.
 | [`method/pre-mortem-prompt.md`](method/pre-mortem-prompt.md) | The fresh-eyes pre-mortem run against a ready spec. |
 | [`method/review-checklist.md`](method/review-checklist.md) | The review checklist; also where recurring review findings are promoted. |
 | [`method/reflection-triage.md`](method/reflection-triage.md) | Turning what a series' reflections surfaced into durable checks. |
-| [`method/series-toml-skeleton.md`](method/series-toml-skeleton.md) | A blank `series.toml` skeleton, including the per-phase budget block. |
 | [`method/measured-terms.md`](method/measured-terms.md) | The rule that a cost term in an estimate is measured, not modelled. |
 
 ## Not here

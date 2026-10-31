@@ -1,8 +1,8 @@
 """Strategy executors: how a scenario turns one task into model spawns (spec §6).
 
-``single_session`` makes exactly one Runner call; ``series`` drives the series
-engine (the one sanctioned non-adapter model-call path).  Both satisfy the
-:class:`StrategyExecutor` protocol and return a :class:`TrialResult`.
+Every strategy makes its model calls through a Runner (ADR-0001); the strategy that
+drove an external engine was retired in 0.13.0.  Each executor satisfies the
+:class:`StrategyExecutor` protocol and returns a :class:`TrialResult`.
 """
 
 from fathom.strategies.base import (
@@ -14,7 +14,6 @@ from fathom.strategies.base import (
 )
 from fathom.strategies.gated_session import GatedSessionExecutor
 from fathom.strategies.reprompt_session import RepromptSessionExecutor
-from fathom.strategies.series import EngineOutcome, SeriesExecutor
 from fathom.strategies.single_session import SingleSessionExecutor
 
 # The canonical set of strategy names a scenario's ``strategy`` field may carry.
@@ -28,7 +27,6 @@ KNOWN_STRATEGIES: frozenset[str] = frozenset(
         "gated-session",
         "gated-review",
         "reprompt-session",
-        "series",
     }
 )
 
@@ -36,10 +34,8 @@ __all__ = [
     "KNOWN_STRATEGIES",
     "PIN_SERIES",
     "PIN_STRONG",
-    "EngineOutcome",
     "GatedSessionExecutor",
     "RepromptSessionExecutor",
-    "SeriesExecutor",
     "SingleSessionExecutor",
     "StrategyExecutor",
     "TrialResult",

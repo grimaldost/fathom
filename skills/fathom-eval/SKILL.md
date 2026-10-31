@@ -12,11 +12,11 @@ description: >
   failing", "dry-run the cost", "smoke first". Covers finding the data root, the
   validate→plan→smoke→run→report recipe, the bank/task/scenario schemas and the
   verify.py contract (in reference/authoring.md), the strategy catalog
-  (single-session, gated-session, gated-review, reprompt-session, series), the cost
+  (single-session, gated-session, gated-review, reprompt-session), the cost
   rails, and the four invariants. Not for hand-editing the append-only ledger (never
   edit it); not for ordinary one-off coding or bug-fixing that is not an eval (that
   is plain implementation work); not for running the convoy multi-PR engine directly
-  (that is convoy — fathom only drives it as the series arm); not for a plain
+  (that is convoy; fathom no longer drives it); not for a plain
   with/without check of one plugin or whether a skill triggers (that is `claude plugin eval`).
 ---
 
@@ -35,7 +35,7 @@ complete guide, in three files:
   the bank and its tasks, fixtures, the verifier, `fathom validate`, running an
   analysis and reading the scorecard;
 - [`reference/arming.md`](reference/arming.md): arms, their tools and treatments,
-  `config_hash` and the resume key, series arms;
+  `config_hash` and the resume key;
 - [`reference/bank-design.md`](reference/bank-design.md): making a bank discriminate,
   and the checklist before the first paid run.
 
@@ -140,7 +140,7 @@ fathom validate <bank> [--strict]
 fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 
 # 3. A few cents: the real-spawn go/no-go gate. Expect "SMOKE RESULT: ALL PASS".
-#    Pass --no-engine-boundary when the data root has no scenarios/series.toml.
+#    It reads no data root, so it takes no flag but --force-fail.
 fathom smoke
 
 # 3b. Optional, a little: prove each treatment arm's injection reaches a live spawn.
@@ -185,10 +185,7 @@ After a run, keep the data root's derived records current:
 ## Cost, and when not to run
 
 - The plan's ceiling is **planned trials × the per-spawn cap in force**
-  (`--max-spawn-usd` if given, else $5), with series trials priced by their spawn
-  count: per PR, one implementation, the template's fix attempts, and under a
-  blocking review one review more than the fix attempts, each at its cap ($20, $3 and
-  $5 unless `--max-spawn-usd` is given). It is a worst case, not an estimate.
+  (`--max-spawn-usd` if given, else $5). It is a worst case, not an estimate.
 - **The `expected:` line** under the plan's `planned:` line is the estimate: what a trial
   of the same strategy has cost in this bank's own ledger. It is the median over completed
   trials (a trial's cost is the sum of its run rows), per strategy and, where a model has
@@ -201,8 +198,8 @@ After a run, keep the data root's derived records current:
   cap is, not that the run will cost the ceiling.
 - **`--max-spawn-usd`** (older spelling `--max-budget-usd`) is the cap for each
   **spawn**, not a run total. Raising it loosens the runaway guard, which is why the
-  printed ceiling tracks it. A series trial spawns several agents, each under the
-  cap.
+  printed ceiling tracks it. A gated or reprompt trial spawns several times, each
+  under the cap.
 - **`--max-run-usd`** stops one invocation between trials once it has spent that
   much (exit 14). For a guard across several invocations of a resumable matrix,
   stage the matrix and sum `cost_usd_est` from the ledger's run rows between stages.
@@ -238,13 +235,12 @@ set, or you only need to re-read an existing result (`report` is free).
   one file per spawn, named after the trial, for later analysis (tool calls, skill
   activation). When unset, `fathom run` keeps them under the data root's
   `.fathom/streams/<bank>/` for arms with a `[context]` inject or a tool grant. A
-  series arm's agents are spawned by its engine, not by fathom, and none of their
-  streams is kept there. A failure to keep a stream never affects the trial.
+  failure to keep a stream never affects the trial.
 
 Neither variable, nor any other `FATHOM_*` variable, is in a trial agent's environment,
 and neither is the directory fathom was started in (`PWD`, `OLDPWD`) or any variable
 whose value names the data root (`PATH` keeps only its entries outside it): fathom
-removes them from each spawn's environment, a series engine's included, and from the
+removes them from each spawn's environment and from the
 environment of a gated arm's gate commands. `FATHOM_HOME` would tell the agent where
 the data root is, which holds each task's reference solution and verifier, and the
 stream tag carries the arm's name. A gate that finds its tools only through a virtual
@@ -287,11 +283,10 @@ spawns. Details in the authoring guide, `reference/arming.md` section 10.
 | `gated-session` | implementation, then the task's gate and a bounded fix loop | 1 + up to 2 |
 | `gated-review` | gated-session plus one review pass and at most one more fix | more |
 | `reprompt-session` | implementation + one unconditional generic reprompt; the control for the gate's information | 2 |
-| `series` | drives an external multi-PR engine (convoy is the reference) | many |
 
-`series` needs the engine's checkout (`[tools] source = "repo"`, `repo = <path>`) and
-a `series.toml` template in each task; it is long and dominates a matrix's cost.
-`gated-*` need the task to define a `[gate] run` (or the arm a `[gate] extra`).
+`gated-*` need the task to define a `[gate] run` (or the arm a `[gate] extra`). The
+`series` strategy was retired in 0.13.0: an arm that names it, or sets `[tools] source =
+"repo"`, no longer loads (`reference/arming.md`, section 12).
 
 ## The four invariants (ADRs under the engine's `docs/adr/`)
 

@@ -5,9 +5,9 @@ Stdlib-runnable:
 Via pytest:
     uv run pytest tests/test_smoke_logic.py
 
-No real spawns and no real engine here: the pure assertions are driven with
+No real spawns here: the pure assertions are driven with
 crafted observations, and ``run_smoke`` runs against a stub implementing the
-``SmokeProbes`` protocol.  The real-spawn / engine-boundary path is exercised
+``SmokeProbes`` protocol.  The real-spawn path is exercised
 manually via ``fathom smoke`` (spec §11) and its output pasted into the PR summary.
 The filesystem touches are forging a shim file (never executed) to prove the
 forge + argv-log round-trip, and the temp directories the injection and mount
@@ -49,17 +49,14 @@ from fathom.smoke import (
     assert_injection_armed,
     assert_isolated_config_is_credential_only,
     assert_no_ancestor_memory,
-    assert_no_bypass_in_engine_spawn,
     assert_tool_denied,
     forge_claude_shim,
     injection_file_of,
     parse_init_skills,
-    permission_mode_of,
     read_argv_log,
     read_credential_status,
     run_smoke,
 )
-from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
 
 # ---------------------------------------------------------------------------
 # Factories
@@ -72,7 +69,7 @@ def _ok_record(**kw):
     return RunRecord(**base)
 
 
-def _good_argv(mode=NON_BYPASS_PERMISSION_MODE):
+def _good_argv(mode="default"):
     return [
         "claude",
         "--print",
@@ -124,7 +121,6 @@ class StubProbes:
         memory=None,
         mount_treatment=None,
         mount_control=None,
-        engine_argvs=None,
         raise_on=None,
     ):
         self._credential = credential if credential is not None else _live_credential()
@@ -147,7 +143,6 @@ class StubProbes:
             mount_treatment if mount_treatment is not None else [CANARY_SKILL, "other:skill"]
         )
         self._mount_control = mount_control if mount_control is not None else ["other:skill"]
-        self._engine = engine_argvs if engine_argvs is not None else [_good_argv()]
         self._raise_on = set(raise_on or ())
         self.calls = []
 
@@ -198,12 +193,6 @@ class StubProbes:
         if "mount_control" in self._raise_on:
             raise RuntimeError("mount_control boom")
         return self._mount_control
-
-    def engine_spawn_argvs(self):
-        self.calls.append("engine")
-        if "engine" in self._raise_on:
-            raise RuntimeError("engine boom")
-        return self._engine
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +379,7 @@ class TestDenyProbeHasRoomToAttemptTheWrite(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as td, mock.patch.dict(os.environ):
             os.environ.pop("FATHOM_STREAM_DIR", None)
-            probes = smoke.RealProbes(real_config_dir=td, spawn=_spawn, scenarios_dir=None)
+            probes = smoke.RealProbes(real_config_dir=td, spawn=_spawn)
             self.addCleanup(lambda: probes.close())
             leaked, record = probes.deny_spawn()
         result = assert_tool_denied(leaked, record)
@@ -592,17 +581,6 @@ class TestLivenessGating(unittest.TestCase):
         self.assertFalse(r.skipped, "an OK spawn with no tokens is a parser failure, not a skip")
 
 
-class TestPermissionModeOf(unittest.TestCase):
-    def test_extracts_value(self):
-        self.assertEqual(permission_mode_of(_good_argv("default")), "default")
-
-    def test_missing_returns_none(self):
-        self.assertIsNone(permission_mode_of(["claude", "--print", "--model", "m"]))
-
-    def test_flag_at_end_without_value_returns_none(self):
-        self.assertIsNone(permission_mode_of(["claude", "--permission-mode"]))
-
-
 def test_injection_file_of():
     assert injection_file_of(["claude", "--append-system-prompt-file", "/a.md"]) == "/a.md"
     assert injection_file_of(["claude", "-p"]) is None
@@ -636,43 +614,6 @@ class TestInjectionArmed(unittest.TestCase):
     def test_infra_status_fails(self):
         rec = _ok_record(status=ExitStatus.INFRASTRUCTURE, result_text=INJECTION_CANARY)
         self.assertFalse(assert_injection_armed(self._armed_argv(), rec).ok)
-
-
-class TestEngineBoundaryAssertion(unittest.TestCase):
-    def test_pinned_default_passes(self):
-        r = assert_no_bypass_in_engine_spawn([_good_argv("default")])
-        self.assertTrue(r.ok, r.detail)
-
-    def test_empty_fails(self):
-        r = assert_no_bypass_in_engine_spawn([])
-        self.assertFalse(r.ok, "no recorded spawn means the boundary was never exercised")
-
-    def test_bypass_mode_fails(self):
-        r = assert_no_bypass_in_engine_spawn([_good_argv("bypassPermissions")])
-        self.assertFalse(r.ok)
-        self.assertIn("bypassPermissions", r.detail)
-
-    def test_dangerously_skip_flag_fails(self):
-        argv = [*_good_argv("default"), "--dangerously-skip-permissions"]
-        r = assert_no_bypass_in_engine_spawn([argv])
-        self.assertFalse(r.ok)
-        self.assertIn("--dangerously-skip-permissions", r.detail)
-
-    def test_missing_mode_fails(self):
-        r = assert_no_bypass_in_engine_spawn([["claude", "--print", "--model", "m"]])
-        self.assertFalse(r.ok)
-        self.assertIn("missing --permission-mode", r.detail)
-
-    def test_one_bad_among_good_fails(self):
-        r = assert_no_bypass_in_engine_spawn(
-            [_good_argv("default"), _good_argv("bypassPermissions")]
-        )
-        self.assertFalse(r.ok, "a single bypass spawn fails the whole boundary check")
-
-    def test_custom_non_bypass_mode_param(self):
-        # A mode that is not the pinned value is a mismatch (the pin did not reach).
-        r = assert_no_bypass_in_engine_spawn([_good_argv("acceptEdits")], non_bypass_mode="default")
-        self.assertFalse(r.ok)
 
 
 # ---------------------------------------------------------------------------
@@ -780,21 +721,6 @@ class TestCanaryPlugin(unittest.TestCase):
         self.assertIn(f"name: {skill_dir}", frontmatter)
 
 
-class TestEngineBoundaryNeedsDataRoot(unittest.TestCase):
-    """The engine-boundary probe reads the data root's series arm. Run from anywhere
-    else, it fails before any temp dir or shim exists, and says how to proceed."""
-
-    def test_missing_series_arm_names_the_fix(self):
-        from fathom.smoke import RealProbes
-
-        with tempfile.TemporaryDirectory() as td:
-            probes = RealProbes(scenarios_dir=Path(td))
-            with self.assertRaises(FileNotFoundError) as cm:
-                probes.engine_spawn_argvs()
-        self.assertIn("data root", str(cm.exception))
-        self.assertIn("--no-engine-boundary", str(cm.exception))
-
-
 def _fake_cli(argv, *, input, timeout, env, cwd):
     """A stand-in for the claude CLI, answering from the files its argv names.
 
@@ -842,7 +768,7 @@ class TestLiveSpawnsUseStagedCopies(unittest.TestCase):
 
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        self.probes = smoke.RealProbes(real_config_dir=tmp.name, scenarios_dir=None)
+        self.probes = smoke.RealProbes(real_config_dir=tmp.name)
         self.runners = []
         real_runner = smoke.ClaudeCliRunner
 
@@ -907,11 +833,11 @@ class TestRunSmoke(unittest.TestCase):
         self.assertNotIn("[FAIL]", output)
 
     def test_reports_every_check(self):
-        # 12 checks when engine included: credential, access token, concurrency, config,
-        # authed, activity, deny, injection, memory, mount-treatment, mount-control, engine.
+        # 11 checks: credential, access token, concurrency, config, authed, activity, deny,
+        # injection, memory, mount-treatment, mount-control.
         _code, output = self._run(StubProbes())
-        self.assertEqual(output.count("[PASS]"), 12, output)
-        self.assertIn("(12/12 checks)", output)
+        self.assertEqual(output.count("[PASS]"), 11, output)
+        self.assertIn("(11/11 checks)", output)
 
     # -- The hollow checks, and the headline that hid them ---------------
 
@@ -951,10 +877,10 @@ class TestRunSmoke(unittest.TestCase):
 
     def test_the_summary_line_names_what_was_not_proven(self):
         """The one line an operator reads carries what the fold above says."""
-        probes = StubProbes(engine_argvs=[_good_argv("bypassPermissions")])
+        probes = StubProbes(mount_treatment=["other:skill"])
         _, output = self._run(probes)
         summary = output.splitlines()[-1]
-        self.assertIn("engine-boundary", summary, summary)
+        self.assertIn("mount/available", summary, summary)
 
     def test_credential_probe_exception_is_guarded(self):
         code, output = self._run(StubProbes(raise_on={"credential"}))
@@ -972,7 +898,7 @@ class TestRunSmoke(unittest.TestCase):
         self.assertIn("forced failure (--force-fail)", summary)
 
     def test_failing_assertion_returns_one(self):
-        probes = StubProbes(engine_argvs=[_good_argv("bypassPermissions")])
+        probes = StubProbes(mount_treatment=["other:skill"])
         code, output = self._run(probes)
         self.assertEqual(code, 1)
         self.assertIn("[FAIL]", output)
@@ -988,11 +914,11 @@ class TestRunSmoke(unittest.TestCase):
         self.assertEqual(code, 1)
 
     def test_probe_exception_is_guarded(self):
-        probes = StubProbes(raise_on={"engine"})
+        probes = StubProbes(raise_on={"memory"})
         code, output = self._run(probes)
         self.assertEqual(code, 1, "a raising probe must fail the gate, not crash it")
         self.assertIn("(probe error)", output)
-        self.assertIn("engine boom", output)
+        self.assertIn("memory boom", output)
 
     def test_mount_probe_exception_is_guarded(self):
         probes = StubProbes(raise_on={"mount_treatment"})
@@ -1019,14 +945,7 @@ class TestRunSmoke(unittest.TestCase):
         self.assertEqual(probes.calls, ["credential"])
         self.assertIn("REFUSING TO SMOKE", output)
 
-    def test_include_engine_false_skips_engine(self):
-        probes = StubProbes()
-        code, output = self._run(probes, include_engine=False)
-        self.assertEqual(code, 0)
-        self.assertNotIn("engine", probes.calls, "engine probe must not run when excluded")
-        self.assertEqual(output.count("[PASS]"), 11)
-
-    def test_order_credential_config_authed_deny_injection_mount_engine(self):
+    def test_order_credential_config_authed_deny_injection_memory_mount(self):
         probes = StubProbes()
         self._run(probes)
         self.assertEqual(
@@ -1040,7 +959,6 @@ class TestRunSmoke(unittest.TestCase):
                 "memory",
                 "mount_treatment",
                 "mount_control",
-                "engine",
             ],
         )
 
@@ -1091,20 +1009,6 @@ class TestSmokeResult(unittest.TestCase):
     def test_fields(self):
         r = SmokeResult("x", True, "d")
         self.assertEqual((r.name, r.ok, r.detail), ("x", True, "d"))
-
-
-class TestEngineBoundaryWithoutADataRoot(unittest.TestCase):
-    """No data root resolved: the engine-boundary check says how to name one."""
-
-    def test_it_names_every_way_forward(self):
-        from fathom.smoke import RealProbes
-
-        probes = RealProbes(scenarios_dir=None)
-        with self.assertRaises(FileNotFoundError) as cm:
-            probes.engine_spawn_argvs()
-        message = str(cm.exception)
-        for phrase in ("no data root", "--home", "FATHOM_HOME", "--no-engine-boundary"):
-            self.assertIn(phrase, message)
 
 
 if __name__ == "__main__":

@@ -156,7 +156,7 @@ them.
       and the naive-fix check passes. A task kept only to demonstrate or test the setup may
       skip this; nothing enforces it (section 9).
 - [ ] The control arm is named `bare` and has the same allowlist as the treatment arms.
-- [ ] No arm has an empty `allowed` list, unless it is a series arm.
+- [ ] No arm has an empty `allowed` list.
 - [ ] When the data root holds more than one bank, each bank's arms sit in their own
       directory, passed with `--scenarios-dir` (`arming.md`, section 10).
 - [ ] `fathom run --dry-run` shows the intended arms, trial count and ceiling.

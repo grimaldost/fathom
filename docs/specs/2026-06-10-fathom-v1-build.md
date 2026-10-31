@@ -83,6 +83,9 @@ the comparison supports.
   `src/fathom/strategies/series.py` is the one sanctioned non-adapter
   model-call path (the engine spawns `claude` itself); the review grep treats it
   as the named waiver, never a silent one.
+  > **Note (2026-10-31):** this waiver is gone since 0.13.0. The `series` strategy and its
+  > engine subprocess were retired (FATH-B36), so every model call goes through a `Runner`
+  > adapter.
 - **Ledger files are append-only; task IDs are stable** — `docs/adr/0002-trial-run-append-only-ledger.md`
 - **Scoring inputs are scenario-blind** — `docs/adr/0003-blind-result-only-scoring.md`
 - **Spawn isolation properties (credential-only temp config; default-deny tools)** — `docs/adr/0004-vendor-claude-runner-core.md`

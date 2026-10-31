@@ -140,6 +140,6 @@ claude plugin validate .
 
 ## Not the same as convoy
 
-fathom drives the [convoy](https://github.com/grimaldost/convoy) multi-PR engine only as the
-measured `series` arm. To run convoy on real work, use convoy directly; this plugin is for
-evaluating tools, not operating them.
+fathom no longer drives the [convoy](https://github.com/grimaldost/convoy) multi-PR engine:
+the strategy that did was retired in 0.13.0. To run convoy on real work, use convoy directly;
+this plugin is for evaluating tools, not operating them.

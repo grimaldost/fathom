@@ -6,6 +6,39 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Removed
+
+- **The `series` strategy (T52b, FATH-B36).** The strategy that drove an external multi-PR
+  engine is gone: `src/fathom/strategies/series.py`, the `"series"` entry of `KNOWN_STRATEGIES`,
+  the plan's series spawn arithmetic and `[tools] source = "repo"`'s resolver methods. An arm
+  with `strategy = "series"` is refused by `fathom run` as an unknown strategy. Every model
+  call now goes through a `Runner` adapter; the one exception ADR-0001 allowed is gone.
+  What other code reads stays: `forge_claude_shim` and `read_argv_log` (the acceptance
+  harness uses them), the `config_hash` preimage keys, `PIN_SERIES` and old ledger rows with
+  `pin_level = "series"`, and the golden scorecard.
+- **The engine-boundary check of `fathom smoke`.** The smoke gate runs 11 checks, not 12, and
+  needs no data root.
+- **The series engine contract spec and the `series.toml` skeleton**
+  (`docs/specs/2026-07-03-series-engine-contract.md`, `docs/method/series-toml-skeleton.md`),
+  with their convoy fixtures. The authoring guide keeps a short section 12 saying the
+  strategy was retired, so its sections stay numbered 1 to 15. FATH-B36 closes; FATH-B56,
+  FATH-B73 and FATH-B74 are moot with it.
+
+### Changed
+
+- **`--no-engine-boundary` and the MCP `no_engine_boundary` parameter are accepted and
+  ignored** for one release, on `fathom smoke`, `python -m fathom.smoke` and the MCP `smoke`
+  tool, because every documented smoke command passed the flag.
+- **An arm with `[tools] source = "repo"` is refused when it loads**, with a message that
+  names the retirement and says to remove the arm or set `source = "none"`. Such a data root
+  stops loading: a minor bump, as 0.10.0 to 0.12.0 were.
+- **`fathom smoke` and its MCP tool need no data root.** Smoke reads nothing from one. It
+  still hides a data root it finds from the spawns' environment, as `fathom run` does, and a
+  `FATHOM_HOME` naming a missing directory no longer stops it (a `note:` line says so). The
+  MCP tool, with no data root resolved, runs `fathom smoke` without `--home` in the server's
+  working directory. `commands/smoke.md` no longer resolves a data root, and `fathom init`'s
+  next steps say `fathom smoke` without a flag.
+
 ## [0.12.2] - 2026-10-27
 
 A patch release: it fixes two defects and moves the railform pin, and adds no fathom option, command or

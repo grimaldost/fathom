@@ -8,8 +8,8 @@ Run the fathom eval matrix — **this spends real money**. Do not skip the
 preconditions.
 
 Preconditions:
-1. The smoke gate passed **this session** (run `/fathom:smoke` if not; it takes
-   `--no-engine-boundary` when the data root has no `scenarios/series.toml`).
+1. The smoke gate passed **this session** (run `/fathom:smoke` if not; it reads no data
+   root and takes no flag but `--force-fail`).
 2. The plan was reviewed, and its arm names, trial count and USD ceiling are
    acceptable (run `/fathom:plan` if not).
 3. If the bank's arms live in a subdirectory of `scenarios/`, `--scenarios-dir` is
@@ -56,8 +56,8 @@ Tell the user before and while running:
   every arm). `--interleave` changes the order only, not which trials are bought.
   `--tasks ID[,ID...]` restricts the run to named tasks,
   the way to buy a small screen first. `--max-spawn-usd USD` is the cap for each
-  **spawn** (default $5), not a run total; a series trial makes several spawns,
-  each under the cap. Raising it loosens the runaway guard and raises the printed
+  **spawn** (default $5), not a run total; a trial makes one spawn, or several in
+  a gated or reprompt arm, each under the cap. Raising it loosens the runaway guard and raises the printed
   ceiling to match. `--max-run-usd USD` stops this invocation between trials once
   it has spent that much (exit 14).
 - `--tasks-dir` and `--ledger-dir` relocate the bank source and the ledger (the

@@ -1,11 +1,11 @@
 """Gated-session strategy: one spawn + a deterministic gate + a bounded fix loop.
 
-Models a series engine's engine-INDEPENDENT gate discipline WITHOUT the
-orchestration engine: the agent implements once, the harness runs the task's
+Models an orchestration engine's engine-INDEPENDENT gate discipline WITHOUT the
+engine: the agent implements once, the harness runs the task's
 visible gate command, and on failure re-prompts the agent with the gate output up
 to ``max_fix_attempts`` times. The ``with_review`` variant adds one structured
 review pass (VERDICT + feedback -> one fix) after the gate is green. Ablation
-companion to ``single_session`` / ``series`` (spec 6).
+companion to ``single_session`` (spec 6).
 
 The gate the agent runs is the task's OWN visible suite (``task.gate["run"]``),
 distinct from the blind harness-side acceptance oracle (``verify.py``, ADR-0003)

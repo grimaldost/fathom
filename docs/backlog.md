@@ -60,16 +60,6 @@ the init sample as the fast path; better, corroborate with an observed `mcp__*` 
 was not denied (`arming.tools_served_by` already maps tools to servers). The refusal should name
 the server and its last-seen status, and offer a scoped wait before the blanket flag.
 
-**FATH-B56 — A relative `[tools] repo` resolves against the process working directory.** *(S)*
-`resolve_repo_invocation_cmd` (`scenario.py`) resolves the path with `Path(repo).resolve()`,
-against fathom's working directory rather than the scenario file that wrote it. It works only
-when fathom runs from the directory the author had in mind. From a worktree, from a checkout laid
-out differently, or with `--home` pointing at a data root from elsewhere, it names a directory
-that does not exist and the series arm cannot start. `[context] inject` and `[settings] inject`
-already resolve against the scenario file. Change: do the same for `[tools] repo`. The resolved
-string enters `config_hash`, so if that would move committed hashes, take the smaller change
-instead: refuse at resolution time when the resolved repo does not exist, naming the path.
-
 **FATH-B67 — `validate` proves a bank can discriminate on its fixture, not that it does against
 a live bare arm.** *(M)*
 The fixture check shows every task leaves the arm something to do; it cannot show that a bare
@@ -219,11 +209,11 @@ right prompts (trigger recall and specificity) is a different measurement that o
 fathom measures outcomes on a task bank, scored by verifiers. Add a negative trigger that says
 so, and state which side owns the with/without comparison.
 
-**FATH-B29 — Two CLI naming and ergonomics fixes.** *(S)*
-`--no-engine-boundary` reads as disabling a safety control when it only skips a check group;
-rename it `--skip-engine-check` (moot: FATH-B36 retires the group). Consider `--limit-per-arm
-N` beside `--limit`, so a pilot cannot spend its whole budget on the first arm; document the
-scenario-major behaviour first (FATH-B10).
+**FATH-B29 — A CLI ergonomics fix.** *(S)*
+Consider `--limit-per-arm N` beside `--limit`, so a pilot cannot spend its whole budget on the
+first arm; document the scenario-major behaviour first (FATH-B10). The other half of this row,
+renaming `--no-engine-boundary`, is moot: FATH-B36 retired the check group, and the flag is
+accepted and ignored.
 
 **FATH-B26 — A second runner adapter would make the vendor-neutrality claim true.** *(L)*
 The `Runner` protocol is in place, but `claude-cli` is the only adapter, so the claim that the
@@ -258,32 +248,6 @@ same executor, yet it is a distinct strategy name in the docs and the parser. Re
 `review = true` key on `gated-session`, with the old name accepted for one release so committed
 `config_hash`es stay interpretable.
 
-**FATH-B36 — Retire the `series` strategy.** *(M)*
-It is the largest strategy, the one sanctioned non-adapter model call, a smoke check group and
-an engine contract spec. This row used to ask for a measurement in a data root before retiring
-it. On 2026-10-08 the maintainer decided to retire it without one: the measurement was declined,
-and the series engine it would have measured froze its runner the same day. The retirement unit
-is unchanged: the strategy (`src/fathom/strategies/series.py`), the contract spec
-(`docs/specs/2026-07-03-series-engine-contract.md`) and the engine-boundary smoke group go
-together, and the smoke check count drops from 11 to 10. Some things must stay, or the change
-breaks what it does not mean to touch:
-- the `tools`, `tool_invocation_cmd` and `tool_repo_sha` keys of every arm's `config_hash`
-  preimage, fixed at their empty values, since dropping them moves every arm's hash; refuse
-  `[tools] source = "repo"` when an arm is loaded instead;
-- the ledger field `tool_git_sha` and the `pin_level` value `"series"`, which old rows carry;
-- the scorecard's series line in `report.py`, or the golden scorecard changes with it;
-- `--no-engine-boundary`, accepted and ignored for one release, since every documented smoke
-  command passes it;
-- a short "12. Series arms (retired)" in `arming.md`, since the guide's sections are numbered
-  without gaps and renumbering 13 to 15 breaks their citations;
-- `NON_BYPASS_PERMISSION_MODE`, which `smoke.py` imports from `series.py`, moved first.
-
-A data root with a series arm deletes it in the same change that takes the release without the
-strategy: `fathom run` refuses an unknown strategy, and smoke's engine check reads that arm until
-the check goes. Until the retirement lands, a series arm's spawns do not get the instruction-file
-exclusion of 0.9.0 (FATH-B83; `CHANGELOG.md`, 0.9.0), so do not buy series trials. The retirement
-moots FATH-B56, FATH-B73, FATH-B74 and the flag-rename half of FATH-B29.
-
 **FATH-B33 — Fold `/fathom:plan` into `/fathom:run`.** *(S)*
 `/fathom:plan` is `fathom run <bank> --dry-run`, and much of `/fathom:report` repeats the skill's
 scorecard-reading section. Replacement: `/fathom:run` dry-runs first and asks for confirmation
@@ -301,8 +265,7 @@ also removes the plugin's only third-party runtime dependency.
 and the generic half of `review-checklist.md` are copies of keel's portable method kit, and each
 copy can drift from its source. Replacement: short pointers to keel's originals, each kept at its
 current path so links into it still resolve. Keep what is specific to this repository:
-`method-bindings.md`, the project items in `review-checklist.md`, `measured-terms.md`, and the
-notes in `series-toml-skeleton.md` on what fathom pins and strips.
+`method-bindings.md`, the project items in `review-checklist.md` and `measured-terms.md`.
 
 ## Later
 
@@ -341,22 +304,6 @@ can read. The guide asks authors to keep such scripts elsewhere or inline. Chang
 declare the scripts its hooks run, copy them per spawn beside the settings file, and
 substitute the copies' paths into the hook commands; hash the scripts' content into
 `config_hash`, which gives only those arms a new hash.
-
-**FATH-B73 — A series engine's checks can leave files in the scored workspace.** *(M)*
-The gated strategies remove whatever a gate command creates in the workspace once it exits.
-A series engine runs its own `[[checks]]` in the trial workspace, and fathom removes nothing
-after them, so a test runner's cache or compiled bytecode can reach the result view and tell
-a series trial apart from the others. Change: have the engine run its checks against a
-snapshot of the workspace (a copy, or a worktree of the commit under test) that it discards
-afterwards, as a clause of the series-engine contract
-(`docs/specs/2026-07-03-series-engine-contract.md`). Until then the authoring guide
-(`arming.md`, section 12) asks for checks that write nothing into the workspace.
-
-**FATH-B74 — A series arm whose engine checkout lies inside the data root names the data root.** *(S)*
-The engine command carries `[tools].repo` as an absolute path, and running the engine from a
-virtual environment in that checkout puts the data root on `VIRTUAL_ENV` and `PATH`. Change:
-refuse, or warn, when a series arm's repo resolves inside the data root, and say in the
-authoring guide (`arming.md`, section 12) that the engine checkout lives outside it.
 
 **FATH-B75 — fathom's own process holds the arm name during a trial.** *(S)*
 `FATHOM_STREAM_TAG` and `FATHOM_STREAM_DIR` are set in fathom's environment for the whole
@@ -442,3 +389,7 @@ is the whole record.
 | FATH-B82 | A finished plan prices one more repeat and counts the completed trials for its arms. | 0.9.0 |
 | FATH-B83 | Each spawn's `--settings` layer excludes the instruction files above its workspace (`claudeMdExcludes`), the claude.ai connectors are off, and `fathom smoke` checks it on a live spawn. | 0.9.0 |
 | FATH-B85 | A study declares repeats per cell; one-repeat studies are marked directional. | 0.11.0 |
+| FATH-B36 | The `series` strategy, the engine-boundary smoke check group and the series engine contract spec are retired; `--no-engine-boundary` is accepted and ignored for one release. | Unreleased |
+| FATH-B56 | Moot: FATH-B36 retired the `[tools] repo` invocation it described. | Unreleased |
+| FATH-B73 | Moot: FATH-B36 retired the strategy whose engine checks it described. | Unreleased |
+| FATH-B74 | Moot: FATH-B36 retired the strategy whose engine checkout it described. | Unreleased |

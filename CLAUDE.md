@@ -56,14 +56,14 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
     `argv[1]`, an environment reduced to system variables with the data root withheld, and
     an empty temporary working directory rather than the data root. Judges see A/B-labelled
     outputs only. Cost data joins after scoring.
-  - *The environment.* A trial's agent, the series engine and gate commands receive no
+  - *The environment.* A trial's agent and gate commands receive no
     `FATHOM_*` variable, not the launch directory (`PWD`, `OLDPWD`), and no variable whose
     value names the data root. `without_harness_vars` in `src/fathom/adapters/claude_cli.py`
     strips the names and then calls `withhold_hidden_dirs`, which drops any variable naming a
     directory registered with `hidden_from_children` and removes PATH entries inside one;
     `_running_in` in `cli.py` registers the data root and any path option for the length of
     a command. `env_for_agent_code` adds the billing and routing strip; `make_spawn_env`
-    builds on that for the adapter and the series engine alike, and gate commands in
+    builds on that for the adapter, and gate commands in
     `strategies/gated_session.py` and `validate.py` get it as it is. `FATHOM_HOME`, the
     launch directory and a virtual environment inside the data root can name it;
     `FATHOM_STREAM_TAG` carries the arm's name. A scenario's `[env]` is applied after the
@@ -90,8 +90,8 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
     process), and the verifier's interpreter, which lies in the data root when fathom runs
     from a virtual environment there; `[settings]` hook commands and `[env]` values, which
     pass as written; a process a timed-out gate detached, which the stop does not reach; and
-    files a series engine's own checks leave in the workspace. The backlog's "Later" group
-    (FATH-B70 to FATH-B73) holds the planned fixes.
+    files an engine's own checks leave in the workspace when an arm's agent runs one. The
+    backlog's "Later" group (FATH-B70 to FATH-B72) holds the planned fixes.
 - **Append-only ledger** (ADR-0002). No code rewrites or deletes a ledger line; reports
   regenerate from the ledger; an invalid run is archived, never deleted. New row fields are
   additive, and readers tolerate rows written before a field existed. The resume key is
@@ -107,8 +107,8 @@ enforcement table (`docs/specs/2026-06-10-fathom-v1-build.md`) says how each is 
   newer pair is written back to the seat's own file only if the seat's file is still what
   was copied, and neither starts while the seat's access token has expired (T53b,
   ADR-0004's 2026-10-24 amendment). Every model call goes
-  through a `Runner` adapter (ADR-0001); the one sanctioned exception is the series-engine
-  subprocess in `src/fathom/strategies/series.py`.
+  through a `Runner` adapter (ADR-0001); the one exception, the series strategy, was retired
+  in 0.13.0.
 - **Standard-library core**, with `typing.Protocol` at the seams (`Runner`,
   `StrategyExecutor`). A convention rather than a CI gate.
 
@@ -130,7 +130,7 @@ taskbank → scenario (resolve + config_hash) → Runner (claude-cli adapter) �
 | `taskbank.py` | Loading `bank.toml` and `task.toml`; staging `fixtures/` into a git workspace; fixture fingerprints. |
 | `scenario.py` | Parsing arm TOML, resolving it, and computing `config_hash` and its preimage. |
 | `adapters/` | The `Runner` protocol and the `claude` CLI adapter: isolation (the spawn environment, and the directories withheld from every child), per-spawn copies of an arm's files, command line, stream parsing, retries, classifying auth and usage-limit failures as infrastructure. |
-| `strategies/` | `single-session`, `gated-session` / `gated-review`, `reprompt-session`, `series`. The set of names is `KNOWN_STRATEGIES`. |
+| `strategies/` | `single-session`, `gated-session` / `gated-review`, `reprompt-session`. The set of names is `KNOWN_STRATEGIES`; `series` was retired in 0.13.0. |
 | `grading/verifier.py` | The result view and the verifier subprocess. `grading/judge.py` is a pairwise judge that `fathom run` does not call. |
 | `validate.py` | The bank-validation checks behind `fathom validate` and the pre-spend gate. |
 | `arming.py`, `armingprobe.py` | Proving on a live spawn that each declared treatment reached it. |
@@ -143,15 +143,14 @@ taskbank → scenario (resolve + config_hash) → Runner (claude-cli adapter) �
 | `streams.py` | Reading the CLI's stream-json output after the fact. |
 
 Design detail: `docs/specs/2026-06-10-fathom-v1-design.md` (architecture) and
-`docs/specs/2026-06-10-fathom-v1-build.md` (build spec). The series arm's boundary is
-`docs/specs/2026-07-03-series-engine-contract.md`. The docs map is `docs/README.md`.
+`docs/specs/2026-06-10-fathom-v1-build.md` (build spec). The docs map is `docs/README.md`.
 
 ## The authoring guide
 
 [`skills/fathom-eval/reference/authoring.md`](skills/fathom-eval/reference/authoring.md) is
 where the one guide for building banks and arms starts, written so an agent with only a fresh
-copy of this repository can build a working bank. It continues in `arming.md` (arms,
-`config_hash`, series arms) and `bank-design.md` (making a bank discriminate, the checklist)
+copy of this repository can build a working bank. It continues in `arming.md` (arms and
+`config_hash`) and `bank-design.md` (making a bank discriminate, the checklist)
 beside it. It ships with the plugin, and `README.md` links to it. It describes as-built
 behaviour of `taskbank.py`, `scenario.py`, `grading/verifier.py`, `validate.py`, `cli.py` and
 `tools/check_naive_refs.py`. A change to any of those that alters a field, a default, a flag,

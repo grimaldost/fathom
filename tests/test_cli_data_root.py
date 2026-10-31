@@ -981,8 +981,8 @@ class InitTests(unittest.TestCase):
             self.assertTrue((ENGINE / relative).exists(), f"the link to {relative} is dead")
 
 
-class SmokeFindsItsDataRootTests(unittest.TestCase):
-    """Only the engine-boundary check reads data, so only it needs a data root.
+class SmokeHidesItsDataRootTests(unittest.TestCase):
+    """``fathom smoke`` reads no data root, but it hides one from its spawns as ``run`` does.
 
     ``run_smoke`` and ``RealProbes`` are replaced: nothing spawns and no credential is read.
     """
@@ -1007,12 +1007,16 @@ class SmokeFindsItsDataRootTests(unittest.TestCase):
         seen = self.seen
 
         class _Probes:
-            def __init__(self, *, scenarios_dir=None, **kw) -> None:
-                seen["scenarios_dir"] = scenarios_dir
+            def __init__(self, **kw) -> None:
+                seen["probes"] = kw
 
-        def _run_smoke(probes, *, force_fail=False, include_engine=True, **kw):
+        def _run_smoke(probes, *, force_fail=False, **kw):
+            from fathom.adapters.claude_cli import hidden_dirs
+
             seen["cwd"] = Path.cwd()
-            seen["include_engine"] = include_engine
+            seen["force_fail"] = force_fail
+            seen["kw"] = kw
+            seen["hidden"] = hidden_dirs()
             # The smoke spawns copy this environment; FATHOM_HOME must not reach them.
             seen["FATHOM_HOME"] = os.environ.get("FATHOM_HOME")
             return 0
@@ -1023,7 +1027,7 @@ class SmokeFindsItsDataRootTests(unittest.TestCase):
         ):
             return _call([*argv, "smoke", *smoke_args], cwd=cwd, env=env)
 
-    def test_a_data_root_found_from_anywhere_is_the_one_read(self) -> None:
+    def test_inside_a_data_root_it_runs_there_and_hides_it_from_the_spawns(self) -> None:
         for mode, (argv, cwd, env) in {
             "inside": ([], self.root / "tasks", None),
             "FATHOM_HOME": ([], self.base, {"FATHOM_HOME": str(self.root)}),
@@ -1033,31 +1037,42 @@ class SmokeFindsItsDataRootTests(unittest.TestCase):
                 self.seen.clear()
                 code, _, err = self._smoke(argv, cwd=cwd, env=env)
                 self.assertEqual(code, 0, err)
-                self.assertEqual(self.seen["scenarios_dir"], self.root / "scenarios")
                 self.assertEqual(self.seen["cwd"], self.root)
+                self.assertIn(self.root, [Path(p) for p in self.seen["hidden"]])
                 self.assertIsNone(self.seen["FATHOM_HOME"])
+                self.assertEqual(self.seen["probes"], {}, "the probes are given no data root")
 
-    def test_without_a_data_root_the_other_checks_still_run(self) -> None:
+    def test_without_a_data_root_it_still_runs_and_withholds_fathom_home(self) -> None:
         plain = self.base / "plain"
         plain.mkdir()
         code, _, err = self._smoke([], cwd=plain)
         self.assertEqual(code, 0, err)
-        self.assertIsNone(self.seen["scenarios_dir"])
-        self.assertTrue(self.seen["include_engine"])
+        self.assertEqual(self.seen["cwd"], plain)
+        self.assertIsNone(self.seen["FATHOM_HOME"])
+        self.assertEqual(self.seen["probes"], {})
 
-    def test_a_bad_fathom_home_stops_it_only_when_the_root_is_needed(self) -> None:
+    def test_a_fathom_home_naming_a_missing_directory_does_not_stop_it(self) -> None:
         plain = self.base / "plain"
         plain.mkdir()
         bad = {"FATHOM_HOME": str(plain / "absent")}
         code, _, err = self._smoke([], cwd=plain, env=bad)
-        self.assertEqual(code, 1, err)
-        self.assertIn("FATHOM_HOME names", err)
-        self.assertEqual(self.seen, {}, "no probe was built")
-        code, _, err = self._smoke([], cwd=plain, env=bad, smoke_args=("--no-engine-boundary",))
         self.assertEqual(code, 0, err)
-        self.assertFalse(self.seen["include_engine"])
-        self.assertIsNone(self.seen["scenarios_dir"])
+        self.assertIn("note:", err)
+        self.assertNotIn("error:", err)
         self.assertIsNone(self.seen["FATHOM_HOME"])
+
+    def test_the_retired_flag_still_parses(self) -> None:
+        plain = self.base / "plain"
+        plain.mkdir()
+        code, _, err = self._smoke([], cwd=plain, smoke_args=("--no-engine-boundary",))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(self.seen["kw"], {}, "the flag is ignored, not passed on")
+
+    def test_force_fail_reaches_the_gate(self) -> None:
+        plain = self.base / "plain"
+        plain.mkdir()
+        self._smoke([], cwd=plain, smoke_args=("--force-fail",))
+        self.assertTrue(self.seen["force_fail"])
 
 
 if __name__ == "__main__":

@@ -452,10 +452,9 @@ def make_spawn_env(config_dir: str) -> dict[str, str]:
     variable, the working-directory variables, and any value naming a hidden
     directory such as the data root, :func:`without_harness_vars`), which is
     :func:`env_for_agent_code`, with ``CLAUDE_CONFIG_DIR`` pinned to the
-    credential-only temp dir.  Both spawn
-    paths — the single-spawn adapter and the series engine — build their env here,
-    so neither can be rerouted off the copied subscription credential by a stray
-    host variable, and neither hands the agent fathom's own state.  The host
+    credential-only temp dir.  Every spawn
+    path builds its env here, so none can be rerouted off the copied subscription
+    credential by a stray host variable, and none hands the agent fathom's own state.  The host
     environment itself is not modified: fathom still reads its variables in its own
     process.
 
@@ -627,8 +626,8 @@ def cost_and_source(cost_usd: float, tokens_in: int, tokens_out: int) -> tuple[f
 def _classify_infrastructure(text: str) -> bool:
     """True when ``text`` carries an auth or subscription usage-limit signature.
 
-    Used by the series strategy to classify engine tracker events. The single-spawn
-    adapter path uses :func:`_spawn_is_infrastructure`, which adds the success nuance.
+    The single-spawn adapter path uses :func:`_spawn_is_infrastructure`, which adds
+    the success nuance.
     """
     return bool(_AUTH.search(text) or _USAGE_LIMIT.search(text))
 
@@ -683,7 +682,7 @@ def build_command(
     auto-approves every tool and turns ``--allowed-tools`` into decoration —
     headless default-deny plus the explicit allowlist is the real boundary, with
     ``--disallowed-tools`` as belt-and-braces.  ``--effort`` gives cross-arm
-    parity with the engine (which always passes it; spec §5).
+    parity with an orchestration engine (which always passes it; spec §5).
     """
     cmd = [
         "claude",
@@ -748,8 +747,8 @@ def terminate_process_tree(pid: int) -> None:
     direct child (as ``subprocess.run``'s timeout does) orphans those grandchildren
     to keep mutating the workspace the verifier is about to score. Windows:
     ``taskkill /T`` walks the child tree. POSIX: the child is started in its own
-    session, so ``killpg`` reaches the group. Shared by the adapter spawn and the
-    series engine boundary (one home, no drift).
+    session, so ``killpg`` reaches the group. Shared by the adapter spawn and
+    the acceptance harness (one home, no drift).
     """
     if os.name == "nt":
         subprocess.run(
@@ -796,7 +795,7 @@ def _subprocess_spawn(
     ``subprocess.run``'s timeout kills only the direct child, so the CLI's tool
     grandchildren are orphaned — they keep mutating the scored workspace, and an
     inherited stdout pipe can block the harness past the timeout. Popen plus a
-    process-tree kill terminates them, mirroring the engine boundary (spec §6).
+    process-tree kill terminates them (spec §6).
     Still re-raises ``TimeoutExpired`` (carrying whatever streamed before the kill)
     so the adapter's timeout path can recover the economy the run burned.
     """

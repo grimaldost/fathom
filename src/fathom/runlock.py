@@ -57,7 +57,7 @@ still share 0.6.2's own window of two tickets taken inside one clock step.
 
 ## Why the seam is per-heartbeat and not per-trial
 
-A series trial can run for an hour. A per-trial beat therefore gives a staleness horizon
+A long trial can run for an hour. A per-trial beat therefore gives a staleness horizon
 no shorter than the longest trial, and for that long a dead holder cannot be told from a
 live one. A background thread beating every 15s gives a 120s horizon — eight missed
 beats, so a stalled writer is not mistaken for a dead one.

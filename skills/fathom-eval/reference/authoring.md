@@ -14,7 +14,7 @@ another file is cited with that file's name, as in "`arming.md`, section 10".
 | File | Sections |
 |---|---|
 | `authoring.md` (this file) | 1 to 8: terms, the data root, the bank, its tasks and fixtures, the verifier, reference solutions and `fathom validate`. 13 and 14: running an analysis, reading the scorecard. |
-| [`arming.md`](arming.md) | 10 to 12: arms, their tools and treatments, `config_hash` and the resume key, series arms. |
+| [`arming.md`](arming.md) | 10 to 12: arms, their tools and treatments, `config_hash` and the resume key, and a note on the strategy retired in 0.13.0. |
 | [`bank-design.md`](bank-design.md) | 9 and 15: making a bank discriminate, the checklist before the first paid run. |
 
 The parsers are the source of truth, and everything below is written against them:
@@ -214,7 +214,6 @@ tasks/<bank>/
     fixtures/               # the starting repository (section 6)
     solution/               # optional; a reference solution overlay (section 8)
     refs/naive/             # optional; the naive-fix overlay (bank-design.md, section 9)
-    series.toml, prompts/   # only for tasks run by a series arm (arming.md, section 12)
     …                       # anything else the verifier reads from its own directory
 ```
 
@@ -229,8 +228,7 @@ The bank itself needs only `bank.toml`. Each task needs:
 - **Recommended:** `solution/`. Without it `fathom validate` cannot show that the task can be
   solved (section 8).
 - **Optional:** `refs/naive/` with a `[naive]` table (`bank-design.md`, section 9);
-  `series.toml` and `prompts/`, only when a series arm runs the task (`arming.md`,
-  section 12); any support files the verifier reads.
+  any support files the verifier reads.
 
 ## 4. `bank.toml`
 
@@ -352,8 +350,9 @@ verifier scores. A `.git` directory inside `fixtures/` is skipped; an empty or m
   workspace under any other name (a memory store, say), the result view keeps it, and its
   presence alone can tell a reader which arm ran. Keep such a directory outside the
   workspace, and write the verifier so it does not depend on it.
-- **The root `.gitignore`.** A series engine appends a block that starts with the line
-  `# PR automation` to the root `.gitignore`, or creates the file. The result view cuts the
+- **The root `.gitignore`.** An engine an arm's agent runs inside the workspace may append a
+  block that starts with the line `# PR automation` to the root `.gitignore`, or create the
+  file. The result view cuts the
   file from that text on and ends it at its last non-blank line with one line break, in every
   arm, and leaves the file out when nothing is left (`_gitignore_for_view`). So a fixture may
   ship a `.gitignore`, but it must not contain that text, and the verifier sees it without
@@ -377,7 +376,7 @@ unable to tell which arm produced the result (ADR-0003).
 **The result view.** fathom copies the workspace into a temporary directory without the
 names listed in section 6: `.git`, `tracker.jsonl`, `outputs`, `logs`, `series.toml` and
 `prompts` at the root, and `plans`, `journal` and `.remember` at any depth. The root
-`.gitignore` loses a series engine's block, as section 6 describes. A fixture file or
+`.gitignore` loses that engine block, as section 6 describes. A fixture file or
 directory under one of those names never reaches the verifier, so do not use them for
 anything the verifier must read. The copy is deleted after the verifier exits. Scoring a copy means the verifier may modify it freely,
 for example to restore the original tests before running them.
@@ -567,7 +566,7 @@ In order, from the data root (or with `--home`):
 fathom validate <bank> [--strict]                       # free: can the bank discriminate?
 fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
                                                         # free: arms, trial count, USD ceiling
-fathom smoke [--no-engine-boundary]                     # a few cents: spawn isolation on real spawns
+fathom smoke                                            # a few cents: spawn isolation on real spawns
 fathom verify-arming [--scenarios-dir DIR]              # optional, a little: are the treatments armed?
 fathom run <bank> --repeats K [--scenarios-dir DIR]     # paid; resumable
 fathom report <bank> [--dataset-version V] [--per-trial] # free: report/scorecard-<bank>.md
@@ -583,8 +582,7 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
 - **Plan first, and read the arm names.** `--dry-run` prints the data root, the arm names
   (each with a config_hash prefix to distinguish forks: arms that differ show different
   prefixes; arms that pool show the same one), the number of trials still to buy (and how
-  many are already done), and a ceiling of `trials × the per-spawn cap` (series trials
-  priced as in `arming.md`, section 12). It spawns nothing and takes no lock. The ceiling is
+  many are already done), and a ceiling of `trials × the per-spawn cap`. It spawns nothing and takes no lock. The ceiling is
   a worst case, not an estimate. When the bank's ledger already holds completed trials, an
   `expected:` line follows the `planned:` line with the estimate: the median cost per
   trial for each planned strategy (per strategy and model once a model has 5 trials), its
@@ -612,7 +610,8 @@ the bank, so it belongs just before paid runs rather than in the authoring loop.
 - **Smoke before any paid run**, and again when resuming later. It proves on tiny real spawns
   that the credential works, that the temporary config holds only the credential, that a
   disallowed tool is refused, that stream parsing works, that a plugin mount reaches the CLI,
-  that the run lock excludes a second run, and (unless skipped) the series engine boundary. It
+  that the run lock excludes a second run, and that no instruction file from above the workspace
+  reaches a spawn. It
   ends with `SMOKE RESULT: ALL PASS (n/n checks)`; a skipped check keeps it red.
 - **Cost rails on `fathom run`.** `--max-spawn-usd USD` is the cap for each spawn (default
   $5; the older spelling `--max-budget-usd` still works); raising it loosens the only runaway

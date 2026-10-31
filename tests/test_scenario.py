@@ -132,58 +132,11 @@ class TestResolveScenario(unittest.TestCase):
         r2 = resolve_scenario(config, AltModel())
         self.assertNotEqual(r1.config_hash, r2.config_hash)
 
-    def test_hash_changes_when_invocation_cmd_changes(self):
-        config = self._config(
-            strategy="series",
-            tools=ToolsConfig(source="repo", repo="/some/path"),
-        )
-
-        class AltCmd:
-            def resolve_model_id(self, model: str) -> str | None:
-                return model + "-20251001"
-
-            def resolve_tool_repo_sha(self, repo: str) -> str:
-                return StubResolver.STUB_SHA
-
-            def build_tool_invocation_cmd(self, repo: str) -> str:
-                return f"DIFFERENT_CMD {repo}"
-
-        r1 = resolve_scenario(config, STUB)
-        r2 = resolve_scenario(config, AltCmd())
-        self.assertNotEqual(r1.config_hash, r2.config_hash)
-
-    def test_hash_changes_when_tool_sha_changes(self):
-        config = self._config(
-            strategy="series",
-            tools=ToolsConfig(source="repo", repo="/some/path"),
-        )
-
-        class AltSha:
-            def resolve_model_id(self, model: str) -> str | None:
-                return model + "-20251001"
-
-            def resolve_tool_repo_sha(self, repo: str) -> str:
-                return "deadbeefdeadbeefdeadbeefdeadbeef"
-
-            def build_tool_invocation_cmd(self, repo: str) -> str:
-                return f"uv run --project {repo} convoy"
-
-        r1 = resolve_scenario(config, STUB)
-        r2 = resolve_scenario(config, AltSha())
-        self.assertNotEqual(r1.config_hash, r2.config_hash)
-
     def test_none_tools_yields_no_pins(self):
         """source=none scenarios produce no invocation cmd or SHA."""
         resolved = resolve_scenario(self._config(), STUB)
         self.assertIsNone(resolved.tool_invocation_cmd)
         self.assertIsNone(resolved.tool_repo_sha)
-
-    def test_repo_tools_yields_invocation_cmd_and_sha(self):
-        config = self._config(tools=ToolsConfig(source="repo", repo="/tools/repo"))
-        resolved = resolve_scenario(config, STUB)
-        self.assertIsNotNone(resolved.tool_invocation_cmd)
-        self.assertIsNotNone(resolved.tool_repo_sha)
-        self.assertIn("uv run --project", resolved.tool_invocation_cmd)
 
     def test_config_hash_is_64_char_hex(self):
         resolved = resolve_scenario(self._config(), STUB)
@@ -193,48 +146,6 @@ class TestResolveScenario(unittest.TestCase):
     def test_returned_type_is_resolved_scenario(self):
         resolved = resolve_scenario(self._config(), STUB)
         self.assertIsInstance(resolved, ResolvedScenario)
-
-
-# ---------------------------------------------------------------------------
-# TestRepoInvocationCmd — the engine invocation command must be cwd-independent.
-# The rule: the command that starts a series engine names its repository by an
-# absolute path. The engine runs with cwd = the trial workspace (a temp dir), so a
-# relative [tools].repo baked verbatim into `uv run --project <rel> convoy` would not
-# resolve there. resolve_repo_invocation_cmd freezes the repo to an absolute,
-# forward-slash path at resolution time.
-# ---------------------------------------------------------------------------
-
-
-class TestRepoInvocationCmd(unittest.TestCase):
-    def _project_arg(self, cmd: str) -> str:
-        parts = cmd.split()
-        return parts[parts.index("--project") + 1]
-
-    def test_relative_repo_frozen_to_absolute(self):
-        from fathom.scenario import resolve_repo_invocation_cmd
-
-        cmd = resolve_repo_invocation_cmd("../convoy")
-        proj = self._project_arg(cmd)
-        self.assertTrue(Path(proj).is_absolute(), f"project path not absolute: {proj!r}")
-        self.assertNotIn("..", cmd)  # the raw relative token is gone
-        self.assertEqual(proj, str(Path("../convoy").resolve()).replace("\\", "/"))
-
-    def test_forward_slash_normalized(self):
-        from fathom.scenario import resolve_repo_invocation_cmd
-
-        cmd = resolve_repo_invocation_cmd(str(Path.cwd()))
-        self.assertNotIn("\\", cmd)  # config_hash stability across separators
-
-    def test_real_resolvers_delegate_to_helper(self):
-        """Both real resolvers must produce the same cwd-independent command,
-        so the series arm works from cli.py and from the smoke gate identically."""
-        from fathom.cli import _DefaultResolver
-        from fathom.scenario import resolve_repo_invocation_cmd
-        from fathom.smoke import _DefaultSmokeResolver
-
-        expected = resolve_repo_invocation_cmd("../convoy")
-        self.assertEqual(_DefaultResolver().build_tool_invocation_cmd("../convoy"), expected)
-        self.assertEqual(_DefaultSmokeResolver().build_tool_invocation_cmd("../convoy"), expected)
 
 
 # ---------------------------------------------------------------------------
@@ -297,26 +208,6 @@ class TestFixtureScenarios(unittest.TestCase):
             Path(config.context.inject), (SCENARIOS_DIR / "assets" / "treatment.md").resolve()
         )
 
-    def test_series_parses_and_resolves(self):
-        config, resolved = self._lr("series.toml")
-        self.assertEqual(config.name, "series")
-        self.assertIsNotNone(resolved.config_hash)
-        self.assertIsNotNone(resolved.tool_invocation_cmd)
-        self.assertIsNotNone(resolved.tool_repo_sha)
-
-    def test_series_names_a_tool_repo(self):
-        config, _ = self._lr("series.toml")
-        self.assertEqual(config.tools.source, "repo")
-        self.assertTrue(config.tools.repo)
-
-    def test_series_invocation_cmd_is_explicit(self):
-        """The command is `uv run --project <repo> ...`, never a bare PATH lookup,
-        and it carries the repo path from the TOML."""
-        config, resolved = self._lr("series.toml")
-        cmd = resolved.tool_invocation_cmd
-        self.assertTrue(cmd.startswith("uv run --project"), msg=f"bare PATH lookup: {cmd!r}")
-        self.assertIn(config.tools.repo, cmd)
-
     def test_bare_and_treatment_differ_only_in_context(self):
         """The fixtures pair a control with a treatment the way a real bank does:
         apart from the arm name, the injected file is the only difference."""
@@ -329,13 +220,12 @@ class TestFixtureScenarios(unittest.TestCase):
         self.assertIsNone(bare.context.inject)
         self.assertIsNotNone(treatment.context.inject)
 
-    def test_all_three_have_unique_config_hashes(self):
+    def test_all_fixtures_have_unique_config_hashes(self):
         """Different scenarios must produce different config hashes."""
         _, r_bare = self._lr("bare.toml")
         _, r_treatment = self._lr("treatment.toml")
-        _, r_series = self._lr("series.toml")
-        hashes = {r_bare.config_hash, r_treatment.config_hash, r_series.config_hash}
-        self.assertEqual(len(hashes), 3, "Expected 3 distinct hashes")
+        hashes = {r_bare.config_hash, r_treatment.config_hash}
+        self.assertEqual(len(hashes), 2, "Expected 2 distinct hashes")
 
 
 class TestToolAllowlists(unittest.TestCase):
@@ -584,8 +474,7 @@ class TestPluginMount(unittest.TestCase):
 
         The goldens are the synthetic fixtures under tests/fixtures/scenarios/,
         resolved with StubResolver: one plain arm, one with an injected context file
-        (its content sha256 is an input) and one series arm (tool SHA and invocation
-        command are inputs). A deliberate edit to a fixture moves its golden in the
+        (its content sha256 is an input). A deliberate edit to a fixture moves its golden in the
         same change; a golden that moves because *code* moved is the defect this
         test exists to catch. Checks on the hashes of real arms belong to the data
         root that holds those arms and their ledgers."""
@@ -593,7 +482,6 @@ class TestPluginMount(unittest.TestCase):
             # A plain single-session arm: no context, plugins, settings, env or gate.
             "bare.toml": "bbc88a419d2128e34d8c1cc864f08dbc76591581c86b02f12da36807d302f810",
             "treatment.toml": ("f4910198605ab3b16759fdf33e12cba1a971ae5ee001c58150f7818bf916a7c4"),
-            "series.toml": "12c0e47df21ea91ac44ceeb6e8e4fd8795e017adf33b95741d65feed9d79d409",
         }
         r = StubResolver()
         for filename, expected_hash in known.items():
