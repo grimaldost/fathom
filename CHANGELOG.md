@@ -6,6 +6,12 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-10-31
+
+A minor release: it retires the `series` strategy and the engine-boundary smoke check, and a data root with a series
+arm, or with `[tools] source = "repo"`, stops loading. Pre-1.0, a change a consumer must act on is a minor bump,
+as 0.10.0 to 0.12.0 were classed.
+
 ### Removed
 
 - **The `series` strategy (T52b, FATH-B36).** The strategy that drove an external multi-PR

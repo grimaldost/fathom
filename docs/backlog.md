@@ -389,7 +389,7 @@ is the whole record.
 | FATH-B82 | A finished plan prices one more repeat and counts the completed trials for its arms. | 0.9.0 |
 | FATH-B83 | Each spawn's `--settings` layer excludes the instruction files above its workspace (`claudeMdExcludes`), the claude.ai connectors are off, and `fathom smoke` checks it on a live spawn. | 0.9.0 |
 | FATH-B85 | A study declares repeats per cell; one-repeat studies are marked directional. | 0.11.0 |
-| FATH-B36 | The `series` strategy, the engine-boundary smoke check group and the series engine contract spec are retired; `--no-engine-boundary` is accepted and ignored for one release. | Unreleased |
-| FATH-B56 | Moot: FATH-B36 retired the `[tools] repo` invocation it described. | Unreleased |
-| FATH-B73 | Moot: FATH-B36 retired the strategy whose engine checks it described. | Unreleased |
-| FATH-B74 | Moot: FATH-B36 retired the strategy whose engine checkout it described. | Unreleased |
+| FATH-B36 | The `series` strategy, the engine-boundary smoke check group and the series engine contract spec are retired; `--no-engine-boundary` is accepted and ignored for one release. | 0.13.0 |
+| FATH-B56 | Moot: FATH-B36 retired the `[tools] repo` invocation it described. | 0.13.0 |
+| FATH-B73 | Moot: FATH-B36 retired the strategy whose engine checks it described. | 0.13.0 |
+| FATH-B74 | Moot: FATH-B36 retired the strategy whose engine checkout it described. | 0.13.0 |
