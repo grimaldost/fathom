@@ -11,7 +11,11 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 - **The `series` strategy (T52b, FATH-B36).** The strategy that drove an external multi-PR
   engine is gone: `src/fathom/strategies/series.py`, the `"series"` entry of `KNOWN_STRATEGIES`,
   the plan's series spawn arithmetic and `[tools] source = "repo"`'s resolver methods. An arm
-  with `strategy = "series"` is refused by `fathom run` as an unknown strategy. Every model
+  with `strategy = "series"` is refused by `fathom run` as an unknown strategy. An arm with
+  completed trials stays attributable for `fathom reconcile` (its `scenario-known` check reads
+  arm names recursively under `scenarios/`) when its file moves to a subdirectory of
+  `scenarios/` instead of being deleted; `fathom run`, which reads only the top level of its
+  scenarios directory, no longer sees it. Every model
   call now goes through a `Runner` adapter; the one exception ADR-0001 allowed is gone.
   What other code reads stays: `forge_claude_shim` and `read_argv_log` (the acceptance
   harness uses them), the `config_hash` preimage keys, `PIN_SERIES` and old ledger rows with

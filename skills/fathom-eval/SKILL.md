@@ -140,7 +140,7 @@ fathom validate <bank> [--strict]
 fathom run <bank> --dry-run [--repeats K] [--scenarios-dir DIR]
 
 # 3. A few cents: the real-spawn go/no-go gate. Expect "SMOKE RESULT: ALL PASS".
-#    It reads no data root, so it takes no flag but --force-fail.
+#    It reads no data root; its only flag with an effect is --force-fail.
 fathom smoke
 
 # 3b. Optional, a little: prove each treatment arm's injection reaches a live spawn.
@@ -285,8 +285,9 @@ spawns. Details in the authoring guide, `reference/arming.md` section 10.
 | `reprompt-session` | implementation + one unconditional generic reprompt; the control for the gate's information | 2 |
 
 `gated-*` need the task to define a `[gate] run` (or the arm a `[gate] extra`). The
-`series` strategy was retired in 0.13.0: an arm that names it, or sets `[tools] source =
-"repo"`, no longer loads (`reference/arming.md`, section 12).
+`series` strategy was retired in 0.13.0: `fathom run` refuses the strategy name as unknown,
+and an arm with the retired `[tools] source = "repo"` no longer loads (`reference/arming.md`,
+section 12).
 
 ## The four invariants (ADRs under the engine's `docs/adr/`)
 

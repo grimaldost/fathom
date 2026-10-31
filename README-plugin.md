@@ -25,7 +25,8 @@ plugin's lock file is used as shipped and never rewritten inside a plugin cache.
 `python -m fathom` rather than the `fathom` console script, because some application-control
 policies (Windows Smart App Control, for one) block console-script executables. Running from
 the data root means a relative path argument, such as `--scenarios-dir scenarios/example`,
-resolves inside it.
+resolves inside it. `smoke` is the exception: it reads no data root, and runs without
+`--home` when none resolves.
 
 The engine version is the plugin's version, and each ledger row it writes records that
 version as `engine_version`.

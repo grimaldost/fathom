@@ -445,10 +445,11 @@ def _trial_ceiling_usd(
 ) -> float:
     """Worst-case USD for ONE trial of `scenario` on `task`: the per-spawn cap.
 
-    Every strategy makes one spawn per trial, so the ceiling is the cap actually in
-    force. `--max-budget-usd` is PER-SPAWN, so passing a number larger than the
-    adapter's default LOOSENS the only runaway guard there is. With a hardcoded
-    price, the plan printed the same reassuring total either way, and a large
+    The plan prices one per-spawn cap per trial for every strategy; gated and reprompt
+    arms make two or more spawns and can spend more, so the ceiling is the cap actually
+    in force, not a bound on a trial's total. `--max-budget-usd` is PER-SPAWN, so passing a
+    number larger than the adapter's default LOOSENS the only runaway guard there is. With a
+    hardcoded price, the plan printed the same reassuring total either way, and a large
     loosening read as a tight total rail. Deriving it from the cap makes the flag's
     real effect visible in the plan, before the spend. The scenario and task stay in
     the signature: the plan and its tests call it per cell.

@@ -228,7 +228,8 @@ claude plugin install fathom@fathom
 export FATHOM_HOME=/path/to/my-evals
 ```
 
-The plugin runs the engine it ships, pointed at your data root with `--home`. `FATHOM_HOME`
+The plugin runs the engine it ships, pointed at your data root with `--home` (`smoke` is the exception: it reads no data root,
+and runs without `--home` when none resolves). `FATHOM_HOME`
 selects the data root; without it, the plugin walks up from the current directory to the
 nearest `fathom.toml` with `[data_root]`. It refuses an unmarked directory, the plugin's own
 tree and a directory inside a plugin cache, because a cache refresh would delete the ledger

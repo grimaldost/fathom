@@ -259,6 +259,10 @@ Users take a release with `uv tool install git+https://github.com/grimaldost/fat
 (which replaces an installed version), then run `fathom smoke` and `fathom reconcile` in
 their data root. A data root whose arms still use the retired `series` strategy or
 `[tools] source = "repo"` stops loading on 0.13.0 or later, so remove those arms first.
+An arm with completed trials stays attributable for `fathom reconcile` (its `scenario-known`
+check reads arm names recursively under `scenarios/`) when its file moves to a subdirectory of
+`scenarios/` instead of being deleted; `fathom run`, which reads only the top level of its
+scenarios directory, no longer sees it.
 The plugin runtime re-pulls an installed plugin only when the
 manifest's version moves, so a release is also what delivers plugin changes.
 

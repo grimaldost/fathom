@@ -9,7 +9,7 @@ preconditions.
 
 Preconditions:
 1. The smoke gate passed **this session** (run `/fathom:smoke` if not; it reads no data
-   root and takes no flag but `--force-fail`).
+   root, and its only flag with an effect is `--force-fail`).
 2. The plan was reviewed, and its arm names, trial count and USD ceiling are
    acceptable (run `/fathom:plan` if not).
 3. If the bank's arms live in a subdirectory of `scenarios/`, `--scenarios-dir` is

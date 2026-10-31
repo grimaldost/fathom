@@ -37,7 +37,8 @@ errored, and the verifier's results if scoring succeeded.
   Identical configurations produce identical hashes, so two runs with the same hash compete
   fairly; a hash change invalidates prior results (the resume key includes it).
 - `tool_git_sha` (str): The SHA of the tool's repository at run time (e.g., the arm's tool
-  repo). Provenance only; not part of the resume key or config_hash.
+  repo). Provenance only; not part of the resume key or config_hash. Empty on rows written from
+  0.13.0; it was set only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
   reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
   retired strategy that drove an engine. Provenance only; not part of the resume key or
@@ -111,7 +112,8 @@ orders them exactly as they arrived, and reports join them to their trial by `co
 - `exit_code` (int): The process exit code (0 for success, non-zero for failure or abort).
 - `dataset_version` (str): The dataset version (same as the trial's).
 - `config_hash` (str): The configuration hash (same as the trial's; used to join run to trial).
-- `tool_git_sha` (str): The tool repository SHA at run time. Provenance only.
+- `tool_git_sha` (str): The tool repository SHA at run time. Provenance only. Empty on rows written from 0.13.0;
+  it was set only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
   reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
   retired strategy that drove an engine. Provenance only.
@@ -161,7 +163,8 @@ when multiple arms compete.
 - `dataset_version` (str): The dataset version.
 - `config_hash_a` (str): The first configuration (often the baseline or "bare" arm).
 - `config_hash_b` (str): The second configuration (the tested arm).
-- `tool_git_sha` (str): The tool repository SHA.
+- `tool_git_sha` (str): The tool repository SHA. Empty on rows written from 0.13.0; it was set
+  only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
   reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
   retired strategy that drove an engine.

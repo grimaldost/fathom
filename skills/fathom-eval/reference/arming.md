@@ -131,8 +131,8 @@ the task. The spawn's environment is the host's with these removed:
 
 Those are what would otherwise tell the agent where the data root is (the directory that
 holds every task's reference solution and verifier) and which arm it is running: during a
-run, `FATHOM_STREAM_TAG` names the bank, the arm, the task and the repeat. The series
-engine's process gets the same environment. Nor does the spawn's command line name a file
+run, `FATHOM_STREAM_TAG` names the bank, the arm, the task and the repeat. Nor does the
+spawn's command line name a file
 in the data root: each spawn of a trial gets its own copies of the arm's `[context]` file
 and `[plugins]` directories ("Treatments", below). Whatever an arm receives beyond the task,
 it declares in its own file.
@@ -410,7 +410,10 @@ never committed cannot be attributed later.
 ## 12. Series arms (retired)
 
 The strategy that handed a whole task to an external multi-PR engine was removed in 0.13.0.
-From 0.13.0 an arm with `strategy = "series"` or `[tools] source = "repo"` no longer loads
-or runs: since 0.13.0 `[tools] source = "repo"` is refused when the arm loads, and `fathom run`
-refuses the strategy as unknown. Remove such an arm, or set `source = "none"`; ledger rows
-written before 0.13.0 with `pin_level = "series"` still read.
+From 0.13.0 an arm with the retired `[tools] source = "repo"` no longer loads, and
+`fathom run` refuses the retired strategy name `series` as unknown. Remove such an arm, or set
+`source = "none"`; ledger rows written before 0.13.0 with `pin_level = "series"` still read.
+An arm with completed trials stays attributable for `fathom reconcile` (its `scenario-known`
+check reads arm names recursively under `scenarios/`) when its file moves to a subdirectory of
+`scenarios/` instead of being deleted; `fathom run`, which reads only the top level of its
+scenarios directory, no longer sees it.

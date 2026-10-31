@@ -31,7 +31,8 @@ uv run --no-dev --frozen --project <plugin root> python -m fathom --home <data r
 with the data root as the working directory. The data root needs no
 `pyproject.toml` and no copy of fathom of its own. `--no-dev` keeps the development
 tools out of the plugin's environment (the engine needs no dependencies to run), and
-`--frozen` uses the plugin's lock file as shipped, never rewriting it in a plugin cache.
+`--frozen` uses the plugin's lock file as shipped, never rewriting it in a plugin cache. `smoke` is the exception: it reads no data root, and
+runs without `--home` when none resolves.
 
 `_resolve.py` finds the data root with the engine's own resolver
 (`src/fathom/home.py`, loaded by path), so the order is the command line's:
