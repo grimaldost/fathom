@@ -19,7 +19,7 @@ this repository.
 |---|---|---|
 | **DoR gate** | a spec-readiness check before decomposition | `keel check-ready <spec>` (keel CLI on PATH) |
 | **Pre-mortem** | a stateless adversarial pass | keel's `pre-mortem-review` agent (blind, non-author), driven by `docs/method/pre-mortem-prompt.md` |
-| **Series budget** | a forecast and a hard stop | convoy's per-phase `[governance.budgets]` (fathom pins them) and its budget-cap halt (`outcome = "budget"`, exit 4, series contract §7): a spawn that exceeds its cap stops un-integrated rather than overspending |
+| **Series budget** | a forecast and a hard stop | convoy's per-phase `[governance.budgets]` and its budget-cap halt (`outcome = "budget"`, exit 4): a spawn that exceeds its cap stops un-integrated rather than overspending |
 | **Edit-time invariant hook** | block edits that violate a boundary | none yet. Planned candidate: an append-only guard on `ledger/*.jsonl` that rejects in-place rewrites. The ledgers live in data roots, so the hook would ship for data roots to install |
 
 ## Orchestrator

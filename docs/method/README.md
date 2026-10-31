@@ -20,7 +20,7 @@ several PRs or touches an invariant.
 | Exit gate of review | [`definition-of-done.md`](definition-of-done.md) | gate commands and the blocking checklist |
 | Review checklist | [`review-checklist.md`](review-checklist.md) | generic items plus fathom's own; the promotion target for triage |
 | Reflection sink | [`reflection-triage.md`](reflection-triage.md) | turns what a series surfaced into checks |
-| Series budget | [`series-toml-skeleton.md`](series-toml-skeleton.md) | per-phase per-spawn USD caps in `[governance.budgets]` |
+| Series budget | [`method-bindings.md`](method-bindings.md) | per-phase per-spawn USD caps in `[governance.budgets]` |
 | Cost terms in a comparison | [`measured-terms.md`](measured-terms.md) | a cost term a verdict rests on is measured, not modelled |
 | Bindings | [`method-bindings.md`](method-bindings.md) | each slot bound to a concrete mechanism in this repository |
 

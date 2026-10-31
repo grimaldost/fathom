@@ -260,6 +260,33 @@ def test_smoke_passes_its_flags(data_root, calls) -> None:
     assert call["cmd"] == [*_prefix(data_root), "smoke", "--force-fail", "--no-engine-boundary"]
 
 
+def test_smoke_runs_without_a_data_root(tmp_path, monkeypatch, calls) -> None:
+    """``fathom smoke`` reads no data root, so the tool runs it with none: no ``--home``,
+    the server's working directory, and ``FATHOM_HOME`` left as inherited."""
+    import _resolve
+    import fathom_server
+
+    unset = tmp_path / "elsewhere"
+    unset.mkdir()
+    monkeypatch.delenv("FATHOM_HOME", raising=False)
+    monkeypatch.chdir(unset)
+    out = _call(fathom_server.smoke, force_fail=True, no_engine_boundary=True)
+    [call] = calls
+    assert call["cmd"] == [
+        *("uv", "run", "--no-dev", "--frozen", "--project", str(_resolve.PLUGIN_ROOT)),
+        *("python", "-m", "fathom", "smoke", "--force-fail", "--no-engine-boundary"),
+    ]
+    assert "--home" not in call["cmd"]
+    assert call["cwd"] == pathlib.Path.cwd()
+    assert out["ok"] is True
+    assert out["home"] is None
+
+    monkeypatch.setenv("FATHOM_HOME", str(tmp_path / "not-a-root"))
+    _call(fathom_server.smoke)
+    assert calls[-1]["cmd"][-1] == "smoke" and "--home" not in calls[-1]["cmd"]
+    assert calls[-1]["env"]["FATHOM_HOME"] == str(tmp_path / "not-a-root")
+
+
 def test_tools_spawn_nothing_without_a_data_root(tmp_path, monkeypatch, calls) -> None:
     import fathom_server
 
@@ -276,7 +303,6 @@ def test_tools_spawn_nothing_without_a_data_root(tmp_path, monkeypatch, calls) -
         for tool, kwargs in (
             (fathom_server.plan, {"bank": "example-v1"}),
             (fathom_server.report, {"bank": "example-v1"}),
-            (fathom_server.smoke, {}),
         ):
             out = _call(tool, **kwargs)
             assert out["ok"] is False, setup

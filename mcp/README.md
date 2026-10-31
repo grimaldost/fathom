@@ -11,7 +11,7 @@ outside `src/fathom/`, so the eval core stays stdlib-only (this server needs
 |---|---|---|---|
 | `plan` | `fathom run <bank> --dry-run` | none | no |
 | `report` | `fathom report <bank>` | none | no (writes the gitignored `report/`) |
-| `smoke` | `fathom smoke` (`force_fail`, `no_engine_boundary` map to the two flags) | a few cents | no |
+| `smoke` | `fathom smoke` (`force_fail` maps to its flag; `no_engine_boundary` is accepted and ignored) | a few cents | no |
 
 `fathom run` is **not** exposed as a tool — it is long-running, paid, and
 appends to the committed longitudinal ledger. Use the `/fathom:run` slash
@@ -31,7 +31,8 @@ uv run --no-dev --frozen --project <plugin root> python -m fathom --home <data r
 with the data root as the working directory. The data root needs no
 `pyproject.toml` and no copy of fathom of its own. `--no-dev` keeps the development
 tools out of the plugin's environment (the engine needs no dependencies to run), and
-`--frozen` uses the plugin's lock file as shipped, never rewriting it in a plugin cache.
+`--frozen` uses the plugin's lock file as shipped, never rewriting it in a plugin cache. `smoke` is the exception: it reads no data root, and
+runs without `--home` when none resolves.
 
 `_resolve.py` finds the data root with the engine's own resolver
 (`src/fathom/home.py`, loaded by path), so the order is the command line's:
@@ -44,7 +45,9 @@ directory whose `fathom.toml` has a `[data_root]` table. It then **refuses**:
   even when marked, so the committed ledger never lands in a tree that a cache
   refresh deletes.
 
-Every refusal says how to make a data root. `fathom init DIR` makes one:
+Every refusal says how to make a data root. `smoke` is the one tool that does not need
+one: it reads no data root, so with none resolved it runs `fathom smoke` without
+`--home`, in the server's working directory. `fathom init DIR` makes one:
 
 ```
 my-evals/

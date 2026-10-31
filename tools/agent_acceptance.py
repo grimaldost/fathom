@@ -622,7 +622,7 @@ def install_claude_stub(directory: Path) -> Path:
     """Put a ``claude`` in *directory* that records each call and spends nothing, and return
     the file it records to.
 
-    It is the stub fathom's own smoke gate uses (:func:`fathom.smoke.forge_claude_shim`): a
+    It is the argv recorder :func:`fathom.smoke.forge_claude_shim` forges: a
     real ``claude.exe`` on Windows, since a bare ``claude`` resolves through CreateProcess,
     which tries only ``.exe``. First on a subject's PATH, it is what every ``claude`` the
     engine spawns for that subject reaches, through the CLI or the MCP server alike.

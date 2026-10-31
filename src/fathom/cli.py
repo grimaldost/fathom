@@ -20,7 +20,6 @@ import os
 import pathlib
 import statistics
 import sys
-import tomllib
 from collections.abc import Callable, Iterator, Sequence
 from typing import Any, TextIO
 
@@ -46,10 +45,6 @@ _DEFAULT_BASE_BRANCH = "main"
 # here so the plan's ceiling is computed from the cap that will actually bound the
 # spawns when --max-budget-usd is not given; test_cli_budget asserts the two agree.
 _DEFAULT_SPAWN_BUDGET_USD = 5.00
-_SERIES_TEMPLATE_NAME = "series.toml"
-# The engine's own default when a series template omits [review]; mirrors
-# GatedSessionExecutor's repair budget.
-_SERIES_DEFAULT_MAX_FIX_ATTEMPTS = 2
 # Bound on the verifier output persisted per trial (FATH-B14). The ledger is
 # committed, so this is the line between "diagnosable" and "a megabyte of agent
 # output in git history on one bad trial".
@@ -227,9 +222,8 @@ def _build_parser() -> argparse.ArgumentParser:
         "from the costs this process has observed — never summed from the ledger, which "
         "holds every prior invocation of a resumable matrix and would trip at $0 of new "
         "spend on a resume. Because a trial's cost is only known once it is paid, the "
-        "realised total can exceed the rail by the last trial's own ceiling (up to "
-        "n_prs x (1 impl + fixes + reviews) spawns on a series arm). Resuming is safe: the "
-        "ledger is the checkpoint, so a halt costs nothing already bought.",
+        "realised total can exceed the rail by the last trial's own ceiling. Resuming is "
+        "safe: the ledger is the checkpoint, so a halt costs nothing already bought.",
     )
 
     run_p.add_argument(
@@ -440,99 +434,27 @@ def _build_parser() -> argparse.ArgumentParser:
     smoke_p.add_argument(
         "--no-engine-boundary",
         action="store_true",
-        help="Skip the engine-boundary check, which reads the data root's series arm",
+        help="Accepted and ignored: the engine-boundary check was retired in 0.13.0",
     )
 
     return p
 
 
-@dataclasses.dataclass(frozen=True)
-class _SeriesSpawnPlan:
-    """The most spawns one series trial can make, per PR, by role."""
-
-    n_prs: int
-    fixes: int  # fix spawns per PR: the template's max_fix_attempts
-    reviews: int  # review spawns per PR: 0 without a blocking review gate
-
-    def describe(self) -> str:
-        roles = f"1 impl + {self.fixes} fix"
-        if self.reviews:
-            roles += f" + {self.reviews} review"
-        return f"{self.n_prs} PRs x ({roles}) spawns"
-
-
-def _series_spawn_plan(task: Task) -> _SeriesSpawnPlan | None:
-    """The spawn counts a task's committed series template allows.
-
-    Each PR gets one implementation spawn and up to ``max_fix_attempts`` fix spawns.
-    When ``[review] blocking`` is true, the engine also reviews the PR, and reviews
-    again after each fix, so up to ``1 + max_fix_attempts`` review spawns; a
-    non-blocking or absent review adds none.
-
-    Returns None when the template is absent or unreadable — the trial will fail at
-    run time for the same reason, and the planner's job is to price, not to gate.
-    """
-    template = pathlib.Path(task.task_dir) / _SERIES_TEMPLATE_NAME
-    try:
-        with template.open("rb") as fh:
-            data = tomllib.load(fh)
-    except (OSError, tomllib.TOMLDecodeError):
-        return None
-    prs = data.get("prs")
-    if not isinstance(prs, list) or not prs:
-        return None
-    review = data.get("review")
-    attempts = _SERIES_DEFAULT_MAX_FIX_ATTEMPTS
-    blocking = False
-    if isinstance(review, dict):
-        if isinstance(review.get("max_fix_attempts"), int):
-            attempts = review["max_fix_attempts"]
-        blocking = review.get("blocking") is True
-    fixes = max(0, attempts)
-    return _SeriesSpawnPlan(n_prs=len(prs), fixes=fixes, reviews=1 + fixes if blocking else 0)
-
-
 def _trial_ceiling_usd(
     scenario: ResolvedScenario, task: Task, max_budget_usd: float | None
 ) -> float:
-    """Worst-case USD for ONE trial of `scenario` on `task`.
+    """Worst-case USD for ONE trial of `scenario` on `task`: the per-spawn cap.
 
-    Two corrections to a flat per-trial rate, both of which made the plan understate
-    what a run could spend, and neither of which the other catches.
-
-    **Spawns per trial.** One spawn per trial is true of every single-spawn strategy
-    and false of `series`, which spends one implementation spawn plus up to
-    `max_fix_attempts` fix spawns for EVERY PR in the task's decomposition, and, when
-    the template's review gate is blocking, up to `1 + max_fix_attempts` review spawns
-    per PR as well, each against its own per-spawn cap (:func:`_series_spawn_plan`).
-    Pricing that at one spawn is not a conservative estimate — it is a bound the
-    operator believes and the run exceeds by an order of magnitude, which is exactly
-    what the upfront ceiling exists to prevent (spec §10 / C4).
-
-    **The cap actually in force.** `--max-budget-usd` is PER-SPAWN, so passing a
-    number larger than the adapter's default LOOSENS the only runaway guard there is.
-    With a hardcoded single-spawn price, the plan printed the same reassuring total
-    either way, and a large loosening read as a tight total rail. Deriving it from the
-    cap makes the flag's real effect visible in the plan, before the spend.
+    The plan prices one per-spawn cap per trial for every strategy; gated and reprompt
+    arms make two or more spawns and can spend more, so the ceiling is the cap actually
+    in force, not a bound on a trial's total. `--max-budget-usd` is PER-SPAWN, so passing a
+    number larger than the adapter's default LOOSENS the only runaway guard there is. With a
+    hardcoded price, the plan printed the same reassuring total either way, and a large
+    loosening read as a tight total rail. Deriving it from the cap makes the flag's
+    real effect visible in the plan, before the spend. The scenario and task stay in
+    the signature: the plan and its tests call it per cell.
     """
-    per_spawn = max_budget_usd if max_budget_usd is not None else _DEFAULT_SPAWN_BUDGET_USD
-    if scenario.strategy != "series":
-        return per_spawn
-    plan = _series_spawn_plan(task)
-    if plan is None:
-        return per_spawn
-    from fathom.strategies.series import (
-        DEFAULT_BUDGET_FIX,
-        DEFAULT_BUDGET_IMPL,
-        DEFAULT_BUDGET_REVIEW,
-    )
-
-    # The same per-role budgets `_default_executor_factory` hands SeriesExecutor: the
-    # cap for every role when one is given, else the executor's own defaults.
-    impl = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_IMPL
-    fix = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_FIX
-    review = max_budget_usd if max_budget_usd is not None else DEFAULT_BUDGET_REVIEW
-    return plan.n_prs * (impl + plan.fixes * fix + plan.reviews * review)
+    return max_budget_usd if max_budget_usd is not None else _DEFAULT_SPAWN_BUDGET_USD
 
 
 # A (strategy, model) group needs this many completed trials before the plan quotes its own
@@ -876,7 +798,7 @@ def run_matrix(
 
     ``credential_store`` is the invocation's carried credential
     (:class:`fathom.credentials.CredentialStore`, FATH-B55). The default runner, the
-    series executor and the arming probe copy each spawn's credential from it and hand a
+    arming probe copy each spawn's credential from it and hand a
     refreshed one back, so a matrix outlives the access token it started with. ``None``
     (every test that stubs the factories) copies from the seat's file at each spawn.
     """
@@ -959,9 +881,8 @@ def run_matrix(
         planned = planned[:limit]
 
     num_planned = len(planned)
-    # Per TRIAL, not a flat rate: a series trial spends many spawns, and a
-    # single-spawn trial is bounded by the cap actually in force. Both corrections
-    # live in `_trial_ceiling_usd`.
+    # Per TRIAL: a trial is bounded by the per-spawn cap actually in force, which
+    # `_trial_ceiling_usd` derives.
     ceiling_usd = sum(_trial_ceiling_usd(sc, task, max_budget_usd) for sc, task, _ in planned)
 
     # --- Print plan + ceiling BEFORE any spawn (spec §10 invariant) ---
@@ -1010,27 +931,6 @@ def run_matrix(
     # Whether a contrast from this run can be replicated: the bank's declared plan against
     # --repeats. Its own line, never inside `planned:`; it changes nothing that is bought.
     print(_replication.plan_line(repeats_per_cell, repeats), file=_out)
-    # Show the arithmetic for any multi-spawn arm. A ceiling many times the per-trial
-    # rail reads as a typo unless the spawn count is named; naming it is what makes
-    # the number actionable (chunk it with --limit, lower the rail, or don't run).
-    series_cells: dict[tuple[str, str], list[Any]] = {}
-    for sc, task, _ in planned:
-        if sc.strategy == "series":
-            series_cells.setdefault((sc.name, task.id), [sc, task, 0])[2] += 1
-    for (arm, task_id), (sc, task, count) in sorted(series_cells.items()):
-        spawn_plan = _series_spawn_plan(task)
-        shape = (
-            spawn_plan.describe()
-            if spawn_plan is not None
-            else "spawn count UNKNOWN (series template unreadable)"
-        )
-        print(
-            f"  series arm {arm}/{task_id}: {count} x "
-            f"${_trial_ceiling_usd(sc, task, max_budget_usd):.2f}/trial"
-            f"  ({shape}; the per-spawn rail applies to each)",
-            file=_out,
-        )
-
     if nothing_pending:
         for line in _one_more_repeat_lines(
             bank, resolved_scenarios, tasks_to_run, done, max_budget_usd
@@ -1481,23 +1381,6 @@ def _default_executor_factory(
     max_budget_usd: float | None = None,
     credential_store: Any | None = None,
 ) -> Any:
-    if scenario.strategy == "series":
-        from fathom.strategies.series import SeriesExecutor
-
-        if max_budget_usd is None:
-            return SeriesExecutor(credential_store=credential_store)
-        # `--max-budget-usd` is the per-spawn cost rail, and the engine's spawns are
-        # spawns. Without this the flag silently did nothing on a series arm — the
-        # runner it caps is the one the engine never uses (ADR-0001) — so the only
-        # ceiling in force was SeriesExecutor's own $20/$5/$3 default, and an operator
-        # who set the rail believed in one that was not there. Every role gets the
-        # same cap because the flag names a per-spawn cap, not a per-role policy.
-        return SeriesExecutor(
-            budget_impl=max_budget_usd,
-            budget_review=max_budget_usd,
-            budget_fix=max_budget_usd,
-            credential_store=credential_store,
-        )
     if scenario.strategy in ("gated-session", "gated-review"):
         from fathom.strategies.gated_session import GatedSessionExecutor
 
@@ -1534,7 +1417,7 @@ def _default_runner_factory(
     from fathom.adapters.claude_cli import ClaudeCliRunner
 
     inject = scenario.context.inject
-    if scenario.strategy != "series" and not scenario.tools.allowed:
+    if not scenario.tools.allowed:
         # Under headless default-deny an empty allowlist leaves the agent with
         # no tools at all — the arm is unarmed, not evaluated.
         print(
@@ -1609,8 +1492,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # These find their own root, or need none: `init` creates one, `reconcile` and
-    # `index` also accept an engine checkout, and `smoke` needs a data root only for its
-    # engine-boundary check.
+    # `index` also accept an engine checkout, and `smoke` reads no data root.
     if args.command == "init":
         return _cmd_init(args)
     if args.command == "reconcile":
@@ -1842,8 +1724,7 @@ def _init_next_steps() -> str:
         "  4. Plan the matrix and its cost ceiling, spending nothing:\n"
         "     fathom run <bank> --dry-run\n"
         "  5. Before the first paid run, and again before each resume, check spawn isolation\n"
-        "     on real spawns (spends a little):  fathom smoke --no-engine-boundary\n"
-        "     (drop the flag once the data root has a scenarios/series.toml arm)\n"
+        "     on real spawns (spends a little):  fathom smoke\n"
         "The authoring guide covers every file a bank and an arm hold\n"
         f"({_AUTHORING_GUIDE} in the fathom repository):\n  {guide}\n"
         f"A complete small data root to copy from ({_EXAMPLE_ROOT}/ there):\n  {example}"
@@ -2551,49 +2432,31 @@ def _cmd_reconcile(args: argparse.Namespace) -> int:
 
 
 def _cmd_smoke(args: argparse.Namespace) -> int:
-    """Run the smoke gate. Only its engine-boundary check reads data (the data root's
-    series arm), so a data root is resolved for that check alone, and its absence is
-    reported by that check rather than stopping the others."""
+    """Run the smoke gate. It reads nothing from a data root, but it hides one from the
+    spawns' environment as ``run`` does: a smoke started inside a data root keeps the
+    child environment a trial gets. The data root is resolved best-effort; an error in
+    resolving it is noted and never stops the gate."""
     from fathom.smoke import RealProbes, run_smoke
 
-    include_engine = not args.no_engine_boundary
     root: _home.DataRoot | None = None
-    if include_engine:
-        try:
-            root = _home.resolve(args.home)
-        except _home.DataRootError as exc:
-            if not exc.found_nothing:
-                print(f"error: {exc}", file=sys.stderr)
-                return 1
+    try:
+        root = _home.resolve(args.home)
+    except _home.DataRootError as exc:
+        if not exc.found_nothing:
+            print(f"note: smoke reads no data root; ignoring: {exc}", file=sys.stderr)
     if root is None:
         with _fathom_home_withheld():
-            probes = RealProbes(scenarios_dir=None)
-            return run_smoke(probes, force_fail=args.force_fail, include_engine=include_engine)
+            return run_smoke(RealProbes(), force_fail=args.force_fail)
     with _running_in(root, args):
-        probes = RealProbes(scenarios_dir=root.path / SCENARIOS_DIR)
-        return run_smoke(probes, force_fail=args.force_fail, include_engine=include_engine)
+        return run_smoke(RealProbes(), force_fail=args.force_fail)
 
 
 class _DefaultResolver:
-    """Real scenario resolver: git for tool SHA, uv run for invocation command."""
+    """Real scenario resolver: the model id is resolved at run time; the plugin's
+    metadata is read from its directory."""
 
     def resolve_model_id(self, model: str) -> str | None:
         return None  # deferred; CLI reports the exact model id at run time
-
-    def resolve_tool_repo_sha(self, repo: str) -> str:
-        import subprocess
-
-        result = subprocess.run(
-            ["git", "-C", repo, "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout.strip() if result.returncode == 0 else "unknown"
-
-    def build_tool_invocation_cmd(self, repo: str) -> str:
-        from fathom.scenario import resolve_repo_invocation_cmd
-
-        return resolve_repo_invocation_cmd(repo)
 
     def resolve_plugin_meta(self, plugin_dir: str) -> tuple[str, str, str]:
         import hashlib

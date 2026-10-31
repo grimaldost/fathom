@@ -105,8 +105,8 @@ three sessions cost at most $9. The fathom processes a subject starts are separa
 outside that cap:
 
 - **S1 and S3** are told not to spend, and run with a `claude` stub first on their PATH: the
-  stub fathom's own smoke gate uses, which records each call and answers without reaching a
-  model. Every spawn the engine makes for them, through the CLI or the MCP server, lands
+  argv recorder that `fathom.smoke.forge_claude_shim` forges, which records each call and
+  answers without reaching a model. Every spawn the engine makes for them, through the CLI or the MCP server, lands
   there. A `claude` started by its full path would bypass it, so the harness also reads the
   workspace's ledgers every 10 s and stops the session once a new row carries a cost.
 - **S2** may spend $1 on its trials. The harness stops the session once its ledgers record

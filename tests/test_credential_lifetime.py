@@ -45,7 +45,6 @@ from fathom.adapters.base import ExitStatus
 from fathom.adapters.claude_cli import ClaudeCliRunner, cleanup_dir
 from fathom.credentials import CredentialStore, write_back_to_seat
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
-from fathom.strategies.series import SeriesExecutor
 
 FIXTURES = Path(__file__).parent / "fixtures"
 CREDENTIAL_FILE = ".credentials.json"
@@ -593,44 +592,6 @@ class CredentialStoreWriteBackTests(unittest.TestCase):
         self.assertIn("refresh-refreshed", self.seat_file.read_text(encoding="utf-8"))
 
 
-class SeriesExecutorCarriesTheCredentialTests(unittest.TestCase):
-    """The series engine's spawns share one config dir per trial; the store carries what
-    they refreshed on to the next trial's dir."""
-
-    def test_the_trial_config_is_made_from_the_store_and_handed_back_to_it(self):
-        real = Path(tempfile.mkdtemp(prefix="fake_real_cfg_"))
-        self.addCleanup(cleanup_dir, str(real))
-        (real / CREDENTIAL_FILE).write_text(_credential(100, 1000, "seat"), encoding="utf-8")
-        sources: list[str | None] = []
-
-        def make_config(source):
-            sources.append(source)
-            cfg = Path(tempfile.mkdtemp(prefix="fake_series_cfg_"))
-            # The engine refreshed the credential during the trial.
-            (cfg / CREDENTIAL_FILE).write_text(_credential(200, 1000, "engine"), encoding="utf-8")
-            return str(cfg)
-
-        task_dir = Path(tempfile.mkdtemp(prefix="fake_task_"))
-        self.addCleanup(cleanup_dir, str(task_dir))
-        (task_dir / "series.toml").write_text("[paths]\n", encoding="utf-8")
-        task = types.SimpleNamespace(task_dir=str(task_dir), id="t")
-        ws = Path(tempfile.mkdtemp(prefix="ws_"))
-        self.addCleanup(cleanup_dir, str(ws))
-        with CredentialStore(real) as store:
-            executor = SeriesExecutor(
-                make_config=make_config,
-                credential_store=store,
-                template_name="series.toml",
-            )
-            # The template names no prompts, so the trial stops before any engine runs;
-            # the config was made by then, and the store takes it back on the way out.
-            with self.assertRaises(KeyError):
-                executor.run_trial(task, ws, _scenario(), runner=None)
-            self.assertEqual(sources, [store.seed_dir()])
-            held = (Path(store.seed_dir()) / CREDENTIAL_FILE).read_text(encoding="utf-8")
-        self.assertIn("refresh-engine", held)
-
-
 class SmokeCarriesTheCredentialTests(unittest.TestCase):
     """`fathom smoke` runs its spawns in sequence; each must start from the newest
     credential, as a run's spawns do.
@@ -671,11 +632,11 @@ class SmokeCarriesTheCredentialTests(unittest.TestCase):
         # holding a copy at the same moment cannot be mistaken for one this smoke left.
         tmp = Path(tempfile.mkdtemp(prefix="smoke_tmp_"))
         self.addCleanup(cleanup_dir, str(tmp))
-        probes = RealProbes(real_config_dir=str(self.real), spawn=self._spawn, scenarios_dir=None)
+        probes = RealProbes(real_config_dir=str(self.real), spawn=self._spawn)
         out = io.StringIO()
         with mock.patch.dict(os.environ), mock.patch.object(tempfile, "tempdir", str(tmp)):
             os.environ.pop("FATHOM_STREAM_DIR", None)
-            run_smoke(probes, include_engine=False, out=out, now_s=self.seat.now_s)
+            run_smoke(probes, out=out, now_s=self.seat.now_s)
         self.cred_dirs_after = sorted(p.name for p in tmp.glob("fathom_cred_*"))
         return out.getvalue()
 

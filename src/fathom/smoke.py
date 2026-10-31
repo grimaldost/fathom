@@ -2,8 +2,8 @@
 
 The go/no-go gate that must pass before any paid matrix run **and again at every
 resume** (spec §13): it asserts, on *real* spawns, the isolation properties the
-rest of the harness assumes but that only a live spawn can prove.  Six assertion
-groups, covering spawn isolation, the engine boundary and plugin-mount fidelity:
+rest of the harness assumes but that only a live spawn can prove.  Seven assertion
+groups (0 to 6), covering spawn isolation and plugin-mount fidelity:
 
 0. **The credential is live.**  Free, spawns nothing, and runs FIRST because every
    group below it depends on a spawn that can authenticate.  Reads exactly two
@@ -30,14 +30,7 @@ groups, covering spawn isolation, the engine boundary and plugin-mount fidelity:
    run lock a second acquirer does not, and a ticket past the staleness horizon is
    released rather than honoured.  An operational check ships in the same change as
    its mechanism — a gate written after the thing it gates is a gate written to pass.
-6. **Engine boundary: the §6-pinned non-bypass permission mode reaches the
-   engine's spawned CLI invocation.**  A minimal one-PR series run against
-   a scratch workspace, with ``claude`` shadowed by a PATH shim that records its
-   argv (and spends **no** model tokens), confirms the engine spawns ``claude``
-   with ``--permission-mode default`` and never ``--dangerously-skip-permissions``
-   / ``bypassPermissions`` — the pinned non-bypass mode the §6 executor guarantees.
-
-7. **No instruction file from above the workspace.**  The CLI reads ``CLAUDE.md``
+6. **No instruction file from above the workspace.**  The CLI reads ``CLAUDE.md``
    in its working directory and in every directory above it, whatever
    ``CLAUDE_CONFIG_DIR`` says, so on Windows, where workspaces sit inside the user's
    profile, the user's own ``~/.claude/CLAUDE.md`` would reach every spawn (FATH-B83).
@@ -46,7 +39,9 @@ groups, covering spawn isolation, the engine boundary and plugin-mount fidelity:
    instruction files are read at all, so the second's absence is a result.
 
 Exit nonzero on any violation; ``--force-fail`` appends a failing check to
-demonstrate the nonzero path.
+demonstrate the nonzero path.  The former engine-boundary check was retired in 0.13.0
+together with the strategy it covered; the flag is retired too, accepted and ignored
+for one release.
 
 **A check that could not be proven is not a pass.**  Two of the assertions below
 (activity detection, tool denial) read a *live* spawn's behaviour, and both used to
@@ -61,7 +56,7 @@ the **probes** that perform the real I/O.  The assertions and the
 :func:`run_smoke` plumbing are unit-tested with stub probes
 (``tests/test_smoke_logic.py``, stdlib-runnable); the real-spawn path is
 exercised manually via ``fathom smoke`` (no third-party imports here either —
-stdlib only, plus the vendored adapter / series executor).
+stdlib only, plus the vendored adapter).
 """
 
 from __future__ import annotations
@@ -90,7 +85,6 @@ from fathom.credentials import (
     read_credential_status,
 )
 from fathom.scenario import LimitsOverride, ResolvedScenario, ToolsConfig
-from fathom.strategies.series import NON_BYPASS_PERMISSION_MODE
 
 if TYPE_CHECKING:
     from fathom.adapters.base import RunRecord
@@ -101,18 +95,11 @@ if TYPE_CHECKING:
 DEFAULT_SMOKE_MODEL = "claude-haiku-5-5"
 DEFAULT_SMOKE_EFFORT = "low"
 DEFAULT_SPAWN_TIMEOUT_S = 180.0
-# The engine boundary uses a token-free shim, so its wall-clock is only the
-# `uv run` + engine startup; a few minutes bounds a hang without truncating it.
-DEFAULT_ENGINE_TIMEOUT_S = 420.0
 # Turn caps of the two spawns whose checks read liveness. The deny probe's model may spend
 # a turn or two on ToolSearch before it attempts the Write, and a cap of three cut it off
 # before the attempt, so the check skipped without testing the boundary.
 AUTHED_MAX_TURNS = 2
 DENY_MAX_TURNS = 6
-
-# The bypass surfaces the engine boundary must never see in a spawned argv.
-_BYPASS_FLAG = "--dangerously-skip-permissions"
-_BYPASS_MODE = "bypassPermissions"
 
 # A short, distinctive token the injection-armed probe directs the model to emit via an
 # injected system prompt — proof the --append-system-prompt-file body actually reaches
@@ -141,59 +128,6 @@ CANARY_SKILL = "fathom-smoke-canary:probe"
 # Thirty minutes is long enough that a green gate is not immediately followed by an
 # auth failure mid-trial, and short enough that it refuses no legitimate run.
 CREDENTIAL_MIN_TTL_S = 1800.0
-
-# Minimal one-PR series template for the engine-boundary scratch run.  Structure
-# mirrors the committed bank templates (§12); the §6 executor overwrites
-# model/effort/permission_mode/budgets and strips `tier`, so the [governance]
-# values here are placeholders.  The blocking gate is a trivial always-pass command
-# so the engine's baseline gate stays green on the scratch fixture (§12: the
-# deliberately-failing acceptance lives in a verifier, never in a gate).
-_SMOKE_SERIES_TEMPLATE = """\
-[series]
-id = "fathom-smoke"
-version = "1"
-
-[branches]
-base = "main"
-integration = "fathom-smoke/integration"
-
-[paths]
-prompts = "prompts"
-outputs = "outputs"
-
-[governance]
-model = "claude-haiku-5-5"
-effort = "low"
-permission_mode = "acceptEdits"
-timeout_seconds = 120
-
-[governance.budgets]
-implementation = 1.0
-review = 1.0
-fix = 1.0
-
-[governance.tools]
-implementation = ["Read"]
-review = ["Read"]
-fix = ["Read"]
-
-[review]
-blocking = false
-max_fix_attempts = 0
-
-[[checks]]
-name = "noop"
-run = "python -c \\"pass\\""
-blocking = true
-independent = false
-
-[[prs]]
-id = "PR01"
-branch = "fathom-smoke/pr01"
-prompt = "PR01.md"
-phase = "1"
-depends_on = []
-"""
 
 
 @dataclasses.dataclass
@@ -491,14 +425,6 @@ def assert_concurrency_exclusion() -> SmokeResult:
     )
 
 
-def permission_mode_of(argv: list[str]) -> str | None:
-    """The value following ``--permission-mode`` in *argv*, or None if absent."""
-    for i, tok in enumerate(argv):
-        if tok == "--permission-mode" and i + 1 < len(argv):
-            return argv[i + 1]
-    return None
-
-
 def injection_file_of(argv: list[str]) -> str | None:
     """The --append-system-prompt-file value in *argv*, or None (helper for the
     injection-armed check)."""
@@ -605,42 +531,6 @@ def assert_canary_skill_absent(skills: list[str]) -> SmokeResult:
     )
 
 
-def assert_no_bypass_in_engine_spawn(
-    recorded_argvs: list[list[str]], *, non_bypass_mode: str = NON_BYPASS_PERMISSION_MODE
-) -> SmokeResult:
-    """Every engine-spawned ``claude`` argv carries the pinned non-bypass mode.
-
-    A pass requires: at least one recorded spawn (the boundary was exercised),
-    every spawn carrying ``--permission-mode <non_bypass_mode>``, and none
-    carrying ``--dangerously-skip-permissions`` or a ``bypassPermissions`` mode
-    (the engine's own default, which the §6 executor must override).
-    """
-    name = "engine-boundary: non-bypass permission mode reaches the spawned CLI"
-    if not recorded_argvs:
-        return SmokeResult(
-            name, False, "engine spawned no claude invocation (boundary not exercised)"
-        )
-
-    problems: list[str] = []
-    modes: list[str | None] = []
-    for argv in recorded_argvs:
-        mode = permission_mode_of(argv)
-        modes.append(mode)
-        if _BYPASS_FLAG in argv:
-            problems.append(_BYPASS_FLAG)
-        if mode is None:
-            problems.append("missing --permission-mode")
-        elif mode != non_bypass_mode:
-            # Covers bypassPermissions and any other unexpected (non-pinned) mode.
-            problems.append(f"--permission-mode {mode!r}")
-
-    ok = not problems
-    detail = f"{len(recorded_argvs)} engine claude spawn(s); permission-mode(s)={modes}"
-    if problems:
-        detail += "; VIOLATIONS=" + ", ".join(sorted(set(problems)))
-    return SmokeResult(name, ok, detail)
-
-
 # ---------------------------------------------------------------------------
 # Probe seam — the real I/O, injected so run_smoke is unit-testable with stubs
 # ---------------------------------------------------------------------------
@@ -651,7 +541,7 @@ class SmokeProbes(Protocol):
 
     Each method performs one real observation; :func:`run_smoke` feeds the
     observations to the pure assertions above.  ``RealProbes`` wires the
-    credential-only spawns and the engine-boundary shim; tests pass a stub.
+    credential-only spawns; tests pass a stub.
     """
 
     def credential_status(self) -> CredentialStatus:
@@ -689,10 +579,6 @@ class SmokeProbes(Protocol):
         """Skills from a real spawn without --plugin-dir (canary must be absent)."""
         ...
 
-    def engine_spawn_argvs(self) -> list[list[str]]:
-        """Every ``claude`` argv a minimal one-PR engine run spawned (via the shim)."""
-        ...
-
 
 # ---------------------------------------------------------------------------
 # Orchestration — run the probes, apply the assertions, report, exit code
@@ -711,7 +597,6 @@ def run_smoke(
     probes: SmokeProbes,
     *,
     force_fail: bool = False,
-    include_engine: bool = True,
     out: TextIO | None = None,
     now_s: float | None = None,
 ) -> int:
@@ -719,14 +604,11 @@ def run_smoke(
 
     Returns 0 only when every check was **proven**: a failed check and a skipped
     one both keep it nonzero.  ``force_fail`` appends a failing check (the
-    nonzero-path demonstration); ``include_engine`` toggles the engine-boundary
-    group (group 5) for environments without the series engine; ``now_s`` pins the
-    clock the credential pre-flight compares against (tests).
+    nonzero-path demonstration); ``now_s`` pins the clock the credential pre-flight
+    compares against (tests).
     """
     try:
-        return _run_smoke(
-            probes, force_fail=force_fail, include_engine=include_engine, out=out, now_s=now_s
-        )
+        return _run_smoke(probes, force_fail=force_fail, out=out, now_s=now_s)
     finally:
         # Probes that carried a copy of the credential hand a refreshed pair back to the
         # seat's file (T53b) before the copy is removed. Optional, like ``close``.
@@ -751,7 +633,6 @@ def _run_smoke(
     probes: SmokeProbes,
     *,
     force_fail: bool,
-    include_engine: bool,
     out: TextIO | None,
     now_s: float | None,
 ) -> int:
@@ -823,13 +704,6 @@ def _run_smoke(
 
     results += _guard("mount/available", _mount)
 
-    if include_engine:
-
-        def _engine() -> list[SmokeResult]:
-            return [assert_no_bypass_in_engine_spawn(probes.engine_spawn_argvs())]
-
-        results += _guard("engine boundary", _engine)
-
     if force_fail:
         results.append(
             SmokeResult(
@@ -875,16 +749,16 @@ def _verdict(failed: list[str], skipped: list[str]) -> str:
 
 
 # ---------------------------------------------------------------------------
-# claude PATH shim — records argv, spends no tokens (engine-boundary mechanism)
+# claude PATH shim — records argv, spends no tokens (used by tools/agent_acceptance.py)
 # ---------------------------------------------------------------------------
 
 
 def _recorder_body(record_file: Path) -> str:
     """Python source for the shim: append argv to *record_file*, emit a stub JSON result.
 
-    The recorded argv is what the engine passed to ``claude``; the printed JSON is
-    a minimal ``--output-format json`` success so the engine treats the subagent
-    as a clean no-op (zero file changes → NOOP) without ever reaching the model.
+    The recorded argv is what the caller passed to ``claude``; the printed JSON is
+    a minimal ``--output-format json`` success, so a caller treats the spawn as a
+    clean no-op without ever reaching the model.
     """
     rec_literal = repr(str(record_file))
     return (
@@ -994,19 +868,6 @@ def read_argv_log(record_file: Path) -> list[list[str]]:
     return out
 
 
-def _write_smoke_task_assets(task_dir: Path) -> None:
-    """Write the minimal one-PR series assets the engine-boundary run instantiates."""
-    (task_dir / "series.toml").write_text(_SMOKE_SERIES_TEMPLATE, encoding="utf-8")
-    prompts = task_dir / "prompts"
-    prompts.mkdir()
-    (prompts / "PR01.md").write_text(
-        "# Smoke probe PR\n\nThis is a no-op smoke probe. Make no changes.\n", encoding="utf-8"
-    )
-    fixtures = task_dir / "fixtures"
-    fixtures.mkdir()
-    (fixtures / "README.md").write_text("# fathom smoke fixture\n", encoding="utf-8")
-
-
 # ---------------------------------------------------------------------------
 # RealProbes — the live spawns (exercised by `fathom smoke`, stubbed in tests)
 # ---------------------------------------------------------------------------
@@ -1030,7 +891,7 @@ def _smoke_scenario(model: str, effort: str, timeout_s: float) -> ResolvedScenar
 
 
 class RealProbes:
-    """Live smoke probes: real credential-only spawns + the engine-boundary shim run.
+    """Live smoke probes: real credential-only spawns.
 
     The live spawns are not unit-tested (that is what ``fathom smoke`` is for); the
     assertions and :func:`run_smoke` plumbing it feeds are tested with a stub
@@ -1052,20 +913,15 @@ class RealProbes:
         *,
         model: str = DEFAULT_SMOKE_MODEL,
         effort: str = DEFAULT_SMOKE_EFFORT,
-        scenarios_dir: Path | None = Path("scenarios"),
         real_config_dir: str | None = None,
         spawn_timeout_s: float = DEFAULT_SPAWN_TIMEOUT_S,
-        engine_timeout_s: float = DEFAULT_ENGINE_TIMEOUT_S,
         credential_store: CredentialStore | None = None,
         spawn: Spawn | None = None,
     ) -> None:
         self.model = model
         self.effort = effort
-        # None when no data root resolved: the engine-boundary check then says so.
-        self.scenarios_dir = Path(scenarios_dir) if scenarios_dir is not None else None
         self.real_config_dir = real_config_dir
         self.spawn_timeout_s = spawn_timeout_s
-        self.engine_timeout_s = engine_timeout_s
         # A store copies nothing until the first spawn asks for it.
         self._owns_store = credential_store is None
         self.credential_store = (
@@ -1286,103 +1142,6 @@ class RealProbes:
     def mount_control_skills(self) -> list[str]:
         return self._init_skills_from_spawn(plugin_dirs=[])
 
-    # -- group 4/5 (engine boundary) ----------------------------------------
-
-    def engine_spawn_argvs(self) -> list[list[str]]:
-        """Drive a minimal one-PR series run with ``claude`` shadowed by the shim.
-
-        Reuses the §6 :class:`SeriesExecutor` so the *real* pinning path is
-        exercised: the executor instantiates the series with
-        ``permission_mode = "default"``, then the engine subprocess (with the shim
-        dir on PATH) resolves ``claude`` to the recorder and we read back its argv.
-        """
-        from fathom.scenario import load_scenario, resolve_scenario
-        from fathom.strategies.series import (
-            SeriesExecutor,
-            _default_run_engine,
-        )
-        from fathom.taskbank import Task, stage_task
-
-        # The series arm names the engine repo, which only the data root knows.
-        if self.scenarios_dir is None:
-            raise FileNotFoundError(
-                "no data root was found, and the engine-boundary check reads the data root's "
-                "series arm (scenarios/series.toml). Name the data root with `fathom --home "
-                "DIR smoke` or FATHOM_HOME, run it inside the data root, or pass "
-                "--no-engine-boundary."
-            )
-        series_toml = self.scenarios_dir / "series.toml"
-        if not series_toml.is_file():
-            raise FileNotFoundError(
-                f"{series_toml.as_posix()} not found; the engine-boundary check reads the "
-                "data root's series arm. Pass --no-engine-boundary when the data root has "
-                "no series arm."
-            )
-
-        shim_dir = Path(tempfile.mkdtemp(prefix="fathom-smoke-shim-"))
-        task_dir = Path(tempfile.mkdtemp(prefix="fathom-smoke-task-"))
-        record_file = shim_dir / "claude_argv.jsonl"
-        try:
-            forge_claude_shim(shim_dir, record_file)
-            _write_smoke_task_assets(task_dir)
-            task = Task(
-                id="fathom-smoke",
-                instruction="engine-boundary smoke probe",
-                limits={},
-                verify={"entry": "verify.py"},
-                task_dir=task_dir,
-            )
-
-            config = load_scenario(series_toml)
-            scenario = resolve_scenario(config, _DefaultSmokeResolver())
-            scenario = dataclasses.replace(
-                scenario, limits=LimitsOverride(trial_timeout_s=int(self.engine_timeout_s))
-            )
-
-            def shim_engine(argv, *, cwd, env, timeout):  # type: ignore[no-untyped-def]
-                # The engine resolves `claude` against ITS OWN process PATH, so the
-                # shim dir must lead the PATH the engine child is launched with.
-                patched = {**env, "PATH": str(shim_dir) + os.pathsep + env.get("PATH", "")}
-                return _default_run_engine(argv, cwd=cwd, env=patched, timeout=timeout)
-
-            executor = SeriesExecutor(
-                run_engine=shim_engine,
-                real_config_dir=self.real_config_dir,
-                credential_store=self.credential_store,
-            )
-            with stage_task(task, "main") as workspace:
-                # The series executor ignores the Runner (the engine spawns claude
-                # itself — ADR-0001); the recorded argv is read regardless of the
-                # trial verdict, so a downstream engine failure cannot hide a bypass.
-                executor.run_trial(task, workspace, scenario, None)  # type: ignore[arg-type]
-
-            return read_argv_log(record_file)
-        finally:
-            cleanup_dir(str(shim_dir))
-            cleanup_dir(str(task_dir))
-
-
-class _DefaultSmokeResolver:
-    """Scenario resolver for the engine-boundary run (real git SHA + uv invocation)."""
-
-    def resolve_model_id(self, model: str) -> str | None:
-        return None
-
-    def resolve_tool_repo_sha(self, repo: str) -> str:
-        import subprocess
-
-        result = subprocess.run(
-            ["git", "-C", repo, "rev-parse", "HEAD"],
-            capture_output=True,
-            text=True,
-        )
-        return result.stdout.strip() if result.returncode == 0 else "unknown"
-
-    def build_tool_invocation_cmd(self, repo: str) -> str:
-        from fathom.scenario import resolve_repo_invocation_cmd
-
-        return resolve_repo_invocation_cmd(repo)
-
 
 # ---------------------------------------------------------------------------
 # CLI entry (also reachable as `fathom smoke`)
@@ -1409,14 +1168,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--no-engine-boundary",
         action="store_true",
-        help="Skip the engine-boundary check, which reads the data root's series arm",
+        help="Accepted and ignored: the engine-boundary check was retired in 0.13.0",
     )
     p.add_argument("--model", default=DEFAULT_SMOKE_MODEL, help="Model for the real spawns")
     p.add_argument("--effort", default=DEFAULT_SMOKE_EFFORT, help="Effort for the real spawns")
     args = p.parse_args(argv)
 
     probes = RealProbes(model=args.model, effort=args.effort)
-    return run_smoke(probes, force_fail=args.force_fail, include_engine=not args.no_engine_boundary)
+    return run_smoke(probes, force_fail=args.force_fail)
 
 
 if __name__ == "__main__":

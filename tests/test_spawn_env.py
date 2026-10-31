@@ -11,8 +11,8 @@ started in, which is the data root when fathom finds its data root from there; m
 into the data root for a command does not change them. None of that is for the agent
 under test. These tests set such variables in the parent, run from inside a
 data-root-like directory as a command does, and read the environment each spawn path
-actually hands its child: the single-session adapter (and every strategy that runs
-through it) and the series engine.
+actually hands its child: the single-session adapter, and every strategy that runs
+through it.
 
 A scenario's ``[env]`` table is applied after the strip. It may name any variable,
 FATHOM_* included: that is the arm's own declared treatment, and it enters config_hash.
@@ -25,7 +25,7 @@ command runs, the data root is registered as hidden and such values are withheld
 treatment arm's argv would name its [context] body and [plugins] mounts, which live
 under the data root: the runner `fathom run` builds passes per-spawn copies instead.
 
-No real spawns: both subprocess boundaries are injected.
+No real spawns: the adapter's subprocess boundary is injected.
 """
 
 import contextlib
@@ -33,14 +33,13 @@ import os
 import subprocess
 import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from fathom.adapters.base import ExitStatus, RunRecord
+from fathom.adapters.base import ExitStatus
 from fathom.adapters.claude_cli import (
     ClaudeCliRunner,
     cleanup_dir,
@@ -48,8 +47,6 @@ from fathom.adapters.claude_cli import (
     without_harness_vars,
 )
 from fathom.scenario import EnvConfig, LimitsOverride, ResolvedScenario, ToolsConfig
-from fathom.strategies.series import EngineOutcome, SeriesExecutor
-from fathom.taskbank import Task
 
 # What a parent process holds during `fathom run`: the data root, the stream tee's
 # directory and per-trial tag (set by the run loop), and any other FATHOM_* name.
@@ -67,26 +64,6 @@ _STREAM = (
     ' "duration_ms": 10, "total_cost_usd": 0.01, "result": "done",'
     ' "usage": {"input_tokens": 1, "output_tokens": 1}}\n'
 )
-
-_SERIES_TEMPLATE = """\
-[series]
-id = "example"
-version = "1.0"
-
-[paths]
-prompts = "prompts"
-outputs = "outputs"
-
-[governance]
-effort = "high"
-
-[[prs]]
-id = "PR01"
-branch = "example/pr01"
-prompt = "pr01.md"
-phase = "1"
-depends_on = []
-"""
 
 
 def _harness_names(env) -> list[str]:
@@ -108,7 +85,7 @@ def _dir_names(env) -> list[str]:
     return sorted(name for name in env if name.upper() in {"PWD", "OLDPWD"})
 
 
-def _scenario(*, strategy="single-session", env_vars=(), tool_invocation_cmd=None):
+def _scenario(*, strategy="single-session", env_vars=()):
     return ResolvedScenario(
         name="arm-a",
         adapter="claude-cli",
@@ -119,7 +96,7 @@ def _scenario(*, strategy="single-session", env_vars=(), tool_invocation_cmd=Non
         limits=LimitsOverride(trial_timeout_s=60),
         model_id=None,
         tool_repo_sha=None,
-        tool_invocation_cmd=tool_invocation_cmd,
+        tool_invocation_cmd=None,
         config_hash="x" * 64,
         env=EnvConfig(vars=tuple(env_vars)),
     )
@@ -134,17 +111,6 @@ class _RecordingSpawn:
     def __call__(self, argv, *, input, timeout, env, cwd):
         self.envs.append(dict(env))
         return subprocess.CompletedProcess(list(argv), 0, _STREAM, "")
-
-
-class _RecordingEngine:
-    """The series engine boundary: records the env the engine process would get."""
-
-    def __init__(self):
-        self.envs: list[dict[str, str]] = []
-
-    def __call__(self, argv, *, cwd, env, timeout):
-        self.envs.append(dict(env))
-        return EngineOutcome(returncode=0, stdout="", stderr="", timed_out=False, duration_s=0.1)
 
 
 class _Base(unittest.TestCase):
@@ -184,32 +150,6 @@ class _Base(unittest.TestCase):
         self.assertEqual(record.status, ExitStatus.OK)
         self.assertEqual(len(spawn.envs), 1)
         return spawn.envs[0]
-
-    def run_engine(self) -> dict[str, str]:
-        task_dir = Path(tempfile.mkdtemp(prefix="fathom-spawn-env-task-"))
-        self.addCleanup(cleanup_dir, str(task_dir))
-        (task_dir / "series.toml").write_text(_SERIES_TEMPLATE, encoding="utf-8")
-        (task_dir / "prompts").mkdir()
-        (task_dir / "prompts" / "pr01.md").write_text("implement PR01", encoding="utf-8")
-        task = Task(
-            id="add",
-            instruction="do the thing",
-            limits={},
-            verify={"entry": "verify.py"},
-            task_dir=task_dir,
-        )
-        engine = _RecordingEngine()
-        executor = SeriesExecutor(run_engine=engine, real_config_dir=str(self.real_config))
-        # A fathom command runs with the data root as its working directory.
-        with contextlib.chdir(self.data_root):
-            executor.run_trial(
-                task,
-                self.workspace,
-                _scenario(strategy="series", tool_invocation_cmd="engine"),
-                types.SimpleNamespace(execute=lambda *a, **k: RunRecord(status=ExitStatus.OK)),
-            )
-        self.assertEqual(len(engine.envs), 1)
-        return engine.envs[0]
 
 
 class TestMakeSpawnEnv(_Base):
@@ -322,19 +262,6 @@ class TestAdapterSpawn(_Base):
         env = self.run_adapter(_scenario(env_vars=(("WHERE", "${PWD}"), ("BEFORE", "${OLDPWD}"))))
         self.assertEqual(env["WHERE"], "")
         self.assertEqual(env["BEFORE"], "")
-        self.assertEqual(_names_holding(env, self.data_root.name), [])
-
-
-class TestSeriesEngineSpawn(_Base):
-    def test_no_fathom_variable_reaches_the_engine(self):
-        env = self.run_engine()
-        self.assertEqual(_harness_names(env), [])
-        self.assertTrue("CLAUDE_CONFIG_DIR" in env)
-        self.assertEqual(env["SPAWN_ENV_TEST_BENIGN"], "keep-me")
-
-    def test_no_value_names_the_data_root_it_was_started_in(self):
-        env = self.run_engine()
-        self.assertEqual(_dir_names(env), [])
         self.assertEqual(_names_holding(env, self.data_root.name), [])
 
 
@@ -508,12 +435,6 @@ class TestValuesNamingTheDataRoot(_Base):
     def test_the_adapter_spawn_withholds_the_data_root(self):
         with self.hidden():
             env = self.run_adapter()
-        self.assertEqual(_names_naming(env, self.data_root), [])
-        self.assertEqual(env["PATH"], self.other_entry)
-
-    def test_the_series_engine_withholds_the_data_root(self):
-        with self.hidden():
-            env = self.run_engine()
         self.assertEqual(_names_naming(env, self.data_root), [])
         self.assertEqual(env["PATH"], self.other_entry)
 

@@ -37,12 +37,15 @@ errored, and the verifier's results if scoring succeeded.
   Identical configurations produce identical hashes, so two runs with the same hash compete
   fairly; a hash change invalidates prior results (the resume key includes it).
 - `tool_git_sha` (str): The SHA of the tool's repository at run time (e.g., the arm's tool
-  repo). Provenance only; not part of the resume key or config_hash.
+  repo). Provenance only; not part of the resume key or config_hash. Empty on rows written from
+  0.13.0; it was set only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
-  reports it. Empty when the stream reports none, and for series-pinned runs. Provenance only;
-  not part of the resume key or config_hash.
-- `pin_level` (str): The pin strength: `"strong"` (single explicit model) or `"series"`
-  (series engine chose a model per trial). Provenance only; not part of config_hash.
+  reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
+  retired strategy that drove an engine. Provenance only; not part of the resume key or
+  config_hash.
+- `pin_level` (str): The pin strength: `"strong"` (single explicit model). `"series"` appears
+  only on rows written before 0.13.0, by the retired strategy whose engine chose a model per
+  trial. Provenance only; not part of config_hash.
 - `verifier_results` (dict or None): The verifier's outcome. `None` means no verification
   ran (trial errored before grading). When present, a dict of criterion name -> bool:
   each criterion that the verifier checked and its result. The trial passes when the dict
@@ -109,10 +112,13 @@ orders them exactly as they arrived, and reports join them to their trial by `co
 - `exit_code` (int): The process exit code (0 for success, non-zero for failure or abort).
 - `dataset_version` (str): The dataset version (same as the trial's).
 - `config_hash` (str): The configuration hash (same as the trial's; used to join run to trial).
-- `tool_git_sha` (str): The tool repository SHA at run time. Provenance only.
+- `tool_git_sha` (str): The tool repository SHA at run time. Provenance only. Empty on rows written from 0.13.0;
+  it was set only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
-  reports it. Empty when the stream reports none, and for series-pinned runs. Provenance only.
-- `pin_level` (str): The pin strength (`"strong"` or `"series"`). Provenance only.
+  reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
+  retired strategy that drove an engine. Provenance only.
+- `pin_level` (str): The pin strength (`"strong"`; `"series"` only on rows written before
+  0.13.0). Provenance only.
 - `scenario` (str): The arm name (additive field; defaults to empty on legacy rows from
   before this field existed). Empty string means the arm identity is not recorded; the
   config_hash is the true key.
@@ -130,8 +136,9 @@ orders them exactly as they arrived, and reports join them to their trial by `co
 - `models_seen` (list of str): Each distinct `model` value the spawn's output named, in the
   order first seen: the init event's, each assistant message's (a subagent's included) and
   the result's. `model_id` keeps one model; a spawn whose subagent ran on another model
-  lists both here. Additive; `[]` on legacy rows, on series-strategy runs (built from the
-  engine's spawn events, not a CLI stream) and when the output named no model. Provenance only; not part
+  lists both here. Additive; `[]` on legacy rows, on rows written before 0.13.0 by the retired
+  strategy that drove an engine (built from its spawn events, not a CLI stream) and when the
+  output named no model. Provenance only; not part
   of config_hash.
 - `config_preimage` (str): The exact configuration string hashed to produce `config_hash`.
   Additive; empty on rows written before 0.4.0. Stored for bit-exact validation.
@@ -156,12 +163,15 @@ when multiple arms compete.
 - `dataset_version` (str): The dataset version.
 - `config_hash_a` (str): The first configuration (often the baseline or "bare" arm).
 - `config_hash_b` (str): The second configuration (the tested arm).
-- `tool_git_sha` (str): The tool repository SHA.
+- `tool_git_sha` (str): The tool repository SHA. Empty on rows written from 0.13.0; it was set
+  only by the retired `source = "repo"` arms.
 - `cli_version` (str): The version of the Claude Code CLI the run spawned, as its init event
-  reports it. Empty when the stream reports none, and for series-pinned runs.
+  reports it. Empty when the stream reports none, and for rows written before 0.13.0 by the
+  retired strategy that drove an engine.
 - `judge_config_hash` (str): The SHA256 hash of the judge's configuration. Provenance only.
 - `judge_model` (str): The model the judge used (e.g., `"claude-sonnet-5-5"`). Provenance only.
-- `pin_level` (str): The pin strength (`"strong"` or `"series"`).
+- `pin_level` (str): The pin strength (`"strong"`; `"series"` only on rows written before
+  0.13.0).
 
 **Provenance-only fields** (added by the ledger module):
 

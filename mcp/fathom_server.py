@@ -19,8 +19,10 @@ with the data root as the working directory, so a relative path argument (such a
 data root is the directory holding ``tasks/``, ``scenarios/`` and the committed
 ``ledger/``, marked by a ``fathom.toml`` with a ``[data_root]`` table; ``FATHOM_HOME``
 names it, or the server finds it at or above its working directory. It is never the
-plugin's own tree or a plugin cache directory (``_resolve.py``). stdout carries the
-JSON-RPC stream only; diagnostics go to stderr, and the framework's start-up banner is off.
+plugin's own tree or a plugin cache directory (``_resolve.py``). ``smoke`` is the one op
+that reads no data root: with none resolved it runs ``fathom smoke`` without ``--home``, in
+the server's working directory. stdout carries the JSON-RPC stream only; diagnostics go
+to stderr, and the framework's start-up banner is off.
 
 The server reports fathom's version, read from the plugin manifest, as its own in the
 handshake, not the version of the framework serving it. That needs ``fastmcp`` 2.11.3 or
@@ -75,13 +77,15 @@ def _engine_env() -> dict[str, str]:
     return {k: v for k, v in os.environ.items() if k.upper() != "VIRTUAL_ENV"}
 
 
-def _run_fathom(args: list[str], home: pathlib.Path, timeout: float) -> dict[str, Any]:
+def _run_fathom(args: list[str], home: pathlib.Path | None, timeout: float) -> dict[str, Any]:
+    """Run the shipped engine; with no data root (``home=None``), without ``--home``, in the
+    server's working directory."""
     cmd = fathom_command(home, args)
     # The engine writes UTF-8 whatever the locale (fathom.cli.use_utf8_streams); read in the
     # locale's code page, cp1252 on Windows, each non-ASCII character would come back garbled.
     proc = subprocess.run(
         cmd,
-        cwd=home,
+        cwd=home if home is not None else pathlib.Path.cwd(),
         env=_engine_env(),
         capture_output=True,
         text=True,
@@ -219,35 +223,38 @@ async def smoke(
         bool,
         Field(
             description=(
-                "Skip the engine-boundary check, which reads the data root's series arm "
-                "(scenarios/series.toml). Default false; set it when the data root has no "
-                "series arm."
+                "Accepted and ignored: the engine-boundary check was retired in 0.13.0. "
+                "Default false."
             )
         ),
     ] = False,
 ) -> dict[str, Any]:
     """Run the real-spawn isolation smoke gate — the go/no-go before any paid matrix.
 
-    Spends a few cents (tiny real spawns); the engine-boundary check is
-    token-free and reads the data root's series arm (``scenarios/series.toml``).
-    A clean run ends with 'SMOKE RESULT: ALL PASS (n/n checks)'. Requires
-    FATHOM_HOME (or a working directory inside the data root), uv on PATH, and
-    valid Claude credentials; it runs the fathom engine this plugin ships.
+    Spends a few cents (tiny real spawns). A clean run ends with 'SMOKE RESULT: ALL
+    PASS (n/n checks)'. Needs uv on PATH and valid Claude credentials; it runs the
+    fathom engine this plugin ships. It reads no data root: when one resolves it runs
+    there, and when none does it runs without one.
 
-    Returns a dict: ``ok`` (true only on exit 0), ``home``, ``output`` (stdout),
-    ``cmd``, ``exit_code``, ``stderr``.
+    Returns a dict: ``ok`` (true only on exit 0), ``home`` (the data root, or null
+    when none resolved), ``output`` (stdout), ``cmd``, ``exit_code``, ``stderr``.
     """
     try:
-        home = _home()
-    except FathomHomeError as exc:
-        return {"ok": False, "error": str(exc)}
+        home: pathlib.Path | None = _home()
+    except FathomHomeError:
+        home = None
     args = ["smoke"]
     if force_fail:
         args.append("--force-fail")
     if no_engine_boundary:
         args.append("--no-engine-boundary")
     res = await asyncio.to_thread(_run_fathom, args, home, 600.0)
-    return {"ok": res["exit_code"] == 0, "home": str(home), "output": res["stdout"], **res}
+    return {
+        "ok": res["exit_code"] == 0,
+        "home": str(home) if home is not None else None,
+        "output": res["stdout"],
+        **res,
+    }
 
 
 if __name__ == "__main__":

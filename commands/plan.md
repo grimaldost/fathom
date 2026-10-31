@@ -23,8 +23,7 @@ Plan a fathom eval matrix without spawning or spending anything.
 3. Report the arm names the plan printed (each arm shows its name and config_hash
    prefix to distinguish forks from pools), the trial count (and how many are
    already done), and the USD ceiling: planned trials × the per-spawn cap in force
-   (`--max-spawn-usd` if given, else $5), with series trials priced by their spawn
-   count.
+   (`--max-spawn-usd` if given, else $5).
    When the bank's ledger already holds completed trials, the plan also prints one
    `expected:` line after the `planned:` line: the median cost per trial for the
    planned strategies (and per model where a group holds at least 5 trials), with

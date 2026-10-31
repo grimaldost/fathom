@@ -316,18 +316,14 @@ class TestDryRun(_Base):
 
 
 # ---------------------------------------------------------------------------
-# The ceiling must be a CEILING for a multi-spawn strategy
+# The ceiling of a trial is the per-spawn cap in force
 #
-# A flat one-spawn price per trial is wrong for `series`. A series trial spends one
-# implementation spawn plus up to `max_fix_attempts` fix spawns for every PR in the
-# decomposition (and review spawns when the review gate is blocking), and the
-# per-spawn cap bounds each of those spawns individually, so a one-spawn price
-# understates a 5-PR series arm many times over. An upfront number the run exceeds
-# by an order of magnitude is worse than no number: the operator stops checking.
+# Every strategy makes one spawn per trial, so the plan prices a trial at one spawn
+# against the cap that will actually bound it.
 # ---------------------------------------------------------------------------
 
 
-class TestSeriesCeiling(unittest.TestCase):
+class TestSingleSpawnCeiling(unittest.TestCase):
     def setUp(self):
         self._tmp = tempfile.mkdtemp()
         self.task_dir = Path(self._tmp)
@@ -339,65 +335,23 @@ class TestSeriesCeiling(unittest.TestCase):
         shutil.rmtree(self._tmp, ignore_errors=True)
         shutil.rmtree(str(self.ledger_dir), ignore_errors=True)
 
-    def _write_series(
-        self, n_prs: int, max_fix_attempts: int | None = 2, blocking: bool | None = None
-    ) -> None:
-        body = "[series]\nid = 's'\nversion = '1'\n"
-        if max_fix_attempts is not None or blocking is not None:
-            body += "\n[review]\n"
-        if max_fix_attempts is not None:
-            body += f"max_fix_attempts = {max_fix_attempts}\n"
-        if blocking is not None:
-            body += f"blocking = {'true' if blocking else 'false'}\n"
-        for i in range(n_prs):
-            body += f"\n[[prs]]\nid = 'PR{i:02d}'\nbranch = 'b{i}'\nprompt = 'p{i}.md'\n"
-        (self.task_dir / "series.toml").write_text(body, encoding="utf-8")
-
     def _plan(self, scenario, **kw) -> str:
         _, output = _run_matrix(
             self.bank, [scenario], repeats=1, ledger_dir=self.ledger_dir, dry_run=True, **kw
         )
         return output
 
-    def test_series_ceiling_counts_every_pr_and_every_fix_attempt(self):
-        self._write_series(5, max_fix_attempts=2)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)
-        # 5 PRs x (1 impl + 2 fix) spawns x $1.00/spawn = $15.00 for the one trial.
-        self.assertIn("ceiling: $15.00", output)
-
-    def test_series_ceiling_shows_the_spawn_arithmetic(self):
-        self._write_series(5, max_fix_attempts=2)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)
-        self.assertIn("series arm series-arm/t", output)
-        self.assertIn("5 PRs x (1 impl + 2 fix) spawns", output)
-
-    def test_series_ceiling_uses_executor_defaults_without_a_rail(self):
-        """No --max-budget-usd means the executor's own $20 impl / $3 fix are in force."""
-        from fathom.strategies.series import DEFAULT_BUDGET_FIX, DEFAULT_BUDGET_IMPL
-
-        self._write_series(5, max_fix_attempts=2)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc)
-        expected = 5 * (DEFAULT_BUDGET_IMPL + 2 * DEFAULT_BUDGET_FIX)
-        self.assertIn(f"ceiling: ${expected:.2f}", output)
-
     def test_single_spawn_strategies_price_one_spawn_at_the_cap_in_force(self):
-        """The series fix must not inflate every other arm's ceiling — one spawn stays one.
+        """One spawn stays one, priced at the cap in force.
 
-        The constant it used to assert against is gone, and deliberately: a
-        single-spawn trial's worst case is ONE spawn at the cap that will actually
+        A single-spawn trial's worst case is ONE spawn at the cap that will actually
         bound it, not a fixed $2. `--max-budget-usd` is per-spawn, so passing a number
         LOOSENS the only runaway guard there is, and while the price was hardcoded the
         plan printed the same reassuring total either way, so a large loosening
-        read as a tight rail. Both corrections live in
-        `_trial_ceiling_usd`: spawns-per-trial (this test's original subject) and the
-        cap in force (this assertion).
+        read as a tight rail. `_trial_ceiling_usd` derives it from the cap.
         """
         sc = _make_scenario("bare", config_hash="d" * 64, strategy="single-session")
         self.assertIn("ceiling: $1.00", self._plan(sc, max_budget_usd=1.0))
-        self.assertNotIn("series arm", self._plan(sc, max_budget_usd=1.0))
 
     def test_a_single_spawn_ceiling_tracks_the_cap_rather_than_a_constant(self):
         """Raising the per-spawn cap must be visible in the plan, before the spend."""
@@ -408,53 +362,6 @@ class TestSeriesCeiling(unittest.TestCase):
         self.assertIn(
             f"ceiling: ${_DEFAULT_SPAWN_BUDGET_USD:.2f}", self._plan(sc, max_budget_usd=None)
         )
-
-    def test_unreadable_series_template_says_so_rather_than_quoting_a_number(self):
-        """A missing template must not silently reinstate the understated rail."""
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)  # no series.toml written
-        self.assertIn("spawn count UNKNOWN", output)
-
-    def test_missing_review_block_falls_back_to_the_engine_default(self):
-        from fathom.cli import _SERIES_DEFAULT_MAX_FIX_ATTEMPTS
-
-        self._write_series(3, max_fix_attempts=None)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)
-        expected = 3 * (1 + _SERIES_DEFAULT_MAX_FIX_ATTEMPTS)
-        self.assertIn(f"ceiling: ${expected:.2f}", output)
-
-    # A blocking review gate adds review spawns: one before the first fix and one after
-    # each fix, every one under the review budget the executor hands the engine. A
-    # ceiling that leaves them out is not a worst case.
-
-    def test_a_blocking_review_adds_a_review_spawn_per_round(self):
-        self._write_series(5, max_fix_attempts=2, blocking=True)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)
-        # 5 PRs x (1 impl + 2 fix + 3 review) spawns x $1.00/spawn = $30.00.
-        self.assertIn("ceiling: $30.00", output)
-        self.assertIn("5 PRs x (1 impl + 2 fix + 3 review) spawns", output)
-
-    def test_a_blocking_review_is_priced_at_the_executor_review_budget(self):
-        from fathom.strategies.series import (
-            DEFAULT_BUDGET_FIX,
-            DEFAULT_BUDGET_IMPL,
-            DEFAULT_BUDGET_REVIEW,
-        )
-
-        self._write_series(5, max_fix_attempts=2, blocking=True)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc)
-        expected = 5 * (DEFAULT_BUDGET_IMPL + 2 * DEFAULT_BUDGET_FIX + 3 * DEFAULT_BUDGET_REVIEW)
-        self.assertIn(f"ceiling: ${expected:.2f}", output)
-
-    def test_a_non_blocking_review_adds_no_spawns(self):
-        self._write_series(5, max_fix_attempts=2, blocking=False)
-        sc = _make_scenario("series-arm", config_hash="c" * 64, strategy="series")
-        output = self._plan(sc, max_budget_usd=1.0)
-        self.assertIn("ceiling: $15.00", output)
-        self.assertIn("5 PRs x (1 impl + 2 fix) spawns", output)
 
 
 # ---------------------------------------------------------------------------
@@ -1371,35 +1278,6 @@ class TestUnknownStrategyRejected(unittest.TestCase):
         for strat in KNOWN_STRATEGIES:
             with self.subTest(strategy=strat):
                 self.assertIsNotNone(_default_executor_factory(self._resolved(strat)))
-
-    def test_series_arm_honours_the_max_budget_rail(self):
-        """`--max-budget-usd` must reach the ENGINE's spawns, not only the adapter's.
-
-        The series executor ignores the Runner (the engine spawns the CLI itself,
-        ADR-0001), so capping the runner caps nothing on a series arm. Before this,
-        the flag was silently inert there and the only ceiling in force was the
-        executor's own $20/$5/$3 default — an operator who set a rail had one they
-        did not have.
-        """
-        from fathom.cli import _default_executor_factory
-
-        ex = _default_executor_factory(self._resolved("series"), max_budget_usd=2.0)
-        self.assertEqual((ex.budget_impl, ex.budget_review, ex.budget_fix), (2.0, 2.0, 2.0))
-
-    def test_series_arm_without_a_rail_keeps_the_recorded_defaults(self):
-        """No flag means the executor's explicit, recorded defaults — not zero, not none."""
-        from fathom.cli import _default_executor_factory
-        from fathom.strategies.series import (
-            DEFAULT_BUDGET_FIX,
-            DEFAULT_BUDGET_IMPL,
-            DEFAULT_BUDGET_REVIEW,
-        )
-
-        ex = _default_executor_factory(self._resolved("series"))
-        self.assertEqual(
-            (ex.budget_impl, ex.budget_review, ex.budget_fix),
-            (DEFAULT_BUDGET_IMPL, DEFAULT_BUDGET_REVIEW, DEFAULT_BUDGET_FIX),
-        )
 
     def test_dry_run_rejects_unknown_strategy(self):
         """--dry-run must catch a bad strategy up front (before planning/spawning)."""
@@ -3238,14 +3116,14 @@ class ReconcileRefusesANonRootFirstTests(unittest.TestCase):
 class InitNextStepsTests(unittest.TestCase):
     """The steps `fathom init` prints must work on the root it has just made."""
 
-    def test_the_smoke_step_leaves_out_the_engine_boundary_check(self):
-        # A fresh root has no scenarios/series.toml, and the engine-boundary check fails
-        # without one, after the other checks have already spent.
+    def test_the_smoke_step_names_the_command_without_flags(self):
+        # The engine-boundary check was retired in 0.13.0, so no flag is needed on a fresh root.
         from fathom.cli import _init_next_steps
 
         steps = _init_next_steps()
-        self.assertIn("fathom smoke --no-engine-boundary", steps)
-        self.assertIn("scenarios/series.toml", steps)
+        self.assertIn("fathom smoke", steps)
+        self.assertNotIn("--no-engine-boundary", steps)
+        self.assertNotIn("scenarios/series.toml", steps)
 
 
 class TrialRunnerStagesArmFilesTests(unittest.TestCase):
