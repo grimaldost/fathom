@@ -6,6 +6,15 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The repository moves to the railform 0.4.0 release pin (`3e6f27f`, from `300d175`), made with
+  `railform adopt`: the pin in `ci.yml`, the tag-watch caller and `.pre-commit-config.yaml`, the
+  `gate` job's `runs-on` line and the `pre-commit` and `pre-push` hook wrappers, which now carry
+  railform's egress extension point (inactive unless `RAILFORM_EGRESS_HOOK` or the git key
+  `railform.egressHook` names a hook). This repository sets neither of the two keys 0.4.0 removes, so
+  `railform.toml` is unchanged. From this pin `railform private-refs`, in the hook and in CI, judges home-directory paths only: no project gate checks names, and that check takes an environment's egress hook, which railform does not ship.
+
 ## [0.13.0] - 2026-10-31
 
 A minor release: it retires the `series` strategy and the engine-boundary smoke check, and a data root with a series
