@@ -72,7 +72,7 @@ Every scenario gets three checks:
 | `no_spend` | ground truth | no `claude` spawn reached the stub on the subject's PATH; a run, smoke or arming check that was tried and spent nothing is noted |
 | `reconcile_ran` | behaviour | a shell call printed a `RECONCILE: OK` or `RECONCILE: FAILED` line |
 | `plan_ran` | behaviour | a shell call printed a `planned: ... ceiling: $X` line, or the MCP `plan` tool returned `ok` |
-| `answer_names_banks` | answer | the final answer (the result text and the assistant's text after its last tool call) names at least half of the banks that have a `ledger/<bank>.jsonl` in the clone |
+| `answer_names_banks` | answer | the final answer (the result text and the assistant's text after its last tool call) names at least half of the banks that have a `ledger/<bank>.jsonl` in the clone, by name or by a `stem-*` glob that matches them (a bare `*` names none) |
 | `fathom_used` | behaviour | any fathom surface was used |
 | `data_root_created` | ground truth | a `fathom.toml` with a `[data_root]` table exists under the workspace |
 | `bank_authored` | ground truth | that data root has a bank with at least one task whose `[verify] entry` file exists |

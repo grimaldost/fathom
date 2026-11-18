@@ -6,6 +6,13 @@ versions are not part of this repository's history. Tags start at 0.8.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- The agent acceptance check `answer_names_banks` counts a `stem-*` glob written in the final answer
+  as naming every bank whose name starts with `stem-`, so an answer that groups banks by a shared
+  prefix is no longer failed for not spelling each name. A bare `*` names nothing, and literal-name
+  counting is unchanged.
+
 ### Changed
 
 - The repository moves to the railform 0.4.0 release pin (`3e6f27f`, from `300d175`), made with

@@ -844,6 +844,22 @@ class GroundTruthTests(unittest.TestCase):
         check = _checks(scenario, analysis, self._clone_facts(["alpha-v1", "beta"]))
         self.assertTrue(check["answer_names_banks"].passed)
 
+    def _names_banks(self, answer: str, banks: list[str]) -> acc.Check:
+        analysis = _analysis(_say(answer), _final(""))
+        scenario = _scenario(checks=("answer_names_banks",))
+        return _checks(scenario, analysis, self._clone_facts(banks))["answer_names_banks"]
+
+    def test_a_prefix_glob_names_the_banks_it_covers(self) -> None:
+        banks = ["alpha-1", "alpha-2", "alpha-3", "alpha-4", "beta-x", "gamma"]
+        literal = "Banks: alpha-1, beta-x."
+        self.assertFalse(self._names_banks(literal, banks).passed)
+        self.assertTrue(self._names_banks(literal + " Also the `alpha-*` family.", banks).passed)
+        self.assertTrue(self._names_banks("Banks: beta-x; alpha-*, gamma.", banks).passed)
+
+    def test_a_bare_star_names_no_bank(self) -> None:
+        banks = ["alpha-1", "alpha-2", "beta-x", "gamma"]
+        self.assertFalse(self._names_banks("Every bank: *, -*, and `*`.", banks).passed)
+
     def test_a_call_that_reaches_the_output_directory_fails(self) -> None:
         out = self.tmp / "fathom-agent-acceptance" / "20261006-120000"
         markers = acc.output_markers(out, default_out=True)
