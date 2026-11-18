@@ -1727,7 +1727,7 @@ def mentions(text: str, name: str) -> bool:
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
-_PREFIX_GLOB = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z0-9_][A-Za-z0-9_.-]*-)\*")
+_PREFIX_GLOB = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z0-9_][A-Za-z0-9_.-]*-)\*(?![*A-Za-z0-9_-])")
 
 
 def mentions_glob(text: str, name: str) -> bool:

@@ -860,6 +860,17 @@ class GroundTruthTests(unittest.TestCase):
         banks = ["alpha-1", "alpha-2", "beta-x", "gamma"]
         self.assertFalse(self._names_banks("Every bank: *, -*, and `*`.", banks).passed)
 
+    def test_only_a_lone_trailing_star_is_a_prefix_glob(self) -> None:
+        banks = ["alpha-1", "alpha-2", "pre-a", "pre-b", "self-a", "self-b"]
+        for answer in ("pre-**bold** self-*contained*", "alpha-*-v2 pre-**bold**"):
+            with self.subTest(answer=answer):
+                self.assertFalse(self._names_banks(answer, banks).passed)
+        for answer in ("alpha-*-v2 self-*contained*", "pre-**bold** alpha-*-v2"):
+            with self.subTest(answer=answer):
+                self.assertFalse(self._names_banks(answer, ["alpha-1", "alpha-2", "gamma"]).passed)
+        self.assertTrue(self._names_banks("ALPHA-*", ["alpha-1", "alpha-2", "gamma"]).passed)
+        self.assertFalse(self._names_banks("xalpha-*", ["alpha-1", "alpha-2", "gamma"]).passed)
+
     def test_a_call_that_reaches_the_output_directory_fails(self) -> None:
         out = self.tmp / "fathom-agent-acceptance" / "20261006-120000"
         markers = acc.output_markers(out, default_out=True)
