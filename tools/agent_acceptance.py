@@ -1727,6 +1727,18 @@ def mentions(text: str, name: str) -> bool:
     return re.search(pattern, text, re.IGNORECASE) is not None
 
 
+_PREFIX_GLOB = re.compile(r"(?<![A-Za-z0-9_-])([A-Za-z0-9_][A-Za-z0-9_.-]*-)\*(?![*A-Za-z0-9_-])")
+
+
+def mentions_glob(text: str, name: str) -> bool:
+    """Whether *text* writes a ``stem-*`` glob whose stem is a prefix of *name*.
+
+    A bare ``*``, or a glob with no literal stem, names nothing.
+    """
+    lowered = name.lower()
+    return any(lowered.startswith(m.group(1).lower()) for m in _PREFIX_GLOB.finditer(text))
+
+
 _SCAN_SKIP = frozenset({".git", ".venv", "node_modules", "__pycache__", ".fathom"})
 _ARM_SKIP = frozenset({"tasks", "ledger", "report"}) | _SCAN_SKIP
 
@@ -2138,7 +2150,7 @@ def check_answer_names_banks(ctx: Context) -> tuple[bool, str]:
     if not banks:
         return False, "the clone has no ledger/<bank>.jsonl, so there is nothing to name"
     text = ctx.analysis.answer
-    named = [b for b in banks if mentions(text, b)]
+    named = [b for b in banks if mentions(text, b) or mentions_glob(text, b)]
     need = math.ceil(len(banks) / 2)
     missing = [b for b in banks if b not in named]
     evidence = f"the final answer names {len(named)} of {len(banks)} banks (needs {need})"
