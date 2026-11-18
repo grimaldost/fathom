@@ -68,6 +68,13 @@ measures nothing, which is found only after the spend. Change: an optional pre-s
 few bare-arm trials per task, that warns when the bare arm already passes, phrased as "bare and
 armed are predicted to tie". FATH-B08 is the post-hoc half of the same problem.
 
+**FATH-B93 — Nothing warns, before a further purchase, that a bank's positive control has
+stopped separating arms.** *(S)*
+A bank whose positive control no longer separates its arms has saturated,
+found only after the spend. Held by policy D8
+(additive); two reports across two arcs (from the 2026-10-26 feedback triage). Change: `validate`, or the
+dry-run plan, reads the ledger and warns when the control's recorded arms no longer separate.
+
 **FATH-B63 — A ledger's cost is never reconciled against a recomputation.** *(S)*
 `cost_usd_est` is the CLI's reported figure (with `cost_source` saying whether one was
 reported), and nothing in the engine recomputes it. The reported figure folds every token
@@ -135,6 +142,35 @@ to pass.
 On Windows a stale `fathom.exe` or `python` process can hold files in the venv, and the failure
 surfaces as an unrelated `uv sync` error. Change: an orphan-process pre-flight in `fathom smoke`,
 as part of FATH-B64's group.
+
+**FATH-B88 — `smoke` and the acceptance harness hold no dollar ceiling and print no spend.** *(S)*
+An approval stated in dollars has no surface to bind to: `smoke` takes no ceiling and prints no
+total, and the acceptance harness's live smoke spawns reach no ledger, so the guide can only say
+"a few cents". Held by policy D8 (additive); the 2026-11-17 feedback triage recommends excepting this row
+from D8, an open owner decision. Three reports and a lineage. Change: print the summed caps before the first spawn and the summed
+`total_cost_usd` after the last, refuse a ceiling below the caps, and carry smoke's total into
+the harness's `verdict.json`.
+
+**FATH-B89 — A passing `smoke` does not say which conditions it did not exercise.** *(S)*
+`smoke` prints a count of checks and names none it skipped, so a pass can hide that the
+condition a fix targeted never arose (a credential refresh with hours left on the access token,
+a skipped series boundary). Held by policy D8 (additive output); two reports (from the 2026-10-26 feedback triage).
+Change: after the result line, print one line per observable condition not exercised, with its
+reason, for example `credential refresh: not exercised (access token had 7h 25m left)`.
+
+**FATH-B91 — Nothing checks live that the credential write-back survives a refresh.** *(M)*
+The write-back of a refreshed credential to the seat's own file shipped in 0.12.1 without a live
+check. A live check would seed the throwaway copy with an expired access token and an intact refresh
+token, run two spawns, assert the second authenticates, and rely on the write-back to restore
+the seat. It spends a real refresh token, so it is paid and rotates the seat's credential. Held
+for the owner, who runs it once at a release gate with the cost stated; two reports (from the 2026-10-26 feedback triage). Home: `smoke.py`, `credentials.py`.
+
+**FATH-B87 — A fresh harness or smoke run starts refused when the seat has not refreshed
+itself.** *(S)*
+An active desktop seat can leave its credential file's access token expired for days; the
+0.12.1 refusal names the cure, one `claude -p` call. Change: an opt-in `--refresh-seat` that
+makes that call, prints its cost and re-reads the expiry. Held: it waits on the consent rule for
+paid spawns (FATH-B92) (from the 2026-11-17 feedback triage).
 
 ## Reporting
 
@@ -228,6 +264,25 @@ proposal left open indefinitely reads as a live plan. Change: decide it. Either 
 the slicer it gates (a factor slicer in the calibration views), or withdraw it, with the reason
 recorded. Then update the references in ADR-0009 and in the authoring guide's calibration
 section (`bank-design.md`, section 9).
+
+**FATH-B92 — The operating rules for paid spawns and held-out content live outside the
+repository.** *(S)*
+Two rules reach an agent only through its owner's own configuration: a command that spawns a
+paid session needs the user's explicit yes in the current conversation, and bank tasks,
+reference solutions and verifiers are never copied to a path a tested agent can read. Open
+question for the owner: whether a retained snapshot on a remote runner counts as such a path;
+the triage recommends treating retained snapshots as readable until the runner's retention is
+shown to exclude them, pending the owner's decision. Held for the
+owner, who sets the policy; D8 holds prose (from the 2026-10-26 feedback triage). Change: two sentences in
+the agent-facing front door, displacing CONTRIBUTING's "a few cents".
+
+**FATH-B90 — Live checks owed before a release are recorded as process text in CHANGELOG
+entries.** *(S)*
+A 0.12.0 entry carried "the live acceptance run is the owner's, at the next release", which is
+process, not change, and now sits in the published changelog. Held by policy D8 (prose); two reports
+(from the 2026-10-26 feedback triage). Change: one backlog row, "live checks owed before the next cut", that
+Releasing step 1 of CONTRIBUTING reads, in place of such sentences; the row displaces the
+changelog text.
 
 ## Retire or fold
 
